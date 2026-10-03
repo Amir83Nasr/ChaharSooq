@@ -1,0 +1,38 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: charsooq
+      POSTGRES_PASSWORD: charsooq
+      POSTGRES_DB: charsooq
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgresql+psycopg://charsooq:charsooq@postgres:5432/charsooq
+      SESSION_SECRET: change-me-min-32-chars
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:

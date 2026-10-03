@@ -1,21 +1,81 @@
-# shadcn/ui monorepo template
+# چهارسوق (Charsooq)
 
-This is a Next.js monorepo template with shadcn/ui.
+Persian, RTL-first admin web application. Monorepo: Next.js frontend + FastAPI backend + PostgreSQL.
 
-## Adding components
+## Tech stack
 
-To add components to your app, run the following command at the root of your `web` app:
+- Frontend: Next.js 16, React 19, TypeScript (strict), Tailwind CSS 4, shadcn/ui, pnpm
+- Backend: FastAPI, SQLAlchemy 2.x, Alembic, Pydantic, uv
+- Database: PostgreSQL 17
+
+See [CHARSOOQ-PROJECT-SPEC.md](CHARSOOQ-PROJECT-SPEC.md) for full specification and [AGENTS.md](AGENTS.md) for agent rules.
+
+## Requirements
+
+- Node.js >= 20.9, pnpm 11
+- Python >= 3.12, uv
+- PostgreSQL 17 (or Docker)
+
+## Installation
 
 ```bash
-pnpm dlx shadcn@latest add button -c apps/web
+pnpm install
+uv sync
+cp .env.example .env.local
 ```
 
-This will place the ui components in the `packages/ui/src/components` directory.
+## Development commands
 
-## Using components
+```bash
+pnpm dev          # frontend (turbo)
+pnpm lint         # frontend lint
+pnpm typecheck    # frontend typecheck
+pnpm format       # frontend format
+pnpm --filter @workspace/ui test   # frontend unit tests
+pnpm --filter web build            # production build
 
-To use the components in your app, import them from the `ui` package.
-
-```tsx
-import { Button } from "@workspace/ui/components/button";
+uv run --project backend/api ruff check .          # backend lint
+uv run --project backend/api ruff format --check . # backend format check
+uv run --project backend/api pyright               # backend typecheck
+uv run --project backend/api pytest -q             # backend tests
 ```
+
+## Environment variables
+
+See [.env.example](.env.example). Never commit real secrets.
+
+| Variable | Purpose |
+| --- | --- |
+| `APP_ENV` | `development` / `test` / `production` (Secure cookies only in production) |
+| `DATABASE_URL` | SQLAlchemy URL, e.g. `postgresql+psycopg://charsooq:charsooq@localhost:5432/charsooq` |
+| `SESSION_SECRET` | Reserved for session signing; change the dev default in production |
+| `NEXT_PUBLIC_API_URL` | Frontend → API base URL |
+
+## Database setup
+
+```bash
+createdb charsooq
+uv run --project backend/api alembic -c backend/api/alembic.ini upgrade head
+```
+
+## Migrations
+
+Schema changes require an Alembic migration under `backend/api/migrations/`. Autogenerate from models, review, then apply.
+
+## Testing
+
+- Frontend unit tests: `packages/ui/src/lib/*.test.ts` (vitest) — Persian digits, `٬` grouping, `٫` dates
+- Backend tests: `backend/api/tests/` (pytest) — auth flow, product CRUD, validation envelope
+- CI runs both plus a production build; PostgreSQL service for backend integration.
+
+## Build
+
+```bash
+pnpm --filter web build
+```
+
+## Deployment
+
+- Frontend: any Node 22 host (`next start`) behind TLS.
+- Backend: `uvicorn app.main:app` from `backend/api` with `APP_ENV=production`, real `DATABASE_URL`, and a strong `SESSION_SECRET`.
+- See [docs/architecture/deployment.md](docs/architecture/deployment.md).

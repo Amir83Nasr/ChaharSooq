@@ -1,15 +1,15 @@
-import { Geist, Geist_Mono, Inter } from "next/font/google"
+import type { Metadata } from "next"
 
 import "@workspace/ui/globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "@workspace/ui/lib/utils"
 
-const inter = Inter({subsets:['latin'],variable:'--font-sans'})
+import { iranYekanX } from "./fonts"
 
-const fontMono = Geist_Mono({
-  subsets: ["latin"],
-  variable: "--font-mono",
-})
+export const metadata: Metadata = {
+  title: "چهارسوق | پنل مدیریت",
+  description: "پنل مدیریت فروشگاه چهارسوق",
+}
 
 export default function RootLayout({
   children,
@@ -18,9 +18,10 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang="fa"
+      dir="rtl"
       suppressHydrationWarning
-      className={cn("antialiased", fontMono.variable, "font-sans", inter.variable)}
+      className={cn("antialiased", iranYekanX.variable, "font-sans")}
     >
       <body>
         <ThemeProvider>{children}</ThemeProvider>

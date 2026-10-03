@@ -1,0 +1,21 @@
+pre-commit:
+  parallel: true
+  commands:
+    format:
+      glob: "*.{ts,tsx}"
+      run: pnpm exec prettier --write {staged_files}
+      stage_fixed: true
+    lint:
+      glob: "*.{ts,tsx}"
+      run: pnpm exec eslint {staged_files}
+    ruff:
+      glob: "backend/**/*.py"
+      run: uv run ruff check {staged_files}
+      exclude: backend/api/tests/**
+
+pre-push:
+  commands:
+    frontend:
+      run: pnpm lint && pnpm typecheck
+    backend:
+      run: uv run --project backend/api ruff check . && uv run --project backend/api ruff format --check . && uv run --project backend/api pyright && uv run --project backend/api pytest -q

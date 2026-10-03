@@ -47,7 +47,6 @@
     --radius-2xl: calc(var(--radius) * 1.8);
     --radius-3xl: calc(var(--radius) * 2.2);
     --radius-4xl: calc(var(--radius) * 2.6);
-    --font-sans: var(--font-sans);
 }
 
 :root {
@@ -125,6 +124,10 @@
     }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-sans), Tahoma, Arial, sans-serif;
+    }
+  .toman-glyph {
+    font-family: var(--font-toman), var(--font-sans), Tahoma, sans-serif;
     }
   button:not(:disabled), [role="button"]:not(:disabled) {
     cursor: pointer;

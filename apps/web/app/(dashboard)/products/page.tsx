@@ -2,7 +2,15 @@
 
 import { useEffect, useState } from "react"
 
-import { EmptyState } from "@workspace/ui/components/state"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@workspace/ui/components/table"
+import { EmptyState, ErrorState } from "@workspace/ui/components/state"
 import { PageHeader } from "@workspace/ui/components/page-header"
 import { Price } from "@workspace/ui/components/price"
 import { PersianNumber } from "@workspace/ui/components/persian-number"
@@ -33,9 +41,7 @@ export default function ProductsPage() {
     <>
       <PageHeader title="محصولات" subtitle="مدیریت کالاهای فروشگاه" />
       {error ? (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
+        <ErrorState title="خطا در بارگذاری محصولات" hint={error} />
       ) : null}
       {!page && !error ? (
         <div className="flex flex-col gap-2" aria-label="در حال بارگذاری">
@@ -51,43 +57,30 @@ export default function ProductsPage() {
         />
       ) : null}
       {page && page.items.length > 0 ? (
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full min-w-160 text-sm">
-            <thead>
-              <tr className="border-b border-border">
-                <th scope="col" className="px-4 py-2 text-start font-medium">
-                  نام
-                </th>
-                <th scope="col" className="px-4 py-2 text-start font-medium">
-                  کد
-                </th>
-                <th scope="col" className="px-4 py-2 text-start font-medium">
-                  قیمت
-                </th>
-                <th scope="col" className="px-4 py-2 text-start font-medium">
-                  موجودی
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {page.items.map((item) => (
-                <tr
-                  key={item.id}
-                  className="border-b border-border last:border-0"
-                >
-                  <td className="px-4 py-2">{item.name}</td>
-                  <td className="px-4 py-2">{item.sku}</td>
-                  <td className="px-4 py-2">
-                    <Price value={item.price} />
-                  </td>
-                  <td className="px-4 py-2">
-                    <PersianNumber value={item.stock} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead scope="col">نام</TableHead>
+              <TableHead scope="col">کد</TableHead>
+              <TableHead scope="col">قیمت</TableHead>
+              <TableHead scope="col">موجودی</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {page.items.map((item) => (
+              <TableRow key={item.id}>
+                <TableCell>{item.name}</TableCell>
+                <TableCell>{item.sku}</TableCell>
+                <TableCell>
+                  <Price value={item.price} />
+                </TableCell>
+                <TableCell>
+                  <PersianNumber value={item.stock} />
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       ) : null}
     </>
   )

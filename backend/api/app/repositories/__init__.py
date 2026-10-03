@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Product
@@ -11,13 +11,19 @@ class ProductRepository:
         self._session = session
 
     def list(self, *, query: str, page: int, page_size: int) -> tuple[list[Product], int]:
-        stmt = select(Product).order_by(Product.id.desc())
+        base = select(Product)
+        count_stmt = select(func.count()).select_from(Product)
         if query:
-            stmt = stmt.where(Product.name.ilike(f"%{query}%"))
-        rows = self._session.execute(stmt).scalars().all()
-        total = len(rows)
+            base = base.where(Product.name.ilike(f"%{query}%"))
+            count_stmt = count_stmt.where(Product.name.ilike(f"%{query}%"))
+        total = self._session.execute(count_stmt).scalar_one()
         start = (page - 1) * page_size
-        return list(rows[start : start + page_size]), total
+        rows = (
+            self._session.execute(base.order_by(Product.id.desc()).offset(start).limit(page_size))
+            .scalars()
+            .all()
+        )
+        return list(rows), total
 
     def add(self, product: Product) -> Product:
         self._session.add(product)

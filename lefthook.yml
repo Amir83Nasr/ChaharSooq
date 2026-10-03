@@ -10,7 +10,7 @@ pre-commit:
       run: pnpm exec eslint {staged_files}
     ruff:
       glob: "backend/**/*.py"
-      run: uv run ruff check {staged_files}
+      run: uv run --project backend/api ruff check {staged_files}
       exclude: backend/api/tests/**
 
 pre-push:

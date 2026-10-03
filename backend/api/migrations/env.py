@@ -1,13 +1,23 @@
-"""Alembic environment — autogenerate from app.models metadata."""
+# pyright: reportUnusedImport=false
+"""Alembic environment — autogenerate from app.models metadata.
 
+Run from backend/api so `import app...` resolves (prepend_sys_path = .).
+"""
+
+from __future__ import annotations
+
+import sys
 from logging.config import fileConfig
+from pathlib import Path
 
-from alembic import context
-from sqlalchemy import engine_from_config, pool
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.core.database import Base
+from alembic import context  # noqa: E402
+from sqlalchemy import engine_from_config, pool  # noqa: E402
 
-import app.models  # noqa: F401  (register models)
+from app.core.database import Base  # noqa: E402
+
+import app.models  # noqa: E402,F401  (register models)
 
 config = context.config
 if config.config_file_name is not None:

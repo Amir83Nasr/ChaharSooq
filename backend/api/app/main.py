@@ -3,12 +3,14 @@
 import logging
 import time
 from collections import defaultdict
+from collections.abc import Awaitable, Callable
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 
 from app.api.router import router
 from app.core.config import get_settings
@@ -22,7 +24,9 @@ RATE_WINDOW_S = 60.0
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):  # type: ignore[no-untyped-def]
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
@@ -54,7 +58,9 @@ def create_app() -> FastAPI:
     )
 
     @app.middleware("http")
-    async def login_rate_limit(request: Request, call_next):  # type: ignore[no-untyped-def]
+    async def login_rate_limit(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         if request.url.path.endswith("/auth/login") and request.method == "POST":
             ip = request.client.host if request.client else "unknown"
             if _rate_limited(ip):
@@ -76,7 +82,7 @@ def create_app() -> FastAPI:
             field = ".".join(str(p) for p in err["loc"] if p != "body") or "body"
             details.setdefault(field, []).append(err["msg"])
         return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             content={
                 "error": {
                     "code": "validation_error",

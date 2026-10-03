@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.dependencies import get_current_admin, get_db, require_admin
 from app.models import Admin
-from app.schemas import ErrorEnvelope, LoginIn, LoginOut, MeOut, ProductIn, ProductOut, ProductPage
+from app.schemas import LoginIn, LoginOut, MeOut, ProductIn, ProductOut, ProductPage
 from app.services import LOGIN_ERROR, AuthService, ProductService
 
 router = APIRouter()
@@ -23,10 +23,6 @@ def _session_cookie(token: str | None, *, max_age: int | None) -> dict[str, obje
         "path": "/",
         **({"max_age": max_age} if max_age else {"expires": 0}),
     }
-
-
-def _unauthorized(message: str) -> ErrorEnvelope:
-    return ErrorEnvelope.model_validate({"error": {"code": "unauthorized", "message": message}})
 
 
 @router.get("/health")

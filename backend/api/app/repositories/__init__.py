@@ -15,9 +15,7 @@ class CategoryRepository:
         self._session = session
 
     def list(self) -> list[Category]:
-        return list(
-            self._session.execute(select(Category).order_by(Category.name)).scalars().all()
-        )
+        return list(self._session.execute(select(Category).order_by(Category.name)).scalars().all())
 
     def get(self, category_id: int) -> Category | None:
         return self._session.get(Category, category_id)

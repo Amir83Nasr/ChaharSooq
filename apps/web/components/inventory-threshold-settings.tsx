@@ -53,7 +53,7 @@ export function InventoryThresholdSettings() {
     setError(null)
     setSaved(false)
     try {
-      const data = await api.updateSettings(threshold)
+      const data = await api.updateSettings({ low_stock_threshold: threshold })
       setValue(String(data.low_stock_threshold))
       setSaved(true)
     } catch (err: unknown) {

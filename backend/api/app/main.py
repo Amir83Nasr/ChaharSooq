@@ -1,8 +1,6 @@
 """App factory — secure defaults, predictable error envelope, no secret logging."""
 
 import logging
-import time
-from collections import defaultdict
 from collections.abc import Awaitable, Callable
 
 from fastapi import FastAPI, HTTPException, Request, status
@@ -12,20 +10,12 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
-from app.api.router import router
+from app.api import router
 from app.core.config import get_settings
+from app.core.rate_limit import rate_limited
 
 log = logging.getLogger("charsooq")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
-
-_rate_buckets: dict[str, list[float]] = defaultdict(list)
-RATE_LIMIT = 10
-RATE_WINDOW_S = 60.0
-
-
-def reset_rate_limits() -> None:
-    """Test hook — clears in-memory login buckets between test clients."""
-    _rate_buckets.clear()
 
 
 _FIELD_LABELS: dict[str, str] = {
@@ -70,16 +60,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
-def _rate_limited(ip: str) -> bool:
-    now = time.monotonic()
-    bucket = [t for t in _rate_buckets[ip] if now - t < RATE_WINDOW_S]
-    _rate_buckets[ip] = bucket
-    if len(bucket) >= RATE_LIMIT:
-        return True
-    bucket.append(now)
-    return False
-
-
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title="Charsooq Admin API", version="0.1.0")
@@ -99,7 +79,7 @@ def create_app() -> FastAPI:
     ) -> Response:
         if request.url.path.endswith("/auth/login") and request.method == "POST":
             ip = request.client.host if request.client else "unknown"
-            if _rate_limited(ip):
+            if rate_limited(ip):
                 return JSONResponse(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     content={

@@ -36,7 +36,7 @@ import { LogoutMenuItem } from "@/components/logout-menu-item"
 const NAV = [
   {
     group: "داشبورد",
-    items: [{ href: "/dashboard", label: "داشبورد", icon: LayoutDashboard }],
+    items: [{ href: "/dashboard", label: "داشبورد", icon: LayoutDashboard, soon: true }],
   },
   {
     group: "فروش",

@@ -1,3 +1,5 @@
+"""Versioned API router."""
+
 from fastapi import APIRouter
 
 from app.api.routes import router as v1_router

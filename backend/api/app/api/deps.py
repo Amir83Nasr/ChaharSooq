@@ -6,6 +6,7 @@ from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_session as _get_session
+from app.core.errors import LOGIN_REQUIRED
 from app.models import Admin
 from app.services import AuthService
 
@@ -33,5 +34,5 @@ def require_admin(
 ) -> Admin:
     admin = AuthService(session).current_admin(_token_from_request(request))
     if admin is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="نیاز به ورود است")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=LOGIN_REQUIRED)
     return admin

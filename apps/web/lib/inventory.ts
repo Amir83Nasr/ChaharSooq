@@ -17,6 +17,7 @@ export function stockStatus(stock: number, threshold: number = DEFAULT_LOW_STOCK
   return "in"
 }
 
+/** Local aggregate for tests/offline calc. Live stats come from GET /products/summary. */
 export interface InventorySummary {
   total: number
   in: number

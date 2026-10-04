@@ -1,11 +1,12 @@
 import type { Metadata } from "next"
 
-import { MoonStar, PackageMinus } from "lucide-react"
+import { MoonStar, PackageMinus, Rows3 } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { PageHeader } from "@workspace/ui/components/page-header"
 
 import { InventoryThresholdSettings } from "@/components/inventory-threshold-settings"
+import { PageSizeSettings } from "@/components/page-size-settings"
 import { ThemeSettings } from "@/components/theme-settings"
 
 export const metadata: Metadata = { title: "چهارسوق | تنظیمات" }
@@ -26,6 +27,20 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent>
           <ThemeSettings />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Rows3 className="size-4" />
+            تعداد ردیف پیش‌فرض جدول
+          </CardTitle>
+          <CardDescription>
+            چند ردیف در هر صفحه جدول محصولات نمایش داده شود
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <PageSizeSettings />
         </CardContent>
       </Card>
       <Card>

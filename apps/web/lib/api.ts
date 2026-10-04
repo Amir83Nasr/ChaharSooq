@@ -29,6 +29,14 @@ export interface ProductPage {
   page_size: number
 }
 
+export interface InventorySummary {
+  total: number
+  in_stock: number
+  low: number
+  out: number
+  stock_value: number
+}
+
 export interface ApiError {
   error: {
     code: string
@@ -67,6 +75,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (res.status === 204) return undefined as T
   return (await res.json()) as T
+}
+
+export interface SettingsOut {
+  low_stock_threshold: number
+  default_page_size: number
+}
+
+export interface SettingsUpdate {
+  low_stock_threshold?: number
+  default_page_size?: number
 }
 
 export interface ProductFilters {
@@ -116,12 +134,12 @@ export const api = {
     })
   },
   settings() {
-    return request<{ low_stock_threshold: number }>("/api/v1/settings")
+    return request<SettingsOut>("/api/v1/settings")
   },
-  updateSettings(low_stock_threshold: number) {
-    return request<{ low_stock_threshold: number }>("/api/v1/settings", {
+  updateSettings(patch: SettingsUpdate) {
+    return request<SettingsOut>("/api/v1/settings", {
       method: "PUT",
-      body: JSON.stringify({ low_stock_threshold }),
+      body: JSON.stringify(patch),
     })
   },
   me() {
@@ -157,19 +175,11 @@ export const api = {
   deleteCategory(id: number) {
     return request<undefined>(`/api/v1/categories/${id}`, { method: "DELETE" })
   },
+  productsSummary(threshold: number) {
+    return request<InventorySummary>(
+      `/api/v1/products/summary?threshold=${threshold}`
+    )
+  },
 }
 
-/** All products across server pages. Aggregate use only, never for tables. */
-export async function fetchAllProducts(): Promise<ProductOut[]> {
-  const pageSize = 100
-  const first = await api.products({ page: 1, page_size: pageSize })
-  const all = [...first.items]
-  let pageNum = 1
-  while (all.length < first.total) {
-    pageNum += 1
-    const next = await api.products({ page: pageNum, page_size: pageSize })
-    if (next.items.length === 0) break
-    all.push(...next.items)
-  }
-  return all
-}
+

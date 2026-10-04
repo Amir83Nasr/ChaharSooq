@@ -11,7 +11,7 @@ cp .env.example .env.local
 ## Workflow
 
 1. Branch from `main`, keep changes focused.
-2. Follow [AGENTS.md](../AGENTS.md) and [CHARSOOQ-PROJECT-SPEC.md](../CHARSOOQ-PROJECT-SPEC.md).
+2. Follow [AGENTS.md](../AGENTS.md).
 3. Machine values stay numeric/Latin in backend, API, and DB. Persian digits, `٬`, `٫`, Jalali dates, and the Toman glyph live only in the UI layer (`packages/ui`).
 4. Business logic goes in `backend/api/app/services/`, never in route handlers. UI primitives stay free of business logic.
 

@@ -11,6 +11,6 @@ export const metadata: Metadata = {
 
 export default async function LoginPage() {
   const admin = await getSessionAdmin()
-  if (admin) redirect("/dashboard")
+  if (admin) redirect("/products")
   return <LoginShell />
 }

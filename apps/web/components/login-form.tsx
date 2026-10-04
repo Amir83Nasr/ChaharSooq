@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import { Lock, User } from "lucide-react"
 
 import { Button } from "@workspace/ui/components/button"
@@ -9,7 +8,6 @@ import { Input } from "@workspace/ui/components/input"
 import { api, ApiRequestError } from "@/lib/api"
 
 export function LoginForm() {
-  const router = useRouter()
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [fieldErrors, setFieldErrors] = useState<{ username?: string; password?: string }>({})
@@ -31,8 +29,9 @@ export function LoginForm() {
     setPending(true)
     try {
       await api.login(username.trim(), password)
-      router.push("/dashboard")
-      router.refresh()
+      // Full reload (not router.push): picks up the fresh HttpOnly session
+      // cookie server-side; push+refresh races and can leave user on /login.
+      window.location.assign("/products")
     } catch (err) {
       if (err instanceof ApiRequestError && err.code === "validation_error" && err.details) {
         const mapped: typeof fieldErrors = {}

@@ -50,6 +50,9 @@ db-seed: db-up ## Create dev admin user (ADMIN_USER / ADMIN_PASSWORD)
 	ADMIN_USER="$(strip $(ADMIN_USER))" ADMIN_PASSWORD="$(strip $(ADMIN_PASSWORD))" \
 	uv run --project backend/api python backend/api/scripts/seed_admin.py
 
+db-seed-products: db-up ## Seed home-appliance catalog (idempotent, prunes stale rows)
+	uv run --project backend/api python backend/api/scripts/seed_products.py
+
 # ─── DATABASE: PROD (NEON) ────────────────────────────────
 db-migrate-prod: ## Apply Alembic migrations to prod Neon (reads .env.production)
 	set -a; . ./.env.production; set +a; \

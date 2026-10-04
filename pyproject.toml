@@ -1,7 +1,7 @@
 [project]
 name = "charsooq"
-version = "0.0.1"
-description = "Charsooq monorepo workspace root"
+version = "0.1.0"
+description = "ChaharSooq monorepo workspace root"
 requires-python = ">=3.12"
 dependencies = []
 

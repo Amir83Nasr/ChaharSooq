@@ -63,7 +63,7 @@
             }
           },
           "422": {
-            "description": "Unprocessable Content",
+            "description": "Unprocessable Entity",
             "content": {
               "application/json": {
                 "schema": {
@@ -168,6 +168,40 @@
                 }
               ],
               "title": "Max Price"
+            }
+          },
+          {
+            "name": "min_stock",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Stock"
+            }
+          },
+          {
+            "name": "max_stock",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Max Stock"
             }
           },
           {
@@ -285,6 +319,47 @@
         }
       }
     },
+    "/api/v1/products/summary": {
+      "get": {
+        "summary": "Products Summary",
+        "operationId": "products_summary_api_v1_products_summary_get",
+        "parameters": [
+          {
+            "name": "threshold",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 10,
+              "title": "Threshold"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventorySummaryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/categories": {
       "get": {
         "summary": "List Categories",
@@ -361,6 +436,60 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings": {
+      "get": {
+        "summary": "Get Settings View",
+        "operationId": "get_settings_view_api_v1_settings_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsOut"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update Settings",
+        "operationId": "update_settings_api_v1_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsUpdateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsOut"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -476,6 +605,39 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "InventorySummaryOut": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "in_stock": {
+            "type": "integer",
+            "title": "In Stock"
+          },
+          "low": {
+            "type": "integer",
+            "title": "Low"
+          },
+          "out": {
+            "type": "integer",
+            "title": "Out"
+          },
+          "stock_value": {
+            "type": "integer",
+            "title": "Stock Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "in_stock",
+          "low",
+          "out",
+          "stock_value"
+        ],
+        "title": "InventorySummaryOut"
       },
       "LoginIn": {
         "properties": {
@@ -647,6 +809,59 @@
           "page_size"
         ],
         "title": "ProductPage"
+      },
+      "SettingsOut": {
+        "properties": {
+          "low_stock_threshold": {
+            "type": "integer",
+            "title": "Low Stock Threshold"
+          },
+          "default_page_size": {
+            "type": "integer",
+            "title": "Default Page Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "low_stock_threshold",
+          "default_page_size"
+        ],
+        "title": "SettingsOut"
+      },
+      "SettingsUpdateIn": {
+        "properties": {
+          "low_stock_threshold": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1000000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Low Stock Threshold"
+          },
+          "default_page_size": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "enum": [
+                  10,
+                  20,
+                  50
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Page Size"
+          }
+        },
+        "type": "object",
+        "title": "SettingsUpdateIn"
       },
       "ValidationError": {
         "properties": {

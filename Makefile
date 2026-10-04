@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-.PHONY: build check db-migrate db-seed db-seed-products db-up deploy-api dev-all dev-api dev-web docker-down docker-logs docker-up help install lint test typecheck
+.PHONY: build check db-migrate db-migrate-prod db-seed db-seed-prod db-seed-products db-up deploy-api dev-all dev-api dev-web docker-down docker-logs docker-up help install lint test typecheck
 
 # ─── HELP ─────────────────────────────────────────────────
 help: ## Show this help message
@@ -39,7 +39,7 @@ dev-all: db-up migrate ## Start backend + frontend together (Ctrl-C stops both)
 	pnpm dev & \
 	wait
 
-# ─── DATABASE ─────────────────────────────────────────────
+# ─── DATABASE: DEV ────────────────────────────────────────
 db-up: ## Start dev postgres (own container, port 5433)
 	docker compose -f $(COMPOSE_FILE) up -d postgres
 
@@ -50,8 +50,15 @@ db-seed: db-up ## Create dev admin user (ADMIN_USER / ADMIN_PASSWORD)
 	ADMIN_USER="$(strip $(ADMIN_USER))" ADMIN_PASSWORD="$(strip $(ADMIN_PASSWORD))" \
 	uv run --project backend/api python backend/api/scripts/seed_admin.py
 
-db-seed-products: db-up ## Insert demo products (idempotent, safe to re-run)
-	uv run --project backend/api python backend/api/scripts/seed_products.py
+# ─── DATABASE: PROD (NEON) ────────────────────────────────
+db-migrate-prod: ## Apply Alembic migrations to prod Neon (reads .env.production)
+	set -a; . ./.env.production; set +a; \
+	cd backend/api && uv run alembic upgrade head
+
+db-seed-prod: ## Create prod admin user from ADMIN_USER / ADMIN_PASSWORD
+	set -a; . ./.env.production; set +a; \
+	ADMIN_USER="$(strip $(ADMIN_USER))" ADMIN_PASSWORD="$(strip $(ADMIN_PASSWORD))" \
+	uv run --project backend/api python backend/api/scripts/seed_admin.py
 
 # ─── DOCKER ───────────────────────────────────────────────
 docker-up: ## Start services with Docker Compose

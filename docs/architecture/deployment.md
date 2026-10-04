@@ -23,4 +23,4 @@ Production requires: real `DATABASE_URL`, strong `SESSION_SECRET`, `APP_ENV=prod
 
 ## Docker (optional)
 
-`docker-compose.yml` provides `web` + `api` + `postgres` for reproducible local/prod-like runs. Native `pnpm dev` remains the default dev path.
+`compose.yml` provides `web` + `api` + `postgres` for reproducible local/prod-like runs. Native `pnpm dev` remains the default dev path.

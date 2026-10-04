@@ -26,12 +26,14 @@ class AuthService:
         ).scalar_one_or_none()
         if admin is None or not verify_password(admin.password_hash, payload.password):
             return None
+        now = datetime.now(UTC)
+        self._session.execute(delete(AdminSession).where(AdminSession.expires_at <= now))
         token = new_session_token()
         ttl = timedelta(hours=get_settings().session_ttl_hours)
         self._session.add(
             AdminSession(
                 token_hash=hash_token(token),
-                expires_at=datetime.now(UTC) + ttl,
+                expires_at=now + ttl,
             )
         )
         return token

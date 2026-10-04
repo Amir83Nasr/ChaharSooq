@@ -50,13 +50,13 @@ export function AppSidebar() {
   }
 
   return (
-    <Sidebar variant="sidebar" collapsible="icon">
+    <Sidebar side="right" variant="sidebar" collapsible="offcanvas">
       <SidebarHeader>
         <div className="flex items-center gap-2 px-2 py-1">
           <span className="flex size-8 items-center justify-center rounded-md bg-primary font-bold text-primary-foreground">
             چ
           </span>
-          <span className="flex min-w-0 flex-col group-data-[collapsible=icon]:hidden">
+          <span className="flex min-w-0 flex-col">
             <span className="text-sm font-bold">چهارسوق</span>
             <span className="text-xs text-muted-foreground">
               پنل مدیریت فروشگاه

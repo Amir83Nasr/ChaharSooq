@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "eslint",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@workspace/ui": "workspace:*",
@@ -20,6 +21,7 @@
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -27,6 +29,7 @@
     "@workspace/eslint-config": "workspace:^",
     "@workspace/typescript-config": "workspace:*",
     "eslint": "^10",
+    "shadcn": "^4.21.1",
     "typescript": "^5"
   }
 }

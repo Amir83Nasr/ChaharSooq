@@ -14,15 +14,21 @@ export interface SessionAdmin {
 
 export async function getSessionAdmin(): Promise<SessionAdmin | null> {
   const cookieHeader = (await cookies()).toString()
+  let res: Response
   try {
-    const res = await fetch(`${API}/api/v1/auth/me`, {
+    res = await fetch(`${API}/api/v1/auth/me`, {
       headers: { cookie: cookieHeader },
       cache: "no-store",
     })
-    if (!res.ok) return null
-    return (await res.json()) as SessionAdmin
   } catch {
-    // API down → treat as unauthenticated (safe default: deny).
+    // API unreachable from the web server → check API_URL_INTERNAL on the host.
+    // Never log cookieHeader here (session secret material).
+    console.error("getSessionAdmin: API unreachable", { host: API })
     return null
   }
+  if (!res.ok) {
+    if (res.status !== 401) console.error("getSessionAdmin: unexpected status", { host: API, status: res.status })
+    return null
+  }
+  return (await res.json()) as SessionAdmin
 }

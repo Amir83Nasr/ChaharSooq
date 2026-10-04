@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-.PHONY: build check db-migrate db-migrate-prod db-seed db-seed-prod db-seed-products db-up deploy-api dev-all dev-api dev-web docker-down docker-logs docker-up help install lint test typecheck
+.PHONY: build check db-migrate db-migrate-prod db-seed db-seed-prod db-up deploy-api dev-all dev-api dev-web docker-down docker-logs docker-up help install lint test typecheck
 
 # ─── HELP ─────────────────────────────────────────────────
 help: ## Show this help message

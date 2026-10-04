@@ -28,7 +28,10 @@ export function LoginForm() {
     }
     setPending(true)
     try {
-      await api.login(username.trim(), password)
+      const t0 = Date.now()
+      const res = await api.login(username.trim(), password)
+      // eslint-disable-next-line no-console
+      console.info("login ok", { ms: Date.now() - t0, ok: res.ok })
       // Full reload (not router.push): picks up the fresh HttpOnly session
       // cookie server-side; push+refresh races and can leave user on /login.
       window.location.assign("/products")

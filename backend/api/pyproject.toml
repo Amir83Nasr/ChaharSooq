@@ -43,5 +43,8 @@ pythonpath = ["."]
 [tool.pyright]
 typeCheckingMode = "strict"
 
+[tool.fastapi]
+entrypoint = "app.main:app"
+
 [tool.alembic]
 script_location = "migrations"

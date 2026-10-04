@@ -35,12 +35,15 @@ router = APIRouter()
 
 def _session_cookie(token: str | None, *, max_age: int | None) -> dict[str, object]:
     settings = get_settings()
+    # ponytail: cross-domain prod (Vercel + API host جدا) به SESSION_SAMESITE=none نیاز دارد.
+    samesite: str = "none" if settings.session_samesite == "none" else "lax"
+    secure = True if samesite == "none" else settings.is_production
     return {
         "key": settings.session_cookie_name,
         "value": token or "",
         "httponly": True,
-        "secure": settings.is_production,
-        "samesite": "lax",
+        "secure": secure,
+        "samesite": samesite,
         "path": "/",
         **({"max_age": max_age} if max_age else {"expires": 0}),
     }
@@ -71,7 +74,12 @@ def logout(request: Request, response: Response, session: Session = Depends(get_
     token = request.cookies.get(get_settings().session_cookie_name)
     if token:
         AuthService(session).logout(token)
-    response.delete_cookie(key=get_settings().session_cookie_name, path="/")
+    settings = get_settings()
+    samesite: str = "none" if settings.session_samesite == "none" else "lax"
+    secure = True if samesite == "none" else settings.is_production
+    response.delete_cookie(
+        key=settings.session_cookie_name, path="/", secure=secure, samesite=samesite
+    )
     response.status_code = status.HTTP_204_NO_CONTENT
 
 

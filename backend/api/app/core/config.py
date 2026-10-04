@@ -1,6 +1,6 @@
 import json
 from functools import lru_cache
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     session_secret: str = Field(default="dev-only-secret-change-me-min-32-chars")
     session_cookie_name: str = Field(default="charsooq_session")
     session_ttl_hours: int = Field(default=12)
+    session_samesite: Literal["lax", "none"] = Field(default="lax")
     cors_origins: Annotated[list[str], NoDecode] = Field(
         default=[
             "http://localhost:3000",

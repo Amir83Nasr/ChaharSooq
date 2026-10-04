@@ -34,7 +34,7 @@ dev-web: ## Start frontend dev server (turbo)
 dev-api: ## Start backend API with reload (expects postgres up)
 	uv run --project backend/api uvicorn app.main:app --app-dir backend/api --host 0.0.0.0 --port 8000 --reload
 
-dev-all: db-up migrate ## Start backend + frontend together (Ctrl-C stops both)
+dev-all: db-migrate ## Start backend + frontend together (Ctrl-C stops both)
 	uv run --project backend/api uvicorn app.main:app --app-dir backend/api --host 0.0.0.0 --port 8000 --reload & \
 	pnpm dev & \
 	wait

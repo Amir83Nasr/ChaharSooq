@@ -30,9 +30,11 @@ export default async function DashboardLayout({
         {/* min-w-0 lets the inset shrink below its content's min-content
             width, so wide inner scrollers (tables) scroll inside their own
             container instead of pushing the whole page sideways. */}
-        <SidebarInset className="min-w-0">
+        <SidebarInset className="h-dvh min-w-0 overflow-hidden md:h-[calc(100dvh-1rem)]">
           <DashboardHeader />
-          <div className="flex min-w-0 flex-col gap-4 overflow-x-clip p-4">{children}</div>
+          <div className="no-scrollbar flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-x-clip overflow-y-auto p-4">
+            {children}
+          </div>
         </SidebarInset>
       </LogoutProvider>
     </SidebarProvider>

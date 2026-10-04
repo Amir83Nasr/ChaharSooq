@@ -131,9 +131,14 @@
     -ms-overflow-style: none;
     }
   html::-webkit-scrollbar,
-  body::-webkit-scrollbar {
+  body::-webkit-scrollbar,
+  .no-scrollbar::-webkit-scrollbar {
     display: none;
-    }
+  }
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
   .toman-glyph {
     font-family: var(--font-toman), var(--font-sans), Tahoma, sans-serif;
     }

@@ -15,14 +15,14 @@ import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { TablePagination } from "@workspace/ui/components/pagination"
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@workspace/ui/components/dialog"
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+  ResponsiveDialogTrigger,
+} from "@workspace/ui/components/responsive-dialog"
 import { Input } from "@workspace/ui/components/input"
 import {
   Select,
@@ -43,6 +43,10 @@ import { PageHeader } from "@workspace/ui/components/page-header"
 import { Price } from "@workspace/ui/components/price"
 import { PersianDate } from "@workspace/ui/components/persian-date"
 import { PersianNumber } from "@workspace/ui/components/persian-number"
+import {
+  formatPersianNumber,
+  parsePriceFilterInput,
+} from "@workspace/ui/lib/number"
 import { Skeleton } from "@workspace/ui/components/skeleton"
 import {
   api,
@@ -78,6 +82,36 @@ const STOCK_FILTER_LABELS: Record<StockFilter, string> = {
   out: "ناموجود",
 }
 
+type StatColor = "emerald" | "red" | "sky"
+
+const STAT_STYLES: Record<StatColor, { wrap: string; dot: string }> = {
+  sky: {
+    wrap: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+    dot: "bg-sky-500",
+  },
+  red: {
+    wrap: "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300",
+    dot: "bg-red-500",
+  },
+  emerald: {
+    wrap: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    dot: "bg-emerald-500",
+  },
+}
+
+function StatBadge({ color, label, value }: { color: StatColor; label: string; value: number }) {
+  const styles = STAT_STYLES[color]
+  return (
+    <span className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm ${styles.wrap}`}>
+      <span aria-hidden="true" className="relative flex size-2 shrink-0">
+        <span className={`absolute inline-flex h-full w-full animate-ping rounded-full ${styles.dot} opacity-60`} />
+        <span className={`relative inline-flex size-2 rounded-full ${styles.dot}`} />
+      </span>
+      {label} <strong><PersianNumber value={value} /></strong>
+    </span>
+  )
+}
+
 function statusVariant(status: StockStatus): "secondary" | "default" | "destructive" {
   if (status === "out") return "destructive"
   if (status === "low") return "default"
@@ -93,7 +127,7 @@ export default function ProductsPage() {
   const [selected, setSelected] = useState<ProductOut | null>(null)
 
   const [pageNum, setPageNum] = useState(1)
-  const [pageSize, setPageSize] = useState(20)
+  const [pageSize, setPageSize] = useState(10)
   const [q, setQ] = useState("")
   const [debouncedQ, setDebouncedQ] = useState("")
   const [categoryId, setCategoryId] = useState<number | null>(null)
@@ -240,23 +274,23 @@ export default function ProductsPage() {
         title="محصولات"
         subtitle="مدیریت کالاهای فروشگاه"
         actions={
-          <Dialog open={catOpen} onOpenChange={setCatOpen}>
-            <DialogTrigger render={<Button variant="outline" />}>
-              مدیریت دسته‌ها
-            </DialogTrigger>
-            <DialogContent aria-label="مدیریت دسته‌بندی‌ها">
-              <DialogHeader>
-                <DialogTitle>دسته‌بندی‌ها</DialogTitle>
-                <DialogDescription>
-                  دسته جدید بسازید یا دسته خالی را حذف کنید.
-                </DialogDescription>
-              </DialogHeader>
+          <ResponsiveDialog open={catOpen} onOpenChange={setCatOpen}>
+            <ResponsiveDialogTrigger render={<Button variant="outline" />}>
+              مدیریت دسته‌بندی‌ها
+            </ResponsiveDialogTrigger>
+            <ResponsiveDialogContent aria-label="مدیریت دسته‌بندی‌ها">
+              <ResponsiveDialogHeader>
+                <ResponsiveDialogTitle>دسته‌بندی‌ها</ResponsiveDialogTitle>
+                <ResponsiveDialogDescription>
+                  دسته‌بندی جدید بسازید یا دسته‌بندی خالی را حذف کنید.
+                </ResponsiveDialogDescription>
+              </ResponsiveDialogHeader>
               <div className="flex items-center gap-2">
                 <Input
                   value={newCat}
                   onChange={(e) => setNewCat(e.target.value)}
-                  placeholder="نام دسته جدید…"
-                  aria-label="نام دسته جدید"
+                  placeholder="نام دسته‌بندی جدید…"
+                  aria-label="نام دسته‌بندی جدید"
                   maxLength={120}
                 />
                 <Button onClick={addCategory} disabled={!newCat.trim() || catBusy}>
@@ -274,30 +308,26 @@ export default function ProductsPage() {
                   </li>
                 ))}
                 {categories.length === 0 ? (
-                  <li className="text-sm text-muted-foreground">دسته‌ای ثبت نشده است.</li>
+                  <li className="text-sm text-muted-foreground">دسته‌بندی‌ای ثبت نشده است.</li>
                 ) : null}
               </ul>
-              <DialogFooter>
+              <ResponsiveDialogFooter>
                 <Button variant="outline" onClick={() => setCatOpen(false)}>
                   بستن
                 </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              </ResponsiveDialogFooter>
+            </ResponsiveDialogContent>
+          </ResponsiveDialog>
         }
       />
 
-      {stats ? (
+      {stats || page ? (
         <div className="mb-4 flex flex-wrap items-center gap-2" aria-label="آمار موجودی">
-          <span className="rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground">
-            کل کالاها <strong className="text-foreground"><PersianNumber value={stats.total} /></strong>
-          </span>
-          <span className="rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground">
-            کم‌موجودی <strong className="text-foreground"><PersianNumber value={stats.low} /></strong>
-          </span>
-          <span className="rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground">
-            ناموجود <strong className="text-foreground"><PersianNumber value={stats.out} /></strong>
-          </span>
+          <StatBadge color="sky" label="کل کالاها" value={stats?.total ?? 0} />
+          <StatBadge color="red" label="کالاهای ناموجود" value={stats?.out ?? 0} />
+          {hasFilters && page ? (
+            <StatBadge color="emerald" label="نتایج فیلتر" value={page.total} />
+          ) : null}
         </div>
       ) : null}
 
@@ -322,15 +352,15 @@ export default function ProductsPage() {
             <SelectValue>
               {(value: string | null) =>
                 value === null || value === "all"
-                  ? "همه دسته‌ها"
-                  : (categories.find((c) => String(c.id) === value)?.name ?? "همه دسته‌ها")
+                  ? "همه دسته‌بندی‌ها"
+                  : (categories.find((c) => String(c.id) === value)?.name ?? "همه دسته‌بندی‌ها")
               }
             </SelectValue>
           </SelectTrigger>
           <SelectContent align="start">
             <SelectGroup>
               <SelectLabel>دسته‌بندی</SelectLabel>
-              <SelectItem value="all">همه دسته‌ها</SelectItem>
+              <SelectItem value="all">همه دسته‌بندی‌ها</SelectItem>
               {categories.map((c) => (
                 <SelectItem key={c.id} value={String(c.id)}>
                   {c.name}
@@ -385,37 +415,46 @@ export default function ProductsPage() {
             </SelectGroup>
           </SelectContent>
         </Select>
-        <Input
-          value={minPrice}
-          onChange={(e) => {
-            setMinPrice(e.target.value.replace(/[^0-9]/g, ""))
-            resetPage()
-          }}
-          placeholder="کمینه قیمت"
-          aria-label="کمینه قیمت (تومان)"
-          inputMode="numeric"
-          className="w-full sm:w-32"
-        />
-        <Input
-          value={maxPrice}
-          onChange={(e) => {
-            setMaxPrice(e.target.value.replace(/[^0-9]/g, ""))
-            resetPage()
-          }}
-          placeholder="بیشینه قیمت"
-          aria-label="بیشینه قیمت (تومان)"
-          inputMode="numeric"
-          className="w-full sm:w-32"
-        />
+        <div className="relative w-full sm:w-40">
+          <Input
+            value={minPrice === "" ? "" : formatPersianNumber(minPrice)}
+            onChange={(e) => {
+              setMinPrice(parsePriceFilterInput(e.target.value))
+              resetPage()
+            }}
+            placeholder="کمینه قیمت"
+            aria-label="کمینه قیمت (تومان)"
+            inputMode="numeric"
+            className="w-full pe-12"
+          />
+          {minPrice !== "" ? (
+            <span aria-hidden="true" className="pointer-events-none absolute inset-e-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+              تومان
+            </span>
+          ) : null}
+        </div>
+        <div className="relative w-full sm:w-40">
+          <Input
+            value={maxPrice === "" ? "" : formatPersianNumber(maxPrice)}
+            onChange={(e) => {
+              setMaxPrice(parsePriceFilterInput(e.target.value))
+              resetPage()
+            }}
+            placeholder="بیشینه قیمت"
+            aria-label="بیشینه قیمت (تومان)"
+            inputMode="numeric"
+            className="w-full pe-12"
+          />
+          {maxPrice !== "" ? (
+            <span aria-hidden="true" className="pointer-events-none absolute inset-e-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+              تومان
+            </span>
+          ) : null}
+        </div>
         {hasFilters ? (
-          <Button variant="ghost" size="sm" onClick={clearFilters}>
+          <Button variant="destructive" size="sm" onClick={clearFilters}>
             پاک‌سازی فیلترها
           </Button>
-        ) : null}
-        {page ? (
-          <span className="text-sm text-muted-foreground">
-            <PersianNumber value={page.total} /> کالا
-          </span>
         ) : null}
       </DataTableToolbar>
 
@@ -427,7 +466,7 @@ export default function ProductsPage() {
               <TableRow>
                 <TableHead>نام</TableHead>
                 <TableHead className="text-center">کد</TableHead>
-                <TableHead>دسته</TableHead>
+                <TableHead>دسته‌بندی</TableHead>
                 <TableHead className="text-center">قیمت</TableHead>
                 <TableHead className="text-center">موجودی</TableHead>
                 <TableHead className="text-center">وضعیت</TableHead>
@@ -456,7 +495,7 @@ export default function ProductsPage() {
           icon={<PackageSearch className="size-10 text-muted-foreground" />}
           action={
             hasFilters ? (
-              <Button variant="outline" size="sm" onClick={clearFilters}>
+              <Button variant="destructive" size="sm" onClick={clearFilters}>
                 پاک‌سازی فیلترها
               </Button>
             ) : undefined
@@ -478,7 +517,7 @@ export default function ProductsPage() {
               <TableRow>
                 <TableHead scope="col">نام</TableHead>
                 <TableHead scope="col" className="text-center">کد</TableHead>
-                <TableHead scope="col">دسته</TableHead>
+                <TableHead scope="col">دسته‌بندی</TableHead>
                 <TableHead scope="col" className="text-center">قیمت</TableHead>
                 <TableHead scope="col" className="text-center">موجودی</TableHead>
                 <TableHead scope="col" className="text-center">وضعیت</TableHead>
@@ -540,15 +579,15 @@ export default function ProductsPage() {
                 resetPage()
               }}
             >
-              <SelectTrigger size="sm" aria-label="تعداد در هر صفحه">
+              <SelectTrigger size="sm" aria-label="تعداد محصول در هر صفحه">
                 <SelectValue>
                   {(value: string | null) =>
                     value ? (
                       <span>
-                        <PersianNumber value={Number(value)} /> در صفحه
+                        <PersianNumber value={Number(value)} /> محصول در صفحه
                       </span>
                     ) : (
-                      "تعداد در صفحه"
+                      "تعداد محصول در صفحه"
                     )
                   }
                 </SelectValue>
@@ -556,7 +595,7 @@ export default function ProductsPage() {
               <SelectContent align="end">
                 {PAGE_SIZES.map((n) => (
                   <SelectItem key={n} value={String(n)}>
-                    <PersianNumber value={n} /> در صفحه
+                    <PersianNumber value={n} /> محصول در صفحه
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -565,14 +604,14 @@ export default function ProductsPage() {
         </div>
       ) : null}
 
-      <Dialog open={selected !== null} onOpenChange={(open) => { if (!open) setSelected(null) }}>
-        <DialogContent aria-label="جزئیات کالا">
-          <DialogHeader>
-            <DialogTitle>{selected?.name ?? ""}</DialogTitle>
-            <DialogDescription>
+      <ResponsiveDialog open={selected !== null} onOpenChange={(open) => { if (!open) setSelected(null) }}>
+        <ResponsiveDialogContent aria-label="جزئیات کالا">
+          <ResponsiveDialogHeader>
+            <ResponsiveDialogTitle>{selected?.name ?? ""}</ResponsiveDialogTitle>
+            <ResponsiveDialogDescription>
               {selected ? `کد کالا: ${selected.sku}` : ""}
-            </DialogDescription>
-          </DialogHeader>
+            </ResponsiveDialogDescription>
+          </ResponsiveDialogHeader>
           {selected && selectedStatus ? (
             <>
               <div className="flex flex-wrap gap-2">
@@ -601,7 +640,7 @@ export default function ProductsPage() {
                   </dd>
                 </div>
                 <div className="rounded-md border border-border px-3 py-2">
-                  <dt className="text-xs text-muted-foreground">دسته</dt>
+                  <dt className="text-xs text-muted-foreground">دسته‌بندی</dt>
                   <dd className="mt-0.5 font-semibold">
                     {selected.category ? selected.category.name : "—"}
                   </dd>
@@ -619,8 +658,8 @@ export default function ProductsPage() {
               </dl>
             </>
           ) : null}
-        </DialogContent>
-      </Dialog>
+        </ResponsiveDialogContent>
+      </ResponsiveDialog>
     </>
   )
 }

@@ -1,27 +1,15 @@
 "use client"
 
-import { LogOut } from "lucide-react"
-
 import { Button } from "@workspace/ui/components/button"
 import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@workspace/ui/components/dialog"
-import {
-  Drawer,
-  DrawerClose,
-  DrawerContent,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-} from "@workspace/ui/components/drawer"
-import { useIsMobile } from "@/hooks/use-mobile"
+  ResponsiveDialog,
+  ResponsiveDialogClose,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "@workspace/ui/components/responsive-dialog"
 
 type LogoutDialogProps = {
   open: boolean
@@ -37,66 +25,35 @@ export function LogoutDialog({
   onConfirm,
   pending,
 }: LogoutDialogProps) {
-  const isMobile = useIsMobile()
-
-  if (isMobile) {
-    return (
-      <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent aria-label="خروج از حساب">
-          <DrawerHeader className="items-center text-center">
-            <span className="mb-1 flex size-10 items-center justify-center rounded-md bg-destructive/10 text-destructive">
-              <LogOut className="size-5" />
-            </span>
-            <DrawerTitle>خروج از حساب</DrawerTitle>
-            <DrawerDescription>
-              آیا مطمئن هستید که می‌خواهید از پنل مدیریت خارج شوید؟
-            </DrawerDescription>
-          </DrawerHeader>
-          <DrawerFooter className="flex-row gap-2">
-            <DrawerClose render={<Button variant="outline" className="flex-1" />}>
-              انصراف
-            </DrawerClose>
-            <Button
-              variant="destructive"
-              className="flex-1"
-              onClick={() => void onConfirm()}
-              disabled={pending}
-              autoFocus
-            >
-              {pending ? "در حال خروج…" : "خروج"}
-            </Button>
-          </DrawerFooter>
-        </DrawerContent>
-      </Drawer>
-    )
-  }
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent aria-label="خروج از حساب">
-        <DialogHeader className="items-center text-center">
-          <span className="mb-1 flex size-10 items-center justify-center rounded-md bg-destructive/10 text-destructive">
-            <LogOut className="size-5" />
-          </span>
-          <DialogTitle>خروج از حساب</DialogTitle>
-          <DialogDescription>
-            آیا مطمئن هستید که می‌خواهید از پنل مدیریت خارج شوید؟
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <DialogClose render={<Button variant="outline" />}>
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+      <ResponsiveDialogContent aria-label="خروج از حساب">
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>خروج از حساب کاربری</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>
+            آیا مطمئن هستید که می‌خواهید از حساب خود خارج شوید؟ برای ورود مجدد
+            باید دوباره وارد شوید.
+          </ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
+        <ResponsiveDialogFooter className="flex-row gap-2">
+          <ResponsiveDialogClose
+            render={
+              <Button variant="outline" className="flex-1 sm:flex-none" />
+            }
+          >
             انصراف
-          </DialogClose>
+          </ResponsiveDialogClose>
           <Button
             variant="destructive"
+            className="flex-1 sm:flex-none"
             onClick={() => void onConfirm()}
             disabled={pending}
             autoFocus
           >
-            {pending ? "در حال خروج…" : "خروج"}
+            {pending ? "در حال خروج…" : "خروج از حساب"}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </ResponsiveDialogFooter>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   )
 }

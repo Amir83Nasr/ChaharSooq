@@ -14,8 +14,25 @@ export function formatPersianDate(value: Date | string | number): string {
 
 export function formatPersianDateTime(value: Date | string | number): string {
   const date = value instanceof Date ? value : new Date(value)
-  const time = toPersianDigits(
-    `${pad2(date.getHours())}:${pad2(date.getMinutes())}`
+  return `${formatPersianDate(date)}، ساعت ${formatPersianTime(date)}`
+}
+
+/** Machine value in, `۱۲:۳۴`-style Persian-digit time out. */
+export function formatPersianTime(
+  value: Date | string | number,
+  withSeconds = false
+): string {
+  const date = value instanceof Date ? value : new Date(value)
+  const base = `${pad2(date.getHours())}:${pad2(date.getMinutes())}`
+  return toPersianDigits(
+    withSeconds ? `${base}:${pad2(date.getSeconds())}` : base
   )
-  return `${formatPersianDate(date)}، ساعت ${time}`
+}
+
+const weekdayFormatter = new Intl.DateTimeFormat("fa-IR", { weekday: "long" })
+
+/** Machine value in, Persian weekday name out (e.g. `یکشنبه`). */
+export function formatPersianWeekday(value: Date | string | number): string {
+  const date = value instanceof Date ? value : new Date(value)
+  return weekdayFormatter.format(date)
 }

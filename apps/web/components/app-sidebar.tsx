@@ -79,12 +79,12 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
 
   return (
     <Sidebar collapsible="icon" side="right" {...props}>
-      <SidebarHeader>
-        <div className="flex items-center gap-2 px-2 py-1">
-          <span className="flex size-8 items-center justify-center rounded-md bg-primary font-bold text-primary-foreground">
+      <SidebarHeader className="group-data-[collapsible=icon]:px-0">
+        <div className="flex items-center gap-2 px-2 py-1 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary font-bold text-primary-foreground">
             چ
           </span>
-          <span className="flex min-w-0 flex-col">
+          <span className="flex min-w-0 flex-col group-data-[collapsible=icon]:hidden">
             <span className="text-sm font-bold">چهارسوق</span>
             <span className="text-xs text-muted-foreground">
               پنل مدیریت فروشگاه
@@ -94,7 +94,10 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         {NAV.map((entry) => (
-          <SidebarGroup key={entry.group}>
+          <SidebarGroup
+            key={entry.group}
+            className="group-data-[collapsible=icon]:px-0"
+          >
             <SidebarGroupLabel>{entry.group}</SidebarGroupLabel>
             <SidebarMenu>
               {entry.items.map((item) => (
@@ -102,10 +105,13 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
                   {"soon" in item && item.soon ? (
                     <div className="relative">
                       <SidebarMenuButton
+                        className="group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:justify-center"
                         render={
                           <span aria-disabled="true" className="opacity-60">
                             <item.icon />
-                            <span>{item.label}</span>
+                            <span className="group-data-[collapsible=icon]:hidden">
+                              {item.label}
+                            </span>
                           </span>
                         }
                         tooltip={`${item.label} — به‌زودی`}
@@ -119,10 +125,13 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
                     </div>
                   ) : (
                     <SidebarMenuButton
+                      className="group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:justify-center"
                       render={
                         <Link href={item.href}>
                           <item.icon />
-                          <span>{item.label}</span>
+                          <span className="group-data-[collapsible=icon]:hidden">
+                            {item.label}
+                          </span>
                         </Link>
                       }
                       tooltip={item.label}

@@ -58,6 +58,7 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+TODO.md
 
 # ─── ! ────────────────────────────────────────────────────────
 !.yarn/patches

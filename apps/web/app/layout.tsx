@@ -1,6 +1,7 @@
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 
 import "@workspace/ui/globals.css"
+import { ThemeColorSync } from "@/components/theme-color-sync"
 import { ThemeProvider } from "@/components/theme-provider"
 import { cn } from "@workspace/ui/lib/utils"
 
@@ -9,6 +10,13 @@ import { iranYekanX } from "./fonts"
 export const metadata: Metadata = {
   title: "چهارسوق | پنل مدیریت",
   description: "پنل مدیریت فروشگاه چهارسوق",
+}
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+  ],
 }
 
 export default function RootLayout({
@@ -25,6 +33,7 @@ export default function RootLayout({
     >
       <body>
         <ThemeProvider>
+          <ThemeColorSync />
           <div id="charsooq-root" className="relative min-h-dvh">
             {/* Full-page fixed square pattern — stays put while content scrolls */}
             <div

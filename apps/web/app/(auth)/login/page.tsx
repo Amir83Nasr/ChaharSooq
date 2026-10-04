@@ -5,7 +5,7 @@ import { LoginShell } from "@/components/login-shell"
 import { getSessionAdmin } from "@/lib/auth"
 
 export const metadata: Metadata = {
-  title: "ورود مدیر | چهارسوق",
+  title: "چهارسوق | ورود مدیر",
   description: "ورود به پنل مدیریت فروشگاه چهارسوق",
 }
 

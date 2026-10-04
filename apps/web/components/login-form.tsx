@@ -15,6 +15,7 @@ export function LoginForm() {
   const [fieldErrors, setFieldErrors] = useState<{ username?: string; password?: string }>({})
   const [formError, setFormError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
+  const canSubmit = username.trim().length > 0 && password.length > 0 && !pending
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault()
@@ -54,9 +55,9 @@ export function LoginForm() {
     <div className="flex flex-col gap-6">
       <form onSubmit={onSubmit} className="flex flex-col gap-6" noValidate={false}>
         <div className="flex flex-col items-center gap-1 text-center">
-          <h1 className="text-2xl font-bold">ورود مدیر</h1>
+          <h1 className="text-2xl font-bold">ورود به چهارسوق</h1>
           <p className="text-sm text-balance text-muted-foreground">
-            برای ورود به پنل، اطلاعات مدیر را وارد کنید.
+            برای ورود به پنل مدیریت، اطلاعات خود را وارد کنید.
           </p>
         </div>
 
@@ -125,7 +126,7 @@ export function LoginForm() {
         ) : null}
 
         <div className="flex w-full flex-col gap-2">
-          <Button type="submit" className="h-9 w-full md:h-9" disabled={pending}>
+          <Button type="submit" className="h-9 w-full md:h-9" disabled={!canSubmit}>
             {pending ? "در حال ورود…" : "ورود"}
           </Button>
         </div>

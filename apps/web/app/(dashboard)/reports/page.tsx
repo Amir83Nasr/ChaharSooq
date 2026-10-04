@@ -5,7 +5,7 @@ import { Wrench } from "lucide-react"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { PageHeader } from "@workspace/ui/components/page-header"
 
-export const metadata: Metadata = { title: "گزارش‌ها | چهارسوق" }
+export const metadata: Metadata = { title: "چهارسوق | گزارش‌ها" }
 
 export default function ReportsPage() {
   return (

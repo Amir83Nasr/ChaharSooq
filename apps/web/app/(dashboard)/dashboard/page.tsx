@@ -5,7 +5,7 @@ import { Wrench } from "lucide-react"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { PageHeader } from "@workspace/ui/components/page-header"
 
-export const metadata: Metadata = { title: "داشبورد | چهارسوق" }
+export const metadata: Metadata = { title: "چهارسوق | داشبورد" }
 
 export default function DashboardPage() {
   return (

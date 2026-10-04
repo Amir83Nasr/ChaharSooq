@@ -7,7 +7,7 @@ import { PageHeader } from "@workspace/ui/components/page-header"
 
 import { ThemeSettings } from "@/components/theme-settings"
 
-export const metadata: Metadata = { title: "تنظیمات | چهارسوق" }
+export const metadata: Metadata = { title: "چهارسوق | تنظیمات" }
 
 export default function SettingsPage() {
   return (

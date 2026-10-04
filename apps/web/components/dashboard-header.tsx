@@ -16,6 +16,7 @@ import { usePathname } from "next/navigation"
 import { Fragment } from "react"
 
 import { ThemeToggle } from "@/components/theme-toggle"
+import { HeaderDateTime } from "@/components/header-datetime"
 
 const breadcrumbLabels: Record<string, string> = {
   dashboard: "داشبورد",
@@ -61,6 +62,7 @@ export function DashboardHeader() {
       <div className="flex-1" />
       <div className="flex shrink-0 items-center gap-1.5 px-3 sm:gap-2 sm:px-4">
         <ThemeToggle />
+        <HeaderDateTime />
       </div>
     </header>
   )

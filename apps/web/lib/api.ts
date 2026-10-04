@@ -36,7 +36,19 @@ export interface ApiError {
   }
 }
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
+function resolveBase(): string {
+  const configured = process.env.NEXT_PUBLIC_API_URL
+  if (typeof window === "undefined") return configured ?? "http://localhost:8000"
+  const host = window.location.hostname
+  if (host === "localhost" || host === "127.0.0.1" || host === "::1") {
+    return configured ?? "http://localhost:8000"
+  }
+  // ponytail: LAN dev — same host :8000؛ production به NEXT_PUBLIC_API_URL صریح نیاز دارد.
+  if (configured && !configured.includes("localhost") && !configured.includes("127.0.0.1")) {
+    return configured
+  }
+  return `http://${host}:8000`
+}
 
 export class ApiRequestError extends Error {
   status: number
@@ -54,7 +66,7 @@ export class ApiRequestError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response
   try {
-    res = await fetch(`${BASE}${path}`, {
+    res = await fetch(`${resolveBase()}${path}`, {
       credentials: "include",
       headers: { "Content-Type": "application/json" },
       ...init,

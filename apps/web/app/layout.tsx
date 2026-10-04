@@ -24,7 +24,16 @@ export default function RootLayout({
       className={cn("antialiased", iranYekanX.variable, "font-sans")}
     >
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <div id="charsooq-root" className="relative min-h-dvh">
+            {/* Full-page fixed square pattern — stays put while content scrolls */}
+            <div
+              aria-hidden="true"
+              className="bg-grid-pattern pointer-events-none fixed inset-0 -z-10"
+            />
+            {children}
+          </div>
+        </ThemeProvider>
       </body>
     </html>
   )

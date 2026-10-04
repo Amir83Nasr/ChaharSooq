@@ -259,21 +259,37 @@ function SidebarTrigger({
   const { toggleSidebar } = useSidebar()
 
   return (
-    <Button
-      data-sidebar="trigger"
-      data-slot="sidebar-trigger"
-      variant="ghost"
-      size="icon-sm"
-      className={cn(className)}
-      onClick={(event) => {
-        onClick?.(event)
-        toggleSidebar()
-      }}
-      {...props}
-    >
-      <PanelLeftIcon className="rtl:rotate-180" />
-      <span className="sr-only">Toggle Sidebar</span>
-    </Button>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            data-sidebar="trigger"
+            data-slot="sidebar-trigger"
+            variant="ghost"
+            size="icon-sm"
+            className={cn(className)}
+            onClick={(event) => {
+              onClick?.(event)
+              toggleSidebar()
+            }}
+            aria-label="تغییر نمایش نوار کناری"
+            {...props}
+          >
+            <PanelLeftIcon className="rtl:rotate-180" />
+            <span className="sr-only">تغییر نمایش نوار کناری</span>
+          </Button>
+        }
+      />
+      <TooltipContent side="bottom" className="hidden md:inline-flex">
+        تغییر نمایش نوار کناری
+        <kbd
+          data-slot="kbd"
+          className="rounded bg-background/20 px-1 font-mono text-[10px] leading-4"
+        >
+          Ctrl+B
+        </kbd>
+      </TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -482,6 +498,8 @@ const sidebarMenuButtonVariants = cva(
         default: "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
         outline:
           "bg-background shadow-[0_0_0_1px_var(--sidebar-border)] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-[0_0_0_1px_var(--sidebar-accent)]",
+        destructive:
+          "text-destructive hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive active:bg-destructive/15 active:text-destructive dark:hover:bg-destructive/20 dark:active:bg-destructive/25 data-open:bg-destructive/10 data-open:text-destructive data-open:hover:bg-destructive/15 data-open:hover:text-destructive dark:data-open:bg-destructive/20 data-active:bg-destructive/10 data-active:text-destructive dark:data-active:bg-destructive/20",
       },
       size: {
         default: "h-8 text-sm",

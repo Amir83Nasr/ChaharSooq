@@ -1,16 +1,16 @@
 import type { Metadata } from "next"
+import { redirect } from "next/navigation"
 
-import { LoginForm } from "@/components/login-form"
+import { LoginShell } from "@/components/login-shell"
+import { getSessionAdmin } from "@/lib/auth"
 
 export const metadata: Metadata = {
   title: "ورود مدیر | چهارسوق",
   description: "ورود به پنل مدیریت فروشگاه چهارسوق",
 }
 
-export default function LoginPage() {
-  return (
-    <main className="flex min-h-svh items-center justify-center p-6">
-      <LoginForm />
-    </main>
-  )
+export default async function LoginPage() {
+  const admin = await getSessionAdmin()
+  if (admin) redirect("/dashboard")
+  return <LoginShell />
 }

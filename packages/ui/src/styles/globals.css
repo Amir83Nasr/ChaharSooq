@@ -126,10 +126,54 @@
     @apply bg-background text-foreground;
     font-family: var(--font-sans), Tahoma, Arial, sans-serif;
     }
+  html {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    }
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar {
+    display: none;
+    }
   .toman-glyph {
     font-family: var(--font-toman), var(--font-sans), Tahoma, sans-serif;
     }
   button:not(:disabled), [role="button"]:not(:disabled) {
     cursor: pointer;
     }
+}
+
+/* ── GRID / SQUARE PATTERN ────────────────────────────── */
+
+:root {
+  --grid-line: rgba(0, 0, 0, 0.04);
+}
+
+.dark {
+  --grid-line: rgba(255, 255, 255, 0.03);
+}
+
+.bg-grid-pattern,
+[data-slot="sidebar-inset"] {
+  background-image:
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+@media (max-width: 767px) {
+  button:not(.h-10):not(.h-11):not(.min-h-11):not(.size-10):not(.size-11),
+  a[data-slot="button"]:not(.h-10):not(.h-11):not(.min-h-11):not(
+      .size-10
+    ):not(.size-11),
+  [role="button"]:not(.h-10):not(.h-11):not(.min-h-11):not(.size-10):not(
+      .size-11
+    ) {
+    min-height: 44px;
+  }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
+      [type="hidden"]
+    ):not(.h-11):not(.min-h-11),
+  select:not(.h-11):not(.min-h-11) {
+    min-height: 44px;
+  }
 }

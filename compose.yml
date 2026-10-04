@@ -1,14 +1,14 @@
 services:
   postgres:
-    image: postgres:17
+    image: postgres:18
     environment:
       POSTGRES_USER: charsooq
       POSTGRES_PASSWORD: charsooq
       POSTGRES_DB: charsooq
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql
 
   api:
     build:

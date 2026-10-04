@@ -9,11 +9,16 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.security import hash_password, hash_token, new_session_token, verify_password
-from app.models import Admin, AdminSession, Product
-from app.repositories import ProductRepository
-from app.schemas import LoginIn, ProductIn
+from app.models import Admin, AdminSession, Category, Product
+from app.repositories import CategoryRepository, ProductRepository, ProductSort
+from app.schemas import CategoryIn, LoginIn, ProductIn
 
 LOGIN_ERROR = "نام کاربری یا گذرواژه نادرست است"
+INVALID_CATEGORY_ERROR = "دسته‌بندی نامعتبر است"
+
+
+class InvalidCategoryError(ValueError):
+    pass
 
 
 class AuthService:
@@ -63,14 +68,62 @@ class AuthService:
             self._session.add(Admin(username=username, password_hash=hash_password(password_hash)))
 
 
+class CategoryService:
+    def __init__(self, session: Session) -> None:
+        self._repos = CategoryRepository(session)
+
+    def list(self) -> list[Category]:
+        return self._repos.list()
+
+    def create(self, payload: CategoryIn) -> Category:
+        return self._repos.add(Category(name=payload.name.strip()))
+
+    def delete(self, category_id: int) -> Category | None | str:
+        """Return None when missing, "in_use" when products reference it."""
+        category = self._repos.get(category_id)
+        if category is None:
+            return None
+        if self._repos.product_count(category_id) > 0:
+            return "in_use"
+        self._repos.delete(category)
+        return category
+
+
 class ProductService:
     def __init__(self, session: Session) -> None:
+        self._session = session
         self._repos = ProductRepository(session)
 
-    def list(self, *, query: str, page: int, page_size: int) -> tuple[list[Product], int]:
+    def list(
+        self,
+        *,
+        query: str,
+        category_id: int | None,
+        min_price: int | None,
+        max_price: int | None,
+        in_stock: bool | None,
+        sort: ProductSort,
+        page: int,
+        page_size: int,
+    ) -> tuple[list[Product], int]:
         page = max(page, 1)
         page_size = min(max(page_size, 1), 100)
-        return self._repos.list(query=query.strip(), page=page, page_size=page_size)
+        if min_price is not None and max_price is not None and min_price > max_price:
+            min_price, max_price = max_price, min_price
+        return self._repos.list(
+            query=query.strip(),
+            category_id=category_id,
+            min_price=min_price,
+            max_price=max_price,
+            in_stock=in_stock,
+            sort=sort,
+            page=page,
+            page_size=page_size,
+        )
 
     def create(self, payload: ProductIn) -> Product:
+        if payload.category_id is None:
+            return self._repos.add(Product(**payload.model_dump()))
+        if self._session.get(Category, payload.category_id) is None:
+            raise InvalidCategoryError
         return self._repos.add(Product(**payload.model_dump()))

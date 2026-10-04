@@ -7,6 +7,6 @@ Admin password flow: `POST /api/v1/auth/login` → HttpOnly session cookie → `
 - Cookie: `HttpOnly`, `Secure` in production, `SameSite=Lax`, path `/`.
 - Brute force: 10 login attempts / IP / minute → `429 rate_limited` (Persian message).
 - Errors: non-sensitive Persian messages (`نام کاربری یا گذرواژه نادرست است`, `نیاز به ورود است`); validation → `validation_error` envelope.
-- Frontend: no `localStorage` tokens; `credentials: "include"` fetch client; login form with labels, field errors, and `role="alert"`.
+- Frontend: no `localStorage` tokens; `credentials: "include"` fetch client; login form with labels, field errors, and `role="alert"`. `(dashboard)` routes are server-guarded via `lib/auth.ts` (`GET /api/v1/auth/me` with forwarded cookies, redirect to `/login` on failure); logout requires dialog confirmation before `POST /api/v1/auth/logout`.
 
 ADR: [002-authentication](../adr/002-authentication.md).

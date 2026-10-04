@@ -1,39 +1,28 @@
 import type { Metadata } from "next"
 
-import { PersianDate } from "@workspace/ui/components/persian-date"
-import { PersianNumber } from "@workspace/ui/components/persian-number"
+import { Wrench } from "lucide-react"
+
+import { Card, CardContent } from "@workspace/ui/components/card"
 import { PageHeader } from "@workspace/ui/components/page-header"
-import { Price } from "@workspace/ui/components/price"
 
 export const metadata: Metadata = { title: "داشبورد | چهارسوق" }
 
-const KPIS = [
-  { label: "فروش امروز", value: 1250000 },
-  { label: "سفارش‌های امروز", value: 48, plain: true },
-  { label: "موجودی کم", value: 7, plain: true },
-] as const
-
 export default function DashboardPage() {
   return (
-    <>
+    <div className="flex flex-1 flex-col gap-6">
       <PageHeader title="داشبورد" subtitle="نمای کلی فروشگاه" />
-      <p className="text-sm text-muted-foreground">
-        امروز: <PersianDate value={new Date()} />
-      </p>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {KPIS.map((kpi) => (
-          <div key={kpi.label} className="rounded-lg border border-border p-4">
-            <p className="text-sm text-muted-foreground">{kpi.label}</p>
-            <p className="mt-1 text-lg font-bold">
-              {"plain" in kpi && kpi.plain ? (
-                <PersianNumber value={kpi.value} />
-              ) : (
-                <Price value={kpi.value} />
-              )}
-            </p>
+      <Card>
+        <CardContent className="flex flex-col items-center justify-center py-20">
+          <div className="mb-6 rounded-full bg-muted p-4">
+            <Wrench className="size-12 text-muted-foreground" />
           </div>
-        ))}
-      </div>
-    </>
+          <h3 className="mb-2 text-xl font-semibold">در حال توسعه</h3>
+          <p className="max-w-md text-center text-sm text-muted-foreground">
+            داشبورد فروشگاه در حال توسعه است. به‌زودی آمارها، نمودارها و
+            گزارش‌های جامع‌تری در این بخش در دسترس خواهد بود.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
   )
 }

@@ -9,7 +9,7 @@ class Settings(BaseSettings):
 
     app_env: str = Field(default="development")
     database_url: str = Field(
-        default="postgresql+psycopg://charsooq:charsooq@localhost:5432/charsooq"
+        default="postgresql+psycopg://charsooq:charsooq@localhost:5433/charsooq"
     )
     session_secret: str = Field(default="dev-only-secret-change-me-min-32-chars")
     session_cookie_name: str = Field(default="charsooq_session")

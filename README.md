@@ -26,8 +26,21 @@ cp .env.example .env.local
 
 ## Development commands
 
+Run everything from the repository root with make:
+
 ```bash
-pnpm dev          # frontend (turbo)
+make install    # install frontend + backend deps
+make db-up      # start dev postgres (compose)
+make migrate    # apply Alembic migrations
+make seed       # create dev admin (ADMIN_USER / ADMIN_PASSWORD)
+make dev-all    # postgres + migrate, then backend :8000 + frontend :3000
+```
+
+Individual servers:
+
+```bash
+make api        # backend API with reload (:8000, expects postgres up)
+make dev        # frontend only (turbo)
 pnpm lint         # frontend lint
 pnpm typecheck    # frontend typecheck
 pnpm format       # frontend format
@@ -47,7 +60,7 @@ See [.env.example](.env.example). Never commit real secrets.
 | Variable | Purpose |
 | --- | --- |
 | `APP_ENV` | `development` / `test` / `production` (Secure cookies only in production) |
-| `DATABASE_URL` | SQLAlchemy URL, e.g. `postgresql+psycopg://charsooq:charsooq@localhost:5432/charsooq` |
+| `DATABASE_URL` | SQLAlchemy URL, e.g. `postgresql+psycopg://charsooq:charsooq@localhost:5433/charsooq` |
 | `SESSION_SECRET` | Reserved for session signing; change the dev default in production |
 | `NEXT_PUBLIC_API_URL` | Frontend → API base URL |
 

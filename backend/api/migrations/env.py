@@ -6,6 +6,7 @@ Run from backend/api so `import app...` resolves (prepend_sys_path = .).
 
 from __future__ import annotations
 
+import os
 import sys
 from logging.config import fileConfig
 from pathlib import Path
@@ -22,6 +23,10 @@ import app.models  # noqa: E402,F401  (register models)
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+db_url = os.environ.get("DATABASE_URL")
+if db_url:
+    config.set_main_option("sqlalchemy.url", db_url)
 
 target_metadata = Base.metadata
 

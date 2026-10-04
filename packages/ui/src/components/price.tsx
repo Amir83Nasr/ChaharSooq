@@ -8,13 +8,15 @@ type PriceProps = {
   value: number | bigint
 } & ComponentProps<"span">
 
-// ponytail: Toman glyph font not yet provided — .toman-glyph hook in
-// globals.css takes --font-toman when it lands; upgrade path needs no
-// component change. sr-only label keeps the amount accessible meanwhile.
+// ponytail: Toman glyph "تومانءءء" uses fallback font until --font-toman
+// lands; no API change.
 export function Price({ value, className, ...props }: PriceProps) {
   return (
     <span className={cn(className)} {...props}>
-      {formatToman(value)} <span className="toman-glyph" aria-hidden="true" />
+      {formatToman(value)}{" "}
+      <span className="toman-glyph" aria-hidden="true">
+        تومانءء
+      </span>
       <span className="sr-only">تومان</span>
     </span>
   )

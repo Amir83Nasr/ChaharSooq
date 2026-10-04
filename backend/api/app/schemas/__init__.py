@@ -28,11 +28,24 @@ class MeOut(BaseModel):
     username: str
 
 
+class CategoryIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+
+
+class CategoryOut(BaseModel):
+    id: int
+    name: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class ProductIn(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     sku: str = Field(min_length=1, max_length=64)
     price: int = Field(ge=0)  # toman, integer
     stock: int = Field(ge=0, default=0)
+    category_id: int | None = Field(default=None)
 
 
 class ProductOut(BaseModel):
@@ -41,6 +54,7 @@ class ProductOut(BaseModel):
     sku: str
     price: int
     stock: int
+    category: CategoryOut | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

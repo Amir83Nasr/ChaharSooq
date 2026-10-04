@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-.PHONY: build check dev down help install lint logs test typecheck up
+.PHONY: api build check db-up dev dev-all down help install lint logs migrate seed seed-products test typecheck up
 
 # ─── HELP ─────────────────────────────────────────────────
 help: ## Show this help message
@@ -19,6 +19,8 @@ help: ## Show this help message
 
 # ─── CONFIG / VARIABLES ───────────────────────────────────
 COMPOSE_FILE ?= compose.yml ## Compose file used by up/down/logs
+ADMIN_USER ?= admin ## Dev admin username for seed target
+ADMIN_PASSWORD ?= secret123 ## Dev admin password for seed target
 
 # ─── INSTALL / SETUP ──────────────────────────────────────
 install: ## Install frontend and backend dependencies
@@ -26,8 +28,30 @@ install: ## Install frontend and backend dependencies
 	uv sync
 
 # ─── DEV / RUN ────────────────────────────────────────────
-dev: ## Start all dev servers (turbo)
+dev: ## Start frontend dev server (turbo)
 	pnpm dev
+
+api: ## Start backend API with reload (expects postgres up)
+	uv run --project backend/api uvicorn app.main:app --app-dir backend/api --host 0.0.0.0 --port 8000 --reload
+
+dev-all: db-up migrate ## Start backend + frontend together (Ctrl-C stops both)
+	uv run --project backend/api uvicorn app.main:app --app-dir backend/api --host 0.0.0.0 --port 8000 --reload & \
+	pnpm dev & \
+	wait
+
+# ─── DEV DATABASE ─────────────────────────────────────────
+db-up: ## Start dev postgres (own container, port 5433)
+	docker compose -f $(COMPOSE_FILE) up -d postgres
+
+migrate: db-up ## Apply Alembic migrations to dev database
+	cd backend/api && uv run alembic upgrade head
+
+seed: db-up ## Create dev admin user (ADMIN_USER / ADMIN_PASSWORD)
+	ADMIN_USER="$(strip $(ADMIN_USER))" ADMIN_PASSWORD="$(strip $(ADMIN_PASSWORD))" \
+	uv run --project backend/api python backend/api/scripts/seed_admin.py
+
+seed-products: db-up ## Insert demo products (idempotent, safe to re-run)
+	uv run --project backend/api python backend/api/scripts/seed_products.py
 
 up: ## Start services with Docker Compose
 	docker compose -f $(COMPOSE_FILE) up -d

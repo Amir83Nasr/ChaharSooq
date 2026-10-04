@@ -1,28 +1,36 @@
+import { redirect } from "next/navigation"
 import {
   SidebarInset,
   SidebarProvider,
-  SidebarTrigger,
 } from "@workspace/ui/components/sidebar"
 
 import { AppSidebar } from "@/components/app-sidebar"
+import { DashboardHeader } from "@/components/dashboard-header"
+import { getSessionAdmin } from "@/lib/auth"
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  // Desktop sidebar is locked open (no collapse); mobile still uses the drawer.
+  const admin = await getSessionAdmin()
+  if (!admin) redirect("/login")
   return (
-    <SidebarProvider open>
-      <AppSidebar />
-      <SidebarInset>
-        <header className="flex items-center gap-2 border-b border-border px-4 py-2 md:hidden">
-          <SidebarTrigger />
-          <span className="text-sm font-bold">چهارسوق</span>
-        </header>
-        <div className="flex min-w-0 flex-1 flex-col gap-6 p-4 md:p-6">
-          {children}
-        </div>
+    <SidebarProvider
+      style={
+        {
+          "--sidebar-width": "calc(var(--spacing) * 72)",
+          "--header-height": "calc(var(--spacing) * 12)",
+        } as React.CSSProperties
+      }
+    >
+      <AppSidebar variant="inset" />
+      {/* min-w-0 lets the inset shrink below its content's min-content
+          width, so wide inner scrollers (tables) scroll inside their own
+          container instead of pushing the whole page sideways. */}
+      <SidebarInset className="min-w-0">
+        <DashboardHeader />
+        <div className="flex flex-col gap-4 p-4">{children}</div>
       </SidebarInset>
     </SidebarProvider>
   )

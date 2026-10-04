@@ -51,6 +51,15 @@ class Category(Base):
     products: Mapped[list["Product"]] = relationship(back_populates="category")
 
 
+class Setting(Base):
+    """Key/value admin settings — display thresholds, never secrets."""
+
+    __tablename__ = "settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(String(256), nullable=False)
+
+
 class Product(Base):
     """Example domain row — prices are integer toman, datetimes stay tz-aware."""
 

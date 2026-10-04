@@ -1,42 +1,42 @@
 import type { ProductOut } from "./api"
 
-export type StockStatus = "good" | "low" | "out"
+export type StockStatus = "in" | "low" | "out"
 
-/** Matches mock: low means 1..5 in stock, out means 0. */
-export const LOW_STOCK_THRESHOLD = 5
+/** Fallback until server settings load. Matches mock: low means 1..5 in stock, out means 0. */
+export const DEFAULT_LOW_STOCK_THRESHOLD = 5
 
 export const STOCK_LABELS: Record<StockStatus, string> = {
-  good: "مناسب",
+  in: "موجود",
   low: "کم",
   out: "ناموجود",
 }
 
-export function stockStatus(stock: number): StockStatus {
+export function stockStatus(stock: number, threshold: number = DEFAULT_LOW_STOCK_THRESHOLD): StockStatus {
   if (stock <= 0) return "out"
-  if (stock <= LOW_STOCK_THRESHOLD) return "low"
-  return "good"
+  if (stock <= Math.max(threshold, 0)) return "low"
+  return "in"
 }
 
 export interface InventorySummary {
   total: number
-  good: number
+  in: number
   low: number
   out: number
   /** Sum of price * stock over items. Machine value, format with <Price/>. */
   stockValue: number
 }
 
-export function summarizeInventory(items: ProductOut[]): InventorySummary {
-  let good = 0
+export function summarizeInventory(items: ProductOut[], threshold: number = DEFAULT_LOW_STOCK_THRESHOLD): InventorySummary {
+  let ok = 0
   let low = 0
   let out = 0
   let stockValue = 0
   for (const item of items) {
-    const status = stockStatus(item.stock)
-    if (status === "good") good += 1
+    const status = stockStatus(item.stock, threshold)
+    if (status === "in") ok += 1
     else if (status === "low") low += 1
     else out += 1
     stockValue += item.price * item.stock
   }
-  return { total: items.length, good, low, out, stockValue }
+  return { total: items.length, in: ok, low, out, stockValue }
 }

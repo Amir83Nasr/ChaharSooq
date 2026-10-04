@@ -1,8 +1,11 @@
-"""Seed demo products — idempotent, safe to re-run.
+"""Seed home-appliance products — idempotent, safe to re-run.
 
 Machine-readable values only (integer toman, plain SKUs).
 Persian display formatting happens in the UI.
-Run via `make seed-products` from the repository root.
+Run via `make db-seed-products` from the repository root.
+
+Re-run prunes products/categories absent from this file, so old
+seed data (e.g. the previous grocery catalog) gets replaced.
 """
 
 from __future__ import annotations
@@ -18,201 +21,144 @@ from sqlalchemy.orm import Session
 from app.core.database import Base, get_engine
 from app.models import Category, Product
 
-CATEGORIES: list[str] = ["خواربار", "لبنیات", "ادویه", "شیرینی"]
+CATEGORIES: list[str] = [
+    "تلویزیون و صوتی‌تصویری",
+    "یخچال و فریزر",
+    "شست‌وشو و نظافت",
+    "پخت‌وپز",
+    "سرمایش و گرمایش",
+    "مبلمان و دکوراسیون",
+    "لوازم برقی آشپزخانه",
+    "روشنایی",
+]
 
-# ponytail: prefix map covers current seed SKUs; new prefixes fall back to خواربار.
+# ponytail: prefix map covers current seed SKUs; new prefixes fall back to لوازم برقی آشپزخانه.
 PREFIX_CATEGORY: dict[str, str] = {
-    "TEA": "خواربار",
-    "COF": "خواربار",
-    "RICE": "خواربار",
-    "FLOUR": "خواربار",
-    "OAT": "خواربار",
-    "PASTA": "خواربار",
-    "LENT": "خواربار",
-    "PEA": "خواربار",
-    "BEAN": "خواربار",
-    "BEANC": "خواربار",
-    "OIL": "خواربار",
-    "SES": "خواربار",
-    "HONEY": "خواربار",
-    "JAM": "خواربار",
-    "HV": "خواربار",
-    "SAFFRON": "ادویه",
-    "SPI": "ادویه",
-    "PISTA": "خواربار",
-    "ALM": "خواربار",
-    "HAZ": "خواربار",
-    "WALNUT": "خواربار",
-    "CASH": "خواربار",
-    "SUN": "خواربار",
-    "PUM": "خواربار",
-    "RAISIN": "خواربار",
-    "FIG": "خواربار",
-    "MUL": "خواربار",
-    "APR": "خواربار",
-    "DATE": "خواربار",
-    "PRU": "خواربار",
-    "CHIPF": "خواربار",
-    "LIGH": "لبنیات",
-    "CHE": "لبنیات",
-    "YOG": "لبنیات",
-    "KASHK": "لبنیات",
-    "DOUGH": "لبنیات",
-    "BUT": "لبنیات",
-    "CREAM": "لبنیات",
-    "PASTE": "خواربار",
-    "TUN": "خواربار",
-    "CORN": "خواربار",
-    "PICK": "خواربار",
-    "OLIVE": "خواربار",
-    "NABAT": "شیرینی",
-    "SOHAN": "شیرینی",
-    "GAZ": "شیرینی",
-    "PUL": "شیرینی",
-    "BAGH": "شیرینی",
-    "KOL": "شیرینی",
-    "BAS": "شیرینی",
-    "LAV": "شیرینی",
-    "CHIPS": "خواربار",
-    "SNACK": "خواربار",
-    "ARAQ": "خواربار",
-    "SHAR": "خواربار",
-    "LIME": "خواربار",
-    "SALT": "ادویه",
-    "SUG": "شیرینی",
+    "TV": "تلویزیون و صوتی‌تصویری",
+    "SND": "تلویزیون و صوتی‌تصویری",
+    "FR": "یخچال و فریزر",
+    "WASH": "شست‌وشو و نظافت",
+    "DISH": "شست‌وشو و نظافت",
+    "VAC": "شست‌وشو و نظافت",
+    "IRON": "شست‌وشو و نظافت",
+    "GAS": "پخت‌وپز",
+    "OVEN": "پخت‌وپز",
+    "MW": "پخت‌وپز",
+    "FRY": "پخت‌وپز",
+    "AC": "سرمایش و گرمایش",
+    "HEAT": "سرمایش و گرمایش",
+    "AIR": "سرمایش و گرمایش",
+    "SOFA": "مبلمان و دکوراسیون",
+    "TABLE": "مبلمان و دکوراسیون",
+    "BED": "مبلمان و دکوراسیون",
+    "FOOD": "لوازم برقی آشپزخانه",
+    "MEAT": "لوازم برقی آشپزخانه",
+    "JUICE": "لوازم برقی آشپزخانه",
+    "KETTLE": "لوازم برقی آشپزخانه",
+    "COFFEE": "لوازم برقی آشپزخانه",
+    "TOAST": "لوازم برقی آشپزخانه",
+    "MIX": "لوازم برقی آشپزخانه",
+    "LUST": "روشنایی",
+    "LAMP": "روشنایی",
 }
 
 PRODUCTS: list[dict[str, str | int]] = [
-    # ── TEA / COFFEE ──
-    {"name": "چای ایرانی بهاره", "sku": "TEA-001", "price": 450000, "stock": 24},
-    {"name": "چای دارجیلینگ ممتاز", "sku": "TEA-002", "price": 680000, "stock": 18},
-    {"name": "چای سبز گن‌پاودر", "sku": "TEA-003", "price": 390000, "stock": 30},
-    {"name": "دمنوش بابونه", "sku": "TEA-004", "price": 180000, "stock": 45},
-    {"name": "دمنوش گل‌گاوزبان", "sku": "TEA-005", "price": 220000, "stock": 40},
-    {"name": "قهوه عربیکا تازه‌برشت", "sku": "COF-001", "price": 1450000, "stock": 16},
-    {"name": "قهوه روبوستا اسپرسو", "sku": "COF-002", "price": 1180000, "stock": 20},
-    {"name": "پودر قهوه فوری گلد", "sku": "COF-003", "price": 560000, "stock": 35},
-    {"name": "پودر قهوه فوری کلاسیک", "sku": "COF-004", "price": 420000, "stock": 28},
-    {"name": "کاپوچینو فوری", "sku": "COF-005", "price": 310000, "stock": 33},
-    # ── RICE / GRAINS ──
-    {"name": "برنج طارم هاشمی", "sku": "RICE-001", "price": 1850000, "stock": 40},
-    {"name": "برنج دم‌سیاه آستانه", "sku": "RICE-002", "price": 2100000, "stock": 25},
-    {"name": "برنج نیم‌دانه", "sku": "RICE-003", "price": 950000, "stock": 60},
-    {"name": "برنج قهوه‌ای", "sku": "RICE-004", "price": 780000, "stock": 22},
-    {"name": "آرد گندم کامل", "sku": "FLOUR-001", "price": 150000, "stock": 70},
-    {"name": "آرد برنج", "sku": "FLOUR-002", "price": 190000, "stock": 55},
-    {"name": "آرد نخودچی", "sku": "FLOUR-003", "price": 260000, "stock": 48},
-    {"name": "جو پرک", "sku": "OAT-001", "price": 170000, "stock": 52},
-    {"name": "بلغور گندم", "sku": "OAT-002", "price": 140000, "stock": 44},
-    {"name": "ماکارونی رشته‌ای", "sku": "PASTA-001", "price": 95000, "stock": 120},
-    {"name": "ماکارونی فرمی", "sku": "PASTA-002", "price": 98000, "stock": 110},
-    {"name": "رشته آش", "sku": "PASTA-003", "price": 110000, "stock": 90},
-    {"name": "رشته سوپ", "sku": "PASTA-004", "price": 88000, "stock": 95},
-    # ── LEGUMES ──
-    {"name": "عدس قرمز", "sku": "LENT-001", "price": 240000, "stock": 65},
-    {"name": "عدس سبز", "sku": "LENT-002", "price": 230000, "stock": 58},
-    {"name": "نخود آبگوشتی", "sku": "PEA-001", "price": 310000, "stock": 50},
-    {"name": "لپه آذرشهر", "sku": "PEA-002", "price": 360000, "stock": 38},
-    {"name": "لوبیا چیتی", "sku": "BEAN-001", "price": 340000, "stock": 47},
-    {"name": "لوبیا قرمز", "sku": "BEAN-002", "price": 330000, "stock": 42},
-    {"name": "لوبیا سفید", "sku": "BEAN-003", "price": 320000, "stock": 40},
-    {"name": "لوبیا چشم‌بلبلی", "sku": "BEAN-004", "price": 350000, "stock": 36},
-    {"name": "ماش سبز", "sku": "BEAN-005", "price": 290000, "stock": 44},
-    # ── OILS ──
-    {"name": "روغن کنجد پرس سرد", "sku": "OIL-001", "price": 890000, "stock": 15},
-    {"name": "روغن زیتون فرابکر", "sku": "OIL-002", "price": 1650000, "stock": 14},
-    {"name": "روغن آفتابگردان", "sku": "OIL-003", "price": 420000, "stock": 80},
-    {"name": "روغن حیوانی کرمانشاهی", "sku": "OIL-004", "price": 1980000, "stock": 10},
-    {"name": "روغن کنجد معمولی", "sku": "OIL-005", "price": 640000, "stock": 26},
-    {"name": "ارده کنجد", "sku": "SES-001", "price": 480000, "stock": 32},
-    {"name": "کره بادام‌زمینی طبیعی", "sku": "SES-002", "price": 590000, "stock": 21},
-    # ── HONEY / JAM / BREAKFAST ──
-    {"name": "عسل طبیعی سبلان", "sku": "HONEY-001", "price": 1250000, "stock": 12},
-    {"name": "عسل کنار", "sku": "HONEY-002", "price": 1890000, "stock": 9},
-    {"name": "عسل گون", "sku": "HONEY-003", "price": 1420000, "stock": 11},
-    {"name": "مربای آلبالو", "sku": "JAM-001", "price": 280000, "stock": 34},
-    {"name": "مربای به", "sku": "JAM-002", "price": 260000, "stock": 29},
-    {"name": "مربای هویج", "sku": "JAM-003", "price": 220000, "stock": 37},
-    {"name": "شیره انگور", "sku": "JAM-004", "price": 390000, "stock": 23},
-    {"name": "شیره خرما", "sku": "JAM-005", "price": 340000, "stock": 27},
-    {"name": "حلوا شکری", "sku": "HV-001", "price": 310000, "stock": 31},
-    {"name": "حلوا ارده", "sku": "HV-002", "price": 360000, "stock": 24},
-    # ── SPICES ──
-    {"name": "زعفران قائنات نیم‌مثقال", "sku": "SAFFRON-001", "price": 9800000, "stock": 8},
-    {"name": "زعفران قائنات یک‌مثقال", "sku": "SAFFRON-002", "price": 17500000, "stock": 5},
-    {"name": "زردچوبه قلم", "sku": "SPI-001", "price": 180000, "stock": 66},
-    {"name": "فلفل سیاه آسیاب‌شده", "sku": "SPI-002", "price": 450000, "stock": 33},
-    {"name": "فلفل قرمز", "sku": "SPI-003", "price": 290000, "stock": 41},
-    {"name": "دارچین قلم", "sku": "SPI-004", "price": 520000, "stock": 27},
-    {"name": "هل سبز", "sku": "SPI-005", "price": 2900000, "stock": 7},
-    {"name": "زیره سبز", "sku": "SPI-006", "price": 610000, "stock": 25},
-    {"name": "سماق قرمز", "sku": "SPI-007", "price": 380000, "stock": 30},
-    {"name": "آویشن شیرازی", "sku": "SPI-008", "price": 150000, "stock": 58},
-    {"name": "نعناع خشک", "sku": "SPI-009", "price": 130000, "stock": 62},
-    {"name": "پودر سیر", "sku": "SPI-010", "price": 240000, "stock": 39},
-    {"name": "زنجبیل آسیاب‌شده", "sku": "SPI-011", "price": 330000, "stock": 28},
-    {"name": "گلپر", "sku": "SPI-012", "price": 270000, "stock": 35},
-    # ── NUTS / DRIED ──
-    {"name": "پسته اکبری شور", "sku": "PISTA-001", "price": 2300000, "stock": 20},
-    {"name": "پسته احمدآقایی", "sku": "PISTA-002", "price": 1950000, "stock": 22},
-    {"name": "بادام درختی", "sku": "ALM-001", "price": 1680000, "stock": 19},
-    {"name": "بادام‌زمینی", "sku": "ALM-002", "price": 720000, "stock": 43},
-    {"name": "فندق خام", "sku": "HAZ-001", "price": 1890000, "stock": 13},
-    {"name": "گردوی پوست‌کاغذی", "sku": "WALNUT-001", "price": 1750000, "stock": 18},
-    {"name": "بادام هندی", "sku": "CASH-001", "price": 2450000, "stock": 12},
-    {"name": "تخمه آفتابگردان", "sku": "SUN-001", "price": 280000, "stock": 75},
-    {"name": "تخمه کدو", "sku": "PUM-001", "price": 420000, "stock": 46},
-    {"name": "کشمش پلویی آفتابی", "sku": "RAISIN-001", "price": 340000, "stock": 35},
-    {"name": "مویز بی‌دانه", "sku": "RAISIN-002", "price": 460000, "stock": 29},
-    {"name": "انجیر خشک", "sku": "FIG-001", "price": 890000, "stock": 17},
-    {"name": "توت خشک", "sku": "MUL-001", "price": 640000, "stock": 26},
-    {"name": "برگه زردآلو", "sku": "APR-001", "price": 780000, "stock": 20},
-    {"name": "خرمای مضافتی بم", "sku": "DATE-001", "price": 380000, "stock": 50},
-    {"name": "خرمای پیارم", "sku": "DATE-002", "price": 1450000, "stock": 15},
-    {"name": "خرمای زاهدی", "sku": "DATE-003", "price": 260000, "stock": 68},
-    {"name": "آلو بخارا", "sku": "PRU-001", "price": 580000, "stock": 24},
-    {"name": "چیپس میوه مخلوط", "sku": "CHIPF-001", "price": 490000, "stock": 22},
-    # ── DAIRY ──
-    {"name": "پنیر لیقوان", "sku": "LIGH-001", "price": 780000, "stock": 16},
-    {"name": "پنیر سفید تبریزی", "sku": "CHE-001", "price": 540000, "stock": 28},
-    {"name": "ماست چکیده", "sku": "YOG-001", "price": 190000, "stock": 40},
-    {"name": "کشک خشک", "sku": "KASHK-001", "price": 420000, "stock": 33},
-    {"name": "دوغ گازدار", "sku": "DOUGH-001", "price": 85000, "stock": 150},
-    {"name": "کره محلی", "sku": "BUT-001", "price": 880000, "stock": 18},
-    {"name": "خامه عسلی", "sku": "CREAM-001", "price": 240000, "stock": 25},
-    # ── CANNED / PASTE / PICKLES ──
-    {"name": "رب گوجه خانگی", "sku": "PASTE-001", "price": 290000, "stock": 30},
-    {"name": "رب انار", "sku": "PASTE-002", "price": 690000, "stock": 19},
-    {"name": "کنسرو ماهی تن", "sku": "TUN-001", "price": 320000, "stock": 85},
-    {"name": "کنسرو لوبیا", "sku": "BEANC-001", "price": 150000, "stock": 95},
-    {"name": "کنسرو ذرت", "sku": "CORN-001", "price": 170000, "stock": 88},
-    {"name": "خیارشور ویژه", "sku": "PICK-001", "price": 230000, "stock": 54},
-    {"name": "ترشی مخلوط", "sku": "PICK-002", "price": 250000, "stock": 47},
-    {"name": "زیتون شور", "sku": "OLIVE-001", "price": 480000, "stock": 31},
-    # ── SNACKS / SWEETS ──
-    {"name": "نبات شاخه‌ای زعفرانی", "sku": "NABAT-001", "price": 210000, "stock": 60},
-    {"name": "نبات چوبی", "sku": "NABAT-002", "price": 240000, "stock": 55},
-    {"name": "سوهان عسلی قم", "sku": "SOHAN-001", "price": 520000, "stock": 25},
-    {"name": "گز آردی اصفهان", "sku": "GAZ-001", "price": 920000, "stock": 14},
-    {"name": "پولکی نعنایی", "sku": "PUL-001", "price": 180000, "stock": 72},
-    {"name": "باقلوا استانبولی", "sku": "BAGH-001", "price": 1250000, "stock": 10},
-    {"name": "کلوچه فومن", "sku": "KOL-001", "price": 160000, "stock": 83},
-    {"name": "باسلوق", "sku": "BAS-001", "price": 380000, "stock": 26},
-    {"name": "لواشک آلبالو", "sku": "LAV-001", "price": 190000, "stock": 64},
-    {"name": "لواشک مخلوط", "sku": "LAV-002", "price": 175000, "stock": 61},
-    {"name": "چیپس خلالی", "sku": "CHIPS-001", "price": 140000, "stock": 110},
-    {"name": "ذرت حجیم‌شده", "sku": "SNACK-001", "price": 95000, "stock": 130},
-    # ── DRINKS / SYRUPS ──
-    {"name": "عرق نعناع", "sku": "ARAQ-001", "price": 150000, "stock": 57},
-    {"name": "عرق بیدمشک", "sku": "ARAQ-002", "price": 165000, "stock": 49},
-    {"name": "گلاب قمصر", "sku": "ARAQ-003", "price": 210000, "stock": 45},
-    {"name": "شربت سکنجبین", "sku": "SHAR-001", "price": 230000, "stock": 38},
-    {"name": "آب‌لیمو طبیعی", "sku": "LIME-001", "price": 290000, "stock": 36},
-    # ── PANTRY ──
-    {"name": "نمک دریا", "sku": "SALT-001", "price": 60000, "stock": 200},
-    {"name": "نمک صورتی", "sku": "SALT-002", "price": 140000, "stock": 90},
-    {"name": "شکر قهوه‌ای", "sku": "SUG-001", "price": 170000, "stock": 85},
-    {"name": "قند شکسته", "sku": "SUG-002", "price": 150000, "stock": 95},
+    # ── TV / SOUND ──
+    {"name": "تلویزیون ۵۵ اینچ 4K هوشمند", "sku": "TV-001", "price": 32000000, "stock": 12},
+    {"name": "تلویزیون ۶۵ اینچ QLED", "sku": "TV-002", "price": 58000000, "stock": 7},
+    {"name": "تلویزیون ۵۰ اینچ 4K", "sku": "TV-003", "price": 26500000, "stock": 15},
+    {"name": "تلویزیون ۴۳ اینچ فول‌اچ‌دی", "sku": "TV-004", "price": 17800000, "stock": 20},
+    {"name": "تلویزیون ۷۵ اینچ 4K", "sku": "TV-005", "price": 79000000, "stock": 4},
+    {"name": "ساندبار ۲٫۱ کانال", "sku": "SND-001", "price": 6400000, "stock": 18},
+    {"name": "سینمای خانگی ۵٫۱ کانال", "sku": "SND-002", "price": 14500000, "stock": 8},
+    {"name": "اسپیکر بلوتوثی قابل‌حمل", "sku": "SND-003", "price": 2900000, "stock": 30},
+    {"name": "پایه دیواری تلویزیون", "sku": "SND-004", "price": 850000, "stock": 45},
+    {"name": "گیرنده دیجیتال", "sku": "SND-005", "price": 1600000, "stock": 40},
+    # ── FRIDGE / FREEZER ──
+    {"name": "یخچال فریزر ساید ۳۰ فوت", "sku": "FR-001", "price": 68000000, "stock": 5},
+    {"name": "یخچال فریزر دوقلو", "sku": "FR-002", "price": 74000000, "stock": 4},
+    {"name": "یخچال فریزر بالا پایین ۲۶ فوت", "sku": "FR-003", "price": 42000000, "stock": 8},
+    {"name": "یخچال فریزر کمبی ۲۰ فوت", "sku": "FR-004", "price": 31500000, "stock": 10},
+    {"name": "فریزر صندوقی ۲۵۰ لیتری", "sku": "FR-005", "price": 18700000, "stock": 9},
+    {"name": "یخچال تک ۱۲ فوت", "sku": "FR-006", "price": 22300000, "stock": 11},
+    {"name": "یخچال مینی‌بار هتلی", "sku": "FR-007", "price": 12900000, "stock": 14},
+    {"name": "آبسردکن یخچال‌دار", "sku": "FR-008", "price": 9800000, "stock": 13},
+    # ── WASH / DISH / CLEAN ──
+    {"name": "ماشین لباسشویی ۹ کیلویی", "sku": "WASH-001", "price": 33000000, "stock": 9},
+    {"name": "ماشین لباسشویی ۸ کیلویی", "sku": "WASH-002", "price": 27500000, "stock": 12},
+    {
+        "name": "ماشین لباسشویی خشک‌کن‌دار ۱۰٫۵ کیلویی",
+        "sku": "WASH-003",
+        "price": 46000000,
+        "stock": 5,
+    },
+    {"name": "خشک‌کن ۸ کیلویی", "sku": "WASH-004", "price": 29800000, "stock": 6},
+    {"name": "ماشین ظرفشویی ۱۴ نفره", "sku": "DISH-001", "price": 34500000, "stock": 8},
+    {"name": "ماشین ظرفشویی ۱۳ نفره", "sku": "DISH-002", "price": 28900000, "stock": 10},
+    {"name": "ماشین ظرفشویی رومیزی", "sku": "DISH-003", "price": 19400000, "stock": 7},
+    {"name": "جاروبرقی کیسه‌ای ۲۰۰۰ وات", "sku": "VAC-001", "price": 8200000, "stock": 22},
+    {"name": "جاروبرقی مخزن‌دار", "sku": "VAC-002", "price": 6700000, "stock": 25},
+    {"name": "جاروشارژی عصایی", "sku": "VAC-003", "price": 11300000, "stock": 16},
+    {"name": "ربات جاروبرقی", "sku": "VAC-004", "price": 21000000, "stock": 6},
+    {"name": "بخارشوی چندکاره", "sku": "VAC-005", "price": 7600000, "stock": 15},
+    {"name": "اتو بخار ایستاده", "sku": "IRON-001", "price": 5400000, "stock": 19},
+    {"name": "اتو بخار دستی", "sku": "IRON-002", "price": 2300000, "stock": 35},
+    # ── COOKING ──
+    {"name": "اجاق‌گاز ۵ شعله فر‌دار", "sku": "GAS-001", "price": 21500000, "stock": 10},
+    {"name": "اجاق‌گاز صفحه‌ای ۵ شعله", "sku": "GAS-002", "price": 13800000, "stock": 14},
+    {"name": "اجاق‌گاز رومیزی ۲ شعله", "sku": "GAS-003", "price": 3900000, "stock": 28},
+    {"name": "فر توکار برقی", "sku": "OVEN-001", "price": 24000000, "stock": 7},
+    {"name": "فر توکار گازی", "sku": "OVEN-002", "price": 19700000, "stock": 8},
+    {"name": "هود مورب آشپزخانه", "sku": "OVEN-003", "price": 8600000, "stock": 17},
+    {"name": "هود زیرکابینتی", "sku": "OVEN-004", "price": 5100000, "stock": 21},
+    {"name": "مایکروویو ۳۰ لیتری", "sku": "MW-001", "price": 9500000, "stock": 18},
+    {"name": "مایکروویو ۲۵ لیتری", "sku": "MW-002", "price": 7200000, "stock": 23},
+    {"name": "سرخ‌کن بدون روغن ۵٫۵ لیتری", "sku": "FRY-001", "price": 6800000, "stock": 26},
+    {"name": "سرخ‌کن دوقلو ۹ لیتری", "sku": "FRY-002", "price": 11900000, "stock": 12},
+    # ── COOLING / HEATING ──
+    {"name": "کولر گازی ۲۴ هزار", "sku": "AC-001", "price": 42000000, "stock": 6},
+    {"name": "کولر گازی ۱۸ هزار", "sku": "AC-002", "price": 35500000, "stock": 8},
+    {"name": "کولر گازی ۱۲ هزار", "sku": "AC-003", "price": 29000000, "stock": 10},
+    {"name": "کولر آبی ۷۰۰۰", "sku": "AC-004", "price": 13200000, "stock": 15},
+    {"name": "پنکه ایستاده", "sku": "AC-005", "price": 2400000, "stock": 40},
+    {"name": "بخاری گازی ۱۲ هزار", "sku": "HEAT-001", "price": 8900000, "stock": 16},
+    {"name": "شوفاژ برقی ۱۳ پره", "sku": "HEAT-002", "price": 6300000, "stock": 20},
+    {"name": "بخاری برقی فن‌دار", "sku": "HEAT-003", "price": 1800000, "stock": 50},
+    {"name": "تصفیه هوای خانگی", "sku": "AIR-001", "price": 9700000, "stock": 11},
+    {"name": "رطوبت‌ساز سرد", "sku": "AIR-002", "price": 3100000, "stock": 24},
+    # ── FURNITURE ──
+    {"name": "مبل راحتی ۷ نفره", "sku": "SOFA-001", "price": 38000000, "stock": 4},
+    {"name": "مبل ال ۵ نفره", "sku": "SOFA-002", "price": 31000000, "stock": 5},
+    {"name": "مبل تختخواب‌شو", "sku": "SOFA-003", "price": 17500000, "stock": 8},
+    {"name": "صندلی راحتی تک‌نفره", "sku": "SOFA-004", "price": 6900000, "stock": 18},
+    {"name": "میز جلو‌مبلی چوبی", "sku": "TABLE-001", "price": 4800000, "stock": 22},
+    {"name": "میز ناهارخوری ۶ نفره", "sku": "TABLE-002", "price": 16200000, "stock": 6},
+    {"name": "میز تلویزیون", "sku": "TABLE-003", "price": 5600000, "stock": 19},
+    {"name": "کتابخانه چوبی", "sku": "TABLE-004", "price": 7300000, "stock": 13},
+    {"name": "سرویس خواب دونفره", "sku": "BED-001", "price": 29000000, "stock": 5},
+    {"name": "تخت یک‌نفره", "sku": "BED-002", "price": 11400000, "stock": 9},
+    {"name": "تشک دونفره طبی", "sku": "BED-003", "price": 13800000, "stock": 12},
+    {"name": "کمد لباس ۳ درب", "sku": "BED-004", "price": 14600000, "stock": 7},
+    # ── SMALL KITCHEN APPLIANCES ──
+    {"name": "غذاساز چندکاره", "sku": "FOOD-001", "price": 7900000, "stock": 17},
+    {"name": "پلوپز چندکاره", "sku": "FOOD-002", "price": 4700000, "stock": 25},
+    {"name": "آرام‌پز", "sku": "FOOD-003", "price": 2800000, "stock": 30},
+    {"name": "چرخ‌گوشت ۲۰۰۰ وات", "sku": "MEAT-001", "price": 6100000, "stock": 20},
+    {"name": "آبمیوه‌گیری ۴ کاره", "sku": "JUICE-001", "price": 5200000, "stock": 23},
+    {"name": "چای‌ساز سماوری", "sku": "KETTLE-001", "price": 4300000, "stock": 27},
+    {"name": "کتری برقی", "sku": "KETTLE-002", "price": 1900000, "stock": 55},
+    {"name": "قهوه‌ساز اسپرسو", "sku": "COFFEE-001", "price": 12500000, "stock": 10},
+    {"name": "قهوه‌ساز فرانسه", "sku": "COFFEE-002", "price": 3400000, "stock": 21},
+    {"name": "توستر نان", "sku": "TOAST-001", "price": 2200000, "stock": 33},
+    {"name": "مخلوط‌کن و آسیاب", "sku": "MIX-001", "price": 3100000, "stock": 29},
+    {"name": "همزن برقی", "sku": "MIX-002", "price": 2600000, "stock": 31},
+    # ── LIGHTING ──
+    {"name": "لوستر ۶ شاخه", "sku": "LUST-001", "price": 9800000, "stock": 9},
+    {"name": "لوستر مدرن LED", "sku": "LUST-002", "price": 12300000, "stock": 7},
+    {"name": "آباژور ایستاده", "sku": "LAMP-001", "price": 3600000, "stock": 16},
+    {"name": "آباژور رومیزی", "sku": "LAMP-002", "price": 1700000, "stock": 28},
+    {"name": "چراغ خواب", "sku": "LAMP-003", "price": 950000, "stock": 42},
+    {"name": "پنل LED سقفی", "sku": "LAMP-004", "price": 1200000, "stock": 60},
 ]
 
 
@@ -220,6 +166,7 @@ def main() -> None:
     engine = get_engine()
     Base.metadata.create_all(engine)
     added = 0
+    removed = 0
     with Session(engine) as session:
         cat_ids: dict[str, int] = {}
         for name in CATEGORIES:
@@ -229,6 +176,7 @@ def main() -> None:
                 session.add(cat)
                 session.flush()
             cat_ids[name] = cat.id
+        new_skus = {str(item["sku"]) for item in PRODUCTS}
         for item in PRODUCTS:
             exists = session.scalar(select(Product.id).where(Product.sku == item["sku"]))
             if exists is not None:
@@ -238,13 +186,28 @@ def main() -> None:
             session.add(
                 Product(
                     **item,  # type: ignore[arg-type]
-                    category_id=cat_ids.get(PREFIX_CATEGORY.get(prefix, "خواربار"), None),
+                    category_id=cat_ids.get(
+                        PREFIX_CATEGORY.get(prefix, "لوازم برقی آشپزخانه"), None
+                    ),
                 )
             )
             added += 1
+        # Re-run replaces old catalog: products absent from PRODUCTS are removed.
+        for stale in session.scalars(select(Product).where(Product.sku.not_in(new_skus))).all():
+            session.delete(stale)
+            removed += 1
+        session.flush()
+        for cat in session.scalars(select(Category)).all():
+            if cat.name in CATEGORIES:
+                continue
+            has_products = (
+                session.scalar(select(Product.id).where(Product.category_id == cat.id)) is not None
+            )
+            if not has_products:
+                session.delete(cat)
         session.commit()
     total = len(PRODUCTS)
-    print(f"{added} new products added ({total - added} already existed)")
+    print(f"{added} new products added ({total - added} already existed), {removed} stale removed")
 
 
 if __name__ == "__main__":

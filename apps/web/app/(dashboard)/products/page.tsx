@@ -48,6 +48,7 @@ import {
   parsePriceFilterInput,
 } from "@workspace/ui/lib/number"
 import { Skeleton } from "@workspace/ui/components/skeleton"
+import { useIsMobile } from "@/hooks/use-mobile"
 import {
   api,
   ApiRequestError,
@@ -58,6 +59,7 @@ import {
   type ProductSort,
 } from "@/lib/api"
 import {
+  DEFAULT_LOW_STOCK_THRESHOLD,
   STOCK_LABELS,
   stockStatus,
   summarizeInventory,
@@ -68,7 +70,7 @@ import {
 const PAGE_SIZES = [10, 20, 50]
 const SEARCH_DEBOUNCE_MS = 400
 
-type StockFilter = "all" | "in" | "out"
+type StockFilter = "all" | "in" | "out" | "low"
 
 const SORT_LABELS: Record<ProductSort, string> = {
   newest: "جدیدترین",
@@ -80,9 +82,10 @@ const STOCK_FILTER_LABELS: Record<StockFilter, string> = {
   all: "همه",
   in: "موجود",
   out: "ناموجود",
+  low: "کم",
 }
 
-type StatColor = "emerald" | "red" | "sky"
+type StatColor = "emerald" | "red" | "sky" | "amber"
 
 const STAT_STYLES: Record<StatColor, { wrap: string; dot: string }> = {
   sky: {
@@ -96,6 +99,10 @@ const STAT_STYLES: Record<StatColor, { wrap: string; dot: string }> = {
   emerald: {
     wrap: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
     dot: "bg-emerald-500",
+  },
+  amber: {
+    wrap: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+    dot: "bg-amber-500",
   },
 }
 
@@ -112,14 +119,34 @@ function StatBadge({ color, label, value }: { color: StatColor; label: string; v
   )
 }
 
-function statusVariant(status: StockStatus): "secondary" | "default" | "destructive" {
+function statusVariant(status: StockStatus): "secondary" | "warning" | "destructive" {
   if (status === "out") return "destructive"
-  if (status === "low") return "default"
+  if (status === "low") return "warning"
   return "secondary"
+}
+
+/** Stock count cell: plain number when fine, badge when low (amber) or out (red). */
+function StockCell({ value, threshold }: { value: number; threshold: number }) {
+  if (value <= 0) {
+    return (
+      <Badge variant="destructive">
+        <PersianNumber value={value} />
+      </Badge>
+    )
+  }
+  if (value <= Math.max(threshold, 0)) {
+    return (
+      <Badge variant="warning">
+        <PersianNumber value={value} />
+      </Badge>
+    )
+  }
+  return <PersianNumber value={value} />
 }
 
 export default function ProductsPage() {
   const router = useRouter()
+  const isMobile = useIsMobile()
   const [page, setPage] = useState<ProductPage | null>(null)
   const [categories, setCategories] = useState<CategoryOut[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -135,6 +162,7 @@ export default function ProductsPage() {
   const [stock, setStock] = useState<StockFilter>("all")
   const [minPrice, setMinPrice] = useState("")
   const [maxPrice, setMaxPrice] = useState("")
+  const [threshold, setThreshold] = useState(DEFAULT_LOW_STOCK_THRESHOLD)
 
   const [catOpen, setCatOpen] = useState(false)
   const [newCat, setNewCat] = useState("")
@@ -152,6 +180,12 @@ export default function ProductsPage() {
   }, [q])
 
   const resetPage = useCallback(() => setPageNum(1), [])
+
+  const effectivePageSize = isMobile ? 10 : pageSize
+
+  useEffect(() => {
+    resetPage()
+  }, [isMobile, resetPage])
 
   useEffect(() => {
     let cancelled = false
@@ -172,13 +206,15 @@ export default function ProductsPage() {
     }
   }, [goLogin, catOpen])
 
-  // Global catalog aggregate for the stats strip. Table errors/auth surface
-  // through the paginated query below, so failures here stay silent.
+  // Low-stock threshold comes from server settings so every device agrees.
   useEffect(() => {
     let cancelled = false
-    fetchAllProducts()
-      .then((all) => {
-        if (!cancelled) setStats(summarizeInventory(all))
+    api
+      .settings()
+      .then((data) => {
+        if (!cancelled && Number.isFinite(data.low_stock_threshold)) {
+          setThreshold(Math.max(0, Math.floor(data.low_stock_threshold)))
+        }
       })
       .catch(() => {})
     return () => {
@@ -186,21 +222,41 @@ export default function ProductsPage() {
     }
   }, [catOpen])
 
+  // Global catalog aggregate for the stats strip. Table errors/auth surface
+  // through the paginated query below, so failures here stay silent.
+  useEffect(() => {
+    let cancelled = false
+    fetchAllProducts()
+      .then((all) => {
+        if (!cancelled) setStats(summarizeInventory(all, threshold))
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [catOpen, threshold])
+
   useEffect(() => {
     let cancelled = false
     setError(null)
     const min = minPrice.trim() === "" ? undefined : Number(minPrice)
     const max = maxPrice.trim() === "" ? undefined : Number(maxPrice)
+    const stockParams: { in_stock?: boolean; min_stock?: number; max_stock?: number } = {}
+    if (stock === "in" || stock === "out") stockParams.in_stock = stock === "in"
+    else if (stock === "low") {
+      stockParams.in_stock = true
+      stockParams.max_stock = threshold
+    }
     api
       .products({
         q: debouncedQ || undefined,
         category_id: categoryId ?? undefined,
         min_price: Number.isFinite(min) ? min : undefined,
         max_price: Number.isFinite(max) ? max : undefined,
-        in_stock: stock === "all" ? undefined : stock === "in",
+        ...stockParams,
         sort,
         page: pageNum,
-        page_size: pageSize,
+        page_size: effectivePageSize,
       })
       .then((data) => {
         if (!cancelled) setPage(data)
@@ -216,7 +272,7 @@ export default function ProductsPage() {
     return () => {
       cancelled = true
     }
-  }, [goLogin, pageNum, pageSize, debouncedQ, categoryId, sort, stock, minPrice, maxPrice])
+  }, [goLogin, pageNum, effectivePageSize, debouncedQ, categoryId, sort, stock, threshold, minPrice, maxPrice])
 
   const totalPages = page ? Math.max(1, Math.ceil(page.total / page.page_size)) : 1
   const hasFilters =
@@ -266,7 +322,7 @@ export default function ProductsPage() {
     }
   }
 
-  const selectedStatus = selected ? stockStatus(selected.stock) : null
+  const selectedStatus = selected ? stockStatus(selected.stock, threshold) : null
 
   return (
     <>
@@ -324,6 +380,7 @@ export default function ProductsPage() {
       {stats || page ? (
         <div className="mb-4 flex flex-wrap items-center gap-2" aria-label="آمار موجودی">
           <StatBadge color="sky" label="کل کالاها" value={stats?.total ?? 0} />
+          <StatBadge color="amber" label="موجودی کم" value={stats?.low ?? 0} />
           <StatBadge color="red" label="کالاهای ناموجود" value={stats?.out ?? 0} />
           {hasFilters && page ? (
             <StatBadge color="emerald" label="نتایج فیلتر" value={page.total} />
@@ -412,6 +469,7 @@ export default function ProductsPage() {
               <SelectItem value="all">همه</SelectItem>
               <SelectItem value="in">موجود</SelectItem>
               <SelectItem value="out">ناموجود</SelectItem>
+              <SelectItem value="low">کم</SelectItem>
             </SelectGroup>
           </SelectContent>
         </Select>
@@ -469,13 +527,12 @@ export default function ProductsPage() {
                 <TableHead>دسته‌بندی</TableHead>
                 <TableHead className="text-center">قیمت</TableHead>
                 <TableHead className="text-center">موجودی</TableHead>
-                <TableHead className="text-center">وضعیت</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={i}>
-                  {Array.from({ length: 6 }).map((_, j) => (
+                  {Array.from({ length: 5 }).map((_, j) => (
                     <TableCell key={j} className={j > 0 ? "text-center" : ""}>
                       <Skeleton
                         className={j > 0 ? "mx-auto h-4 w-20" : "h-4 w-20"}
@@ -493,13 +550,6 @@ export default function ProductsPage() {
           title={hasFilters ? "محصولی با این فیلترها یافت نشد" : "محصولی ثبت نشده است"}
           hint={hasFilters ? "فیلترها را تغییر دهید یا پاک کنید." : "اولین محصول را از طریق API اضافه کنید."}
           icon={<PackageSearch className="size-10 text-muted-foreground" />}
-          action={
-            hasFilters ? (
-              <Button variant="destructive" size="sm" onClick={clearFilters}>
-                پاک‌سازی فیلترها
-              </Button>
-            ) : undefined
-          }
         />
       ) : null}
       {page && page.items.length > 0 ? (
@@ -511,7 +561,6 @@ export default function ProductsPage() {
               <col className="w-52" />
               <col className="w-28" />
               <col className="w-24" />
-              <col className="w-28" />
             </colgroup>
             <TableHeader>
               <TableRow>
@@ -520,12 +569,10 @@ export default function ProductsPage() {
                 <TableHead scope="col">دسته‌بندی</TableHead>
                 <TableHead scope="col" className="text-center">قیمت</TableHead>
                 <TableHead scope="col" className="text-center">موجودی</TableHead>
-                <TableHead scope="col" className="text-center">وضعیت</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {page.items.map((item) => {
-                const status = stockStatus(item.stock)
                 return (
                   <TableRow
                     key={item.id}
@@ -554,10 +601,7 @@ export default function ProductsPage() {
                       <Price value={item.price} />
                     </TableCell>
                     <TableCell className="text-center">
-                      <PersianNumber value={item.stock} />
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant={statusVariant(status)}>{STOCK_LABELS[status]}</Badge>
+                      <StockCell value={item.stock} threshold={threshold} />
                     </TableCell>
                   </TableRow>
                 )
@@ -572,6 +616,7 @@ export default function ProductsPage() {
               setPageNum(Math.min(Math.max(1, p), totalPages))
             }
           >
+            {isMobile ? null : (
             <Select
               value={String(pageSize)}
               onValueChange={(v) => {
@@ -600,6 +645,7 @@ export default function ProductsPage() {
                 ))}
               </SelectContent>
             </Select>
+            )}
           </TablePagination>
         </div>
       ) : null}
@@ -615,7 +661,11 @@ export default function ProductsPage() {
           {selected && selectedStatus ? (
             <>
               <div className="flex flex-wrap gap-2">
-                <Badge variant={statusVariant(selectedStatus)}>{STOCK_LABELS[selectedStatus]}</Badge>
+                <Badge variant={statusVariant(selectedStatus)}>
+                  {STOCK_LABELS[selectedStatus]}
+                  {" · "}
+                  <PersianNumber value={selected.stock} />
+                </Badge>
                 {selected.category ? (
                   <Badge variant="secondary">{selected.category.name}</Badge>
                 ) : null}

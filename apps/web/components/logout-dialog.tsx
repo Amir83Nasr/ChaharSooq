@@ -35,17 +35,17 @@ export function LogoutDialog({
             باید دوباره وارد شوید.
           </ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
-        <ResponsiveDialogFooter className="flex-row gap-2">
+        <ResponsiveDialogFooter className="flex-col-reverse sm:flex-row">
           <ResponsiveDialogClose
             render={
-              <Button variant="outline" className="flex-1 sm:flex-none" />
+              <Button variant="outline" className="w-full sm:w-auto" />
             }
           >
             انصراف
           </ResponsiveDialogClose>
           <Button
             variant="destructive"
-            className="flex-1 sm:flex-none"
+            className="w-full sm:w-auto"
             onClick={() => void onConfirm()}
             disabled={pending}
             autoFocus

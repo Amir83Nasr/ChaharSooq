@@ -87,6 +87,8 @@ export interface ProductFilters {
   category_id?: number
   min_price?: number
   max_price?: number
+  min_stock?: number
+  max_stock?: number
   in_stock?: boolean
   sort?: ProductSort
   page?: number
@@ -126,6 +128,15 @@ export const api = {
       body: JSON.stringify({ username, password }),
     })
   },
+  settings() {
+    return request<{ low_stock_threshold: number }>("/api/v1/settings")
+  },
+  updateSettings(low_stock_threshold: number) {
+    return request<{ low_stock_threshold: number }>("/api/v1/settings", {
+      method: "PUT",
+      body: JSON.stringify({ low_stock_threshold }),
+    })
+  },
   me() {
     return request<{ username: string }>("/api/v1/auth/me")
   },
@@ -138,6 +149,8 @@ export const api = {
     if (params.category_id) search.set("category_id", String(params.category_id))
     if (params.min_price !== undefined) search.set("min_price", String(params.min_price))
     if (params.max_price !== undefined) search.set("max_price", String(params.max_price))
+    if (params.min_stock !== undefined) search.set("min_stock", String(params.min_stock))
+    if (params.max_stock !== undefined) search.set("max_stock", String(params.max_stock))
     if (params.in_stock !== undefined) search.set("in_stock", String(params.in_stock))
     if (params.sort) search.set("sort", params.sort)
     if (params.page) search.set("page", String(params.page))

@@ -171,6 +171,40 @@ def test_product_invalid_category_rejected(client: TestClient) -> None:
     assert r.status_code == 422
 
 
+# ── Settings / low-stock threshold ───────────────────────────────
+
+
+def test_settings_require_auth(client: TestClient) -> None:
+    assert client.get("/api/v1/settings").status_code == 401
+    assert client.put("/api/v1/settings", json={"low_stock_threshold": 3}).status_code == 401
+
+
+def test_settings_default_and_update(client: TestClient) -> None:
+    login(client)
+    assert client.get("/api/v1/settings").json() == {"low_stock_threshold": 5}
+    r = client.put("/api/v1/settings", json={"low_stock_threshold": 3})
+    assert r.status_code == 200, r.text
+    assert r.json() == {"low_stock_threshold": 3}
+    assert client.get("/api/v1/settings").json() == {"low_stock_threshold": 3}
+
+
+def test_settings_reject_invalid_threshold(client: TestClient) -> None:
+    login(client)
+    assert client.put("/api/v1/settings", json={"low_stock_threshold": -1}).status_code == 422
+    assert client.put("/api/v1/settings", json={"low_stock_threshold": "زیاد"}).status_code == 422
+
+
+def test_product_stock_range_filters(client: TestClient) -> None:
+    seed(client)
+    low = client.get(
+        "/api/v1/products", params={"in_stock": True, "max_stock": 5}
+    ).json()
+    assert {i["sku"] for i in low["items"]} == {"TEA-1", "COF-1"}
+    good = client.get("/api/v1/products", params={"min_stock": 6}).json()
+    assert good["total"] == 0
+    assert client.get("/api/v1/products", params={"min_stock": -1}).status_code == 422
+
+
 def test_database_url_trailing_whitespace_stripped() -> None:
     from app.core.config import Settings
 

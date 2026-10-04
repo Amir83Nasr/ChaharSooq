@@ -45,6 +45,8 @@ class ProductRepository:
         category_id: int | None,
         min_price: int | None,
         max_price: int | None,
+        min_stock: int | None,
+        max_stock: int | None,
         in_stock: bool | None,
         sort: ProductSort,
         page: int,
@@ -72,6 +74,12 @@ class ProductRepository:
         elif in_stock is False:
             base = base.where(Product.stock == 0)
             count_stmt = count_stmt.where(Product.stock == 0)
+        if min_stock is not None:
+            base = base.where(Product.stock >= min_stock)
+            count_stmt = count_stmt.where(Product.stock >= min_stock)
+        if max_stock is not None:
+            base = base.where(Product.stock <= max_stock)
+            count_stmt = count_stmt.where(Product.stock <= max_stock)
         total = self._session.execute(count_stmt).scalar_one()
         order = {
             "newest": Product.id.desc(),

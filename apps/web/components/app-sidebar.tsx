@@ -27,6 +27,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@workspace/ui/components/sidebar"
 import { Badge } from "@workspace/ui/components/badge"
 import { Skeleton } from "@workspace/ui/components/skeleton"
@@ -76,6 +77,7 @@ const NAV = [
 
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
+  const { isMobile, setOpenMobile } = useSidebar()
 
   return (
     <Sidebar collapsible="icon" side="right" {...props}>
@@ -127,7 +129,12 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
                     <SidebarMenuButton
                       className="group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:justify-center"
                       render={
-                        <Link href={item.href}>
+                        <Link
+                          href={item.href}
+                          onClick={() => {
+                            if (isMobile) setOpenMobile(false)
+                          }}
+                        >
                           <item.icon />
                           <span className="group-data-[collapsible=icon]:hidden">
                             {item.label}

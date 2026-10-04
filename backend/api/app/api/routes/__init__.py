@@ -20,6 +20,8 @@ from app.schemas import (
     ProductIn,
     ProductOut,
     ProductPage,
+    SettingsOut,
+    SettingsUpdateIn,
 )
 from app.services import (
     INVALID_CATEGORY_ERROR,
@@ -28,6 +30,7 @@ from app.services import (
     CategoryService,
     InvalidCategoryError,
     ProductService,
+    SettingsService,
 )
 
 router = APIRouter()
@@ -98,6 +101,8 @@ def list_products(
     category_id: int | None = Query(default=None, ge=1),
     min_price: int | None = Query(default=None, ge=0),
     max_price: int | None = Query(default=None, ge=0),
+    min_stock: int | None = Query(default=None, ge=0),
+    max_stock: int | None = Query(default=None, ge=0),
     in_stock: bool | None = Query(default=None),
     sort: Literal["newest", "cheapest", "most_expensive"] = Query(default="newest"),
     page: int = Query(default=1, ge=1),
@@ -110,6 +115,8 @@ def list_products(
         category_id=category_id,
         min_price=min_price,
         max_price=max_price,
+        min_stock=min_stock,
+        max_stock=max_stock,
         in_stock=in_stock,
         sort=sort,
         page=page,
@@ -137,6 +144,24 @@ def create_product(
             detail=INVALID_CATEGORY_ERROR,
         ) from None
     return ProductOut.model_validate(product)
+
+
+@router.get("/settings", response_model=SettingsOut)
+def get_settings_view(
+    _admin: Admin = Depends(require_admin),  # noqa: B008
+    session: Session = Depends(get_db),  # noqa: B008
+) -> SettingsOut:
+    return SettingsOut(low_stock_threshold=SettingsService(session).get_threshold())
+
+
+@router.put("/settings", response_model=SettingsOut)
+def update_settings(
+    payload: SettingsUpdateIn,
+    _admin: Admin = Depends(require_admin),  # noqa: B008
+    session: Session = Depends(get_db),  # noqa: B008
+) -> SettingsOut:
+    threshold = SettingsService(session).update_threshold(payload.low_stock_threshold)
+    return SettingsOut(low_stock_threshold=threshold)
 
 
 @router.get("/categories", response_model=list[CategoryOut])

@@ -65,3 +65,11 @@ class ProductPage(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class SettingsOut(BaseModel):
+    low_stock_threshold: int
+
+
+class SettingsUpdateIn(BaseModel):
+    low_stock_threshold: int = Field(ge=0, le=1_000_000)

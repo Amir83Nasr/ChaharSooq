@@ -1,10 +1,11 @@
 import type { Metadata } from "next"
 
-import { MoonStar } from "lucide-react"
+import { MoonStar, PackageMinus } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { PageHeader } from "@workspace/ui/components/page-header"
 
+import { InventoryThresholdSettings } from "@/components/inventory-threshold-settings"
 import { ThemeSettings } from "@/components/theme-settings"
 
 export const metadata: Metadata = { title: "چهارسوق | تنظیمات" }
@@ -25,6 +26,20 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent>
           <ThemeSettings />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <PackageMinus className="size-4" />
+            آستانه موجودی کم
+          </CardTitle>
+          <CardDescription>
+            از چه موجودی به پایین، کالا «کم» محسوب شود
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <InventoryThresholdSettings />
         </CardContent>
       </Card>
     </div>

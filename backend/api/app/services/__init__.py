@@ -9,12 +9,15 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.security import hash_password, hash_token, new_session_token, verify_password
-from app.models import Admin, AdminSession, Category, Product
+from app.models import Admin, AdminSession, Category, Product, Setting
 from app.repositories import CategoryRepository, ProductRepository, ProductSort
 from app.schemas import CategoryIn, LoginIn, ProductIn
 
 LOGIN_ERROR = "نام کاربری یا گذرواژه نادرست است"
 INVALID_CATEGORY_ERROR = "دسته‌بندی نامعتبر است"
+
+LOW_STOCK_THRESHOLD_KEY = "low_stock_threshold"
+DEFAULT_LOW_STOCK_THRESHOLD = 5
 
 
 class InvalidCategoryError(ValueError):
@@ -101,6 +104,8 @@ class ProductService:
         category_id: int | None,
         min_price: int | None,
         max_price: int | None,
+        min_stock: int | None,
+        max_stock: int | None,
         in_stock: bool | None,
         sort: ProductSort,
         page: int,
@@ -115,6 +120,8 @@ class ProductService:
             category_id=category_id,
             min_price=min_price,
             max_price=max_price,
+            min_stock=min_stock,
+            max_stock=max_stock,
             in_stock=in_stock,
             sort=sort,
             page=page,
@@ -127,3 +134,28 @@ class ProductService:
         if self._session.get(Category, payload.category_id) is None:
             raise InvalidCategoryError
         return self._repos.add(Product(**payload.model_dump()))
+
+
+class SettingsService:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def get_threshold(self) -> int:
+        row = self._session.get(Setting, LOW_STOCK_THRESHOLD_KEY)
+        if row is None:
+            return DEFAULT_LOW_STOCK_THRESHOLD
+        try:
+            value = int(row.value)
+        except ValueError:
+            return DEFAULT_LOW_STOCK_THRESHOLD
+        return max(value, 0)
+
+    def update_threshold(self, threshold: int) -> int:
+        row = self._session.get(Setting, LOW_STOCK_THRESHOLD_KEY)
+        if row is None:
+            row = Setting(key=LOW_STOCK_THRESHOLD_KEY, value=str(threshold))
+            self._session.add(row)
+        else:
+            row.value = str(threshold)
+        self._session.flush()
+        return threshold

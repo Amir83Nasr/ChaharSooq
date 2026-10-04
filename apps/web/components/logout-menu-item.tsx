@@ -1,7 +1,16 @@
 "use client"
 
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react"
 import { useRouter } from "next/navigation"
-import { useEffect, useRef, useState } from "react"
 import { LogOut } from "lucide-react"
 
 import {
@@ -11,7 +20,23 @@ import {
 import { api } from "@/lib/api"
 import { LogoutDialog } from "@/components/logout-dialog"
 
-export function LogoutMenuItem() {
+type LogoutContextValue = {
+  requestLogout: () => void
+}
+
+const LogoutContext = createContext<LogoutContextValue | null>(null)
+
+function useLogout() {
+  const context = useContext(LogoutContext)
+  if (!context) {
+    throw new Error("useLogout must be used within a LogoutProvider.")
+  }
+  return context
+}
+
+// State lives above the mobile sidebar sheet: closing the sheet unmounts
+// its children, which used to kill the pending dialog open timer.
+export function LogoutProvider({ children }: { children: ReactNode }) {
   const router = useRouter()
   const { isMobile, setOpenMobile } = useSidebar()
   const [open, setOpen] = useState(false)
@@ -25,7 +50,7 @@ export function LogoutMenuItem() {
     []
   )
 
-  function requestOpen() {
+  const requestLogout = useCallback(() => {
     // The mobile sidebar is itself a modal sheet. Let it finish closing
     // before opening the confirmation drawer so focus transfers cleanly.
     if (!isMobile) {
@@ -38,7 +63,7 @@ export function LogoutMenuItem() {
       setOpen(true)
       openTimer.current = null
     }, 550)
-  }
+  }, [isMobile, setOpenMobile])
 
   async function onConfirm() {
     setPending(true)
@@ -54,23 +79,33 @@ export function LogoutMenuItem() {
     router.refresh()
   }
 
+  const value = useMemo(() => ({ requestLogout }), [requestLogout])
+
   return (
-    <>
-      <SidebarMenuButton
-        className="group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:justify-center"
-        render={<button type="button" onClick={requestOpen} />}
-        tooltip="خروج"
-        variant="destructive"
-      >
-        <LogOut />
-        <span className="group-data-[collapsible=icon]:hidden">خروج</span>
-      </SidebarMenuButton>
+    <LogoutContext.Provider value={value}>
+      {children}
       <LogoutDialog
         open={open}
         onOpenChange={setOpen}
         onConfirm={onConfirm}
         pending={pending}
       />
-    </>
+    </LogoutContext.Provider>
+  )
+}
+
+export function LogoutMenuItem() {
+  const { requestLogout } = useLogout()
+
+  return (
+    <SidebarMenuButton
+      className="group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:justify-center"
+      render={<button type="button" onClick={requestLogout} />}
+      tooltip="خروج"
+      variant="destructive"
+    >
+      <LogOut />
+      <span className="group-data-[collapsible=icon]:hidden">خروج</span>
+    </SidebarMenuButton>
   )
 }

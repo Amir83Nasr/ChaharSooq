@@ -24,10 +24,24 @@ import {
 } from "@workspace/ui/components/drawer"
 import { useIsMobile } from "@workspace/ui/hooks/use-mobile"
 
+const ResponsiveDialogContext =
+  React.createContext<{ isMobile: boolean } | null>(null)
+
+function useResponsiveDialogMobile() {
+  const context = React.useContext(ResponsiveDialogContext)
+  if (!context) {
+    throw new Error(
+      "ResponsiveDialog parts must be used within a ResponsiveDialog."
+    )
+  }
+  return context.isMobile
+}
+
 type ResponsiveDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   children: React.ReactNode
+  showSwipeHandle?: boolean
 }
 
 /** Centered dialog on desktop, bottom sheet on mobile. */
@@ -35,21 +49,33 @@ export function ResponsiveDialog({
   open,
   onOpenChange,
   children,
+  showSwipeHandle = true,
 }: ResponsiveDialogProps) {
+  // SSR-safe default: Dialog on server/first paint, Drawer after hydration
+  // on mobile — children read this from context so root and parts agree.
   const isMobile = useIsMobile()
+  const value = React.useMemo(() => ({ isMobile }), [isMobile])
 
   if (isMobile) {
     return (
-      <Drawer open={open} onOpenChange={onOpenChange}>
-        {children}
-      </Drawer>
+      <ResponsiveDialogContext.Provider value={value}>
+        <Drawer
+          open={open}
+          onOpenChange={onOpenChange}
+          showSwipeHandle={showSwipeHandle}
+        >
+          {children}
+        </Drawer>
+      </ResponsiveDialogContext.Provider>
     )
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      {children}
-    </Dialog>
+    <ResponsiveDialogContext.Provider value={value}>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        {children}
+      </Dialog>
+    </ResponsiveDialogContext.Provider>
   )
 }
 
@@ -60,7 +86,7 @@ type TriggerProps = {
 }
 
 export function ResponsiveDialogTrigger(props: TriggerProps) {
-  const isMobile = useIsMobile()
+  const isMobile = useResponsiveDialogMobile()
 
   if (isMobile) {
     return (
@@ -90,7 +116,7 @@ export function ResponsiveDialogContent({
   showCloseButton = true,
   ...props
 }: ContentProps) {
-  const isMobile = useIsMobile()
+  const isMobile = useResponsiveDialogMobile()
 
   if (isMobile) {
     return (
@@ -114,7 +140,7 @@ export function ResponsiveDialogContent({
 export function ResponsiveDialogHeader(
   props: React.ComponentProps<typeof DialogHeader>
 ) {
-  const isMobile = useIsMobile()
+  const isMobile = useResponsiveDialogMobile()
 
   if (isMobile) {
     return <DrawerHeader {...props} />
@@ -126,7 +152,7 @@ export function ResponsiveDialogHeader(
 export function ResponsiveDialogTitle(
   props: React.ComponentProps<typeof DialogTitle>
 ) {
-  const isMobile = useIsMobile()
+  const isMobile = useResponsiveDialogMobile()
 
   if (isMobile) {
     return <DrawerTitle {...props} />
@@ -138,7 +164,7 @@ export function ResponsiveDialogTitle(
 export function ResponsiveDialogDescription(
   props: React.ComponentProps<typeof DialogDescription>
 ) {
-  const isMobile = useIsMobile()
+  const isMobile = useResponsiveDialogMobile()
 
   if (isMobile) {
     return <DrawerDescription {...props} />
@@ -150,7 +176,7 @@ export function ResponsiveDialogDescription(
 export function ResponsiveDialogFooter(
   props: React.ComponentProps<typeof DialogFooter>
 ) {
-  const isMobile = useIsMobile()
+  const isMobile = useResponsiveDialogMobile()
 
   if (isMobile) {
     return <DrawerFooter {...props} />
@@ -160,7 +186,7 @@ export function ResponsiveDialogFooter(
 }
 
 export function ResponsiveDialogClose(props: TriggerProps) {
-  const isMobile = useIsMobile()
+  const isMobile = useResponsiveDialogMobile()
 
   if (isMobile) {
     return (

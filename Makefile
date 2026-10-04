@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-.PHONY: api build check db-up dev dev-all down help install lint logs migrate seed seed-products test typecheck up
+.PHONY: api build check db-up deploy-api dev dev-all down help install lint logs migrate seed seed-products test typecheck up
 
 # ─── HELP ─────────────────────────────────────────────────
 help: ## Show this help message
@@ -61,6 +61,10 @@ down: ## Stop Docker Compose services
 
 logs: ## Follow Docker Compose logs
 	docker compose -f $(COMPOSE_FILE) logs -f
+
+# ─── DEPLOY ───────────────────────────────────────────────
+deploy-api: ## Deploy backend API to FastAPI Cloud (run from backend/api)
+	cd backend/api && uvx --with 'fastapi[standard]' fastapi deploy
 
 # ─── QUALITY / CHECKS ─────────────────────────────────────
 lint: ## Run frontend lint and backend ruff checks

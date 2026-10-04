@@ -66,7 +66,7 @@ export class ApiRequestError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response
   try {
-    res = await fetch(`${resolveBase()}${path}`, {
+    res = await fetch(`${resolveBase().replace(/\/+$/, "")}${path}`, {
       credentials: "include",
       headers: { "Content-Type": "application/json" },
       ...init,
@@ -106,7 +106,7 @@ const STATUS_FALLBACK: Record<number, string> = {
 }
 
 function toApiError(status: number, body: ApiError | null): ApiRequestError {
-  const raw = body?.error.message?.trim()
+  const raw = body?.error?.message?.trim()
   const message =
     raw && /[؀-ۿ]/.test(raw)
       ? raw

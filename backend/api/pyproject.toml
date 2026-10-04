@@ -36,6 +36,9 @@ select = ["E", "F", "I", "UP", "B", "ASYNC"]
 [tool.ruff.format]
 quote-style = "double"
 
+[tool.setuptools.packages.find]
+include = ["app*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

@@ -48,6 +48,7 @@ venv/
 # ─── SECRETS / CREDENTIALS / TOKENS ───────────────────────────
 .env
 .env.local
+.env.production
 .env.test
 *.pem
 *.key

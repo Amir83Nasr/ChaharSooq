@@ -298,10 +298,10 @@ export default function ProductsPage() {
                 </Button>
               </div>
               {catError ? <p role="alert" className="text-sm text-destructive">{catError}</p> : null}
-              <ul className="flex flex-col gap-2">
+              <ul className="flex max-h-64 min-h-0 flex-col gap-2 overflow-y-auto">
                 {categories.map((c) => (
                   <li key={c.id} className="flex items-center justify-between gap-2 rounded-md border border-border px-2.5 py-1.5">
-                    <span>{c.name}</span>
+                    <span className="min-w-0 flex-1 truncate">{c.name}</span>
                     <Button variant="ghost" size="sm" onClick={() => removeCategory(c.id)}>
                       حذف
                     </Button>
@@ -461,7 +461,7 @@ export default function ProductsPage() {
       {error ? <ErrorState title="خطا در بارگذاری محصولات" hint={error} /> : null}
       {!page && !error ? (
         <div aria-label="در حال بارگذاری">
-          <Table className="min-w-285 table-fixed">
+          <Table className="min-w-212 table-fixed">
             <TableHeader>
               <TableRow>
                 <TableHead>نام</TableHead>
@@ -504,7 +504,7 @@ export default function ProductsPage() {
       ) : null}
       {page && page.items.length > 0 ? (
         <div className="space-y-6">
-          <Table className="min-w-285 table-fixed">
+          <Table className="min-w-212 table-fixed">
             <colgroup>
               <col className="w-44" />
               <col className="w-36" />
@@ -539,11 +539,11 @@ export default function ProductsPage() {
                       }
                     }}
                   >
-                    <TableCell>
+                    <TableCell className="whitespace-normal wrap-break-word">
                       <span className="text-sm font-medium">{item.name}</span>
                     </TableCell>
                     <TableCell className="text-center text-sm text-muted-foreground">
-                      <span dir="ltr" className="inline-block">
+                      <span dir="ltr" className="inline-block max-w-full truncate align-middle">
                         {item.sku}
                       </span>
                     </TableCell>

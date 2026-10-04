@@ -22,13 +22,13 @@ export function HeaderDateTime() {
     return (
       <span
         aria-hidden="true"
-        className="hidden h-8 w-56 animate-pulse rounded-md bg-muted sm:block"
+        className="h-8 w-56 animate-pulse rounded-md bg-muted"
       />
     )
   }
 
   return (
-    <div className="hidden items-center gap-2 sm:flex">
+    <div className="flex items-center gap-2">
       <div className="flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-[13px] text-foreground shadow-xs">
         <time
           dateTime={now.toISOString()}

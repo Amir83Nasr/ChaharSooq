@@ -84,12 +84,12 @@ function TablePagination({
   if (totalPages <= 1) return null
 
   return (
-    <div className="flex items-center justify-between px-4 py-3">
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-4 py-3">
       <p className="text-sm text-muted-foreground">
         صفحه <PersianNumber value={page} /> از{" "}
         <PersianNumber value={totalPages} />
       </p>
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
         <Pagination className="mx-0 w-auto">
           <PaginationContent>
             <PaginationItem>

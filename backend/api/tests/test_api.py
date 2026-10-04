@@ -169,3 +169,10 @@ def test_product_invalid_category_rejected(client: TestClient) -> None:
         json={"name": "x", "sku": "X-1", "price": 1, "category_id": 9999},
     )
     assert r.status_code == 422
+
+
+def test_database_url_trailing_whitespace_stripped() -> None:
+    from app.core.config import Settings
+
+    s = Settings(database_url="postgresql+psycopg://u:p@host/db?sslmode=require ")
+    assert s.database_url == "postgresql+psycopg://u:p@host/db?sslmode=require"

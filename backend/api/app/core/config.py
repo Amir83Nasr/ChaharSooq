@@ -25,6 +25,13 @@ class Settings(BaseSettings):
         ]
     )
 
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def _strip_database_url(cls, value: object) -> object:
+        # Pasted Neon URLs can carry trailing whitespace ("sslmode=require "),
+        # which psycopg rejects. Strip before SQLAlchemy sees it.
+        return value.strip() if isinstance(value, str) else value
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_cors_origins(cls, value: object) -> object:

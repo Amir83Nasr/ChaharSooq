@@ -79,7 +79,7 @@ export function InventoryThresholdSettings() {
             setValue(parsePriceFilterInput(e.target.value))
             setSaved(false)
           }}
-          placeholder="مثلاً ۵"
+          placeholder="مثلاً ۱۰"
           aria-label="آستانه موجودی کم (عدد)"
           inputMode="numeric"
           maxLength={7}

@@ -17,7 +17,7 @@ LOGIN_ERROR = "نام کاربری یا گذرواژه نادرست است"
 INVALID_CATEGORY_ERROR = "دسته‌بندی نامعتبر است"
 
 LOW_STOCK_THRESHOLD_KEY = "low_stock_threshold"
-DEFAULT_LOW_STOCK_THRESHOLD = 5
+DEFAULT_LOW_STOCK_THRESHOLD = 10
 
 
 class InvalidCategoryError(ValueError):

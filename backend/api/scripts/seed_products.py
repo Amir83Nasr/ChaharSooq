@@ -68,7 +68,7 @@ PRODUCTS: list[dict[str, str | int]] = [
     {"name": "تلویزیون ۶۵ اینچ QLED", "sku": "TV-002", "price": 58000000, "stock": 7},
     {"name": "تلویزیون ۵۰ اینچ 4K", "sku": "TV-003", "price": 26500000, "stock": 15},
     {"name": "تلویزیون ۴۳ اینچ فول‌اچ‌دی", "sku": "TV-004", "price": 17800000, "stock": 20},
-    {"name": "تلویزیون ۷۵ اینچ 4K", "sku": "TV-005", "price": 79000000, "stock": 4},
+    {"name": "تلویزیون ۷۵ اینچ 4K", "sku": "TV-005", "price": 79000000, "stock": 0},
     {"name": "ساندبار ۲٫۱ کانال", "sku": "SND-001", "price": 6400000, "stock": 18},
     {"name": "سینمای خانگی ۵٫۱ کانال", "sku": "SND-002", "price": 14500000, "stock": 8},
     {"name": "اسپیکر بلوتوثی قابل‌حمل", "sku": "SND-003", "price": 2900000, "stock": 30},
@@ -178,17 +178,21 @@ def main() -> None:
             cat_ids[name] = cat.id
         new_skus = {str(item["sku"]) for item in PRODUCTS}
         for item in PRODUCTS:
-            exists = session.scalar(select(Product.id).where(Product.sku == item["sku"]))
-            if exists is not None:
-                continue
             sku = str(item["sku"])
             prefix = sku.split("-")[0] if "-" in sku else sku
+            category_id = cat_ids.get(PREFIX_CATEGORY.get(prefix, "لوازم برقی آشپزخانه"), None)
+            existing = session.scalar(select(Product).where(Product.sku == item["sku"]))
+            if existing is not None:
+                # Re-run syncs seed values (e.g. stock changes), not just new rows.
+                existing.name = str(item["name"])
+                existing.price = int(item["price"])  # type: ignore[arg-type]
+                existing.stock = int(item["stock"])  # type: ignore[arg-type]
+                existing.category_id = category_id
+                continue
             session.add(
                 Product(
                     **item,  # type: ignore[arg-type]
-                    category_id=cat_ids.get(
-                        PREFIX_CATEGORY.get(prefix, "لوازم برقی آشپزخانه"), None
-                    ),
+                    category_id=category_id,
                 )
             )
             added += 1

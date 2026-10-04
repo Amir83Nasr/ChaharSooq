@@ -35,17 +35,20 @@ export function LogoutDialog({
             باید دوباره وارد شوید.
           </ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
-        <ResponsiveDialogFooter className="flex-col-reverse sm:flex-row">
+        {/* No layout classes here: DrawerFooter stacks full-width on mobile,
+            DialogFooter right-aligns a row on desktop. `sm:` overrides would
+            leak desktop layout into the mobile drawer (640–768px). */}
+        <ResponsiveDialogFooter>
           <ResponsiveDialogClose
             render={
-              <Button variant="outline" className="w-full sm:w-auto" />
+              <Button variant="outline" className="w-full md:w-auto" />
             }
           >
             انصراف
           </ResponsiveDialogClose>
           <Button
             variant="destructive"
-            className="w-full sm:w-auto"
+            className="w-full md:w-auto"
             onClick={() => void onConfirm()}
             disabled={pending}
             autoFocus

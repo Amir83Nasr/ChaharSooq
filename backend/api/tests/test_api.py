@@ -181,7 +181,7 @@ def test_settings_require_auth(client: TestClient) -> None:
 
 def test_settings_default_and_update(client: TestClient) -> None:
     login(client)
-    assert client.get("/api/v1/settings").json() == {"low_stock_threshold": 5}
+    assert client.get("/api/v1/settings").json() == {"low_stock_threshold": 10}
     r = client.put("/api/v1/settings", json={"low_stock_threshold": 3})
     assert r.status_code == 200, r.text
     assert r.json() == {"low_stock_threshold": 3}
@@ -196,9 +196,7 @@ def test_settings_reject_invalid_threshold(client: TestClient) -> None:
 
 def test_product_stock_range_filters(client: TestClient) -> None:
     seed(client)
-    low = client.get(
-        "/api/v1/products", params={"in_stock": True, "max_stock": 5}
-    ).json()
+    low = client.get("/api/v1/products", params={"in_stock": True, "max_stock": 5}).json()
     assert {i["sku"] for i in low["items"]} == {"TEA-1", "COF-1"}
     good = client.get("/api/v1/products", params={"min_stock": 6}).json()
     assert good["total"] == 0

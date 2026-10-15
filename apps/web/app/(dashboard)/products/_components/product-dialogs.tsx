@@ -1,6 +1,4 @@
 import { Badge } from "@workspace/ui/components/badge"
-import { Button } from "@workspace/ui/components/button"
-import { Input } from "@workspace/ui/components/input"
 import {
   ResponsiveDialog,
   ResponsiveDialogContent,
@@ -14,73 +12,7 @@ import { PersianDate } from "@workspace/ui/components/persian-date"
 import { PersianNumber } from "@workspace/ui/components/persian-number"
 import { statusVariant } from "@/components/products-stock-cell"
 import { STOCK_LABELS, stockStatus, type StockStatus } from "@/lib/inventory"
-import type { CategoryOut, ProductOut } from "@/lib/api"
-
-export function CategoryDialog(props: {
-  open: boolean
-  categories: CategoryOut[]
-  newCat: string
-  catError: string | null
-  catBusy: boolean
-  onOpen: (v: boolean) => void
-  onNewCat: (v: string) => void
-  onAdd: () => void
-  onRemove: (id: number) => void
-  onClose: () => void
-}) {
-  const { open, categories, newCat, catError, catBusy, onOpen, onNewCat, onAdd, onRemove, onClose } =
-    props
-  return (
-    <ResponsiveDialog open={open} onOpenChange={onOpen}>
-      <ResponsiveDialogContent aria-label="مدیریت دسته‌بندی‌ها">
-        <ResponsiveDialogHeader>
-          <ResponsiveDialogTitle>دسته‌بندی‌ها</ResponsiveDialogTitle>
-          <ResponsiveDialogDescription>
-            دسته‌بندی جدید بسازید یا دسته‌بندی خالی را حذف کنید.
-          </ResponsiveDialogDescription>
-        </ResponsiveDialogHeader>
-        <div className="flex items-center gap-2">
-          <Input
-            value={newCat}
-            onChange={(e) => onNewCat(e.target.value)}
-            placeholder="نام دسته‌بندی جدید…"
-            aria-label="نام دسته‌بندی جدید"
-            maxLength={120}
-          />
-          <Button onClick={onAdd} disabled={!newCat.trim() || catBusy}>
-            افزودن
-          </Button>
-        </div>
-        {catError ? (
-          <p role="alert" className="text-sm text-destructive">
-            {catError}
-          </p>
-        ) : null}
-        <ul className="flex max-h-64 min-h-0 flex-col gap-2 overflow-y-auto">
-          {categories.map((c) => (
-            <li
-              key={c.id}
-              className="flex items-center justify-between gap-2 rounded-md border border-border px-2.5 py-1.5"
-            >
-              <span className="min-w-0 flex-1 truncate">{c.name}</span>
-              <Button variant="ghost" size="sm" onClick={() => onRemove(c.id)}>
-                حذف
-              </Button>
-            </li>
-          ))}
-          {categories.length === 0 ? (
-            <li className="text-sm text-muted-foreground">دسته‌بندی‌ای ثبت نشده است.</li>
-          ) : null}
-        </ul>
-        <ResponsiveDialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            بستن
-          </Button>
-        </ResponsiveDialogFooter>
-      </ResponsiveDialogContent>
-    </ResponsiveDialog>
-  )
-}
+import type { ProductOut } from "@/lib/api"
 
 export function ProductDetailDialog(props: {
   selected: ProductOut | null

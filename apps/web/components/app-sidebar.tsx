@@ -58,12 +58,12 @@ const NAV = [
     group: "گزارش‌ها",
     items: [{ href: "/reports", label: "گزارش فروش", icon: BarChart3, soon: true }],
   },
-  // ponytail: لینک‌نما با soon؛ صفحه/ API واقعی هنگام اتصال ترب و سپیدار.
+  // ponytail: لینک‌نما با soon؛ صفحه/ API واقعی هنگام اتصال ترب و پارسینا.
   {
     group: "یکپارچه‌سازی",
     items: [
       { href: "/integrations/torob", label: "اتصال ترب", icon: Scale, soon: true },
-      { href: "/integrations/sepidar", label: "اتصال سپیدار", icon: Calculator, soon: true },
+      { href: "/integrations/parsina", label: "اتصال پارسینا", icon: Calculator, soon: true },
     ],
   },
   {

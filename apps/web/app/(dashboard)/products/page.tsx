@@ -5,11 +5,6 @@
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
 
-import { Button } from "@workspace/ui/components/button"
-import {
-  ResponsiveDialog,
-  ResponsiveDialogTrigger,
-} from "@workspace/ui/components/responsive-dialog"
 import { PageHeader } from "@workspace/ui/components/page-header"
 import { ErrorState } from "@workspace/ui/components/state"
 import { useIsMobile } from "@workspace/ui/hooks/use-mobile"
@@ -26,7 +21,7 @@ import {
   type InventorySummary,
 } from "@/lib/inventory"
 import { StatBadge } from "@/components/products-stat-badge"
-import { CategoryDialog, ProductDetailDialog } from "./_components/product-dialogs"
+import { ProductDetailDialog } from "./_components/product-dialogs"
 import { ProductsTable } from "./_components/products-table"
 import { ProductsToolbar, type StockFilter } from "./_components/products-toolbar"
 
@@ -51,11 +46,6 @@ export default function ProductsPage() {
   const [minPrice, setMinPrice] = useState("")
   const [maxPrice, setMaxPrice] = useState("")
   const [threshold, setThreshold] = useState(DEFAULT_LOW_STOCK_THRESHOLD)
-
-  const [catOpen, setCatOpen] = useState(false)
-  const [newCat, setNewCat] = useState("")
-  const [catError, setCatError] = useState<string | null>(null)
-  const [catBusy, setCatBusy] = useState(false)
 
   const goLogin = useCallback(() => {
     router.replace("/login")
@@ -91,7 +81,7 @@ export default function ProductsPage() {
     return () => {
       cancelled = true
     }
-  }, [goLogin, catOpen])
+  }, [goLogin])
 
   // Low-stock threshold + default page size come from server settings
   // so every device agrees.
@@ -112,7 +102,7 @@ export default function ProductsPage() {
     return () => {
       cancelled = true
     }
-  }, [catOpen])
+  }, [])
 
   // Global catalog aggregate for the stats strip. Table errors/auth surface
   // through the paginated query below, so failures here stay silent.
@@ -136,7 +126,7 @@ export default function ProductsPage() {
     return () => {
       cancelled = true
     }
-  }, [catOpen, threshold])
+  }, [threshold])
 
   useEffect(() => {
     let cancelled = false
@@ -195,60 +185,9 @@ export default function ProductsPage() {
     setPageNum(1)
   }
 
-  async function addCategory() {
-    const name = newCat.trim()
-    if (!name || catBusy) return
-    setCatBusy(true)
-    setCatError(null)
-    try {
-      await api.createCategory(name)
-      setNewCat("")
-    } catch (err: unknown) {
-      setCatError(err instanceof Error ? err.message : "خطایی رخ داد.")
-    } finally {
-      setCatBusy(false)
-    }
-  }
-
-  async function removeCategory(id: number) {
-    setCatError(null)
-    try {
-      await api.deleteCategory(id)
-      setCategories((prev) => prev.filter((c) => c.id !== id))
-      if (categoryId === id) {
-        setCategoryId(null)
-        resetPage()
-      }
-    } catch (err: unknown) {
-      setCatError(err instanceof Error ? err.message : "خطایی رخ داد.")
-    }
-  }
-
   return (
     <>
-      <PageHeader
-        title="محصولات"
-        subtitle="مدیریت کالاهای فروشگاه"
-        actions={
-          <ResponsiveDialog open={catOpen} onOpenChange={setCatOpen}>
-            <ResponsiveDialogTrigger render={<Button variant="outline" />}>
-              مدیریت دسته‌بندی‌ها
-            </ResponsiveDialogTrigger>
-            <CategoryDialog
-              open={catOpen}
-              categories={categories}
-              newCat={newCat}
-              catError={catError}
-              catBusy={catBusy}
-              onOpen={setCatOpen}
-              onNewCat={setNewCat}
-              onAdd={addCategory}
-              onRemove={removeCategory}
-              onClose={() => setCatOpen(false)}
-            />
-          </ResponsiveDialog>
-        }
-      />
+      <PageHeader title="محصولات" subtitle="مدیریت کالاهای فروشگاه" />
 
       {stats || page ? (
         <div className="mb-4 flex flex-wrap items-center gap-2" aria-label="آمار موجودی">

@@ -50,18 +50,16 @@ db-seed: db-up ## Create dev admin user (ADMIN_USER / ADMIN_PASSWORD)
 	ADMIN_USER="$(strip $(ADMIN_USER))" ADMIN_PASSWORD="$(strip $(ADMIN_PASSWORD))" \
 	uv run --project backend/api python backend/api/scripts/seed_admin.py
 
-db-seed-products: db-up ## Seed home-appliance catalog (idempotent, prunes stale rows)
-	uv run --project backend/api python backend/api/scripts/seed_products.py
-
 # ─── DATABASE: PROD (NEON) ────────────────────────────────
+# NOTE: never `set -a; . .env` here — DATABASE_URL contains `&` and shell
+# sourcing dies with `parse error near '&'`, silently falling back to the
+# local dev database. `uv --env-file` parses dotenv safely instead.
 db-migrate-prod: ## Apply Alembic migrations to prod Neon (reads .env.production)
-	set -a; . ./.env.production; set +a; \
-	cd backend/api && uv run alembic upgrade head
+	cd backend/api && uv run --env-file $(CURDIR)/.env.production alembic upgrade head
 
 db-seed-prod: ## Create prod admin user from ADMIN_USER / ADMIN_PASSWORD
-	set -a; . ./.env.production; set +a; \
 	ADMIN_USER="$(strip $(ADMIN_USER))" ADMIN_PASSWORD="$(strip $(ADMIN_PASSWORD))" \
-	uv run --project backend/api python backend/api/scripts/seed_admin.py
+	uv run --project backend/api --env-file $(CURDIR)/.env.production python backend/api/scripts/seed_admin.py
 
 # ─── DOCKER ───────────────────────────────────────────────
 docker-up: ## Start services with Docker Compose

@@ -6,12 +6,14 @@ import {
   BarChart3,
   Boxes,
   Calculator,
+  Laptop,
   LayoutDashboard,
   Package,
   Scale,
   Settings,
   ShieldCheck,
   ShoppingCart,
+  Store,
   Tag,
   Truck,
   Users,
@@ -58,11 +60,13 @@ const NAV = [
     group: "گزارش‌ها",
     items: [{ href: "/reports", label: "گزارش فروش", icon: BarChart3, soon: true }],
   },
-  // ponytail: لینک‌نما با soon؛ صفحه/ API واقعی هنگام اتصال ترب و پارسینا.
+  // ponytail: لینک‌نما با soon؛ صفحه/ API واقعی هنگام اتصال ترب، دیجی‌کالا، تکنولایف و پارسینا.
   {
     group: "یکپارچه‌سازی",
     items: [
       { href: "/integrations/torob", label: "اتصال ترب", icon: Scale, soon: true },
+      { href: "/integrations/digikala", label: "اتصال دیجی‌کالا", icon: Store, soon: true },
+      { href: "/integrations/technolife", label: "اتصال تکنولایف", icon: Laptop, soon: true },
       { href: "/integrations/parsina", label: "اتصال پارسینا", icon: Calculator, soon: true },
     ],
   },

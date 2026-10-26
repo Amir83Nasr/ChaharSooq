@@ -137,6 +137,23 @@
             }
           },
           {
+            "name": "main_group",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Main Group"
+            }
+          },
+          {
             "name": "min_price",
             "in": "query",
             "required": false,
@@ -360,6 +377,28 @@
         }
       }
     },
+    "/api/v1/products/groups": {
+      "get": {
+        "summary": "Product Groups",
+        "operationId": "product_groups_api_v1_products_groups_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array",
+                  "title": "Response Product Groups Api V1 Products Groups Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/categories": {
       "get": {
         "summary": "List Categories",
@@ -443,6 +482,42 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/parsina/status": {
+      "get": {
+        "summary": "Parsina Status",
+        "operationId": "parsina_status_api_v1_integrations_parsina_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncStatusOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/parsina/sync": {
+      "post": {
+        "summary": "Parsina Sync",
+        "operationId": "parsina_sync_api_v1_integrations_parsina_sync_post",
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncRunOut"
                 }
               }
             }
@@ -736,6 +811,17 @@
             "type": "integer",
             "title": "Id"
           },
+          "external_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Id"
+          },
           "name": {
             "type": "string",
             "title": "Name"
@@ -745,12 +831,50 @@
             "title": "Sku"
           },
           "price": {
-            "type": "integer",
+            "type": "number",
             "title": "Price"
           },
           "stock": {
-            "type": "integer",
+            "type": "number",
             "title": "Stock"
+          },
+          "main_group_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Main Group Name"
+          },
+          "sub_group_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sub Group Name"
+          },
+          "unit_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Name"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "default": true
           },
           "category": {
             "anyOf": [
@@ -761,6 +885,18 @@
                 "type": "null"
               }
             ]
+          },
+          "synced_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Synced At"
           },
           "created_at": {
             "type": "string",
@@ -777,7 +913,8 @@
           "stock",
           "created_at"
         ],
-        "title": "ProductOut"
+        "title": "ProductOut",
+        "description": "Mirror row — numbers stay machine-readable; UI formats them."
       },
       "ProductPage": {
         "properties": {
@@ -862,6 +999,127 @@
         },
         "type": "object",
         "title": "SettingsUpdateIn"
+      },
+      "SyncRunOut": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "running",
+            "title": "Status"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "SyncRunOut",
+        "description": "Accepted trigger only — counters arrive via the status endpoint."
+      },
+      "SyncStatusOut": {
+        "properties": {
+          "configured": {
+            "type": "boolean",
+            "title": "Configured"
+          },
+          "running": {
+            "type": "boolean",
+            "title": "Running"
+          },
+          "running_since": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Running Since"
+          },
+          "last_attempt_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Attempt At"
+          },
+          "last_success_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Success At"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "last_processed": {
+            "type": "integer",
+            "title": "Last Processed",
+            "default": 0
+          },
+          "last_created": {
+            "type": "integer",
+            "title": "Last Created",
+            "default": 0
+          },
+          "last_updated": {
+            "type": "integer",
+            "title": "Last Updated",
+            "default": 0
+          },
+          "last_deactivated": {
+            "type": "integer",
+            "title": "Last Deactivated",
+            "default": 0
+          },
+          "last_skipped": {
+            "type": "integer",
+            "title": "Last Skipped",
+            "default": 0
+          },
+          "interval_minutes": {
+            "type": "integer",
+            "title": "Interval Minutes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "configured",
+          "running",
+          "interval_minutes"
+        ],
+        "title": "SyncStatusOut"
       },
       "ValidationError": {
         "properties": {

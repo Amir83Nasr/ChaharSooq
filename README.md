@@ -84,6 +84,11 @@ See [.env.example](.env.example). Never commit real secrets.
 | `CORS_ORIGINS` | Backend CORS allowlist, comma-separated |
 | `ALLOWED_DEV_ORIGINS` | Extra Next.js dev origins, comma-separated |
 | `ADMIN_USER` / `ADMIN_PASSWORD` | Seed credentials for `db-seed` / `db-seed-prod` |
+| `PARSINA_*` | Parsina accounting API (URL, credentials, org, year, optional warehouse/sale-type). Empty = integration off. `PARSINA_SYNC_INTERVAL_MINUTES` (default 15) and `PARSINA_SYNC_ENABLED` tune the backend scheduler |
+
+## Parsina product sync
+
+Products mirror the Parsina accounting API (`external_id` = Parsina `goodId`). The backend scheduler syncs every `PARSINA_SYNC_INTERVAL_MINUTES` (default 15) inside the API process; the products page has a «به‌روزرسانی اطلاعات» button for a manual run. Both share one DB lock, so runs never overlap; manual runs return `202` and the UI polls `GET /integrations/parsina/status` until the run finishes, then re-fetches the table in place. A failed or partial fetch never overwrites the last successful data; rows missing from a complete listing are deactivated, never deleted.
 
 ## Database setup
 

@@ -44,6 +44,7 @@ venv/
 *.bak
 *.orig
 *~
+data/
 
 # ─── SECRETS / CREDENTIALS / TOKENS ───────────────────────────
 .env

@@ -26,6 +26,7 @@ router = APIRouter()
 def list_products(
     q: str = Query(default=""),
     category_id: int | None = Query(default=None, ge=1),
+    main_group: str | None = Query(default=None, max_length=200),
     min_price: int | None = Query(default=None, ge=0),
     max_price: int | None = Query(default=None, ge=0),
     min_stock: int | None = Query(default=None, ge=0),
@@ -40,6 +41,7 @@ def list_products(
     items, total = ProductService(session).list(
         query=q,
         category_id=category_id,
+        main_group=main_group,
         min_price=min_price,
         max_price=max_price,
         min_stock=min_stock,
@@ -81,3 +83,11 @@ def products_summary(
 ) -> InventorySummaryOut:
     summary = ProductService(session).summary(low_stock_threshold=threshold)
     return InventorySummaryOut(**summary)
+
+
+@router.get("/products/groups", response_model=list[str])
+def product_groups(
+    _admin: Admin = Depends(require_admin),  # noqa: B008
+    session: Session = Depends(get_db),  # noqa: B008
+) -> list[str]:
+    return ProductService(session).groups()

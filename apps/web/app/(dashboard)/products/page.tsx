@@ -20,10 +20,14 @@ import {
   DEFAULT_LOW_STOCK_THRESHOLD,
   type InventorySummary,
 } from "@/lib/inventory"
+import { ParsinaSyncPanel } from "@/components/parsina-sync-panel"
 import { StatBadge } from "@/components/products-stat-badge"
 import { ProductDetailDialog } from "./_components/product-dialogs"
 import { ProductsTable } from "./_components/products-table"
-import { ProductsToolbar, type StockFilter } from "./_components/products-toolbar"
+import {
+  ProductsToolbar,
+  type StockFilter,
+} from "./_components/products-toolbar"
 
 const SEARCH_DEBOUNCE_MS = 400
 
@@ -46,6 +50,10 @@ export default function ProductsPage() {
   const [minPrice, setMinPrice] = useState("")
   const [maxPrice, setMaxPrice] = useState("")
   const [threshold, setThreshold] = useState(DEFAULT_LOW_STOCK_THRESHOLD)
+  // Bumped after a sync lands — re-fetches table + stats in place, keeping
+  // search/sort/paging state untouched.
+  const [dataVersion, setDataVersion] = useState(0)
+  const refreshData = useCallback(() => setDataVersion((v) => v + 1), [])
 
   const goLogin = useCallback(() => {
     router.replace("/login")
@@ -94,7 +102,11 @@ export default function ProductsPage() {
         if (Number.isFinite(data.low_stock_threshold)) {
           setThreshold(Math.max(0, Math.floor(data.low_stock_threshold)))
         }
-        if (data.default_page_size === 10 || data.default_page_size === 20 || data.default_page_size === 50) {
+        if (
+          data.default_page_size === 10 ||
+          data.default_page_size === 20 ||
+          data.default_page_size === 50
+        ) {
           setPageSize(data.default_page_size)
         }
       })
@@ -126,14 +138,18 @@ export default function ProductsPage() {
     return () => {
       cancelled = true
     }
-  }, [threshold])
+  }, [threshold, dataVersion])
 
   useEffect(() => {
     let cancelled = false
     setError(null)
     const min = minPrice.trim() === "" ? undefined : Number(minPrice)
     const max = maxPrice.trim() === "" ? undefined : Number(maxPrice)
-    const stockParams: { in_stock?: boolean; min_stock?: number; max_stock?: number } = {}
+    const stockParams: {
+      in_stock?: boolean
+      min_stock?: number
+      max_stock?: number
+    } = {}
     if (stock === "in" || stock === "out") stockParams.in_stock = stock === "in"
     else if (stock === "low") {
       stockParams.in_stock = true
@@ -151,7 +167,13 @@ export default function ProductsPage() {
         page_size: effectivePageSize,
       })
       .then((data) => {
-        if (!cancelled) setPage(data)
+        if (cancelled) return
+        // A sync can shrink the catalog; an emptied page falls back to the last one.
+        if (data.page > 1 && data.items.length === 0) {
+          setPageNum(Math.max(1, Math.ceil(data.total / data.page_size)))
+          return
+        }
+        setPage(data)
       })
       .catch((err: unknown) => {
         if (cancelled) return
@@ -164,9 +186,23 @@ export default function ProductsPage() {
     return () => {
       cancelled = true
     }
-  }, [goLogin, pageNum, effectivePageSize, debouncedQ, categoryId, sort, stock, threshold, minPrice, maxPrice])
+  }, [
+    goLogin,
+    pageNum,
+    effectivePageSize,
+    debouncedQ,
+    categoryId,
+    sort,
+    stock,
+    threshold,
+    minPrice,
+    maxPrice,
+    dataVersion,
+  ])
 
-  const totalPages = page ? Math.max(1, Math.ceil(page.total / page.page_size)) : 1
+  const totalPages = page
+    ? Math.max(1, Math.ceil(page.total / page.page_size))
+    : 1
   const hasFilters =
     debouncedQ !== "" ||
     categoryId !== null ||
@@ -187,13 +223,26 @@ export default function ProductsPage() {
 
   return (
     <>
-      <PageHeader title="محصولات" subtitle="مدیریت کالاهای فروشگاه" />
+      <PageHeader
+        title="محصولات"
+        subtitle="مدیریت کالاهای فروشگاه"
+        actions={
+          <ParsinaSyncPanel onSynced={refreshData} onUnauthorized={goLogin} />
+        }
+      />
 
       {stats || page ? (
-        <div className="mb-4 flex flex-wrap items-center gap-2" aria-label="آمار موجودی">
+        <div
+          className="mb-4 flex flex-wrap items-center gap-2"
+          aria-label="آمار موجودی"
+        >
           <StatBadge color="sky" label="کل کالاها" value={stats?.total ?? 0} />
           <StatBadge color="amber" label="موجودی کم" value={stats?.low ?? 0} />
-          <StatBadge color="red" label="کالاهای ناموجود" value={stats?.out ?? 0} />
+          <StatBadge
+            color="red"
+            label="کالاهای ناموجود"
+            value={stats?.out ?? 0}
+          />
           {hasFilters && page ? (
             <StatBadge color="emerald" label="نتایج فیلتر" value={page.total} />
           ) : null}
@@ -236,37 +285,43 @@ export default function ProductsPage() {
         onClear={clearFilters}
       />
 
-      {error ? <ErrorState title="خطا در بارگذاری محصولات" hint={error} /> : null}
-      {!page && !error ? <ProductsTable
-        page={null}
-        threshold={threshold}
-        pageNum={pageNum}
-        totalPages={totalPages}
-        pageSize={pageSize}
-        showPageSize={!isMobile}
-        hasFilters={hasFilters}
-        onSelect={setSelected}
-        onPageChange={(p) => setPageNum(Math.min(Math.max(1, p), totalPages))}
-        onPageSize={(n) => {
-          setPageSize(n)
-          resetPage()
-        }}
-      /> : null}
-      {page ? <ProductsTable
-        page={page}
-        threshold={threshold}
-        pageNum={pageNum}
-        totalPages={totalPages}
-        pageSize={pageSize}
-        showPageSize={!isMobile}
-        hasFilters={hasFilters}
-        onSelect={setSelected}
-        onPageChange={(p) => setPageNum(Math.min(Math.max(1, p), totalPages))}
-        onPageSize={(n) => {
-          setPageSize(n)
-          resetPage()
-        }}
-      /> : null}
+      {error ? (
+        <ErrorState title="خطا در بارگذاری محصولات" hint={error} />
+      ) : null}
+      {!page && !error ? (
+        <ProductsTable
+          page={null}
+          threshold={threshold}
+          pageNum={pageNum}
+          totalPages={totalPages}
+          pageSize={pageSize}
+          showPageSize={!isMobile}
+          hasFilters={hasFilters}
+          onSelect={setSelected}
+          onPageChange={(p) => setPageNum(Math.min(Math.max(1, p), totalPages))}
+          onPageSize={(n) => {
+            setPageSize(n)
+            resetPage()
+          }}
+        />
+      ) : null}
+      {page ? (
+        <ProductsTable
+          page={page}
+          threshold={threshold}
+          pageNum={pageNum}
+          totalPages={totalPages}
+          pageSize={pageSize}
+          showPageSize={!isMobile}
+          hasFilters={hasFilters}
+          onSelect={setSelected}
+          onPageChange={(p) => setPageNum(Math.min(Math.max(1, p), totalPages))}
+          onPageSize={(n) => {
+            setPageSize(n)
+            resetPage()
+          }}
+        />
+      ) : null}
 
       <ProductDetailDialog
         selected={selected}

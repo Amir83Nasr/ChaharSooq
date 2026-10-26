@@ -8,6 +8,8 @@ from app.schemas.catalog import (
     ProductIn,
     ProductOut,
     ProductPage,
+    SyncRunOut,
+    SyncStatusOut,
 )
 from app.schemas.common import ErrorBody, ErrorEnvelope
 from app.schemas.settings import SettingsOut, SettingsUpdateIn
@@ -26,4 +28,6 @@ __all__ = [
     "ProductPage",
     "SettingsOut",
     "SettingsUpdateIn",
+    "SyncRunOut",
+    "SyncStatusOut",
 ]

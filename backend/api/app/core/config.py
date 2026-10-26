@@ -53,6 +53,42 @@ class Settings(BaseSettings):
         return self.app_env == "production"
 
 
+class ParsinaSettings(BaseSettings):
+    """Parsina accounting API connection — secrets only via env, never logged."""
+
+    model_config = SettingsConfigDict(env_file=(".env.local", ".env"), extra="ignore")
+
+    parsina_base_url: str = Field(default="")
+    parsina_username: str = Field(default="")
+    parsina_password: str = Field(default="")
+    parsina_org_id: int | None = Field(default=None)
+    parsina_year: int | None = Field(default=None)
+    parsina_ware_id: int | None = Field(default=None, description="optional LoadByFilter Ware")
+    parsina_sale_type_id: int | None = Field(default=None, description="optional Saletype")
+    parsina_timeout_seconds: float = Field(default=15.0, gt=0)
+    parsina_sync_interval_minutes: int = Field(default=15, ge=1)
+    parsina_sync_enabled: bool = Field(default=True)
+
+    @property
+    def base_url(self) -> str:
+        return self.parsina_base_url.strip().rstrip("/")
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(
+            self.base_url
+            and self.parsina_username
+            and self.parsina_password
+            and self.parsina_org_id is not None
+            and self.parsina_year is not None
+        )
+
+
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+@lru_cache
+def get_parsina_settings() -> ParsinaSettings:
+    return ParsinaSettings()

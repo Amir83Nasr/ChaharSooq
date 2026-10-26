@@ -1,6 +1,7 @@
 """Catalog boundary schemas — machine-readable in/out only."""
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -26,12 +27,20 @@ class ProductIn(BaseModel):
 
 
 class ProductOut(BaseModel):
+    """Mirror row — numbers stay machine-readable; UI formats them."""
+
     id: int
+    external_id: int | None = None
     name: str
     sku: str
-    price: int
-    stock: int
+    price: float
+    stock: float
+    main_group_name: str | None = None
+    sub_group_name: str | None = None
+    unit_name: str | None = None
+    is_active: bool = True
     category: CategoryOut | None = None
+    synced_at: datetime | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -50,3 +59,25 @@ class InventorySummaryOut(BaseModel):
     low: int
     out: int
     stock_value: int
+
+
+class SyncRunOut(BaseModel):
+    """Accepted trigger only — counters arrive via the status endpoint."""
+
+    status: Literal["running"]
+    message: str | None = None
+
+
+class SyncStatusOut(BaseModel):
+    configured: bool
+    running: bool
+    running_since: datetime | None = None
+    last_attempt_at: datetime | None = None
+    last_success_at: datetime | None = None
+    last_error: str | None = None
+    last_processed: int = 0
+    last_created: int = 0
+    last_updated: int = 0
+    last_deactivated: int = 0
+    last_skipped: int = 0
+    interval_minutes: int

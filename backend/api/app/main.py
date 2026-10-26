@@ -1,7 +1,8 @@
 """App factory — secure defaults, predictable error envelope, no secret logging."""
 
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -30,6 +31,7 @@ _FIELD_LABELS: dict[str, str] = {
     "q": "جست‌وجو",
     "page": "صفحه",
     "page_size": "اندازه صفحه",
+    "main_group": "گروه اصلی",
 }
 
 
@@ -60,9 +62,22 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+    """Start/stop the Parsina scheduler with the process (never in tests)."""
+    from app.core.scheduler import build_scheduler
+
+    scheduler = None if get_settings().app_env == "test" else build_scheduler()
+    if scheduler is not None:
+        scheduler.start()
+    yield
+    if scheduler is not None:
+        scheduler.stop()
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
-    app = FastAPI(title="Charsooq Admin API", version="0.1.0")
+    app = FastAPI(title="Charsooq Admin API", version="0.1.0", lifespan=lifespan)
 
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(

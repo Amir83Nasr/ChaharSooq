@@ -25,6 +25,7 @@ class ProductService:
         *,
         query: str,
         category_id: int | None,
+        main_group: str | None,
         min_price: int | None,
         max_price: int | None,
         min_stock: int | None,
@@ -41,6 +42,7 @@ class ProductService:
         return self._repos.list(
             query=query.strip(),
             category_id=category_id,
+            main_group=(main_group or "").strip() or None,
             min_price=min_price,
             max_price=max_price,
             min_stock=min_stock,
@@ -61,3 +63,6 @@ class ProductService:
 
     def summary(self, *, low_stock_threshold: int) -> dict[str, int]:
         return self._repos.summary(low_stock_threshold=low_stock_threshold)
+
+    def groups(self) -> list[str]:
+        return self._repos.list_groups()

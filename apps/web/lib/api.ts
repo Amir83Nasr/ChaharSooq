@@ -14,11 +14,17 @@ export type ProductSort = "newest" | "cheapest" | "most_expensive"
 
 export interface ProductOut {
   id: number
+  external_id: number | null
   name: string
   sku: string
   price: number
   stock: number
+  main_group_name: string | null
+  sub_group_name: string | null
+  unit_name: string | null
+  is_active: boolean
   category: CategoryOut | null
+  synced_at: string | null
   created_at: string
 }
 
@@ -37,6 +43,27 @@ export interface InventorySummary {
   stock_value: number
 }
 
+export interface SyncStatus {
+  configured: boolean
+  running: boolean
+  running_since: string | null
+  last_attempt_at: string | null
+  last_success_at: string | null
+  last_error: string | null
+  last_processed: number
+  last_created: number
+  last_updated: number
+  last_deactivated: number
+  last_skipped: number
+  interval_minutes: number
+}
+
+/** Accepted trigger; counters arrive through SyncStatus polling. */
+export interface SyncRun {
+  status: "running"
+  message: string | null
+}
+
 export interface ApiError {
   error: {
     code: string
@@ -50,7 +77,12 @@ export class ApiRequestError extends Error {
   code?: string
   details?: Record<string, string[]>
 
-  constructor(status: number, message: string, code?: string, details?: Record<string, string[]>) {
+  constructor(
+    status: number,
+    message: string,
+    code?: string,
+    details?: Record<string, string[]>
+  ) {
     super(message)
     this.status = status
     this.code = code
@@ -67,7 +99,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ...init,
     })
   } catch {
-    throw new ApiRequestError(0, "اتصال به سرور برقرار نشد. اتصال اینترنت را بررسی کنید.")
+    throw new ApiRequestError(
+      0,
+      "اتصال به سرور برقرار نشد. اتصال اینترنت را بررسی کنید."
+    )
   }
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as ApiError | null
@@ -90,6 +125,7 @@ export interface SettingsUpdate {
 export interface ProductFilters {
   q?: string
   category_id?: number
+  main_group?: string
   min_price?: number
   max_price?: number
   min_stock?: number
@@ -151,12 +187,19 @@ export const api = {
   products(params: ProductFilters = {}) {
     const search = new URLSearchParams()
     if (params.q) search.set("q", params.q)
-    if (params.category_id) search.set("category_id", String(params.category_id))
-    if (params.min_price !== undefined) search.set("min_price", String(params.min_price))
-    if (params.max_price !== undefined) search.set("max_price", String(params.max_price))
-    if (params.min_stock !== undefined) search.set("min_stock", String(params.min_stock))
-    if (params.max_stock !== undefined) search.set("max_stock", String(params.max_stock))
-    if (params.in_stock !== undefined) search.set("in_stock", String(params.in_stock))
+    if (params.category_id)
+      search.set("category_id", String(params.category_id))
+    if (params.main_group) search.set("main_group", params.main_group)
+    if (params.min_price !== undefined)
+      search.set("min_price", String(params.min_price))
+    if (params.max_price !== undefined)
+      search.set("max_price", String(params.max_price))
+    if (params.min_stock !== undefined)
+      search.set("min_stock", String(params.min_stock))
+    if (params.max_stock !== undefined)
+      search.set("max_stock", String(params.max_stock))
+    if (params.in_stock !== undefined)
+      search.set("in_stock", String(params.in_stock))
     if (params.sort) search.set("sort", params.sort)
     if (params.page) search.set("page", String(params.page))
     if (params.page_size) search.set("page_size", String(params.page_size))
@@ -180,6 +223,21 @@ export const api = {
       `/api/v1/products/summary?threshold=${threshold}`
     )
   },
+  productGroups() {
+    return request<string[]>("/api/v1/products/groups")
+  },
+  parsinaStatus() {
+    return request<SyncStatus>("/api/v1/integrations/parsina/status")
+  },
+  parsinaSync() {
+    return request<SyncRun>("/api/v1/integrations/parsina/sync", {
+      method: "POST",
+    })
+  },
+  /** Cancellable status read — used by the sync poller's unmount cleanup. */
+  parsinaStatusSignal(signal: AbortSignal) {
+    return request<SyncStatus>("/api/v1/integrations/parsina/status", {
+      signal,
+    })
+  },
 }
-
-

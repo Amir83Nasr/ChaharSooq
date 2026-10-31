@@ -282,7 +282,7 @@ def test_sync_status_reports_unconfigured(client: TestClient) -> None:
     body = client.get("/api/v1/integrations/parsina/status").json()
     assert body["configured"] is False
     assert body["running"] is False
-    assert body["interval_minutes"] == 15
+    assert body["interval_minutes"] == 60
 
 
 def test_sync_endpoint_reports_missing_configuration(client: TestClient) -> None:

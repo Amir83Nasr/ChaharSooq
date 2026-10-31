@@ -70,7 +70,7 @@ export function PageSizeSettings() {
         کل لیست را بدون صفحه‌بندی نمایش می‌دهد.
       </p>
       <div
-        className="grid grid-cols-4 gap-2"
+        className="grid grid-cols-2 gap-2 sm:grid-cols-4"
         role="radiogroup"
         aria-label="تعداد ردیف پیش‌فرض"
       >
@@ -84,7 +84,7 @@ export function PageSizeSettings() {
               aria-checked={active}
               disabled={busy}
               onClick={() => save(n)}
-              className={cn("h-10")}
+              className={cn("h-auto min-h-10 leading-tight whitespace-normal!")}
             >
               {n === 0 ? (
                 <span>نمایش همه محصولات</span>

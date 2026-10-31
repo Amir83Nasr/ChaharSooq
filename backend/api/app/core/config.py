@@ -11,7 +11,13 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 # Alembic, and the seed scripts always read the same configuration.
 _BACKEND_DIR = Path(__file__).resolve().parents[2]
 _REPO_ROOT = Path(__file__).resolve().parents[4]
-_ENV_FILES = (str(_BACKEND_DIR / ".env.local"), str(_BACKEND_DIR / ".env"))
+# Shared root env (optional) is loaded first so per-app files can override it.
+_ENV_FILES = (
+    str(_REPO_ROOT / ".env.local"),
+    str(_REPO_ROOT / ".env"),
+    str(_BACKEND_DIR / ".env.local"),
+    str(_BACKEND_DIR / ".env"),
+)
 
 # Only the development source reads this file; production uses Parsina.
 _DEFAULT_PRODUCTS_CSV_PATH = _REPO_ROOT / "data" / "parsina-products.csv"

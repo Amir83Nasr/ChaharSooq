@@ -5,14 +5,14 @@ import { usePathname } from "next/navigation"
 import {
   BarChart3,
   Boxes,
-  Calculator,
   Laptop,
   LayoutDashboard,
   Package,
-  Scale,
   Settings,
   ShieldCheck,
+  ShoppingBag,
   ShoppingCart,
+  Sofa,
   Store,
   Tag,
   Truck,
@@ -69,14 +69,20 @@ const NAV = [
       { href: "/reports", label: "گزارش فروش", icon: BarChart3, soon: true },
     ],
   },
-  // ponytail: لینک‌نما با soon؛ صفحه/ API واقعی هنگام اتصال ترب، دیجی‌کالا، تکنولایف و پارسینا.
+  // ponytail: لینک‌نما با soon؛ صفحه/ API واقعی هنگام اتصال سوفا، دیجی‌فرش، دیجی‌کالا و تکنولایف.
   {
     group: "یکپارچه‌سازی",
     items: [
       {
-        href: "/integrations/torob",
-        label: "اتصال ترب",
-        icon: Scale,
+        href: "/integrations/sofa",
+        label: "اتصال سوفا",
+        icon: Sofa,
+        soon: true,
+      },
+      {
+        href: "/integrations/digifresh",
+        label: "اتصال دیجی‌فرش",
+        icon: ShoppingBag,
         soon: true,
       },
       {
@@ -89,12 +95,6 @@ const NAV = [
         href: "/integrations/technolife",
         label: "اتصال تکنولایف",
         icon: Laptop,
-        soon: true,
-      },
-      {
-        href: "/integrations/parsina",
-        label: "اتصال پارسینا",
-        icon: Calculator,
         soon: true,
       },
     ],

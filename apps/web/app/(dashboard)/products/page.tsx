@@ -74,8 +74,7 @@ export default function ProductsPage() {
   }, [q])
 
   const resetPage = useCallback(() => setPageNum(1), [])
-  const effectivePageSize = isMobile ? 10 : pageSize
-
+  const effectivePageSize = isMobile ? 0 : pageSize
   useEffect(() => {
     resetPage()
   }, [isMobile, resetPage])

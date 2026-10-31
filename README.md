@@ -72,7 +72,7 @@ uv run --project backend/api pytest -q             # backend tests
 
 ## Environment variables
 
-Each app owns its env file: [backend/api/.env.example](backend/api/.env.example) (copy to `backend/api/.env.local`) and [apps/web/.env.example](apps/web/.env.example) (copy to `apps/web/.env.local`). Never commit real secrets. The backend reads its env file by absolute path, so the API, Alembic, and the seed scripts always target the same configuration.
+Each app owns its env file: [backend/api/.env.example](backend/api/.env.example) (copy to `backend/api/.env.local`) and [apps/web/.env.example](apps/web/.env.example) (copy to `apps/web/.env.local`). Never commit real secrets. The backend reads its env file by absolute path, so the API, Alembic, and the seed scripts always target the same configuration. A shared root `.env.local` (or `.env`) is also loaded by both apps as a fallback, which is convenient for LAN/mobile dev (e.g. whitelisting device IPs in `ALLOWED_DEV_ORIGINS` / `CORS_ORIGINS`); per-app values take precedence.
 
 | Variable | Purpose |
 | --- | --- |

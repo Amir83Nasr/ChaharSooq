@@ -16,12 +16,8 @@ import {
   type ProductPage,
   type ProductSort,
 } from "@/lib/api"
-import {
-  DEFAULT_LOW_STOCK_THRESHOLD,
-  type InventorySummary,
-} from "@/lib/inventory"
+import { DEFAULT_LOW_STOCK_THRESHOLD } from "@/lib/inventory"
 import { ParsinaSyncPanel } from "@/components/parsina-sync-panel"
-import { StatBadge } from "@/components/products-stat-badge"
 import { ProductDetailDialog } from "./_components/product-dialogs"
 import { ProductsTable, ProductsTableError } from "./_components/products-table"
 import {
@@ -37,7 +33,6 @@ export default function ProductsPage() {
   const [page, setPage] = useState<ProductPage | null>(null)
   const [categories, setCategories] = useState<CategoryOut[]>([])
   const [error, setError] = useState<string | null>(null)
-  const [stats, setStats] = useState<InventorySummary | null>(null)
   const [selected, setSelected] = useState<ProductOut | null>(null)
 
   const [pageNum, setPageNum] = useState(1)
@@ -128,30 +123,6 @@ export default function ProductsPage() {
       cancelled = true
     }
   }, [])
-
-  // Global catalog aggregate for the stats strip. Table errors/auth surface
-  // through the paginated query below, so failures here stay silent.
-  useEffect(() => {
-    let cancelled = false
-    api
-      .productsSummary(threshold)
-      .then((data) => {
-        if (!cancelled) {
-          const next: InventorySummary = {
-            total: data.total,
-            in: data.in_stock,
-            low: data.low,
-            out: data.out,
-            stockValue: data.stock_value,
-          }
-          setStats(next)
-        }
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [threshold, dataVersion])
 
   useEffect(() => {
     let cancelled = false
@@ -259,24 +230,6 @@ export default function ProductsPage() {
           <ParsinaSyncPanel onSynced={refreshData} onUnauthorized={goLogin} />
         }
       />
-
-      {stats || page ? (
-        <div
-          className="mb-4 flex flex-wrap items-center gap-2"
-          aria-label="آمار موجودی"
-        >
-          <StatBadge color="sky" label="کل کالاها" value={stats?.total ?? 0} />
-          <StatBadge color="amber" label="موجودی کم" value={stats?.low ?? 0} />
-          <StatBadge
-            color="red"
-            label="کالاهای ناموجود"
-            value={stats?.out ?? 0}
-          />
-          {hasFilters && page ? (
-            <StatBadge color="emerald" label="نتایج فیلتر" value={page.total} />
-          ) : null}
-        </div>
-      ) : null}
 
       <ProductsToolbar
         q={q}

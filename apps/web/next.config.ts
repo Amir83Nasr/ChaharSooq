@@ -11,12 +11,13 @@ const API_BASE = (
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@workspace/ui"],
-  // ponytail: تک IP محیط dev؛ برای بازه بزرگ‌تر ALLOWED_DEV_ORIGINS=a,b را ست کنید.
+  // LAN/mobile dev: set ALLOWED_DEV_ORIGINS=a,b (see apps/web/.env.example).
+  // Empty by default, so only localhost may load the dev server.
   allowedDevOrigins: process.env.ALLOWED_DEV_ORIGINS
     ? process.env.ALLOWED_DEV_ORIGINS.split(",")
         .map((s) => s.trim())
         .filter(Boolean)
-    : ["192.168.1.20", "192.168.1.21"],
+    : [],
   async rewrites() {
     return [{ source: "/api/:path*", destination: `${API_BASE}/api/:path*` }]
   },

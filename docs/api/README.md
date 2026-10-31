@@ -2,7 +2,7 @@
 
 Base path `/api/v1`. FastAPI serves the live contract at `/openapi.json` (UI at `/docs`).
 
-Committed snapshot: [backend/openapi.json](../../backend/openapi.json) — regenerate after any route/schema change:
+Committed snapshot: [backend/api/openapi.json](../../backend/api/openapi.json) — regenerate after any route/schema change:
 
 ```bash
 uv run --project backend/api python backend/api/scripts/export_openapi.py

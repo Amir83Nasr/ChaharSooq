@@ -1,6 +1,6 @@
 """Parsina HTTP client — auth, envelope parsing, typed transport errors.
 
-Contract (docs/api/Document Api Parsina.pdf):
+Contract (docs/api/parsina-api.pdf):
   POST {base}/Account                      {username, password, org, year} → access_token
   GET  {base}/Commodity                    list of goods
   GET  {base}/commodity/LoadByFilter?Ware&Saletype&Id
@@ -95,6 +95,15 @@ def _str(raw: Any) -> str | None:
     return text or None
 
 
+def _as_bool(raw: Any) -> bool:
+    """JSON sends real booleans; the dev CSV sends "true"/"false" strings."""
+    if isinstance(raw, bool):
+        return raw
+    if raw is None:
+        return False
+    return str(raw).strip().lower() in {"true", "1", "yes", "y", "بله"}
+
+
 def parse_commodity(raw: Any) -> CommodityRow | None:
     """Return None when the record has no usable stable identity."""
     if not isinstance(raw, dict):
@@ -114,7 +123,7 @@ def parse_commodity(raw: Any) -> CommodityRow | None:
         sub_group_name=_str(record.get("subGroupName")),
         count_unit=_int(record.get("countUnit")),
         weight=_decimal(record.get("weight")),
-        is_special=bool(record.get("khas")),
+        is_special=_as_bool(record.get("khas")),
         sale_pack_price=_decimal(record.get("salePackPrice")),
         sale_box_price=_decimal(record.get("saleBoxPrice")),
         use_price=_decimal(record.get("usePrice")),

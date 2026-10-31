@@ -10,12 +10,17 @@ COPY packages/eslint-config/package.json packages/eslint-config/
 COPY packages/typescript-config/package.json packages/typescript-config/
 RUN pnpm install --frozen-lockfile
 
+# next.config.ts reads API_URL_INTERNAL when it builds the /api/* rewrite,
+# so the value must be present at build time as well as at runtime.
 FROM deps AS web-build
+ARG API_URL_INTERNAL=http://localhost:8000
+ENV API_URL_INTERNAL=${API_URL_INTERNAL}
 COPY . .
 RUN pnpm --filter web build
 
 FROM base AS web
-ENV NODE_ENV=production
+ARG API_URL_INTERNAL=http://localhost:8000
+ENV NODE_ENV=production API_URL_INTERNAL=${API_URL_INTERNAL}
 COPY --from=deps /app/node_modules /app/node_modules
 COPY --from=deps /app/apps/web/node_modules /app/apps/web/node_modules
 COPY --from=deps /app/packages /app/packages

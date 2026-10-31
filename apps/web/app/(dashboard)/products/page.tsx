@@ -6,11 +6,11 @@ import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
 
 import { PageHeader } from "@workspace/ui/components/page-header"
-import { ErrorState } from "@workspace/ui/components/state"
 import { useIsMobile } from "@workspace/ui/hooks/use-mobile"
 import {
   api,
   ApiRequestError,
+  GENERIC_ERROR_MESSAGE,
   type CategoryOut,
   type ProductOut,
   type ProductPage,
@@ -23,7 +23,7 @@ import {
 import { ParsinaSyncPanel } from "@/components/parsina-sync-panel"
 import { StatBadge } from "@/components/products-stat-badge"
 import { ProductDetailDialog } from "./_components/product-dialogs"
-import { ProductsTable } from "./_components/products-table"
+import { ProductsTable, ProductsTableError } from "./_components/products-table"
 import {
   ProductsToolbar,
   type StockFilter,
@@ -181,7 +181,11 @@ export default function ProductsPage() {
           goLogin()
           return
         }
-        setError(err instanceof Error ? err.message : "خطایی رخ داد.")
+        // Only ApiRequestError messages are Persian-safe; anything else (e.g.
+        // a JSON parse failure) would surface a raw English message.
+        setError(
+          err instanceof ApiRequestError ? err.message : GENERIC_ERROR_MESSAGE
+        )
       })
     return () => {
       cancelled = true
@@ -286,26 +290,8 @@ export default function ProductsPage() {
       />
 
       {error ? (
-        <ErrorState title="خطا در بارگذاری محصولات" hint={error} />
-      ) : null}
-      {!page && !error ? (
-        <ProductsTable
-          page={null}
-          threshold={threshold}
-          pageNum={pageNum}
-          totalPages={totalPages}
-          pageSize={pageSize}
-          showPageSize={!isMobile}
-          hasFilters={hasFilters}
-          onSelect={setSelected}
-          onPageChange={(p) => setPageNum(Math.min(Math.max(1, p), totalPages))}
-          onPageSize={(n) => {
-            setPageSize(n)
-            resetPage()
-          }}
-        />
-      ) : null}
-      {page ? (
+        <ProductsTableError message={error} onRetry={refreshData} />
+      ) : (
         <ProductsTable
           page={page}
           threshold={threshold}
@@ -321,7 +307,7 @@ export default function ProductsPage() {
             resetPage()
           }}
         />
-      ) : null}
+      )}
 
       <ProductDetailDialog
         selected={selected}

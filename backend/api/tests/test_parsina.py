@@ -1,6 +1,7 @@
 """Parsina integration — client contract, sync rules, endpoints (mocked HTTP)."""
 
 import json
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
@@ -115,7 +116,7 @@ def _service(session: Session, fake: FakeParsina) -> ProductSyncService:
 
 
 @pytest.fixture()
-def session(client: TestClient) -> Session:
+def session(client: TestClient) -> Iterator[Session]:
     """Depends on `client` so the in-memory schema exists before use."""
     with Session(get_engine()) as s:
         yield s

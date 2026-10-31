@@ -10,10 +10,14 @@ import { api, ApiRequestError } from "@/lib/api"
 export function LoginForm() {
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
-  const [fieldErrors, setFieldErrors] = useState<{ username?: string; password?: string }>({})
+  const [fieldErrors, setFieldErrors] = useState<{
+    username?: string
+    password?: string
+  }>({})
   const [formError, setFormError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
-  const canSubmit = username.trim().length > 0 && password.length > 0 && !pending
+  const canSubmit =
+    username.trim().length > 0 && password.length > 0 && !pending
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault()
@@ -36,11 +40,16 @@ export function LoginForm() {
       // cookie server-side; push+refresh races and can leave user on /login.
       window.location.assign("/products")
     } catch (err) {
-      if (err instanceof ApiRequestError && err.code === "validation_error" && err.details) {
+      if (
+        err instanceof ApiRequestError &&
+        err.code === "validation_error" &&
+        err.details
+      ) {
         const mapped: typeof fieldErrors = {}
         for (const [field, messages] of Object.entries(err.details)) {
           const key = field.split(".").pop()
-          if (key === "username" || key === "password") mapped[key] = messages[0]
+          if (key === "username" || key === "password")
+            mapped[key] = messages[0]
         }
         if (mapped.username || mapped.password) {
           setFieldErrors(mapped)
@@ -55,7 +64,11 @@ export function LoginForm() {
 
   return (
     <div className="flex flex-col gap-6">
-      <form onSubmit={onSubmit} className="flex flex-col gap-6" noValidate={false}>
+      <form
+        onSubmit={onSubmit}
+        className="flex flex-col gap-6"
+        noValidate={false}
+      >
         <div className="flex flex-col items-center gap-1 text-center">
           <h1 className="text-2xl font-bold">ورود به چهارسوق</h1>
           <p className="text-sm text-balance text-muted-foreground">
@@ -80,13 +93,19 @@ export function LoginForm() {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               aria-invalid={fieldErrors.username ? true : undefined}
-              aria-describedby={fieldErrors.username ? "username-error" : undefined}
+              aria-describedby={
+                fieldErrors.username ? "username-error" : undefined
+              }
               className="h-9 bg-background pr-8 text-left"
               required
             />
           </div>
           {fieldErrors.username ? (
-            <p id="username-error" role="alert" className="text-sm font-normal text-destructive">
+            <p
+              id="username-error"
+              role="alert"
+              className="text-sm font-normal text-destructive"
+            >
               {fieldErrors.username}
             </p>
           ) : null}
@@ -109,13 +128,19 @@ export function LoginForm() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               aria-invalid={fieldErrors.password ? true : undefined}
-              aria-describedby={fieldErrors.password ? "password-error" : undefined}
+              aria-describedby={
+                fieldErrors.password ? "password-error" : undefined
+              }
               className="h-9 bg-background pr-8"
               required
             />
           </div>
           {fieldErrors.password ? (
-            <p id="password-error" role="alert" className="text-sm font-normal text-destructive">
+            <p
+              id="password-error"
+              role="alert"
+              className="text-sm font-normal text-destructive"
+            >
               {fieldErrors.password}
             </p>
           ) : null}
@@ -128,7 +153,11 @@ export function LoginForm() {
         ) : null}
 
         <div className="flex w-full flex-col gap-2">
-          <Button type="submit" className="h-9 w-full md:h-9" disabled={!canSubmit}>
+          <Button
+            type="submit"
+            className="h-9 w-full md:h-9"
+            disabled={!canSubmit}
+          >
             {pending ? "در حال ورود…" : "ورود"}
           </Button>
         </div>

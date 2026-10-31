@@ -38,7 +38,14 @@ import { LogoutMenuItem } from "@/components/logout-menu-item"
 const NAV = [
   {
     group: "داشبورد",
-    items: [{ href: "/dashboard", label: "داشبورد", icon: LayoutDashboard, soon: true }],
+    items: [
+      {
+        href: "/dashboard",
+        label: "داشبورد",
+        icon: LayoutDashboard,
+        soon: true,
+      },
+    ],
   },
   {
     group: "فروش",
@@ -58,16 +65,38 @@ const NAV = [
   },
   {
     group: "گزارش‌ها",
-    items: [{ href: "/reports", label: "گزارش فروش", icon: BarChart3, soon: true }],
+    items: [
+      { href: "/reports", label: "گزارش فروش", icon: BarChart3, soon: true },
+    ],
   },
   // ponytail: لینک‌نما با soon؛ صفحه/ API واقعی هنگام اتصال ترب، دیجی‌کالا، تکنولایف و پارسینا.
   {
     group: "یکپارچه‌سازی",
     items: [
-      { href: "/integrations/torob", label: "اتصال ترب", icon: Scale, soon: true },
-      { href: "/integrations/digikala", label: "اتصال دیجی‌کالا", icon: Store, soon: true },
-      { href: "/integrations/technolife", label: "اتصال تکنولایف", icon: Laptop, soon: true },
-      { href: "/integrations/parsina", label: "اتصال پارسینا", icon: Calculator, soon: true },
+      {
+        href: "/integrations/torob",
+        label: "اتصال ترب",
+        icon: Scale,
+        soon: true,
+      },
+      {
+        href: "/integrations/digikala",
+        label: "اتصال دیجی‌کالا",
+        icon: Store,
+        soon: true,
+      },
+      {
+        href: "/integrations/technolife",
+        label: "اتصال تکنولایف",
+        icon: Laptop,
+        soon: true,
+      },
+      {
+        href: "/integrations/parsina",
+        label: "اتصال پارسینا",
+        icon: Calculator,
+        soon: true,
+      },
     ],
   },
   {
@@ -124,7 +153,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
                       />
                       <Badge
                         variant="secondary"
-                        className="absolute inset-e-2 top-1/2 h-5 -translate-y-1/2 px-1.5 text-[10px] group-data-[collapsible=icon]:hidden"
+                        className="inset-e-2 absolute top-1/2 h-5 -translate-y-1/2 px-1.5 text-[10px] group-data-[collapsible=icon]:hidden"
                       >
                         به‌زودی
                       </Badge>

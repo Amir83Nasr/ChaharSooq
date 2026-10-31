@@ -45,6 +45,8 @@ export interface InventorySummary {
 
 export interface SyncStatus {
   configured: boolean
+  /** Live Parsina API in production; local CSV fixture in development. */
+  source: "parsina" | "csv"
   running: boolean
   running_since: string | null
   last_attempt_at: string | null
@@ -138,6 +140,8 @@ export interface ProductFilters {
 
 // ── Persian error mapping (never surface raw fetch/HTML/English errors) ──
 
+export const GENERIC_ERROR_MESSAGE = "خطایی رخ داد. لطفاً دوباره تلاش کنید."
+
 const STATUS_FALLBACK: Record<number, string> = {
   400: "درخواست نامعتبر است.",
   401: "نام کاربری یا گذرواژه نادرست است.",
@@ -153,7 +157,7 @@ function toApiError(status: number, body: ApiError | null): ApiRequestError {
   const message =
     raw && /[؀-ۿ]/.test(raw)
       ? raw
-      : (STATUS_FALLBACK[status] ?? "خطایی رخ داد. لطفاً دوباره تلاش کنید.")
+      : (STATUS_FALLBACK[status] ?? GENERIC_ERROR_MESSAGE)
   return new ApiRequestError(
     status,
     toPersianDigits(message),

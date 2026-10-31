@@ -150,7 +150,11 @@ export function ParsinaSyncPanel({ onSynced, onUnauthorized }: Props) {
       </Button>
       <div className="text-xs text-muted-foreground" aria-live="polite">
         {notConfigured ? (
-          <span>اتصال پارسینا تنظیم نشده است.</span>
+          <span>
+            {status?.source === "csv"
+              ? "فایل داده آزمایشی محصولات یافت نشد."
+              : "اتصال پارسینا تنظیم نشده است."}
+          </span>
         ) : running ? (
           <span>
             همگام‌سازی در حال اجراست
@@ -195,12 +199,21 @@ export function ParsinaSyncPanel({ onSynced, onUnauthorized }: Props) {
           شده است.
         </p>
       ) : null}
+      {status?.source === "csv" ? (
+        <p className="text-xs text-muted-foreground">
+          منبع داده: فایل CSV محیط توسعه
+        </p>
+      ) : null}
       {status?.last_success_at ? (
         <p className="text-xs text-muted-foreground">
           <PersianNumber value={status.last_processed} /> کالا در آخرین
-          همگام‌سازی
-          {" · "}
-          هر <PersianNumber value={status.interval_minutes} /> دقیقه
+          {status.source === "csv" ? " بارگذاری" : " همگام‌سازی"}
+          {status.source === "csv" ? null : (
+            <>
+              {" · "}
+              هر <PersianNumber value={status.interval_minutes} /> دقیقه
+            </>
+          )}
         </p>
       ) : null}
     </div>

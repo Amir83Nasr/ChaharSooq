@@ -7,7 +7,12 @@ import {
   formatPersianWeekday,
 } from "./date"
 import { DATE_SEP, THOUSAND_SEP } from "./locale"
-import { formatPersianNumber, parsePriceFilterInput, toLatinDigits, toPersianDigits } from "./number"
+import {
+  formatPersianNumber,
+  parsePriceFilterInput,
+  toLatinDigits,
+  toPersianDigits,
+} from "./number"
 
 describe("toPersianDigits", () => {
   it("converts latin digits", () => {

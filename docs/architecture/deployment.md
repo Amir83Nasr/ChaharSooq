@@ -23,4 +23,8 @@ Production requires: real `DATABASE_URL`, strong `SESSION_SECRET`, `APP_ENV=prod
 
 ## Docker (optional)
 
-`compose.yml` provides `web` + `api` + `postgres` for reproducible local/prod-like runs. Native `pnpm dev` remains the default dev path.
+`compose.yml` provides `migrate` + `api` + `web` + `postgres` for reproducible local/prod-like runs. The one-shot `migrate` service runs `alembic upgrade head`, and `api` starts only after it succeeds, so a fresh volume is never served with an empty schema. Both run from the same non-root `Dockerfile.api` image. Native `pnpm dev` remains the default dev path.
+
+## CI and deploy order
+
+`ci.yml` runs lint, format check, typecheck, unit tests, backend checks on PostgreSQL, the production build, and the Playwright e2e suite. `deploy.yml` is triggered by a successful CI run on `main` (`workflow_run`), so a red build never deploys.

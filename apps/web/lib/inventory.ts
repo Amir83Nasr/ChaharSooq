@@ -11,7 +11,10 @@ export const STOCK_LABELS: Record<StockStatus, string> = {
   out: "ناموجود",
 }
 
-export function stockStatus(stock: number, threshold: number = DEFAULT_LOW_STOCK_THRESHOLD): StockStatus {
+export function stockStatus(
+  stock: number,
+  threshold: number = DEFAULT_LOW_STOCK_THRESHOLD
+): StockStatus {
   if (stock <= 0) return "out"
   if (stock <= Math.max(threshold, 0)) return "low"
   return "in"
@@ -27,7 +30,10 @@ export interface InventorySummary {
   stockValue: number
 }
 
-export function summarizeInventory(items: ProductOut[], threshold: number = DEFAULT_LOW_STOCK_THRESHOLD): InventorySummary {
+export function summarizeInventory(
+  items: ProductOut[],
+  threshold: number = DEFAULT_LOW_STOCK_THRESHOLD
+): InventorySummary {
   let ok = 0
   let low = 0
   let out = 0

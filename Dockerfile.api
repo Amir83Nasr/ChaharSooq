@@ -7,6 +7,13 @@ COPY backend/api/pyproject.toml ./backend/api/
 COPY backend/api/app ./backend/api/app
 COPY backend/api/alembic.ini ./backend/api/
 COPY backend/api/migrations ./backend/api/migrations
+# uv builds the workspace venv at /srv/api/.venv.
 RUN uv sync --frozen --no-dev --project backend/api
+
+# Non-root runtime: the container only needs the venv and app sources.
+RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin api \
+    && chown -R api:api /srv/api
+USER api
+ENV PATH="/srv/api/.venv/bin:${PATH}"
 EXPOSE 8000
-CMD ["uv", "run", "--no-dev", "--project", "backend/api", "uvicorn", "app.main:app", "--app-dir", "backend/api", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--app-dir", "backend/api", "--host", "0.0.0.0", "--port", "8000"]

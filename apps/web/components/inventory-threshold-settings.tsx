@@ -4,7 +4,11 @@ import { useEffect, useState } from "react"
 
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
-import { formatPersianNumber, parsePriceFilterInput, toPersianDigits } from "@workspace/ui/lib/number"
+import {
+  formatPersianNumber,
+  parsePriceFilterInput,
+  toPersianDigits,
+} from "@workspace/ui/lib/number"
 
 import { api } from "@/lib/api"
 
@@ -64,7 +68,12 @@ export function InventoryThresholdSettings() {
   }
 
   if (!loaded) {
-    return <div className="h-10 animate-pulse rounded-md bg-muted" aria-label="در حال بارگذاری" />
+    return (
+      <div
+        className="h-10 animate-pulse rounded-md bg-muted"
+        aria-label="در حال بارگذاری"
+      />
+    )
   }
 
   return (
@@ -94,7 +103,10 @@ export function InventoryThresholdSettings() {
         </p>
       ) : null}
       {saved ? (
-        <p role="status" className="text-sm text-emerald-600 dark:text-emerald-400">
+        <p
+          role="status"
+          className="text-sm text-emerald-600 dark:text-emerald-400"
+        >
           آستانه ذخیره شد.
         </p>
       ) : null}

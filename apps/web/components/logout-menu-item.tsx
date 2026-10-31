@@ -13,10 +13,7 @@ import {
 import { useRouter } from "next/navigation"
 import { LogOut } from "lucide-react"
 
-import {
-  SidebarMenuButton,
-  useSidebar,
-} from "@workspace/ui/components/sidebar"
+import { SidebarMenuButton, useSidebar } from "@workspace/ui/components/sidebar"
 import { api } from "@/lib/api"
 import { LogoutDialog } from "@/components/logout-dialog"
 

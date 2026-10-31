@@ -1,6 +1,4 @@
-# Licence
-
-MIT Licence — ChaharSooq (چهارسوق)
+MIT License
 
 Copyright (c) 2026 ChaharSooq contributors
 

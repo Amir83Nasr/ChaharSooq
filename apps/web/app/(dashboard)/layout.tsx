@@ -1,8 +1,5 @@
 import { redirect } from "next/navigation"
-import {
-  SidebarInset,
-  SidebarProvider,
-} from "@workspace/ui/components/sidebar"
+import { SidebarInset, SidebarProvider } from "@workspace/ui/components/sidebar"
 
 import { AppSidebar } from "@/components/app-sidebar"
 import { DashboardHeader } from "@/components/dashboard-header"

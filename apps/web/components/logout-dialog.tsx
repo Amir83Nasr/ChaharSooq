@@ -40,9 +40,7 @@ export function LogoutDialog({
             leak desktop layout into the mobile drawer (640–768px). */}
         <ResponsiveDialogFooter>
           <ResponsiveDialogClose
-            render={
-              <Button variant="outline" className="w-full md:w-auto" />
-            }
+            render={<Button variant="outline" className="w-full md:w-auto" />}
           >
             انصراف
           </ResponsiveDialogClose>

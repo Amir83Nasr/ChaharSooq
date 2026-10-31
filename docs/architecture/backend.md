@@ -6,8 +6,9 @@ FastAPI app factory in `backend/api/app/main.py` (`create_app()`), mounted at `/
 - Models/schemas mirror the same domains: `app/models/{auth,sessions,catalog,settings}.py`, `app/schemas/{auth,catalog,settings,common}.py`.
 - Shared deps live in `app/api/deps.py` (`get_db`, `get_current_admin`, `require_admin`); shared guards in `app/core/{errors,rate_limit}.py`. `main.py` only wires middleware + routers.
 - Tests mirror domains: `tests/{test_auth,test_products,test_categories,test_settings}.py` + `tests/helpers.py` (login/seed); `tests/conftest.py` owns the in-memory DB fixture.
+- Product data sources: `app/integrations/sources.py` picks live Parsina (`parsina.py`) in production or the `data/parsina-products.csv` fixture (`parsina_csv.py`) in development; `ProductSyncService` validates/applies both through one path. `make db-seed-parsina` replaces the dev product mirror. The export has no unit titles (`/UnitCount/BaseInfo` is a separate call), so the CSV source maps `countUnit` ids to mock titles — every field the production list returns is populated in dev.
 - Inventory stats: `GET /products/summary` aggregates server-side (total/in/low/out/stock_value); the frontend never pages the whole catalog for stats.
 - Boundary schemas in `app/schemas/` (Pydantic). Predictable error envelope: `{ error: { code, message, details? } }`; validation errors → `validation_error` (Persian message).
 - Security: Argon2id password hashing, opaque session tokens (SHA-256 hash stored), `HttpOnly` cookie (`Secure` in production, `SameSite=Lax`), security headers, strict CORS, 10/min IP rate limit on login.
 - Logging: stdlib structured-ish (`level name message`), never logs passwords, tokens, or secrets.
-- OpenAPI: `backend/api/scripts/export_openapi.py` emits `backend/openapi.json`; frontend `apps/web/lib/api.ts` mirrors the contract types.
+- OpenAPI: `backend/api/scripts/export_openapi.py` emits `backend/api/openapi.json`; frontend `apps/web/lib/api.ts` mirrors the contract types.

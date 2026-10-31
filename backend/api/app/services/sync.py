@@ -19,15 +19,21 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy.orm import Session
 
-from app.core.config import ParsinaSettings, get_parsina_settings
+from app.core.config import ParsinaSettings, get_parsina_settings, get_settings
 from app.integrations.parsina import (
     CommodityRow,
     ParsinaAuthError,
-    ParsinaClient,
     ParsinaError,
     ParsinaNetworkError,
     ParsinaResponseError,
     parse_commodity,
+)
+from app.integrations.parsina_csv import CsvSourceError
+from app.integrations.sources import (
+    CommoditySource,
+    ParsinaCommoditySource,
+    SourceLabel,
+    build_commodity_source,
 )
 from app.models import ParsinaSyncState, Product
 from app.repositories import ProductRepository, SyncStateRepository
@@ -73,14 +79,34 @@ class ProductSyncService:
         *,
         settings: ParsinaSettings | None = None,
         transport: BaseTransport | None = None,
+        source: CommoditySource | None = None,
     ) -> None:
         self._session = session
-        self._settings = settings or get_parsina_settings()
-        self._transport = transport
+        self._source = source or self._default_source(settings, transport)
         self._sync_state = SyncStateRepository(session)
         self._products = ProductRepository(session)
 
+    @staticmethod
+    def _default_source(
+        settings: ParsinaSettings | None, transport: BaseTransport | None
+    ) -> CommoditySource:
+        # Explicit settings/transport pin the live client (tests, production).
+        if settings is not None or transport is not None:
+            return ParsinaCommoditySource(settings or get_parsina_settings(), transport=transport)
+        return build_commodity_source(
+            app_settings=get_settings(),
+            parsina_settings=get_parsina_settings(),
+        )
+
     # ── PUBLIC ───────────────────────────────────────────────
+
+    @property
+    def source_label(self) -> SourceLabel:
+        return self._source.label
+
+    @property
+    def configured(self) -> bool:
+        return self._source.is_configured
 
     def acquire(self) -> None:
         """Take the cross-worker lock; only one manual/scheduled run may hold it."""
@@ -88,21 +114,24 @@ class ProductSyncService:
         # progress is more useful than a config error while it finishes.
         if not self._sync_state.try_acquire(now=datetime.now(UTC), lock_seconds=LOCK_SECONDS):
             raise SyncBusyError("همگام‌سازی دیگری در حال اجراست")
-        if not self._settings.is_configured:
+        if not self._source.is_configured:
             # Release quietly: a missing config must not clobber the last real error.
             self._sync_state.release(success=True)
-            raise SyncNotConfiguredError("تنظیمات اتصال پارسینا کامل نیست")
+            raise SyncNotConfiguredError(self._not_configured_message())
 
-    def run(self) -> SyncResult:
+    def run(self, *, replace: bool = False) -> SyncResult:
         self.acquire()
-        return self.run_acquired()
+        return self.run_acquired(replace=replace)
 
-    def run_acquired(self) -> SyncResult:
-        """Fetch + validate + apply. Caller already holds the sync lock."""
+    def run_acquired(self, *, replace: bool = False) -> SyncResult:
+        """Fetch + validate + apply. Caller already holds the sync lock.
+
+        `replace` drops the existing mirror first (dev CSV seeding only).
+        """
         now = datetime.now(UTC)
         try:
             rows, units = self._fetch()
-            result = self._apply(rows, units, now)
+            result = self._apply(rows, units, now, replace=replace)
         except Exception as exc:  # noqa: BLE001 — record, then let the caller classify
             self._fail(now, exc)
             raise
@@ -128,18 +157,21 @@ class ProductSyncService:
     def state(self) -> ParsinaSyncState:
         return self._sync_state.get()
 
+    def _not_configured_message(self) -> str:
+        if self._source.label == "csv":
+            return "فایل داده آزمایشی محصولات یافت نشد"
+        return "تنظیمات اتصال پارسینا کامل نیست"
+
     # ── FETCH / VALIDATE ─────────────────────────────────────
 
     def _fetch(self) -> tuple[list[CommodityRow], dict[int, str]]:
-        with ParsinaClient(self._settings, transport=self._transport) as client:
-            raw_rows, reported_total = client.commodities()
-            if reported_total is not None and reported_total != len(raw_rows):
-                raise ParsinaResponseError(
-                    f"فهرست دریافتی از پارسینا ناقص است ({len(raw_rows)} از {reported_total} ردیف)"
-                )
-            if not raw_rows:
-                raise ParsinaResponseError("پارسینا فهرست کالایی برگرداند که خالی است")
-            units = client.units()
+        raw_rows, reported_total, units = self._source.fetch()
+        if reported_total is not None and reported_total != len(raw_rows):
+            raise ParsinaResponseError(
+                f"فهرست دریافتی ناقص است ({len(raw_rows)} از {reported_total} ردیف)"
+            )
+        if not raw_rows:
+            raise ParsinaResponseError("منبع داده فهرست کالایی خالی برگرداند")
         return self._normalize(raw_rows), units
 
     def _normalize(self, raw_rows: list[object]) -> list[CommodityRow]:
@@ -149,14 +181,25 @@ class ProductSyncService:
             if row is not None:
                 rows.append(row)
         if not rows:
-            raise ParsinaResponseError("هیچ کالای معتبری در پاسخ پارسینا یافت نشد")
+            raise ParsinaResponseError("هیچ کالای معتبری در داده دریافتی یافت نشد")
         if len(rows) * 2 < len(raw_rows):
-            raise ParsinaResponseError("بیشتر ردیف‌های پارسینا فاقد شناسه معتبر بودند")
+            raise ParsinaResponseError("بیشتر ردیف‌های داده دریافتی فاقد شناسه معتبر بودند")
         return rows
 
     # ── APPLY ────────────────────────────────────────────────
 
-    def _apply(self, rows: list[CommodityRow], units: dict[int, str], now: datetime) -> SyncResult:
+    def _apply(
+        self,
+        rows: list[CommodityRow],
+        units: dict[int, str],
+        now: datetime,
+        *,
+        replace: bool,
+    ) -> SyncResult:
+        if replace:
+            removed = self._products.delete_all()
+            self._session.flush()
+            log.info("product catalog replaced: %d existing rows removed", removed)
         ids = {row.good_id for row in rows}
         existing = self._products.by_external_ids(ids)
         taken_skus = self._products.sku_in_use({row.good_code for row in rows})
@@ -215,20 +258,23 @@ class ProductSyncService:
 
     def _fail(self, now: datetime, exc: Exception) -> None:
         self._session.rollback()
-        message = _describe(exc)
+        message = self._describe(exc)
         self._sync_state.record_failure(attempted_at=now, error=message)
         self._sync_state.release(success=False, error=message)
-        log.warning("parsina sync failed: %s", message)
+        log.warning("product sync failed: %s", message)
 
-
-def _describe(exc: Exception) -> str:
-    if isinstance(exc, ParsinaAuthError):
-        return f"خطای احراز هویت پارسینا: {exc}"
-    if isinstance(exc, ParsinaNetworkError):
-        return f"خطای ارتباط با پارسینا: {exc}"
-    if isinstance(exc, ParsinaResponseError):
-        return f"پاسخ نامعتبر پارسینا: {exc}"
-    return f"خطای همگام‌سازی: {exc}"
+    def _describe(self, exc: Exception) -> str:
+        if isinstance(exc, CsvSourceError):
+            return f"خطای داده آزمایشی: {exc}"
+        if isinstance(exc, ParsinaAuthError):
+            return f"خطای احراز هویت پارسینا: {exc}"
+        if isinstance(exc, ParsinaNetworkError):
+            return f"خطای ارتباط با پارسینا: {exc}"
+        if isinstance(exc, ParsinaResponseError):
+            if self._source.label == "csv":
+                return f"داده آزمایشی نامعتبر است: {exc}"
+            return f"پاسخ نامعتبر پارسینا: {exc}"
+        return f"خطای همگام‌سازی: {exc}"
 
 
 def run_scheduled_sync(
@@ -237,7 +283,9 @@ def run_scheduled_sync(
     interval_minutes: int,
     transport: BaseTransport | None = None,
 ) -> SyncResult | None:
-    """One scheduler tick: no-op when not configured, disabled, or not due."""
+    """One scheduler tick: no-op unless production AND configured, enabled, due."""
+    if not get_settings().is_production:
+        return None
     settings = get_parsina_settings()
     if not settings.is_configured or not settings.parsina_sync_enabled:
         return None

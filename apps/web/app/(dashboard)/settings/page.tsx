@@ -2,7 +2,13 @@ import type { Metadata } from "next"
 
 import { MoonStar, PackageMinus, Rows3 } from "lucide-react"
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@workspace/ui/components/card"
 import { PageHeader } from "@workspace/ui/components/page-header"
 
 import { InventoryThresholdSettings } from "@/components/inventory-threshold-settings"
@@ -21,9 +27,7 @@ export default function SettingsPage() {
             <MoonStar className="size-4" />
             تم نمایش
           </CardTitle>
-          <CardDescription>
-            روشن، تیره یا همگام با سیستم‌عامل
-          </CardDescription>
+          <CardDescription>روشن، تیره یا همگام با سیستم‌عامل</CardDescription>
         </CardHeader>
         <CardContent>
           <ThemeSettings />

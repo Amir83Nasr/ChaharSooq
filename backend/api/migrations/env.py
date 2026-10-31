@@ -2,6 +2,8 @@
 """Alembic environment — autogenerate from app.models metadata.
 
 Run from backend/api so `import app...` resolves (prepend_sys_path = .).
+The database URL comes from `DATABASE_URL` when set (CI, prod `--env-file`),
+otherwise from the same settings the API and seed scripts use.
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from alembic import context  # noqa: E402
 from sqlalchemy import engine_from_config, pool  # noqa: E402
 
+from app.core.config import get_settings  # noqa: E402
 from app.core.database import Base  # noqa: E402
 
 import app.models  # noqa: E402,F401  (register models)
@@ -24,9 +27,10 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-db_url = os.environ.get("DATABASE_URL")
-if db_url:
-    config.set_main_option("sqlalchemy.url", db_url.strip())
+# One settings source for migrations and seeds: a bare `alembic upgrade head`
+# must never target a different database than `python scripts/seed_*.py`.
+db_url = os.environ.get("DATABASE_URL") or get_settings().database_url
+config.set_main_option("sqlalchemy.url", db_url.strip())
 
 target_metadata = Base.metadata
 

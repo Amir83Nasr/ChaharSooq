@@ -19,9 +19,9 @@ See [docs/architecture/overview.md](docs/architecture/overview.md) for architect
 ## Installation
 
 ```bash
-pnpm install
-uv sync
-cp .env.example .env.local
+make install                  # pnpm install, uv sync --locked, git hooks (Lefthook)
+cp backend/api/.env.example backend/api/.env.local
+cp apps/web/.env.example apps/web/.env.local
 ```
 
 ## Development commands
@@ -32,8 +32,8 @@ Run everything from the repository root with make (`make help` lists all targets
 make install           # install frontend + backend deps
 make db-up             # start dev postgres (compose, host :5433)
 make db-migrate        # apply Alembic migrations to dev database
-make db-seed           # create dev admin (ADMIN_USER / ADMIN_PASSWORD)
-make db-seed-products  # seed home-appliance catalog (idempotent, prunes stale rows)
+make db-seed           # create dev admin (DEV_ADMIN_PASSWORD, default secret123)
+make db-seed-parsina   # load data/parsina-products.csv into the dev catalog (replaces products)
 make dev-all           # postgres + migrate, then backend :8000 + frontend :3000
 ```
 
@@ -59,8 +59,9 @@ Without make:
 ```bash
 pnpm lint         # frontend lint
 pnpm typecheck    # frontend typecheck
-pnpm format       # frontend format
-pnpm --filter @workspace/ui test   # frontend unit tests
+pnpm format       # frontend format (writes)
+pnpm format:check # frontend format check
+pnpm test         # frontend unit tests
 pnpm --filter web build            # production build
 
 uv run --project backend/api ruff check .          # backend lint
@@ -71,7 +72,7 @@ uv run --project backend/api pytest -q             # backend tests
 
 ## Environment variables
 
-See [.env.example](.env.example). Never commit real secrets.
+Each app owns its env file: [backend/api/.env.example](backend/api/.env.example) (copy to `backend/api/.env.local`) and [apps/web/.env.example](apps/web/.env.example) (copy to `apps/web/.env.local`). Never commit real secrets. The backend reads its env file by absolute path, so the API, Alembic, and the seed scripts always target the same configuration.
 
 | Variable | Purpose |
 | --- | --- |
@@ -83,21 +84,28 @@ See [.env.example](.env.example). Never commit real secrets.
 | `NEXT_PUBLIC_API_URL` | API origin fallback for rewrites (browser always calls same-origin `/api/*`) |
 | `CORS_ORIGINS` | Backend CORS allowlist, comma-separated |
 | `ALLOWED_DEV_ORIGINS` | Extra Next.js dev origins, comma-separated |
-| `ADMIN_USER` / `ADMIN_PASSWORD` | Seed credentials for `db-seed` / `db-seed-prod` |
+| `ADMIN_USER` / `ADMIN_PASSWORD` | Admin seed credentials. `make db-seed` uses `ADMIN_PASSWORD` or `DEV_ADMIN_PASSWORD` (default `secret123`). `make db-seed-prod` **requires** `ADMIN_PASSWORD=…` on the command line |
 | `PARSINA_*` | Parsina accounting API (URL, credentials, org, year, optional warehouse/sale-type). Empty = integration off. `PARSINA_SYNC_INTERVAL_MINUTES` (default 15) and `PARSINA_SYNC_ENABLED` tune the backend scheduler |
+| `PRODUCTS_CSV_PATH` | Development-only product CSV; defaults to `<repo>/data/parsina-products.csv` |
 
-## Parsina product sync
+## Product data sources
 
-Products mirror the Parsina accounting API (`external_id` = Parsina `goodId`). The backend scheduler syncs every `PARSINA_SYNC_INTERVAL_MINUTES` (default 15) inside the API process; the products page has a «به‌روزرسانی اطلاعات» button for a manual run. Both share one DB lock, so runs never overlap; manual runs return `202` and the UI polls `GET /integrations/parsina/status` until the run finishes, then re-fetches the table in place. A failed or partial fetch never overwrites the last successful data; rows missing from a complete listing are deactivated, never deleted.
+Products mirror an external catalog (`external_id` = Parsina `goodId`), and the GET endpoints always read the local mirror. Where the mirror comes from depends on `APP_ENV`:
+
+- **production** — live Parsina API (`PARSINA_*` credentials). The backend scheduler syncs every `PARSINA_SYNC_INTERVAL_MINUTES` (default 15); the products page has a «به‌روزرسانی اطلاعات» button for a manual run.
+- **development** — `data/parsina-products.csv` (an export of the live catalog, same field names). `make db-seed-parsina` loads it and replaces the dev product mirror; the same button re-imports the file. No Parsina credentials are needed and the scheduler stays off. The export only carries `countUnit` ids, so the CSV source supplies mock unit titles to keep the dev catalog identical to production.
+
+Both paths share one validation/apply routine and one DB lock, so runs never overlap. Manual runs return `202` and the UI polls `GET /integrations/parsina/status` until the run finishes, then re-fetches the table in place. A failed or partial fetch never overwrites the last successful data; rows missing from a complete listing are deactivated, never deleted.
 
 ## Database setup
 
 ```bash
 make db-migrate        # dev: start postgres + `alembic upgrade head`
 make db-seed            # dev admin user
-make db-seed-products   # home-appliance catalog
+make db-seed-parsina    # dev product catalog from data/parsina-products.csv
 
-make db-migrate-prod db-seed-prod   # prod Neon (reads .env.production)
+make db-migrate-prod                          # prod Neon: migrations (reads .env.production)
+make db-seed-prod ADMIN_PASSWORD=<password>   # prod Neon: admin user (password required)
 ```
 
 ## Migrations
@@ -106,7 +114,7 @@ Schema changes require an Alembic migration under `backend/api/migrations/`. Aut
 
 ## API contract
 
-Base path `/api/v1`. Committed OpenAPI snapshot: [backend/openapi.json](backend/openapi.json) — regenerate after any route/schema change:
+Base path `/api/v1`. Committed OpenAPI snapshot: [backend/api/openapi.json](backend/api/openapi.json) — regenerate after any route/schema change:
 
 ```bash
 uv run --project backend/api python backend/api/scripts/export_openapi.py
@@ -117,9 +125,9 @@ The frontend client (`apps/web/lib/api.ts`) mirrors these shapes; see [docs/api/
 ## Testing
 
 - Frontend unit tests: `packages/ui/src/lib/*.test.ts` (vitest) — Persian digits, `٬` grouping, `٫` dates
-- Frontend e2e: `apps/web/e2e/` (playwright, backend-free shell/form checks) — `pnpm --filter web test:e2e`
+- Frontend e2e: `apps/web/e2e/` (playwright) — unauthenticated redirects, Persian login form, RTL shell, mobile layout; runs against the production build without a backend — `pnpm --filter web test:e2e`
 - Backend tests: `backend/api/tests/` (pytest) — auth flow, product CRUD, validation envelope
-- CI runs both plus a production build; PostgreSQL service for backend integration.
+- CI runs lint, format check, typecheck, both test suites, the production build, and the Playwright e2e suite; deploy happens only after CI succeeds.
 
 ## Build
 
@@ -131,5 +139,5 @@ make build
 
 - Frontend: any Node 22 host (`next start`) behind TLS. Browser calls same-origin `/api/*`; Next rewrites to the API origin (`API_URL_INTERNAL`, else `NEXT_PUBLIC_API_URL`), so the session cookie stays first-party.
 - Backend: `uv run --project backend/api uvicorn app.main:app --app-dir backend/api --host 0.0.0.0 --port 8000` with `APP_ENV=production`, real `DATABASE_URL`, and a strong `SESSION_SECRET`. Or `make deploy-api` (FastAPI Cloud).
-- Docker: `make docker-up` runs `web` + `api` + `postgres` from [compose.yml](compose.yml).
+- Docker: `make docker-up` runs `web` + `api` + `postgres` from [compose.yml](compose.yml); a one-shot `migrate` service applies Alembic before the API starts.
 - See [docs/architecture/deployment.md](docs/architecture/deployment.md).

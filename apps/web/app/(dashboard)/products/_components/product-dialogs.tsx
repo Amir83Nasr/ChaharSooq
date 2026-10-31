@@ -20,9 +20,16 @@ export function ProductDetailDialog(props: {
   onClose: () => void
 }) {
   const { selected, threshold, onClose } = props
-  const status: StockStatus | null = selected ? stockStatus(selected.stock, threshold) : null
+  const status: StockStatus | null = selected
+    ? stockStatus(selected.stock, threshold)
+    : null
   return (
-    <ResponsiveDialog open={selected !== null} onOpenChange={(open) => { if (!open) onClose() }}>
+    <ResponsiveDialog
+      open={selected !== null}
+      onOpenChange={(open) => {
+        if (!open) onClose()
+      }}
+    >
       <ResponsiveDialogContent aria-label="جزئیات کالا">
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>{selected?.name ?? ""}</ResponsiveDialogTitle>

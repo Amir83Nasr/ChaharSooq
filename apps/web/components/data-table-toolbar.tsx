@@ -42,7 +42,9 @@ export function DataTableToolbar({
 }) {
   return (
     <div className={cn("rounded-lg border bg-card p-3", className)}>
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">{children}</div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+        {children}
+      </div>
     </div>
   )
 }

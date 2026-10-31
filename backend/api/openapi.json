@@ -1032,6 +1032,15 @@
             "type": "boolean",
             "title": "Configured"
           },
+          "source": {
+            "type": "string",
+            "enum": [
+              "parsina",
+              "csv"
+            ],
+            "title": "Source",
+            "default": "parsina"
+          },
           "running": {
             "type": "boolean",
             "title": "Running"

@@ -70,6 +70,7 @@ class SyncRunOut(BaseModel):
 
 class SyncStatusOut(BaseModel):
     configured: bool
+    source: Literal["parsina", "csv"] = "parsina"
     running: bool
     running_since: datetime | None = None
     last_attempt_at: datetime | None = None

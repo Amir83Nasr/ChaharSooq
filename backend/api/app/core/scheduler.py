@@ -11,7 +11,7 @@ import threading
 
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.core.config import get_parsina_settings
+from app.core.config import get_parsina_settings, get_settings
 from app.core.database import get_engine
 from app.services.sync import run_scheduled_sync
 
@@ -29,6 +29,10 @@ class SyncScheduler:
         self._thread: threading.Thread | None = None
 
     def start(self) -> None:
+        if not get_settings().is_production:
+            # Development serves the CSV fixture; no periodic network sync.
+            log.info("scheduler off: live sync runs only in production")
+            return
         settings = get_parsina_settings()
         if not settings.is_configured or not settings.parsina_sync_enabled:
             log.info("scheduler off: parsina not configured")

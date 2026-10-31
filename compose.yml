@@ -1,3 +1,16 @@
+# Local stack only: the secrets below are placeholders. Set real values
+# through the environment for any shared or production-like deployment.
+x-api-env: &api-env
+  APP_ENV: production
+  DATABASE_URL: postgresql+psycopg://charsooq:charsooq@postgres:5432/charsooq
+  SESSION_SECRET: change-me-min-32-chars
+
+x-api-image: &api-image
+  image: charsooq-api:local
+  build:
+    context: .
+    dockerfile: Dockerfile.api
+
 services:
   postgres:
     image: postgres:18
@@ -9,25 +22,42 @@ services:
       - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U charsooq -d charsooq"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-shot schema upgrade. `api` starts only after this exits successfully,
+  # so a fresh volume never serves an empty database.
+  migrate:
+    <<: *api-image
+    command: ["sh", "-c", "cd backend/api && alembic upgrade head"]
+    environment: *api-env
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   api:
-    build:
-      context: .
-      dockerfile: Dockerfile.api
-    environment:
-      APP_ENV: production
-      DATABASE_URL: postgresql+psycopg://charsooq:charsooq@postgres:5432/charsooq
-      SESSION_SECRET: change-me-min-32-chars
+    <<: *api-image
+    environment: *api-env
     ports:
       - "8000:8000"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   web:
     build:
       context: .
       dockerfile: Dockerfile.web
+      args:
+        API_URL_INTERNAL: http://api:8000
     environment:
+      API_URL_INTERNAL: http://api:8000
       NEXT_PUBLIC_API_URL: http://localhost:8000
     ports:
       - "3000:3000"

@@ -1,13 +1,24 @@
 import json
 from functools import lru_cache
+from pathlib import Path
 from typing import Annotated, Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+# Repository layout: backend/api/app/core/config.py → backend/api → repo root.
+# Env files are resolved from this module, not the working directory, so the API,
+# Alembic, and the seed scripts always read the same configuration.
+_BACKEND_DIR = Path(__file__).resolve().parents[2]
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+_ENV_FILES = (str(_BACKEND_DIR / ".env.local"), str(_BACKEND_DIR / ".env"))
+
+# Only the development source reads this file; production uses Parsina.
+_DEFAULT_PRODUCTS_CSV_PATH = _REPO_ROOT / "data" / "parsina-products.csv"
+
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=(".env.local", ".env"), extra="ignore")
+    model_config = SettingsConfigDict(env_file=_ENV_FILES, extra="ignore")
 
     app_env: str = Field(default="development")
     database_url: str = Field(
@@ -20,10 +31,11 @@ class Settings(BaseSettings):
     cors_origins: Annotated[list[str], NoDecode] = Field(
         default=[
             "http://localhost:3000",
-            "http://192.168.1.20:3000",
-            "http://192.168.1.21:3000",
+            "http://127.0.0.1:3000",
         ]
     )
+    # Development-only product catalog (app_env=development); ignored in production.
+    products_csv_path: str = Field(default=str(_DEFAULT_PRODUCTS_CSV_PATH))
 
     @field_validator("database_url", mode="before")
     @classmethod
@@ -56,7 +68,7 @@ class Settings(BaseSettings):
 class ParsinaSettings(BaseSettings):
     """Parsina accounting API connection — secrets only via env, never logged."""
 
-    model_config = SettingsConfigDict(env_file=(".env.local", ".env"), extra="ignore")
+    model_config = SettingsConfigDict(env_file=_ENV_FILES, extra="ignore")
 
     parsina_base_url: str = Field(default="")
     parsina_username: str = Field(default="")

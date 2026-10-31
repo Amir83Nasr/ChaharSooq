@@ -13,10 +13,7 @@ import {
   formatPersianNumber,
   parsePriceFilterInput,
 } from "@workspace/ui/lib/number"
-import {
-  DataTableToolbar,
-  SearchInput,
-} from "@/components/data-table-toolbar"
+import { DataTableToolbar, SearchInput } from "@/components/data-table-toolbar"
 import type { CategoryOut, ProductSort } from "@/lib/api"
 
 export type StockFilter = "all" | "in" | "out" | "low"
@@ -87,7 +84,8 @@ export function ProductsToolbar(props: ToolbarProps) {
             {(value: string | null) =>
               value === null || value === "all"
                 ? "همه دسته‌بندی‌ها"
-                : (categories.find((c) => String(c.id) === value)?.name ?? "همه دسته‌بندی‌ها")
+                : (categories.find((c) => String(c.id) === value)?.name ??
+                  "همه دسته‌بندی‌ها")
             }
           </SelectValue>
         </SelectTrigger>
@@ -148,7 +146,10 @@ export function ProductsToolbar(props: ToolbarProps) {
           className="w-full pe-12"
         />
         {minPrice !== "" ? (
-          <span aria-hidden="true" className="pointer-events-none absolute inset-e-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+          <span
+            aria-hidden="true"
+            className="inset-e-2.5 pointer-events-none absolute top-1/2 -translate-y-1/2 text-xs text-muted-foreground"
+          >
             تومان
           </span>
         ) : null}
@@ -163,7 +164,10 @@ export function ProductsToolbar(props: ToolbarProps) {
           className="w-full pe-12"
         />
         {maxPrice !== "" ? (
-          <span aria-hidden="true" className="pointer-events-none absolute inset-e-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+          <span
+            aria-hidden="true"
+            className="inset-e-2.5 pointer-events-none absolute top-1/2 -translate-y-1/2 text-xs text-muted-foreground"
+          >
             تومان
           </span>
         ) : null}

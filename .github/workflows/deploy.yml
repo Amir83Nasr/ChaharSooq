@@ -1,12 +1,27 @@
 name: Deploy to FastAPI Cloud
+
+# Deploy only after the CI workflow succeeds on main, so a red build never ships.
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
     branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 jobs:
   deploy:
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
       - uses: astral-sh/setup-uv@v7
       - run: uv run --project backend/api fastapi deploy backend/api
         env:

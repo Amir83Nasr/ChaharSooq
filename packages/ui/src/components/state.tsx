@@ -8,7 +8,13 @@ type StateProps = {
   className?: string
 }
 
-export function EmptyState({ title, hint, action, icon, className }: StateProps) {
+export function EmptyState({
+  title,
+  hint,
+  action,
+  icon,
+  className,
+}: StateProps) {
   return (
     <div
       className={cn(
@@ -28,7 +34,13 @@ export function EmptyState({ title, hint, action, icon, className }: StateProps)
   )
 }
 
-export function ErrorState({ title, hint, action, icon, className }: StateProps) {
+export function ErrorState({
+  title,
+  hint,
+  action,
+  icon,
+  className,
+}: StateProps) {
   return (
     <div
       role="alert"

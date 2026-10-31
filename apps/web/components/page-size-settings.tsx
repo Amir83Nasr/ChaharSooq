@@ -55,7 +55,12 @@ export function PageSizeSettings() {
   }
 
   if (!loaded) {
-    return <div className="h-10 animate-pulse rounded-md bg-muted" aria-label="در حال بارگذاری" />
+    return (
+      <div
+        className="h-10 animate-pulse rounded-md bg-muted"
+        aria-label="در حال بارگذاری"
+      />
+    )
   }
 
   return (
@@ -63,7 +68,11 @@ export function PageSizeSettings() {
       <p className="text-sm text-muted-foreground">
         جدول محصولات در بارگذاری اول با این تعداد ردیف نمایش داده می‌شود.
       </p>
-      <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="تعداد ردیف پیش‌فرض">
+      <div
+        className="grid grid-cols-3 gap-2"
+        role="radiogroup"
+        aria-label="تعداد ردیف پیش‌فرض"
+      >
         {PAGE_SIZE_OPTIONS.map((n) => {
           const active = value === n
           return (
@@ -88,7 +97,10 @@ export function PageSizeSettings() {
         </p>
       ) : null}
       {saved ? (
-        <p role="status" className="text-sm text-emerald-600 dark:text-emerald-400">
+        <p
+          role="status"
+          className="text-sm text-emerald-600 dark:text-emerald-400"
+        >
           تعداد پیش‌فرض ذخیره شد.
         </p>
       ) : null}

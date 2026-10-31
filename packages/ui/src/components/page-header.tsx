@@ -22,9 +22,7 @@ export function PageHeader({
     >
       <div className="min-w-0">
         <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-        {subtitle ? (
-          <p className="text-muted-foreground">{subtitle}</p>
-        ) : null}
+        {subtitle ? <p className="text-muted-foreground">{subtitle}</p> : null}
       </div>
       {actions ? (
         <div className="flex flex-wrap items-center gap-2">{actions}</div>

@@ -10,7 +10,7 @@ from app.models.base import utcnow
 
 
 class Admin(Base):
-    """Single admin row seeded from ADMIN_PASSWORD_HASH env at deploy time."""
+    """Single admin row seeded by scripts/seed_admin.py (Argon2id hash)."""
 
     __tablename__ = "admins"
 

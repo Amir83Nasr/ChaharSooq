@@ -1,452 +1,162 @@
-# AGENTS.md — چهارسوق
+# AGENTS.md
 
-## Purpose
+Repository rules for coding agents working on **چهارسوق (Charsooq)**, a Persian, RTL-first admin panel.
 
-This file contains the repository-level rules for coding agents working on **چهارسوق (Charsooq)**.
+These are project constraints, not suggestions. Setup is in [README.md](README.md), contribution flow in [CONTRIBUTING.md](CONTRIBUTING.md), architecture in [docs/](docs/README.md).
 
-Agents must treat these rules as project constraints, not optional suggestions.
+## 1. Repository map
 
----
+| Path                                                   | Contents                                                                 |
+| ------------------------------------------------------ | ------------------------------------------------------------------------ |
+| `apps/web`                                             | Next.js app: routes, app-level components, API client, e2e tests         |
+| `packages/ui`                                          | Shared UI kit: shadcn primitives, Persian formatting, global styles      |
+| `packages/eslint-config`, `packages/typescript-config` | Shared ESLint and TypeScript configs                                     |
+| `backend/api`                                          | FastAPI service: `app/`, `migrations/`, `tests/`, `scripts/`             |
+| `backend/api/openapi.json`                             | Committed OpenAPI snapshot. Generated; never edit by hand                |
+| `docs/`                                                | Architecture notes, ADRs, API notes                                      |
+| `.github/workflows/`                                   | CI and deploy                                                            |
+| `Dockerfile.*`, `compose.yml`                          | Container images and the local stack                                     |
+| `data/`                                                | Local-only data files (gitignored)                                       |
 
-## 1. Stack and Package Managers
+Do not add a workspace or top-level folder without a documented reason (an ADR).
 
-- Frontend: Next.js + React + TypeScript + Tailwind CSS + shadcn/ui.
-- Backend: FastAPI + Python + SQLAlchemy 2.x + Pydantic + Alembic.
-- Database: PostgreSQL.
-- JavaScript package manager: **pnpm only**.
-- Python package manager: **uv only**.
-- Do not introduce npm, yarn, pip, Poetry, or another package manager for project dependency management.
-- Respect existing lockfiles: `pnpm-lock.yaml` and `uv.lock`.
-- Prefer current stable, mutually compatible dependency versions.
-- Do not blindly replace versions with `latest` in committed manifests.
+## 2. Toolchain
 
----
+- Node 22 (`.node-version`) and pnpm 11 only (pinned by `packageManager`).
+- Python 3.12 (`.python-version`) and uv only.
+- Never introduce npm, yarn, pip, or Poetry.
+- `pnpm-lock.yaml` and `uv.lock` are authoritative. Install with `pnpm install --frozen-lockfile` and `uv sync --locked`.
+- Use current stable, mutually compatible versions. Never write `latest` into a manifest.
+- Before adding a dependency, confirm that the need is real, that the standard library or an existing dependency cannot cover it, and that the package is maintained and supports the stack.
 
-## 2. Repository Structure
+## 3. Architecture boundaries
 
-The repository is a monorepo.
+### Backend
 
-Prefer the established structure:
+Dependency flow: `api/routes → services → repositories → database`.
 
-```text
-apps/web
-packages/*
-backend/api
-docs/*
-scripts/*
-.github/workflows/*
-```
+- Route handlers parse input, call one service, and return the result. No business logic and no SQL.
+- Services hold business logic. Repositories own all SQLAlchemy 2.x queries.
+- Pydantic schemas in `app/schemas/` are the only API boundary types. ORM models do not leave the repository layer.
+- Schema changes go through Alembic migrations in `migrations/`. `create_all` is allowed only in tests and dev seed scripts.
+- External APIs (for example Parsina) live in `app/integrations/`.
 
-Do not create a new package/workspace without a real reason.
+### Frontend
 
-Do not move files between architectural layers casually. Preserve established boundaries unless there is a documented reason to change them.
+- `packages/ui` holds generic, reusable UI. No business logic, no API calls, no app routes.
+- `apps/web/components/` holds app-level composites (sidebar, header, theme, settings).
+- `apps/web/app/**/_components/` holds components private to one route segment.
+- `apps/web/lib/` holds the API client, auth helpers, and app domain helpers.
+- Keep data fetching out of presentational components.
 
----
+## 4. UI system
 
-## 3. UI / Design System
+- shadcn/ui is the UI system. Use official components and Blocks before writing custom ones. Style with Tailwind CSS 4.
+- Do not add another component library without an ADR.
+- The main sidebar uses the shadcn Sidebar / Block approach.
+- Code in `packages/ui` must not import from `apps/web`.
 
-- Use **shadcn/ui** as the default UI system.
-- Prefer official shadcn components and Blocks over custom equivalents.
-- The main sidebar must use the shadcn Sidebar / Block approach.
-- Use Tailwind CSS for styling.
-- Do not introduce another component library without explicit architectural justification.
-- Keep generic UI components independent from business logic.
+## 5. RTL and fonts
 
----
+- The root document uses `lang="fa"` and `dir="rtl"`.
+- Design for RTL, not only for text alignment. Use logical properties (`margin-inline`, `padding-inline`, `inset-inline-*`, `start`/`end`). Do not add LTR hacks unless a technical value requires one.
+- Check drawers, dialogs, dropdowns, tables, navigation, icons, and alignment in RTL.
+- Main UI font: **IRANYekanX**, defined only in `apps/web/app/fonts.ts`. Do not substitute another Persian font while it is available.
+- Toman glyph: render prices only through the `<Price />` component in `packages/ui`. Do not copy glyph markup into features. The glyph font file is not in the repo yet; until it is, `.toman-glyph` falls back (see [ADR 004](docs/adr/004-persian-formatting.md)).
 
-## 4. RTL / Persian-First Rules
+## 6. Numbers, dates, currency
 
-The application is Persian and RTL-first.
+Machine and display representations are separate.
 
-- Root document must use `lang="fa"` and `dir="rtl"`.
-- Design all layouts for RTL, not merely text alignment.
-- Prefer CSS logical properties (`margin-inline`, `padding-inline`, `inset-inline-*`, etc.) over hard-coded left/right assumptions.
-- Verify drawers, dialogs, dropdowns, tables, navigation, icons, and alignment in RTL.
-- Do not add LTR hacks unless a specific technical value requires them.
+- **Machine values** (backend, API, calculations, database): plain numbers such as `1000000`, integer toman, UTC datetimes. Never store Persian digits or Jalali strings.
+- **Display values** (UI only), all implemented in `packages/ui/src/lib/`:
+  - Digits: Persian `۰–۹`.
+  - Thousands separator: `٬` (U+066C). Example: `۱٬۰۰۰٬۰۰۰`. Never `,`.
+  - Dates: Jalali calendar with `٫` (U+066B) as the separator. Example: `۱۴۰۵٫۰۵٫۰۵`. Never `/`, `-`, or `.`.
+  - Currency: تومان. Use `<Price value={…} />`, which applies the digits, grouping, and glyph. Pass the numeric source value.
 
----
+Do not write digit conversion, date formatting, or raw `تومان` strings in feature files.
 
-## 5. Fonts
+## 7. Authentication and security
 
-### IRANYekanX
+This is an admin panel with password login.
 
-Use the provided **IRANYekanX** font as the main UI font.
+- Hash passwords with Argon2id (`argon2-cffi`). Never store or log plaintext passwords.
+- Use server-managed sessions with the session ID in an HttpOnly cookie. Set `Secure` in production and an explicit `SameSite` policy.
+- Rate-limit login attempts.
+- Do not store auth tokens in `localStorage` or `sessionStorage`.
+- Never log passwords, session IDs, API keys, secrets, or Authorization headers.
+- Never commit secrets. Only the per-app `.env.example` files (`backend/api/`, `apps/web/`) are tracked. Docker builds must not receive `.env*` files (see `.dockerignore`).
+- Dev-only default credentials may exist in dev targets. Production seeding must receive `ADMIN_PASSWORD` explicitly.
 
-Do not silently substitute another Persian font when the provided font is available.
-
-Keep font definitions centralized and map weights correctly.
-
-### Toman Glyph
-
-Use the provided **Toman Glyph font** for the تومان currency glyph.
-
-Do not duplicate the currency glyph logic across components.
-
-Prefer a reusable `Price`/currency component or equivalent abstraction.
-
-The implementation must account for the required Persian numeric characters and separators as defined below.
-
----
-
-## 6. Persian Number Formatting — REQUIRED
-
-There are two representations:
-
-### Machine representation
-
-Backend, API payloads, calculations, and database values use standard machine-readable numeric values.
-
-Example:
-
-```text
-1000000
-```
-
-### UI representation
-
-All user-visible numbers use Persian digits:
-
-```text
-۱۰۰۰۰۰۰
-```
-
-Never store Persian digits as canonical numeric values.
-
-Create and reuse centralized formatting utilities/components. Never implement one-off digit conversion in random UI files.
-
----
-
-## 7. Thousand Separator — REQUIRED
-
-Use **U+066C ARABIC THOUSANDS SEPARATOR**:
-
-```text
-٬
-```
-
-Required display example:
-
-```text
-۱٬۰۰۰٬۰۰۰
-```
-
-Do not use the Western comma for Persian numeric grouping:
-
-```text
-1,000,000
-```
-
----
-
-## 8. Persian Date Formatting — REQUIRED
-
-The UI must use the **Jalali/Persian calendar**.
-
-Required example:
-
-```text
-۱۴۰۵٫۰۵٫۰۵
-```
-
-Use **U+066B ARABIC DECIMAL SEPARATOR**:
-
-```text
-٫
-```
-
-Do not use Western dot, slash, or hyphen as the default Persian date presentation.
-
-Canonical dates in the backend/database must remain machine-readable and must not be stored as Jalali display strings.
-
-Centralize date conversion and formatting.
-
----
-
-## 9. Currency — REQUIRED
-
-The project currency is **تومان**.
-
-All prices shown in UI must:
-
-1. Use Persian digits.
-2. Use `٬` for thousands grouping.
-3. Use the provided تومان glyph font.
-4. Keep the source value numeric.
-
-Example source:
-
-```text
-1000000
-```
-
-Expected UI pattern:
-
-```text
-۱٬۰۰۰٬۰۰۰ [Toman Glyph]
-```
-
-Do not scatter raw `تومان` strings when the dedicated glyph is required.
-
----
-
-## 10. API and Backend Boundaries
-
-Prefer this dependency flow:
-
-```text
-Route
-  ↓
-Service
-  ↓
-Repository
-  ↓
-Database
-```
-
-- Keep business logic out of route handlers.
-- Keep database access out of UI code.
-- Use Pydantic schemas for API boundaries.
-- Use SQLAlchemy 2.x for database access.
-- Use Alembic for schema migrations.
-- Keep OpenAPI/API contracts up to date.
-
----
-
-## 11. Authentication / Security
-
-This is an admin panel.
-
-Use a simple but secure admin password authentication flow.
-
-Required principles:
-
-- Never store plaintext passwords.
-- Prefer Argon2id or an equally strong modern password hashing algorithm.
-- Prefer secure server-managed sessions.
-- Prefer HttpOnly cookies for session state.
-- Use `Secure` cookies in production.
-- Apply appropriate `SameSite` policy.
-- Protect login against brute-force attempts/rate-limit abuse.
-- Never log passwords, session tokens, secrets, API keys, or authorization headers.
-- Never commit secrets.
-
-Do not use `localStorage` for authentication tokens without a documented reason.
-
----
-
-## 12. Coding Standards
+## 8. Coding standards
 
 ### TypeScript
 
-- Strict mode.
-- Avoid `any` unless there is a documented and unavoidable reason.
-- Prefer explicit, narrow types.
-- Keep components focused.
-- Do not mix business logic into presentational components.
+- `strict` mode, inherited from `@workspace/typescript-config`.
+- No `any` unless it is unavoidable, and then comment the reason.
+- Explicit, narrow types. Keep components focused. Keep business logic out of presentational components.
 
 ### Python
 
-- Use type hints consistently.
-- Keep functions small and focused.
-- Use Ruff.
-- Use strict type checking where configured.
-- Do not hide errors with broad exception handling.
+- Type hints on all functions. Pyright runs in `strict` mode.
+- Small, focused functions. Ruff handles lint and format (line length 100).
+- Do not catch broad `Exception` to hide errors.
 
----
+### All code
 
-## 13. Formatting and Quality Commands
+- Match the surrounding file's naming, comment density, and idiom.
+- Do not refactor unrelated code in a focused change.
 
-All required checks must be runnable from repository root.
+## 9. Testing
 
-Typical commands:
+- Changes in behavior need tests. Priorities: auth, money and Persian formatting, Jalali dates, API validation, database behavior, critical UI flows, and error states.
+- Frontend unit tests: Vitest in `packages/ui/src/**/*.test.ts`.
+- Frontend e2e: Playwright in `apps/web/e2e/`.
+- Backend: pytest in `backend/api/tests/`, with shared fixtures in `conftest.py`.
+- Do not claim a feature works if its tests are missing or failing. When a check was not run, say so.
 
-```bash
-pnpm lint
-pnpm typecheck
-pnpm format:check
+## 10. Commands
 
-uv run ruff check .
-uv run ruff format --check .
-uv run pyright
-uv run pytest
-```
+Run from the repository root. `make help` lists every target.
 
-Use the project's actual scripts/configuration when they exist.
+- **Install:** `make install` (pnpm, uv, git hooks).
+- **Lint:** `pnpm lint` and `uv run --project backend/api ruff check .`.
+- **Format check:** `pnpm format:check` and `uv run --project backend/api ruff format --check .`.
+- **Typecheck:** `pnpm typecheck` and `uv run --project backend/api pyright`.
+- **Test:** `pnpm test` and `uv run --project backend/api pytest -q`.
+- **Build:** `pnpm --filter web build`.
+- **Everything:** `make check` (lint, typecheck, test).
 
----
+Use the `make` targets when they exist.
 
-## 14. Git Hooks
+## 11. Git, hooks, CI
 
-Use the configured Git hook manager (preferably Lefthook).
+- Hooks are managed by Lefthook (`lefthook.yml`). `pre-commit` runs fast checks on staged files. `pre-push` runs the broader checks. Do not weaken a hook to get a change through.
+- CI (`.github/workflows/ci.yml`) must stay green: frozen pnpm install, `uv sync --locked`, frontend lint, typecheck and tests, backend ruff, pyright and pytest against PostgreSQL, and the production build.
+- Keep workflow permissions minimal (`contents: read` by default). Never print secrets in logs.
+- Commit messages follow the Conventional Commits style used in history, for example `feat(web): …` or `fix(api): …`.
 
-### pre-commit
+## 12. Documentation
 
-Keep fast:
+Documentation is part of the change.
 
-- staged-file formatting
-- linting
-- lightweight validation
+- If behavior, setup, commands, env vars, or user-visible rules change, update `README.md`, `CONTRIBUTING.md`, or `docs/`.
+- If a route or schema changes, regenerate the snapshot with `uv run --project backend/api python backend/api/scripts/export_openapi.py` and update the types in `apps/web/lib/api.ts`.
+- A new env var goes into the owning app's `.env.example` (`backend/api/` or `apps/web/`) and the README table.
+- A significant architecture decision needs a new ADR in `docs/adr/`. Use the next number and never renumber.
 
-### pre-push
+## 13. Definition of done
 
-Run broader checks:
+A task is done when all of these hold:
 
-- frontend lint/typecheck
-- backend lint/typecheck
-- tests
-- relevant build checks
+- [ ] The implementation is complete, and its tests are added or updated and pass.
+- [ ] Lint, typecheck, format check, and the affected tests pass (see §10).
+- [ ] UI changes are verified in RTL: digits, separators, dates, and prices use the Persian rules; loading, empty, and error states exist; mobile, tablet, and desktop layouts are intentional; keyboard access works.
+- [ ] Docs and the OpenAPI snapshot are updated where required.
+- [ ] The diff has no secrets, generated noise, or unrelated changes.
 
-Do not weaken hooks just to make a change pass.
-
----
-
-## 15. GitHub Actions
-
-Every meaningful code change should remain compatible with CI.
-
-CI should cover, where configured:
-
-- frozen pnpm installation
-- uv dependency synchronization
-- frontend lint
-- frontend typecheck
-- frontend tests
-- backend lint
-- backend typecheck
-- backend tests
-- PostgreSQL integration tests
-- production build
-
-Keep workflow permissions minimal and avoid leaking secrets.
-
----
-
-## 16. Testing Rules
-
-When changing behavior, update or add relevant tests.
-
-Prioritize:
-
-- critical user flows
-- authentication
-- money formatting
-- Persian number formatting
-- Jalali date formatting
-- API validation
-- database behavior
-- error states
-
-Do not claim a feature is complete when its relevant tests are absent or failing.
-
----
-
-## 17. Documentation Rules
-
-Documentation is part of implementation.
-
-When changing architecture, API behavior, setup, commands, environment variables, or user-visible rules:
-
-- update the relevant docs
-- update README/CONTRIBUTING when needed
-- add/update an ADR for significant architectural decisions
-
-Keep documentation close to the codebase and current.
-
----
-
-## 18. Change Discipline
-
-Before editing code:
-
-1. Inspect the current implementation and project structure.
-2. Reuse existing abstractions/components when appropriate.
-3. Check related tests and documentation.
-4. Understand the data/API flow before changing it.
-
-After editing:
-
-1. Run the narrowest relevant checks first.
-2. Run broader checks before considering the task complete.
-3. Review the diff for accidental changes.
-4. Update documentation if behavior/architecture changed.
-
-Do not make unrelated refactors while implementing a focused task unless they are required to safely complete it.
-
----
-
-## 19. Dependency Discipline
-
-Before adding a dependency, verify:
-
-- the need is real
-- the standard library or existing dependency cannot solve it cleanly
-- the package is maintained
-- it supports the current stack
-- it does not introduce avoidable bundle/runtime cost
-- it does not create unnecessary lock-in
-
-Prefer fewer dependencies and clearer code.
-
----
-
-## 20. Persian UI Acceptance Checklist
-
-Before declaring a UI task complete, verify:
-
-- [ ] RTL works correctly
-- [ ] IRANYekanX is used
-- [ ] All visible digits are Persian
-- [ ] Thousands grouping uses `٬`
-- [ ] Dates are Jalali
-- [ ] Date presentation uses `٫`
-- [ ] Prices are in تومان
-- [ ] Toman glyph is used where required
-- [ ] Backend/database values remain machine-readable
-- [ ] Loading state exists where necessary
-- [ ] Empty state exists where necessary
-- [ ] Error state exists where necessary
-- [ ] Mobile/tablet/desktop behavior is intentional
-- [ ] Keyboard accessibility works
-
----
-
-## 21. Definition of Done
-
-A task is done only when:
-
-- implementation is complete
-- relevant tests pass
-- lint/typecheck pass
-- formatting passes
-- CI expectations are satisfied
-- responsive behavior is verified
-- RTL behavior is verified
-- Persian localization rules are verified
-- documentation is updated when required
-- no secrets or unrelated changes are introduced
-
----
-
-## 22. Final Agent Principle
-
-Build the simplest solution that satisfies the requirement and fits the existing architecture.
-
-Do not optimize for cleverness.
-Do not optimize for the shortest code.
-Do not optimize for adding more libraries.
-
-Optimize for:
-
-```text
-Correctness
-Security
-Maintainability
-Consistency
-Developer Experience
-Performance
-```
-
-Treat چهارسوق as a long-lived production project.
+Build the smallest solution that fits the existing architecture. Optimize for correctness, security, maintainability, and consistency, not for cleverness, brevity, or new libraries.
 
 <!-- BEGIN:turborepo-agent-rules -->
 

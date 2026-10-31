@@ -24,8 +24,9 @@ import {
 } from "@workspace/ui/components/drawer"
 import { useIsMobile } from "@workspace/ui/hooks/use-mobile"
 
-const ResponsiveDialogContext =
-  React.createContext<{ isMobile: boolean } | null>(null)
+const ResponsiveDialogContext = React.createContext<{
+  isMobile: boolean
+} | null>(null)
 
 function useResponsiveDialogMobile() {
   const context = React.useContext(ResponsiveDialogContext)

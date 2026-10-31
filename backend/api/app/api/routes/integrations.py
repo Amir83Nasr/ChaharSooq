@@ -38,9 +38,11 @@ def _is_running(state: ParsinaSyncState, *, now: datetime) -> bool:
 
 def _status(session: Session) -> SyncStatusOut:
     settings = get_parsina_settings()
-    state = ProductSyncService(session).state()
+    service = ProductSyncService(session)
+    state = service.state()
     return SyncStatusOut(
-        configured=settings.is_configured,
+        configured=service.configured,
+        source=service.source_label,
         running=_is_running(state, now=datetime.now(UTC)),
         running_since=state.running_since,
         last_attempt_at=state.last_attempt_at,
@@ -92,7 +94,12 @@ def parsina_sync(
     except SyncBusyError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
     threading.Thread(target=_run_manual, name="parsina-sync-manual", daemon=True).start()
-    return SyncRunOut(status="running", message="همگام‌سازی با پارسینا آغاز شد")
+    message = (
+        "بارگذاری داده آزمایشی محصولات آغاز شد"
+        if service.source_label == "csv"
+        else "همگام‌سازی با پارسینا آغاز شد"
+    )
+    return SyncRunOut(status="running", message=message)
 
 
 __all__ = ["router"]

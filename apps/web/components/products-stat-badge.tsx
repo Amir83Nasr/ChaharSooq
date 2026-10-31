@@ -33,17 +33,20 @@ export function StatBadge({
   const styles = STAT_STYLES[color]
   return (
     <span
-      className={
-        `inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm ${styles.wrap}`
-      }
+      className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm ${styles.wrap}`}
     >
       <span aria-hidden="true" className="relative flex size-2 shrink-0">
         <span
           className={`absolute inline-flex h-full w-full animate-ping rounded-full ${styles.dot} opacity-60`}
         />
-        <span className={`relative inline-flex size-2 rounded-full ${styles.dot}`} />
+        <span
+          className={`relative inline-flex size-2 rounded-full ${styles.dot}`}
+        />
       </span>
-      {label} <strong><PersianNumber value={value} /></strong>
+      {label}{" "}
+      <strong>
+        <PersianNumber value={value} />
+      </strong>
     </span>
   )
 }

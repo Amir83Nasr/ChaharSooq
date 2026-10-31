@@ -27,7 +27,11 @@ export async function getSessionAdmin(): Promise<SessionAdmin | null> {
     return null
   }
   if (!res.ok) {
-    if (res.status !== 401) console.error("getSessionAdmin: unexpected status", { host: API, status: res.status })
+    if (res.status !== 401)
+      console.error("getSessionAdmin: unexpected status", {
+        host: API,
+        status: res.status,
+      })
     return null
   }
   return (await res.json()) as SessionAdmin

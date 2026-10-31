@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from sqlalchemy import ColumnElement, func, or_, select
+from sqlalchemy import ColumnElement, delete, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models import Product
@@ -41,6 +41,12 @@ class ProductRepository:
             .order_by(Product.main_group_name)
         ).scalars()
         return [name for name in rows if name]
+
+    def delete_all(self) -> int:
+        """Drop the whole mirror — used only by the dev CSV seed (replace mode)."""
+        total = self._session.execute(select(func.count()).select_from(Product)).scalar_one()
+        self._session.execute(delete(Product))
+        return total
 
     def deactivate_missing(self, keep_external_ids: set[int]) -> int:
         """Soft-delete mirror rows absent from a *complete* Parsina listing."""

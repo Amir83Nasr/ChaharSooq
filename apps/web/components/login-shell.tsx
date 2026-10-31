@@ -20,7 +20,7 @@ export function LoginShell() {
         />
       </div>
       <div className="relative flex flex-col items-center justify-center p-6 md:p-10">
-        <div className="absolute top-4 inset-e-4 md:top-6 md:inset-e-6">
+        <div className="inset-e-4 md:inset-e-6 absolute top-4 md:top-6">
           <ThemeToggle />
         </div>
         <div className="flex w-full max-w-xs flex-col justify-center">

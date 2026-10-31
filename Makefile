@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-.PHONY: build check db-migrate db-migrate-prod db-seed db-seed-parsina db-seed-prod db-sync-dev-to-prod db-up deploy-api dev-all dev-api dev-web docker-down docker-logs docker-up help install lint test typecheck
+.PHONY: build check db-migrate db-migrate-prod db-seed db-seed-parsina db-seed-prod db-sync-dev-to-prod sync-dev-to-prod sync-prod dev-to-prod db-up deploy-api dev-all dev-api dev-web docker-down docker-logs docker-up help install lint test typecheck
 
 # ─── HELP ─────────────────────────────────────────────────
 help: ## Show this help message
@@ -74,6 +74,9 @@ db-seed-prod: ## Create prod admin user (requires ADMIN_PASSWORD=... on the comm
 db-sync-dev-to-prod: ## Copy dev DB data (categories/settings/products/sync_state) into prod Neon (reads .env.production)
 	@test -f $(CURDIR)/.env.production || { echo ".env.production is required" >&2; exit 1; }
 	uv run --project backend/api --env-file $(CURDIR)/.env.production python backend/api/scripts/sync_dev_to_prod.py $(if $(filter 1,$(YES)),--yes,)
+
+# ─── Aliases (dev → prod sync) ───────────────────────────
+sync-dev-to-prod sync-prod dev-to-prod: db-sync-dev-to-prod ## Alias for db-sync-dev-to-prod
 
 # ─── DOCKER ───────────────────────────────────────────────
 docker-up: ## Start services with Docker Compose

@@ -3,7 +3,7 @@ import type { ProductOut } from "./api"
 export type StockStatus = "in" | "low" | "out"
 
 /** Fallback until server settings load. Low means 1..threshold in stock, out means 0. */
-export const DEFAULT_LOW_STOCK_THRESHOLD = 10
+export const DEFAULT_LOW_STOCK_THRESHOLD = 5
 
 export const STOCK_LABELS: Record<StockStatus, string> = {
   in: "موجود",

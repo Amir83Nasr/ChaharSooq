@@ -8,7 +8,7 @@ from app.core.config import get_parsina_settings
 from app.models import Setting
 
 LOW_STOCK_THRESHOLD_KEY = "low_stock_threshold"
-DEFAULT_LOW_STOCK_THRESHOLD = 10
+DEFAULT_LOW_STOCK_THRESHOLD = 5
 
 DEFAULT_PAGE_SIZE_KEY = "default_page_size"
 DEFAULT_PAGE_SIZE = 0

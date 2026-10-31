@@ -84,7 +84,7 @@ class ParsinaSettings(BaseSettings):
     parsina_ware_id: int | None = Field(default=None, description="optional LoadByFilter Ware")
     parsina_sale_type_id: int | None = Field(default=None, description="optional Saletype")
     parsina_timeout_seconds: float = Field(default=15.0, gt=0)
-    parsina_sync_interval_minutes: int = Field(default=15, ge=1)
+    parsina_sync_interval_minutes: int = Field(default=60, ge=1)
     parsina_sync_enabled: bool = Field(default=True)
 
     @property

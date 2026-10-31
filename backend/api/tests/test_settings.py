@@ -13,9 +13,9 @@ def test_settings_require_auth(client: TestClient) -> None:
 def test_settings_default_and_update(client: TestClient) -> None:
     login(client)
     assert client.get("/api/v1/settings").json() == {
-        "low_stock_threshold": 10,
+        "low_stock_threshold": 5,
         "default_page_size": 0,
-        "sync_interval_minutes": 15,
+        "sync_interval_minutes": 60,
     }
     r = client.put(
         "/api/v1/settings",
@@ -25,12 +25,12 @@ def test_settings_default_and_update(client: TestClient) -> None:
     assert r.json() == {
         "low_stock_threshold": 3,
         "default_page_size": 100,
-        "sync_interval_minutes": 15,
+        "sync_interval_minutes": 60,
     }
     assert client.get("/api/v1/settings").json() == {
         "low_stock_threshold": 3,
         "default_page_size": 100,
-        "sync_interval_minutes": 15,
+        "sync_interval_minutes": 60,
     }
 
 
@@ -39,9 +39,9 @@ def test_settings_partial_update_keeps_other_field(client: TestClient) -> None:
     r = client.put("/api/v1/settings", json={"default_page_size": 500})
     assert r.status_code == 200, r.text
     assert r.json() == {
-        "low_stock_threshold": 10,
+        "low_stock_threshold": 5,
         "default_page_size": 500,
-        "sync_interval_minutes": 15,
+        "sync_interval_minutes": 60,
     }
 
 

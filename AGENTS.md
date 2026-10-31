@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Constraints for coding agents on **چهارسوق (Charsooq)**, a Persian, RTL-first admin panel. Setup: [README.md](README.md). Contribution: [CONTRIBUTING.md](CONTRIBUTING.md). Architecture: [docs/](docs/README.md).
+Constraints for coding agents on **چهارسوق (Charsooq)**, a Persian, RTL-first admin panel. Setup: [README.md](README.md). Contribution flow: [CONTRIBUTING.md](CONTRIBUTING.md). Architecture: [docs/](docs/README.md).
 
 ## 1. Repository map
 
@@ -162,5 +162,5 @@ Turborepo configuration, task behavior, and CLI commands can vary between instal
 
 Read `docs/README.md` inside that installed package first, then read the relevant pages from its `docs/` directory before changing Turborepo configuration or commands. Heed deprecation notices. These bundled docs match the installed package version and are available without network access.
 
-This block is written and re-added by `turbo` before repository-scoped commands when an AI agent is detected. In the Turborepo source repository, its template is defined in `crates/turborepo-cli/src/cli/agent_guidance.rs`. Removing the managed block while updates are enabled means a later qualifying invocation will add it again. Set `"agentGuidance": false` in the root `turbo.json` or `turbo.jsonc` to opt out; do not remove an existing block. Keep the block committed with your work to avoid an uncommitted change on the next agent invocation.
+This block is written and re-added by `turbo` before repository-scoped commands when an AI agent is detected. In the Turborepo source repository, its template is defined in `crates/turborepo-cli/src/cli/agent_guidance.rs`. Removing the managed block while updates are enabled means a later qualifying invocation will add it again. Set `"agentGuidance": false` in the root `turbo.json` or `turbo.jsonc` to opt out; this does not remove an existing block. Keep the block committed with your work to avoid an uncommitted change on the next agent invocation.
 <!-- END:turborepo-agent-rules -->

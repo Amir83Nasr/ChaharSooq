@@ -117,11 +117,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export interface SettingsOut {
   low_stock_threshold: number
   default_page_size: number
+  sync_interval_minutes: number
 }
 
 export interface SettingsUpdate {
   low_stock_threshold?: number
   default_page_size?: number
+  sync_interval_minutes?: number
 }
 
 export interface ProductFilters {

@@ -51,9 +51,14 @@ class SyncScheduler:
             self._thread = None
 
     def _loop(self) -> None:
-        interval = get_parsina_settings().parsina_sync_interval_minutes
         while not self._stop.is_set():
             try:
+                # Re-read the interval each tick so admin changes in Settings
+                # take effect without a process restart.
+                from app.services import SettingsService
+
+                with self._session_factory() as _s:
+                    interval = SettingsService(_s).get_sync_interval()
                 run_scheduled_sync(session_factory=self._session_factory, interval_minutes=interval)
             except Exception:  # noqa: BLE001 — a bad tick must not kill the loop
                 log.exception("scheduled parsina sync crashed")

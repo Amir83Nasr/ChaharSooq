@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from app.core.config import get_parsina_settings
 from app.models import Setting
 
 LOW_STOCK_THRESHOLD_KEY = "low_stock_threshold"
@@ -11,7 +12,12 @@ DEFAULT_LOW_STOCK_THRESHOLD = 10
 
 DEFAULT_PAGE_SIZE_KEY = "default_page_size"
 DEFAULT_PAGE_SIZE = 0
-ALLOWED_PAGE_SIZES = (0, 10, 100, 500)
+ALLOWED_PAGE_SIZES = (0, 10, 20, 50, 100, 500)
+
+SYNC_INTERVAL_KEY = "sync_interval_minutes"
+DEFAULT_SYNC_INTERVAL_MINUTES = get_parsina_settings().parsina_sync_interval_minutes
+MIN_SYNC_INTERVAL_MINUTES = 1
+MAX_SYNC_INTERVAL_MINUTES = 10080
 
 
 class SettingsService:
@@ -22,6 +28,7 @@ class SettingsService:
         return {
             "low_stock_threshold": self.get_threshold(),
             "default_page_size": self.get_page_size(),
+            "sync_interval_minutes": self.get_sync_interval(),
         }
 
     def get_threshold(self) -> int:
@@ -63,3 +70,23 @@ class SettingsService:
             row.value = str(page_size)
         self._session.flush()
         return page_size
+
+    def get_sync_interval(self) -> int:
+        row = self._session.get(Setting, SYNC_INTERVAL_KEY)
+        if row is None:
+            return DEFAULT_SYNC_INTERVAL_MINUTES
+        try:
+            value = int(row.value)
+        except ValueError:
+            return DEFAULT_SYNC_INTERVAL_MINUTES
+        return min(max(value, MIN_SYNC_INTERVAL_MINUTES), MAX_SYNC_INTERVAL_MINUTES)
+
+    def update_sync_interval(self, minutes: int) -> int:
+        row = self._session.get(Setting, SYNC_INTERVAL_KEY)
+        if row is None:
+            row = Setting(key=SYNC_INTERVAL_KEY, value=str(minutes))
+            self._session.add(row)
+        else:
+            row.value = str(minutes)
+        self._session.flush()
+        return minutes

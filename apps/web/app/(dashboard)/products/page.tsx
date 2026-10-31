@@ -54,13 +54,14 @@ export default function ProductsPage() {
   // search/sort/paging state untouched.
   const [dataVersion, setDataVersion] = useState(0)
   const refreshData = useCallback(() => setDataVersion((v) => v + 1), [])
+  // Auto-refresh cadence follows the configured sync interval (minutes).
+  const [autoRefreshMs, setAutoRefreshMs] = useState(60 * 60 * 1000)
 
-  // Auto-refresh the catalog from the database once an hour so admins always
-  // see current stock/price without manual action.
   useEffect(() => {
-    const id = setInterval(() => setDataVersion((v) => v + 1), 60 * 60 * 1000)
+    if (!autoRefreshMs || autoRefreshMs <= 0) return
+    const id = setInterval(() => setDataVersion((v) => v + 1), autoRefreshMs)
     return () => clearInterval(id)
-  }, [])
+  }, [autoRefreshMs])
 
   const goLogin = useCallback(() => {
     router.replace("/login")
@@ -116,6 +117,11 @@ export default function ProductsPage() {
           data.default_page_size === 500
         ) {
           setPageSize(data.default_page_size)
+        }
+        if (Number.isFinite(data.sync_interval_minutes)) {
+          const ms =
+            Math.max(1, Math.floor(data.sync_interval_minutes)) * 60 * 1000
+          setAutoRefreshMs(ms)
         }
       })
       .catch(() => {})

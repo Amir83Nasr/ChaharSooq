@@ -13,10 +13,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.deps import get_db, require_admin
-from app.core.config import get_parsina_settings
 from app.core.database import get_engine
 from app.models import Admin, ParsinaSyncState
 from app.schemas import SyncRunOut, SyncStatusOut
+from app.services import SettingsService
 from app.services.sync import (
     ProductSyncService,
     SyncBusyError,
@@ -37,9 +37,9 @@ def _is_running(state: ParsinaSyncState, *, now: datetime) -> bool:
 
 
 def _status(session: Session) -> SyncStatusOut:
-    settings = get_parsina_settings()
     service = ProductSyncService(session)
     state = service.state()
+    interval = SettingsService(session).get_sync_interval()
     return SyncStatusOut(
         configured=service.configured,
         source=service.source_label,
@@ -53,7 +53,7 @@ def _status(session: Session) -> SyncStatusOut:
         last_updated=state.last_updated,
         last_deactivated=state.last_deactivated,
         last_skipped=state.last_skipped,
-        interval_minutes=settings.parsina_sync_interval_minutes,
+        interval_minutes=interval,
     )
 
 

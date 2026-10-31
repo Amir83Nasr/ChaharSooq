@@ -13,6 +13,7 @@ from app.services.settings import (
     DEFAULT_PAGE_SIZE,
     DEFAULT_PAGE_SIZE_KEY,
     LOW_STOCK_THRESHOLD_KEY,
+    SYNC_INTERVAL_KEY,
     SettingsService,
 )
 
@@ -29,4 +30,5 @@ __all__ = [
     "InvalidCategoryError",
     "ProductService",
     "SettingsService",
+    "SYNC_INTERVAL_KEY",
 ]

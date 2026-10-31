@@ -956,12 +956,17 @@
           "default_page_size": {
             "type": "integer",
             "title": "Default Page Size"
+          },
+          "sync_interval_minutes": {
+            "type": "integer",
+            "title": "Sync Interval Minutes"
           }
         },
         "type": "object",
         "required": [
           "low_stock_threshold",
-          "default_page_size"
+          "default_page_size",
+          "sync_interval_minutes"
         ],
         "title": "SettingsOut"
       },
@@ -987,6 +992,8 @@
                 "enum": [
                   0,
                   10,
+                  20,
+                  50,
                   100,
                   500
                 ]
@@ -996,6 +1003,19 @@
               }
             ],
             "title": "Default Page Size"
+          },
+          "sync_interval_minutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10080.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sync Interval Minutes"
           }
         },
         "type": "object",

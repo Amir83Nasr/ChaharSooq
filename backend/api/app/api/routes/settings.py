@@ -28,8 +28,15 @@ def update_settings(
     svc = SettingsService(session)
     threshold = svc.get_threshold()
     page_size = svc.get_page_size()
+    interval = svc.get_sync_interval()
     if payload.low_stock_threshold is not None:
         threshold = svc.update_threshold(payload.low_stock_threshold)
     if payload.default_page_size is not None:
         page_size = svc.update_page_size(payload.default_page_size)
-    return SettingsOut(low_stock_threshold=threshold, default_page_size=page_size)
+    if payload.sync_interval_minutes is not None:
+        interval = svc.update_sync_interval(payload.sync_interval_minutes)
+    return SettingsOut(
+        low_stock_threshold=threshold,
+        default_page_size=page_size,
+        sync_interval_minutes=interval,
+    )

@@ -85,14 +85,14 @@ Each app owns its env file: [backend/api/.env.example](backend/api/.env.example)
 | `CORS_ORIGINS` | Backend CORS allowlist, comma-separated |
 | `ALLOWED_DEV_ORIGINS` | Extra Next.js dev origins, comma-separated |
 | `ADMIN_USER` / `ADMIN_PASSWORD` | Admin seed credentials. `make db-seed` uses `ADMIN_PASSWORD` or `DEV_ADMIN_PASSWORD` (default `secret123`). `make db-seed-prod` **requires** `ADMIN_PASSWORD=…` on the command line |
-| `PARSINA_*` | Parsina accounting API (URL, credentials, org, year, optional warehouse/sale-type). Empty = integration off. `PARSINA_SYNC_INTERVAL_MINUTES` (default 15) and `PARSINA_SYNC_ENABLED` tune the backend scheduler |
+| `PARSINA_*` | Parsina accounting API (URL, credentials, org, year, optional warehouse/sale-type). Empty = integration off. `PARSINA_SYNC_INTERVAL_MINUTES` (default 15) seeds the initial auto-sync interval and `PARSINA_SYNC_ENABLED` toggles the backend scheduler |
 | `PRODUCTS_CSV_PATH` | Development-only product CSV; defaults to `<repo>/data/parsina-products.csv` |
 
 ## Product data sources
 
 Products mirror an external catalog (`external_id` = Parsina `goodId`), and the GET endpoints always read the local mirror. Where the mirror comes from depends on `APP_ENV`:
 
-- **production** — live Parsina API (`PARSINA_*` credentials). The backend scheduler syncs every `PARSINA_SYNC_INTERVAL_MINUTES` (default 15); the products page has a «به‌روزرسانی اطلاعات» button for a manual run.
+- **production** — live Parsina API (`PARSINA_*` credentials). The backend scheduler syncs at the interval configured in Settings (default `PARSINA_SYNC_INTERVAL_MINUTES`, 15); the products page has a «به‌روزرسانی اطلاعات» button for a manual run.
 - **development** — `data/parsina-products.csv` (an export of the live catalog, same field names). `make db-seed-parsina` loads it and replaces the dev product mirror; the same button re-imports the file. No Parsina credentials are needed and the scheduler stays off. The export only carries `countUnit` ids, so the CSV source supplies mock unit titles to keep the dev catalog identical to production.
 
 Both paths share one validation/apply routine and one DB lock, so runs never overlap. Manual runs return `202` and the UI polls `GET /integrations/parsina/status` until the run finishes, then re-fetches the table in place. A failed or partial fetch never overwrites the last successful data; rows missing from a complete listing are deactivated, never deleted.

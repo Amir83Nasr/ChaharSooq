@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 
-import { MoonStar, PackageMinus, Rows3 } from "lucide-react"
+import { Clock, MoonStar, PackageMinus, Rows3 } from "lucide-react"
 
 import {
   Card,
@@ -13,6 +13,7 @@ import { PageHeader } from "@workspace/ui/components/page-header"
 
 import { InventoryThresholdSettings } from "@/components/inventory-threshold-settings"
 import { PageSizeSettings } from "@/components/page-size-settings"
+import { SyncIntervalSettings } from "@/components/sync-interval-settings"
 import { ThemeSettings } from "@/components/theme-settings"
 
 export const metadata: Metadata = { title: "چهارسوق | تنظیمات" }
@@ -59,6 +60,20 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent>
           <InventoryThresholdSettings />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Clock className="size-4" />
+            فاصله به‌روزرسانی خودکار
+          </CardTitle>
+          <CardDescription>
+            هر چند دقیقه یکبار کاتالوگ محصولات از حسابداری به‌روز شود
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SyncIntervalSettings />
         </CardContent>
       </Card>
     </div>

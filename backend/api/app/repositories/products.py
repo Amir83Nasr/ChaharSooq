@@ -128,13 +128,12 @@ class ProductRepository:
             "cheapest": Product.price.asc(),
             "most_expensive": Product.price.desc(),
         }[sort]
-        start = (page - 1) * page_size
-        rows = (
-            self._session.execute(base.order_by(order).offset(start).limit(page_size))
-            .unique()
-            .scalars()
-            .all()
-        )
+        if page_size and page_size > 0:
+            start = (page - 1) * page_size
+            stmt = base.order_by(order).offset(start).limit(page_size)
+        else:
+            stmt = base.order_by(order)
+        rows = self._session.execute(stmt).unique().scalars().all()
         return list(rows), total
 
     def add(self, product: Product) -> Product:

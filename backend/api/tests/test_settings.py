@@ -14,7 +14,7 @@ def test_settings_default_and_update(client: TestClient) -> None:
     login(client)
     assert client.get("/api/v1/settings").json() == {
         "low_stock_threshold": 10,
-        "default_page_size": 10,
+        "default_page_size": 0,
     }
     r = client.put(
         "/api/v1/settings",
@@ -44,7 +44,7 @@ def test_settings_reject_invalid_threshold(client: TestClient) -> None:
 def test_settings_reject_invalid_page_size(client: TestClient) -> None:
     login(client)
     assert client.put("/api/v1/settings", json={"default_page_size": 15}).status_code == 422
-    assert client.put("/api/v1/settings", json={"default_page_size": 0}).status_code == 422
+    assert client.put("/api/v1/settings", json={"default_page_size": 7}).status_code == 422
 
 
 def test_database_url_trailing_whitespace_stripped() -> None:

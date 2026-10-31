@@ -8,7 +8,7 @@ import { cn } from "@workspace/ui/lib/utils"
 
 import { api } from "@/lib/api"
 
-export const PAGE_SIZE_OPTIONS = [10, 20, 50] as const
+export const PAGE_SIZE_OPTIONS = [0, 10, 20, 50] as const
 
 export function PageSizeSettings() {
   const [value, setValue] = useState<number | null>(null)
@@ -66,10 +66,11 @@ export function PageSizeSettings() {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm text-muted-foreground">
-        جدول محصولات در بارگذاری اول با این تعداد ردیف نمایش داده می‌شود.
+        جدول محصولات در بارگذاری اول با این تعداد ردیف نمایش داده می‌شود. «همه»
+        کل لیست را بدون صفحه‌بندی نمایش می‌دهد.
       </p>
       <div
-        className="grid grid-cols-3 gap-2"
+        className="grid grid-cols-4 gap-2"
         role="radiogroup"
         aria-label="تعداد ردیف پیش‌فرض"
       >
@@ -85,8 +86,14 @@ export function PageSizeSettings() {
               onClick={() => save(n)}
               className={cn("h-10")}
             >
-              <PersianNumber value={n} />
-              <span>ردیف</span>
+              {n === 0 ? (
+                <span>همه</span>
+              ) : (
+                <>
+                  <PersianNumber value={n} />
+                  <span>ردیف</span>
+                </>
+              )}
             </Button>
           )
         })}

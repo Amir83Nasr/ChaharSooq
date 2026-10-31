@@ -269,9 +269,9 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 100,
-              "minimum": 1,
-              "default": 20,
+              "maximum": 100000,
+              "minimum": 0,
+              "default": 0,
               "title": "Page Size"
             }
           }
@@ -985,6 +985,7 @@
               {
                 "type": "integer",
                 "enum": [
+                  0,
                   10,
                   20,
                   50

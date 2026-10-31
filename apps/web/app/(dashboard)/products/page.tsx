@@ -41,7 +41,7 @@ export default function ProductsPage() {
   const [selected, setSelected] = useState<ProductOut | null>(null)
 
   const [pageNum, setPageNum] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
+  const [pageSize, setPageSize] = useState(0)
   const [q, setQ] = useState("")
   const [debouncedQ, setDebouncedQ] = useState("")
   const [categoryId, setCategoryId] = useState<number | null>(null)
@@ -54,6 +54,13 @@ export default function ProductsPage() {
   // search/sort/paging state untouched.
   const [dataVersion, setDataVersion] = useState(0)
   const refreshData = useCallback(() => setDataVersion((v) => v + 1), [])
+
+  // Auto-refresh the catalog from the database once an hour so admins always
+  // see current stock/price without manual action.
+  useEffect(() => {
+    const id = setInterval(() => setDataVersion((v) => v + 1), 60 * 60 * 1000)
+    return () => clearInterval(id)
+  }, [])
 
   const goLogin = useCallback(() => {
     router.replace("/login")
@@ -103,6 +110,7 @@ export default function ProductsPage() {
           setThreshold(Math.max(0, Math.floor(data.low_stock_threshold)))
         }
         if (
+          data.default_page_size === 0 ||
           data.default_page_size === 10 ||
           data.default_page_size === 20 ||
           data.default_page_size === 50

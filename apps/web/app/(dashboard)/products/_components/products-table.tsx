@@ -38,13 +38,14 @@ interface TableProps {
   onPageSize: (n: number) => void
 }
 
-const COLUMN_COUNT = 6
+const COLUMN_COUNT = 7
 
 // Shared by the data, skeleton and error rows so the column layout never shifts.
 function ProductsTableHead() {
   return (
     <>
       <colgroup>
+        <col className="w-12" />
         <col className="w-56" />
         <col className="w-32" />
         <col className="w-52" />
@@ -54,6 +55,9 @@ function ProductsTableHead() {
       </colgroup>
       <TableHeader>
         <TableRow>
+          <TableHead scope="col" className="text-center">
+            ردیف
+          </TableHead>
           <TableHead scope="col">نام</TableHead>
           <TableHead scope="col" className="text-center">
             کد
@@ -83,8 +87,8 @@ export function ProductTableSkeleton() {
           {Array.from({ length: 5 }).map((_, i) => (
             <TableRow key={i}>
               {Array.from({ length: COLUMN_COUNT }).map((_, j) => {
-                // Matches the data rows: name and group start, the rest centres.
-                const centered = j === 1 || j >= 3
+                // Matches the data rows: row number, name and group start? row number centres.
+                const centered = j === 0 || j === 2 || j >= 4
                 return (
                   <TableCell key={j} className={centered ? "text-center" : ""}>
                     <Skeleton
@@ -135,59 +139,70 @@ export function ProductsTable(props: TableProps) {
       <Table className="min-w-212 table-fixed">
         <ProductsTableHead />
         <TableBody>
-          {page.items.map((item) => (
-            <TableRow
-              key={item.id}
-              tabIndex={0}
-              className="cursor-pointer"
-              onClick={() => onSelect(item)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault()
-                  onSelect(item)
-                }
-              }}
-            >
-              <TableCell className="wrap-break-word whitespace-normal">
-                <span className="text-sm font-medium">{item.name}</span>
-              </TableCell>
-              <TableCell className="text-center text-sm text-muted-foreground">
-                <span
-                  dir="ltr"
-                  className="inline-block max-w-full truncate align-middle"
-                >
-                  {item.sku}
-                </span>
-              </TableCell>
-              <TableCell className="whitespace-normal">
-                {item.main_group_name ? (
-                  <>
-                    <span className="block truncate text-sm">
-                      {item.main_group_name}
-                    </span>
-                    {item.sub_group_name ? (
-                      <span className="block truncate text-xs text-muted-foreground">
-                        {item.sub_group_name}
+          {page.items.map((item, i) => {
+            const rowNumber =
+              (page.page > 1
+                ? (page.page - 1) * (page.page_size || page.items.length)
+                : 0) +
+              i +
+              1
+            return (
+              <TableRow
+                key={item.id}
+                tabIndex={0}
+                className="cursor-pointer"
+                onClick={() => onSelect(item)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault()
+                    onSelect(item)
+                  }
+                }}
+              >
+                <TableCell className="text-center text-sm text-muted-foreground">
+                  <PersianNumber value={rowNumber} />
+                </TableCell>
+                <TableCell className="wrap-break-word whitespace-normal">
+                  <span className="text-sm font-medium">{item.name}</span>
+                </TableCell>
+                <TableCell className="text-center text-sm text-muted-foreground">
+                  <span
+                    dir="ltr"
+                    className="inline-block max-w-full truncate align-middle"
+                  >
+                    {item.sku}
+                  </span>
+                </TableCell>
+                <TableCell className="whitespace-normal">
+                  {item.main_group_name ? (
+                    <>
+                      <span className="block truncate text-sm">
+                        {item.main_group_name}
                       </span>
-                    ) : null}
-                  </>
-                ) : (
-                  <span className="text-muted-foreground">—</span>
-                )}
-              </TableCell>
-              <TableCell className="truncate text-center text-sm">
-                {item.unit_name ?? (
-                  <span className="text-muted-foreground">—</span>
-                )}
-              </TableCell>
-              <TableCell className="text-center">
-                <Price value={item.price} />
-              </TableCell>
-              <TableCell className="text-center">
-                <StockCell value={item.stock} threshold={threshold} />
-              </TableCell>
-            </TableRow>
-          ))}
+                      {item.sub_group_name ? (
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {item.sub_group_name}
+                        </span>
+                      ) : null}
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+                <TableCell className="truncate text-center text-sm">
+                  {item.unit_name ?? (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-center">
+                  <Price value={item.price} />
+                </TableCell>
+                <TableCell className="text-center">
+                  <StockCell value={item.stock} threshold={threshold} />
+                </TableCell>
+              </TableRow>
+            )
+          })}
         </TableBody>
       </Table>
       <TablePagination

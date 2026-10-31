@@ -34,7 +34,7 @@ def list_products(
     in_stock: bool | None = Query(default=None),
     sort: Literal["newest", "cheapest", "most_expensive"] = Query(default="newest"),
     page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=100),
+    page_size: int = Query(default=0, ge=0, le=100000),
     _admin: Admin = Depends(require_admin),  # noqa: B008
     session: Session = Depends(get_db),  # noqa: B008
 ) -> ProductPage:
@@ -51,11 +51,12 @@ def list_products(
         page=page,
         page_size=page_size,
     )
+    response_page_size = page_size if page_size > 0 else (total if total > 0 else 1)
     return ProductPage(
         items=[ProductOut.model_validate(p) for p in items],
         total=total,
         page=page,
-        page_size=page_size,
+        page_size=response_page_size,
     )
 
 

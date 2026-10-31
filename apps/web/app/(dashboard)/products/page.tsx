@@ -220,6 +220,18 @@ export default function ProductsPage() {
   const totalPages = page
     ? Math.max(1, Math.ceil(page.total / page.page_size))
     : 1
+  const changePage = useCallback(
+    (nextPage: number) =>
+      setPageNum(Math.min(Math.max(1, nextPage), totalPages)),
+    [totalPages]
+  )
+  const changePageSize = useCallback(
+    (size: number) => {
+      setPageSize(size)
+      resetPage()
+    },
+    [resetPage]
+  )
   const hasFilters =
     debouncedQ !== "" ||
     topGroup !== null ||
@@ -313,17 +325,13 @@ export default function ProductsPage() {
           showPageSize={!isMobile}
           hasFilters={hasFilters}
           onSelect={setSelected}
-          onPageChange={(p) => setPageNum(Math.min(Math.max(1, p), totalPages))}
-          onPageSize={(n) => {
-            setPageSize(n)
-            resetPage()
-          }}
+          onPageChange={changePage}
+          onPageSize={changePageSize}
         />
       )}
 
       <ProductDetailDialog
         selected={selected}
-        threshold={threshold}
         onClose={() => setSelected(null)}
       />
     </>

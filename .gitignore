@@ -1,31 +1,21 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 # چهارسوق (Charsooq): Persian RTL-first admin monorepo.
 
-# ─── RUNTIME / BUILD OUTPUT ───────────────────────────────────
+# ─── RUNTIME / SESSION STATE ──────────────────────────────
 .next/
 out/
 .turbo
 *.tsbuildinfo
 next-env.d.ts
 .vercel
-build
-dist
 
-# ─── DEPENDENCIES ─────────────────────────────────────────────
-node_modules
-.pnp
-.pnp.*
-.venv/
-venv/
-
-# ─── LOGS ─────────────────────────────────────────────────────
+# ─── LOGS / HISTORY / TELEMETRY ───────────────────────────
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# ─── TESTS / COVERAGE / TOOL CACHES ───────────────────────────
+# ─── CACHE / DOWNLOADED ARTIFACTS ─────────────────────────
 coverage
 .coverage
 playwright-report/
@@ -37,24 +27,39 @@ __pycache__/
 .mypy_cache/
 .pyright/
 
-# ─── SECRETS / CREDENTIALS ────────────────────────────────────
-# Only .env.example is tracked. Real values stay local.
-.env
-.env.*
-!.env.example
-*.pem
-*.key
+# ─── BUILD / DIST ─────────────────────────────────────────
+build
+dist
 
-# ─── LOCAL DATA / BACKUPS ─────────────────────────────────────
+# ─── DEPENDENCIES ─────────────────────────────────────────
+node_modules
+.pnp
+.pnp.*
+.venv/
+venv/
+
+# ─── LOCAL DATA ───────────────────────────────────────────
 data/
+
+# ─── BACKUPS ──────────────────────────────────────────────
 *.bak
 *.orig
 *~
 
-# ─── OS / EDITOR ──────────────────────────────────────────────
+# ─── SECRETS / CREDENTIALS / TOKENS ───────────────────────
+# Only .env.example is tracked. Real values stay local.
+.env
+.env.*
+*.pem
+*.key
+
+# ─── OS / EDITOR CLUTTER ──────────────────────────────────
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/*
-!.vscode/extensions.json
 TODO.md
+
+# ─── ! ────────────────────────────────────────────────────
+!.env.example
+!.vscode/extensions.json

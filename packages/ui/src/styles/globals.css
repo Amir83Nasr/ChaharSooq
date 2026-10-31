@@ -165,6 +165,10 @@
   background-size: 48px 48px;
 }
 
+[data-slot="sidebar-inset"] {
+  background-attachment: fixed;
+}
+
 @media (max-width: 767px) {
   button:not(.h-10):not(.h-11):not(.min-h-11):not(.size-10):not(.size-11),
   a[data-slot="button"]:not(.h-10):not(.h-11):not(.min-h-11):not(

@@ -1,3 +1,4 @@
+import { memo } from "react"
 import {
   Table,
   TableBody,
@@ -146,7 +147,7 @@ export function ProductTableSkeleton() {
   )
 }
 
-export function ProductsTable(props: TableProps) {
+export const ProductsTable = memo(function ProductsTable(props: TableProps) {
   const {
     page,
     threshold,
@@ -304,7 +305,7 @@ export function ProductsTable(props: TableProps) {
       </TablePagination>
     </div>
   )
-}
+})
 
 interface TableErrorProps {
   message: string

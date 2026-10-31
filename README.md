@@ -12,7 +12,7 @@ See [docs/architecture/overview.md](docs/architecture/overview.md) for architect
 
 ## Requirements
 
-- Node.js >= 20.9, pnpm 11
+- Node.js 22, pnpm 11
 - Python >= 3.12, uv
 - Docker (dev postgres) or local PostgreSQL
 

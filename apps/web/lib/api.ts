@@ -164,8 +164,8 @@ function toApiError(status: number, body: ApiError | null): ApiRequestError {
   return new ApiRequestError(
     status,
     toPersianDigits(message),
-    body?.error.code,
-    body?.error.details
+    body?.error?.code,
+    body?.error?.details
   )
 }
 

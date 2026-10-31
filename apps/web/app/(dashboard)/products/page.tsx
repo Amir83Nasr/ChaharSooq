@@ -44,7 +44,7 @@ export default function ProductsPage() {
   const [pageSize, setPageSize] = useState(0)
   const [q, setQ] = useState("")
   const [debouncedQ, setDebouncedQ] = useState("")
-  const [categoryId, setCategoryId] = useState<number | null>(null)
+  const [topGroup, setTopGroup] = useState<string | null>(null)
   const [sort, setSort] = useState<ProductSort>("newest")
   const [stock, setStock] = useState<StockFilter>("all")
   const [minPrice, setMinPrice] = useState("")
@@ -171,7 +171,7 @@ export default function ProductsPage() {
     api
       .products({
         q: debouncedQ || undefined,
-        category_id: categoryId ?? undefined,
+        top_group: topGroup ?? undefined,
         min_price: Number.isFinite(min) ? min : undefined,
         max_price: Number.isFinite(max) ? max : undefined,
         ...stockParams,
@@ -208,7 +208,7 @@ export default function ProductsPage() {
     pageNum,
     effectivePageSize,
     debouncedQ,
-    categoryId,
+    topGroup,
     sort,
     stock,
     threshold,
@@ -222,7 +222,7 @@ export default function ProductsPage() {
     : 1
   const hasFilters =
     debouncedQ !== "" ||
-    categoryId !== null ||
+    topGroup !== null ||
     stock !== "all" ||
     minPrice.trim() !== "" ||
     maxPrice.trim() !== ""
@@ -230,7 +230,7 @@ export default function ProductsPage() {
   function clearFilters() {
     setQ("")
     setDebouncedQ("")
-    setCategoryId(null)
+    setTopGroup(null)
     setSort("newest")
     setStock("all")
     setMinPrice("")
@@ -268,8 +268,7 @@ export default function ProductsPage() {
 
       <ProductsToolbar
         q={q}
-        categoryId={categoryId}
-        categories={categories}
+        topGroup={topGroup}
         sort={sort}
         stock={stock}
         minPrice={minPrice}
@@ -279,8 +278,8 @@ export default function ProductsPage() {
           setQ(v)
           resetPage()
         }}
-        onCategory={(v) => {
-          setCategoryId(v)
+        onTopGroup={(v) => {
+          setTopGroup(v)
           resetPage()
         }}
         onSort={(v) => {

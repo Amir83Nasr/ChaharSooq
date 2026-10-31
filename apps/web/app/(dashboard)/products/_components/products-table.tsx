@@ -38,7 +38,35 @@ interface TableProps {
   onPageSize: (n: number) => void
 }
 
-const COLUMN_COUNT = 7
+const COLUMN_COUNT = 11
+
+// Top-level groups for the catalog display: carpet, furniture, home appliances.
+function topGroupOf(name: string | null): string | null {
+  if (!name) return null
+  const n = name.trim()
+  if (n.startsWith("فرش")) return "فرش"
+  if (n.startsWith("مبلمان")) return "مبلمان"
+  return "لوازم خانگی"
+}
+
+// Brand is the remainder of the main group name after the top-level prefix.
+function brandOf(name: string | null, top: string | null): string | null {
+  if (!name) return null
+  const n = name.trim()
+  if (top === "فرش") {
+    const rest = n.replace(/^فرش\s*/, "").trim()
+    return rest || null
+  }
+  if (top === "مبلمان") {
+    const rest = n.replace(/^مبلمان\s*/, "").trim()
+    return rest || null
+  }
+  if (top === "لوازم خانگی") {
+    const rest = n.replace(/^لوازم\s+خان[گک]ی\s*/, "").trim()
+    return rest || n
+  }
+  return n
+}
 
 // Shared by the data, skeleton and error rows so the column layout never shifts.
 function ProductsTableHead() {
@@ -48,9 +76,13 @@ function ProductsTableHead() {
         <col className="w-12" />
         <col className="w-56" />
         <col className="w-32" />
-        <col className="w-52" />
+        <col className="w-24" />
+        <col className="w-40" />
         <col className="w-20" />
         <col className="w-28" />
+        <col className="w-28" />
+        <col className="w-20" />
+        <col className="w-24" />
         <col className="w-24" />
       </colgroup>
       <TableHeader>
@@ -62,12 +94,22 @@ function ProductsTableHead() {
           <TableHead scope="col" className="text-center">
             کد
           </TableHead>
-          <TableHead scope="col">گروه کالا</TableHead>
+          <TableHead scope="col">دسته‌بندی</TableHead>
+          <TableHead scope="col">برند</TableHead>
           <TableHead scope="col" className="text-center">
             واحد
           </TableHead>
           <TableHead scope="col" className="text-center">
             قیمت
+          </TableHead>
+          <TableHead scope="col" className="text-center">
+            قیمت رقبا
+          </TableHead>
+          <TableHead scope="col" className="text-center">
+            اختلاف درصد
+          </TableHead>
+          <TableHead scope="col" className="text-center">
+            تغییرات قیمت
           </TableHead>
           <TableHead scope="col" className="text-center">
             موجودی
@@ -87,8 +129,7 @@ export function ProductTableSkeleton() {
           {Array.from({ length: 5 }).map((_, i) => (
             <TableRow key={i}>
               {Array.from({ length: COLUMN_COUNT }).map((_, j) => {
-                // Matches the data rows: row number, name and group start? row number centres.
-                const centered = j === 0 || j === 2 || j >= 4
+                const centered = j === 0 || j === 2 || j >= 5
                 return (
                   <TableCell key={j} className={centered ? "text-center" : ""}>
                     <Skeleton
@@ -146,6 +187,7 @@ export function ProductsTable(props: TableProps) {
                 : 0) +
               i +
               1
+            const top = topGroupOf(item.main_group_name)
             return (
               <TableRow
                 key={item.id}
@@ -173,11 +215,14 @@ export function ProductsTable(props: TableProps) {
                     {item.sku}
                   </span>
                 </TableCell>
+                <TableCell className="text-center text-sm font-medium">
+                  {top ?? <span className="text-muted-foreground">—</span>}
+                </TableCell>
                 <TableCell className="whitespace-normal">
-                  {item.main_group_name ? (
+                  {brandOf(item.main_group_name, top) ? (
                     <>
                       <span className="block truncate text-sm">
-                        {item.main_group_name}
+                        {brandOf(item.main_group_name, top)}
                       </span>
                       {item.sub_group_name ? (
                         <span className="block truncate text-xs text-muted-foreground">
@@ -196,6 +241,15 @@ export function ProductsTable(props: TableProps) {
                 </TableCell>
                 <TableCell className="text-center">
                   <Price value={item.price} />
+                </TableCell>
+                <TableCell className="text-center text-muted-foreground">
+                  —
+                </TableCell>
+                <TableCell className="text-center text-muted-foreground">
+                  —
+                </TableCell>
+                <TableCell className="text-center text-muted-foreground">
+                  —
                 </TableCell>
                 <TableCell className="text-center">
                   <StockCell value={item.stock} threshold={threshold} />

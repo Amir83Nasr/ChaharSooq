@@ -129,6 +129,7 @@ export interface SettingsUpdate {
 export interface ProductFilters {
   q?: string
   category_id?: number
+  top_group?: string
   main_group?: string
   min_price?: number
   max_price?: number
@@ -195,6 +196,7 @@ export const api = {
     if (params.q) search.set("q", params.q)
     if (params.category_id)
       search.set("category_id", String(params.category_id))
+    if (params.top_group) search.set("top_group", params.top_group)
     if (params.main_group) search.set("main_group", params.main_group)
     if (params.min_price !== undefined)
       search.set("min_price", String(params.min_price))

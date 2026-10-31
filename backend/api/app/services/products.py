@@ -25,6 +25,7 @@ class ProductService:
         *,
         query: str,
         category_id: int | None,
+        top_group: str | None,
         main_group: str | None,
         min_price: int | None,
         max_price: int | None,
@@ -45,6 +46,7 @@ class ProductService:
         return self._repos.list(
             query=query.strip(),
             category_id=category_id,
+            top_group=(top_group or "").strip() or None,
             main_group=(main_group or "").strip() or None,
             min_price=min_price,
             max_price=max_price,

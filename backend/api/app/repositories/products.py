@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from sqlalchemy import ColumnElement, delete, func, or_, select
+from sqlalchemy import ColumnElement, delete, func, not_, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models import Product
@@ -80,6 +80,7 @@ class ProductRepository:
         *,
         query: str,
         category_id: int | None,
+        top_group: str | None,
         main_group: str | None,
         min_price: int | None,
         max_price: int | None,
@@ -107,6 +108,15 @@ class ProductRepository:
             criteria.append(Product.category_id == category_id)
         if main_group:
             criteria.append(Product.main_group_name == main_group)
+        if top_group:
+            if top_group == "فرش":
+                criteria.append(Product.main_group_name.ilike("فرش%"))
+            elif top_group == "مبلمان":
+                criteria.append(Product.main_group_name.ilike("مبلمان%"))
+            elif top_group == "لوازم خانگی":
+                criteria.append(Product.main_group_name.is_not(None))
+                criteria.append(not_(Product.main_group_name.ilike("فرش%")))
+                criteria.append(not_(Product.main_group_name.ilike("مبلمان%")))
         if min_price is not None:
             criteria.append(Product.price >= min_price)
         if max_price is not None:

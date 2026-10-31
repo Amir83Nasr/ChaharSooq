@@ -14,7 +14,7 @@ import {
   parsePriceFilterInput,
 } from "@workspace/ui/lib/number"
 import { DataTableToolbar, SearchInput } from "@/components/data-table-toolbar"
-import type { CategoryOut, ProductSort } from "@/lib/api"
+import type { ProductSort } from "@/lib/api"
 
 export type StockFilter = "all" | "in" | "out" | "low"
 
@@ -33,15 +33,14 @@ export const STOCK_FILTER_LABELS: Record<StockFilter, string> = {
 
 interface ToolbarProps {
   q: string
-  categoryId: number | null
-  categories: CategoryOut[]
+  topGroup: string | null
   sort: ProductSort
   stock: StockFilter
   minPrice: string
   maxPrice: string
   hasFilters: boolean
   onQ: (v: string) => void
-  onCategory: (v: number | null) => void
+  onTopGroup: (v: string | null) => void
   onSort: (v: ProductSort) => void
   onStock: (v: StockFilter) => void
   onMinPrice: (v: string) => void
@@ -52,15 +51,14 @@ interface ToolbarProps {
 export function ProductsToolbar(props: ToolbarProps) {
   const {
     q,
-    categoryId,
-    categories,
+    topGroup,
     sort,
     stock,
     minPrice,
     maxPrice,
     hasFilters,
     onQ,
-    onCategory,
+    onTopGroup,
     onSort,
     onStock,
     onMinPrice,
@@ -76,16 +74,13 @@ export function ProductsToolbar(props: ToolbarProps) {
         aria-label="جست‌وجو در محصولات"
       />
       <Select
-        value={categoryId === null ? "all" : String(categoryId)}
-        onValueChange={(v) => onCategory(v === "all" ? null : Number(v))}
+        value={topGroup === null ? "all" : topGroup}
+        onValueChange={(v) => onTopGroup(v === "all" ? null : v)}
       >
         <SelectTrigger className="w-full sm:w-44" aria-label="فیلتر دسته‌بندی">
           <SelectValue>
             {(value: string | null) =>
-              value === null || value === "all"
-                ? "همه دسته‌بندی‌ها"
-                : (categories.find((c) => String(c.id) === value)?.name ??
-                  "همه دسته‌بندی‌ها")
+              value === null || value === "all" ? "همه دسته‌بندی‌ها" : value
             }
           </SelectValue>
         </SelectTrigger>
@@ -93,11 +88,9 @@ export function ProductsToolbar(props: ToolbarProps) {
           <SelectGroup>
             <SelectLabel>دسته‌بندی</SelectLabel>
             <SelectItem value="all">همه دسته‌بندی‌ها</SelectItem>
-            {categories.map((c) => (
-              <SelectItem key={c.id} value={String(c.id)}>
-                {c.name}
-              </SelectItem>
-            ))}
+            <SelectItem value="فرش">فرش</SelectItem>
+            <SelectItem value="مبلمان">مبلمان</SelectItem>
+            <SelectItem value="لوازم خانگی">لوازم خانگی</SelectItem>
           </SelectGroup>
         </SelectContent>
       </Select>

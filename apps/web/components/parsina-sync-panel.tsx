@@ -5,9 +5,7 @@ import { RefreshCw } from "lucide-react"
 
 import { Button } from "@workspace/ui/components/button"
 import { PersianDateTime } from "@workspace/ui/components/persian-date"
-import { PersianNumber } from "@workspace/ui/components/persian-number"
 import { api, ApiRequestError, type SyncStatus } from "@/lib/api"
-import { syncSummaryMessage } from "@/lib/parsina"
 
 /** Poll while a run is active (fast) and when idle (catches the 15-min job). */
 const RUNNING_POLL_MS = 2_000
@@ -24,7 +22,6 @@ interface Props {
 export function ParsinaSyncPanel({ onSynced, onUnauthorized }: Props) {
   const [status, setStatus] = useState<SyncStatus | null>(null)
   const [triggering, setTriggering] = useState(false)
-  const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const lastSuccess = useRef<string | null>(null)
@@ -67,11 +64,12 @@ export function ParsinaSyncPanel({ onSynced, onUnauthorized }: Props) {
         pollsRef.current = data.running ? pollsRef.current + 1 : 0
         delay = data.running ? RUNNING_POLL_MS : IDLE_POLL_MS
         setStatus(data)
+        // Re-fetch the catalog whenever a run finishes (success or failure) so
+        // manual and scheduled updates land without a full page reload.
         if (
           lastSuccess.current !== null &&
           data.last_success_at !== lastSuccess.current
         ) {
-          setMessage(syncSummaryMessage(data))
           onSyncedRef.current()
         }
         lastSuccess.current = data.last_success_at
@@ -109,16 +107,15 @@ export function ParsinaSyncPanel({ onSynced, onUnauthorized }: Props) {
     if (triggeringRef.current) return
     triggeringRef.current = true
     setTriggering(true)
-    setMessage(null)
     setError(null)
     try {
-      const run = await api.parsinaSync()
-      if (run.message) setMessage(run.message)
+      await api.parsinaSync()
       // 409 = another run (manual or scheduled) owns the lock; the poller
       // already shows it as running, nothing extra to start.
     } catch (err: unknown) {
       if (err instanceof ApiRequestError && err.status === 409) {
-        setMessage(err.message)
+        // Another run is already in progress; no extra text needed — the
+        // status line already reflects the running state.
       } else {
         handle(err)
       }
@@ -133,11 +130,6 @@ export function ParsinaSyncPanel({ onSynced, onUnauthorized }: Props) {
   const running = triggering || status?.running === true
   const notConfigured = status !== null && !status.configured
   const disabled = running || notConfigured
-  // Latest finished run failed (and nothing newer succeeded).
-  const lastRunFailed =
-    !!status?.last_error &&
-    (!status.last_success_at ||
-      status.last_attempt_at !== status.last_success_at)
 
   return (
     <div className="flex flex-col items-stretch gap-2 sm:items-end">
@@ -167,53 +159,16 @@ export function ParsinaSyncPanel({ onSynced, onUnauthorized }: Props) {
           </span>
         ) : status?.last_success_at ? (
           <span>
-            آخرین به‌روزرسانی موفق:{" "}
+            آخرین به‌روزرسانی:{" "}
             <PersianDateTime value={status.last_success_at} />
           </span>
         ) : (
           <span>هنوز به‌روزرسانی موفقی انجام نشده است.</span>
         )}
       </div>
-      {status?.last_attempt_at &&
-      status.last_attempt_at !== status.last_success_at ? (
-        <p className="text-xs text-muted-foreground">
-          آخرین تلاش: <PersianDateTime value={status.last_attempt_at} />
-        </p>
-      ) : null}
-      {message ? (
-        <p
-          role="status"
-          className="text-xs text-emerald-700 dark:text-emerald-300"
-        >
-          {message}
-        </p>
-      ) : null}
       {error ? (
         <p role="alert" className="max-w-sm text-xs text-destructive">
           {error}
-        </p>
-      ) : null}
-      {lastRunFailed && !error ? (
-        <p role="alert" className="max-w-sm text-xs text-destructive">
-          آخرین به‌روزرسانی ناموفق بود: {status.last_error} — اطلاعات قبلی حفظ
-          شده است.
-        </p>
-      ) : null}
-      {status?.source === "csv" ? (
-        <p className="text-xs text-muted-foreground">
-          منبع داده: فایل CSV محیط توسعه
-        </p>
-      ) : null}
-      {status?.last_success_at ? (
-        <p className="text-xs text-muted-foreground">
-          <PersianNumber value={status.last_processed} /> کالا در آخرین
-          {status.source === "csv" ? " بارگذاری" : " همگام‌سازی"}
-          {status.source === "csv" ? null : (
-            <>
-              {" · "}
-              هر <PersianNumber value={status.interval_minutes} /> دقیقه
-            </>
-          )}
         </p>
       ) : null}
     </div>

@@ -39,7 +39,7 @@ class ProductService:
         if page_size <= 0:
             page_size = 0
         else:
-            page_size = min(max(page_size, 1), 100)
+            page_size = min(max(page_size, 1), 500)
         if min_price is not None and max_price is not None and min_price > max_price:
             min_price, max_price = max_price, min_price
         return self._repos.list(

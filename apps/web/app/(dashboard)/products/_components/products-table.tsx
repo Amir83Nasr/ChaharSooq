@@ -219,9 +219,13 @@ export function ProductsTable(props: TableProps) {
               <SelectValue>
                 {(value: string | null) =>
                   value ? (
-                    <span>
-                      <PersianNumber value={Number(value)} /> محصول در صفحه
-                    </span>
+                    Number(value) === 0 ? (
+                      <span>نمایش همه محصولات</span>
+                    ) : (
+                      <span>
+                        <PersianNumber value={Number(value)} /> محصول در صفحه
+                      </span>
+                    )
                   ) : (
                     "تعداد محصول در صفحه"
                   )
@@ -231,7 +235,13 @@ export function ProductsTable(props: TableProps) {
             <SelectContent align="end">
               {PAGE_SIZE_OPTIONS.map((n) => (
                 <SelectItem key={n} value={String(n)}>
-                  <PersianNumber value={n} /> محصول در صفحه
+                  {n === 0 ? (
+                    <span>نمایش همه محصولات</span>
+                  ) : (
+                    <>
+                      <PersianNumber value={n} /> محصول در صفحه
+                    </>
+                  )}
                 </SelectItem>
               ))}
             </SelectContent>

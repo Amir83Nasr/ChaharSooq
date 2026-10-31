@@ -8,7 +8,7 @@ import { cn } from "@workspace/ui/lib/utils"
 
 import { api } from "@/lib/api"
 
-export const PAGE_SIZE_OPTIONS = [0, 10, 20, 50] as const
+export const PAGE_SIZE_OPTIONS = [0, 10, 100, 500] as const
 
 export function PageSizeSettings() {
   const [value, setValue] = useState<number | null>(null)
@@ -87,7 +87,7 @@ export function PageSizeSettings() {
               className={cn("h-10")}
             >
               {n === 0 ? (
-                <span>همه</span>
+                <span>نمایش همه محصولات</span>
               ) : (
                 <>
                   <PersianNumber value={n} />

@@ -112,8 +112,8 @@ export default function ProductsPage() {
         if (
           data.default_page_size === 0 ||
           data.default_page_size === 10 ||
-          data.default_page_size === 20 ||
-          data.default_page_size === 50
+          data.default_page_size === 100 ||
+          data.default_page_size === 500
         ) {
           setPageSize(data.default_page_size)
         }

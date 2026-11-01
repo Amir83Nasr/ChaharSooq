@@ -69,7 +69,6 @@ const NAV = [
       { href: "/reports", label: "گزارش فروش", icon: BarChart3, soon: true },
     ],
   },
-  // ponytail: لینک‌نما با soon؛ صفحه/ API واقعی هنگام اتصال سوفا، دیجی‌فرش، دیجی‌کالا و تکنولایف.
   {
     group: "یکپارچه‌سازی",
     items: [
@@ -77,25 +76,21 @@ const NAV = [
         href: "/integrations/sofa",
         label: "اتصال سوفا",
         icon: Sofa,
-        soon: true,
       },
       {
         href: "/integrations/digifresh",
         label: "اتصال دیجی‌فرش",
         icon: ShoppingBag,
-        soon: true,
       },
       {
         href: "/integrations/digikala",
         label: "اتصال دیجی‌کالا",
         icon: Store,
-        soon: true,
       },
       {
         href: "/integrations/technolife",
         label: "اتصال تکنولایف",
         icon: Laptop,
-        soon: true,
       },
     ],
   },

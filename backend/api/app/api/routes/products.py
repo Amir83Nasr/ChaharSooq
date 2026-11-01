@@ -18,6 +18,7 @@ from app.services import (
     InvalidCategoryError,
     ProductService,
 )
+from app.services.competitor import CompetitorService
 
 router = APIRouter()
 
@@ -30,6 +31,9 @@ def list_products(
     main_group: str | None = Query(default=None, max_length=200),
     min_price: int | None = Query(default=None, ge=0),
     max_price: int | None = Query(default=None, ge=0),
+    competitor_store: Literal["digikala", "technolife", "other"] | None = Query(default=None),
+    min_competitor_price: int | None = Query(default=None, ge=0),
+    max_competitor_price: int | None = Query(default=None, ge=0),
     min_stock: int | None = Query(default=None, ge=0),
     max_stock: int | None = Query(default=None, ge=0),
     in_stock: bool | None = Query(default=None),
@@ -46,6 +50,9 @@ def list_products(
         main_group=main_group,
         min_price=min_price,
         max_price=max_price,
+        competitor_store=competitor_store,
+        min_competitor_price=min_competitor_price,
+        max_competitor_price=max_competitor_price,
         min_stock=min_stock,
         max_stock=max_stock,
         in_stock=in_stock,
@@ -54,8 +61,14 @@ def list_products(
         page_size=page_size,
     )
     response_page_size = page_size if page_size > 0 else (total if total > 0 else 1)
+    competitor_prices = CompetitorService(session).prices_for_products({p.id for p in items})
     return ProductPage(
-        items=[ProductOut.model_validate(p) for p in items],
+        items=[
+            ProductOut.model_validate(p).model_copy(
+                update={"competitor_prices": competitor_prices.get(p.id, [])}
+            )
+            for p in items
+        ],
         total=total,
         page=page,
         page_size=response_page_size,

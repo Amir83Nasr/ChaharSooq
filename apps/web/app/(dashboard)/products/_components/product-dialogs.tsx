@@ -8,6 +8,7 @@ import {
 import { Price } from "@workspace/ui/components/price"
 import { PersianNumber } from "@workspace/ui/components/persian-number"
 import type { ProductOut } from "@/lib/api"
+import { ProductCompetitorPrices } from "./product-competitor-prices"
 
 export function ProductDetailDialog(props: {
   selected: ProductOut | null
@@ -21,7 +22,10 @@ export function ProductDetailDialog(props: {
         if (!open) onClose()
       }}
     >
-      <ResponsiveDialogContent aria-label="جزئیات کالا">
+      <ResponsiveDialogContent
+        aria-label="جزئیات کالا"
+        className="max-h-[90dvh] max-w-3xl overflow-y-auto"
+      >
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>{selected?.name ?? ""}</ResponsiveDialogTitle>
           <ResponsiveDialogDescription>
@@ -29,7 +33,7 @@ export function ProductDetailDialog(props: {
           </ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
         {selected ? (
-          <>
+          <div className="min-h-0 space-y-4 overflow-y-auto">
             <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <div className="rounded-md border border-border px-3 py-2">
                 <dt className="text-xs text-muted-foreground">موجودی</dt>
@@ -44,14 +48,11 @@ export function ProductDetailDialog(props: {
                 </dd>
               </div>
             </dl>
-            <section className="rounded-lg border border-dashed border-border bg-muted/30 px-4 py-6 text-center">
-              <h3 className="text-sm font-semibold">تنظیمات اتصال</h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                این بخش در حال توسعه است و تنظیمات اتصال در فاز بعدی به آن اضافه
-                می‌شود.
-              </p>
-            </section>
-          </>
+            {!selected.main_group_name?.startsWith("فرش") &&
+            !selected.main_group_name?.startsWith("مبلمان") ? (
+              <ProductCompetitorPrices productId={selected.id} />
+            ) : null}
+          </div>
         ) : null}
       </ResponsiveDialogContent>
     </ResponsiveDialog>

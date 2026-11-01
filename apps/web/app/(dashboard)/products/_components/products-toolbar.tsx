@@ -14,7 +14,7 @@ import {
   parsePriceFilterInput,
 } from "@workspace/ui/lib/number"
 import { DataTableToolbar, SearchInput } from "@/components/data-table-toolbar"
-import type { ProductSort } from "@/lib/api"
+import type { CompetitorStore, ProductSort } from "@/lib/api"
 
 export type StockFilter = "all" | "in" | "out" | "low"
 
@@ -38,6 +38,7 @@ interface ToolbarProps {
   stock: StockFilter
   minPrice: string
   maxPrice: string
+  competitorStore: CompetitorStore | null
   hasFilters: boolean
   onQ: (v: string) => void
   onTopGroup: (v: string | null) => void
@@ -45,6 +46,7 @@ interface ToolbarProps {
   onStock: (v: StockFilter) => void
   onMinPrice: (v: string) => void
   onMaxPrice: (v: string) => void
+  onCompetitorStore: (v: CompetitorStore | null) => void
   onClear: () => void
 }
 
@@ -56,6 +58,7 @@ export function ProductsToolbar(props: ToolbarProps) {
     stock,
     minPrice,
     maxPrice,
+    competitorStore,
     hasFilters,
     onQ,
     onTopGroup,
@@ -63,6 +66,7 @@ export function ProductsToolbar(props: ToolbarProps) {
     onStock,
     onMinPrice,
     onMaxPrice,
+    onCompetitorStore,
     onClear,
   } = props
   return (
@@ -147,6 +151,33 @@ export function ProductsToolbar(props: ToolbarProps) {
           </span>
         ) : null}
       </div>
+      <Select
+        value={competitorStore ?? "all"}
+        onValueChange={(value) =>
+          onCompetitorStore(value === "all" ? null : (value as CompetitorStore))
+        }
+      >
+        <SelectTrigger className="w-full sm:w-44" aria-label="فروشگاه رقیب">
+          <SelectValue>
+            {competitorStore === "digikala"
+              ? "دیجی‌کالا"
+              : competitorStore === "technolife"
+                ? "تکنولایف"
+                : competitorStore === "other"
+                  ? "سایر فروشگاه‌ها"
+                  : "همه فروشگاه‌ها"}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent align="start">
+          <SelectGroup>
+            <SelectLabel>قیمت رقبا</SelectLabel>
+            <SelectItem value="all">همه فروشگاه‌ها</SelectItem>
+            <SelectItem value="digikala">دیجی‌کالا</SelectItem>
+            <SelectItem value="technolife">تکنولایف</SelectItem>
+            <SelectItem value="other">سایر فروشگاه‌ها</SelectItem>
+          </SelectGroup>
+        </SelectContent>
+      </Select>
       <div className="relative w-full sm:w-40">
         <Input
           value={maxPrice === "" ? "" : formatPersianNumber(maxPrice)}

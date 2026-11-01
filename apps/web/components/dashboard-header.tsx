@@ -23,6 +23,11 @@ const breadcrumbLabels: Record<string, string> = {
   products: "محصولات",
   reports: "گزارش‌ها",
   settings: "تنظیمات",
+  integrations: "یکپارچه‌سازی",
+  sofa: "سوفا",
+  digifresh: "دیجی‌فرش",
+  digikala: "دیجی‌کالا",
+  technolife: "تکنولایف",
 }
 
 export function DashboardHeader() {
@@ -40,7 +45,7 @@ export function DashboardHeader() {
         <span className="me-2 hidden shrink-0 items-center min-[420px]:flex">
           <Separator orientation="vertical" className="h-4" />
         </span>
-        <Breadcrumb className="min-w-0">
+        <Breadcrumb dir="rtl" className="min-w-0">
           <BreadcrumbList className="flex-nowrap [&_a]:truncate [&_span]:truncate [&>li]:min-w-0">
             {crumbs.map((crumb, i) => (
               <Fragment key={crumb.href}>

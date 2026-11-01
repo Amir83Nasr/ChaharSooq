@@ -97,6 +97,10 @@ Products mirror an external catalog (`external_id` = Parsina `goodId`), and the 
 
 Both paths share one validation/apply routine and one DB lock, so runs never overlap. Manual runs return `202` and the UI polls `GET /integrations/parsina/status` until the run finishes, then re-fetches the table in place. A failed or partial fetch never overwrites the last successful data; rows missing from a complete listing are deactivated, never deleted.
 
+## Competitor prices
+
+Competitor links and observations are stored separately from the Parsina catalog. In product details, admins can add Digikala, Technolife, or another public product URL; run a check; save a manual price/stock correction; disable the link; or delete it. Automatic extraction is limited to Digikala and Technolife public product pages, uses JSON-LD product offers only, checks each host's `robots.txt`, validates redirects and public DNS, and stops for six hours after a `403` or `429`. Unknown stores remain manual-only. Prices expire after 24 hours by default and stale values are excluded from the table and competitor-price filters. Configure `COMPETITOR_REQUEST_INTERVAL_SECONDS` (default 5) and `COMPETITOR_PRICE_TTL_HOURS` (default 24) in `backend/api/.env.local`.
+
 ## Database setup
 
 ```bash

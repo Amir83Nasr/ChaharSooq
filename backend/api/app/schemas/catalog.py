@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.competitor import CompetitorPriceOut
+
 
 class CategoryIn(BaseModel):
     name: str = Field(min_length=1, max_length=120)
@@ -41,6 +43,7 @@ class ProductOut(BaseModel):
     is_active: bool = True
     category: CategoryOut | None = None
     synced_at: datetime | None = None
+    competitor_prices: list[CompetitorPriceOut] = Field(default_factory=list)
     created_at: datetime
 
     model_config = {"from_attributes": True}

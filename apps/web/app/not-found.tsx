@@ -10,7 +10,9 @@ export default function NotFound() {
         title="صفحه یافت نشد"
         hint="نشانی وارد شده معتبر نیست."
         action={
-          <Button render={<Link href="/products" />}>بازگشت به محصولات</Button>
+          <Button nativeButton={false} render={<Link href="/products" />}>
+            بازگشت به محصولات
+          </Button>
         }
       />
     </div>

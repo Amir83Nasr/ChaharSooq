@@ -13,6 +13,7 @@ from app.schemas.catalog import (
 )
 from app.schemas.common import ErrorBody, ErrorEnvelope
 from app.schemas.settings import SettingsOut, SettingsUpdateIn
+from app.schemas.suggested_price import SuggestedPriceFormulaIn, SuggestedPriceFormulaOut
 
 __all__ = [
     "CategoryIn",
@@ -28,6 +29,8 @@ __all__ = [
     "ProductPage",
     "SettingsOut",
     "SettingsUpdateIn",
+    "SuggestedPriceFormulaIn",
+    "SuggestedPriceFormulaOut",
     "SyncRunOut",
     "SyncStatusOut",
 ]

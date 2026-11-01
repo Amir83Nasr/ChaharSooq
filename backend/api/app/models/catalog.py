@@ -2,12 +2,16 @@
 
 from datetime import datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 from app.models.base import utcnow
+
+if TYPE_CHECKING:
+    from app.models.competitor import CompetitorListing
 
 
 class Category(Base):
@@ -85,3 +89,6 @@ class Product(Base):
     )
 
     category: Mapped["Category | None"] = relationship(back_populates="products")
+    competitor_listings: Mapped[list["CompetitorListing"]] = relationship(
+        back_populates="product", cascade="all, delete-orphan"
+    )

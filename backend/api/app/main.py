@@ -32,6 +32,10 @@ _FIELD_LABELS: dict[str, str] = {
     "page": "صفحه",
     "page_size": "اندازه صفحه",
     "main_group": "گروه اصلی",
+    "product_id": "کالا",
+    "url": "لینک محصول",
+    "store": "فروشگاه",
+    "manual_price": "قیمت دستی",
 }
 
 

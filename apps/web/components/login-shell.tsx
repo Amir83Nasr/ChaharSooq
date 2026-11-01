@@ -7,7 +7,7 @@ import { ThemeToggle } from "@/components/theme-toggle"
 
 export function LoginShell() {
   return (
-    <div className="grid min-h-dvh lg:grid-cols-2">
+    <div className="bg-grid-pattern grid min-h-dvh lg:grid-cols-2">
       <div className="relative hidden overflow-hidden rounded-3xl bg-muted lg:m-4 lg:block">
         <Image
           src="/images/login.jpg"

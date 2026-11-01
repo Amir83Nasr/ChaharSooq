@@ -39,7 +39,11 @@ export default function RootError({
                 <RefreshCw className="size-4" />
                 تلاش مجدد
               </Button>
-              <Button variant="outline" render={<Link href="/products" />}>
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={<Link href="/products" />}
+              >
                 <Home className="size-4" />
                 بازگشت به خانه
               </Button>

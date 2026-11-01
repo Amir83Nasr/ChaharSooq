@@ -69,6 +69,30 @@ function brandOf(name: string | null, top: string | null): string | null {
   return n
 }
 
+function competitorSources(
+  top: string | null
+): { store: string; label: string }[] {
+  if (top === "فرش") return [{ store: "digifresh", label: "دیجی‌فرش" }]
+  if (top === "مبلمان") return [{ store: "sofa", label: "سوفا" }]
+  if (top === "لوازم خانگی") {
+    return [
+      { store: "digikala", label: "دیجی‌کالا" },
+      { store: "technolife", label: "تکنولایف" },
+    ]
+  }
+  return []
+}
+
+const COMPETITOR_STATUS_LABELS: Record<string, string> = {
+  pending: "در انتظار بررسی",
+  success: "قیمت تازه دریافت نشده",
+  not_found: "صفحه پیدا نشد",
+  unavailable: "نیازمند بررسی",
+  blocked: "دسترسی محدود شد",
+  failed: "دریافت ناموفق",
+  manual: "قیمت تازه ثبت نشده",
+}
+
 // Shared by the data, skeleton and error rows so the column layout never shifts.
 function ProductsTableHead() {
   return (
@@ -127,7 +151,7 @@ export function ProductTableSkeleton() {
       <Table className="min-w-212 table-fixed">
         <ProductsTableHead />
         <TableBody>
-          {Array.from({ length: 5 }).map((_, i) => (
+          {Array.from({ length: 10 }).map((_, i) => (
             <TableRow key={i}>
               {Array.from({ length: COLUMN_COUNT }).map((_, j) => {
                 const centered = j === 0 || j === 2 || j >= 5
@@ -189,6 +213,20 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
               i +
               1
             const top = topGroupOf(item.main_group_name)
+            const sources = [
+              ...competitorSources(top),
+              ...item.competitor_prices
+                .filter((price) => price.store === "other")
+                .map((price) => {
+                  let label = "سایر فروشگاه‌ها"
+                  try {
+                    label = new URL(price.url).hostname
+                  } catch {
+                    // Preserve a useful label if a saved URL cannot be parsed.
+                  }
+                  return { store: price.store, label }
+                }),
+            ]
             return (
               <TableRow
                 key={item.id}
@@ -243,8 +281,42 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                 <TableCell className="text-center">
                   <Price value={item.price} />
                 </TableCell>
-                <TableCell className="text-center text-muted-foreground">
-                  —
+                <TableCell className="text-center">
+                  <div className="space-y-1">
+                    {sources.map(({ store, label }) => {
+                      const competitor = item.competitor_prices.find(
+                        (price) => price.store === store
+                      )
+                      const amount =
+                        competitor?.price !== null &&
+                        competitor?.currency === "IRR"
+                          ? Math.round(competitor.price / 10)
+                          : competitor?.price
+                      return (
+                        <span key={store} className="block text-xs">
+                          <span className="text-muted-foreground">
+                            {label}:{" "}
+                          </span>
+                          {competitor?.is_fresh &&
+                          amount !== null &&
+                          amount !== undefined ? (
+                            <Price value={amount} />
+                          ) : (
+                            <span className="text-muted-foreground">
+                              {competitor
+                                ? (COMPETITOR_STATUS_LABELS[
+                                    competitor.status
+                                  ] ?? "نیازمند بررسی")
+                                : "لینک ثبت نشده"}
+                            </span>
+                          )}
+                        </span>
+                      )
+                    })}
+                    {sources.length === 0 ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : null}
+                  </div>
                 </TableCell>
                 <TableCell className="text-center text-muted-foreground">
                   —

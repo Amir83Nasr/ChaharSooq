@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_parsina_settings
-from app.models import Setting
+from app.models import Setting, SuggestedPriceFormula
 
 LOW_STOCK_THRESHOLD_KEY = "low_stock_threshold"
 DEFAULT_LOW_STOCK_THRESHOLD = 5
@@ -24,12 +25,41 @@ class SettingsService:
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def get_all(self) -> dict[str, int]:
+    def get_all(self) -> dict[str, object]:
         return {
             "low_stock_threshold": self.get_threshold(),
             "default_page_size": self.get_page_size(),
             "sync_interval_minutes": self.get_sync_interval(),
+            "suggested_price_formulas": self.get_suggested_price_formulas(),
         }
+
+    def get_suggested_price_formulas(self) -> list[dict[str, int | str]]:
+        rows = self._session.scalars(
+            select(SuggestedPriceFormula).order_by(SuggestedPriceFormula.category_id)
+        )
+        return [{"category_id": row.category_id, "expression": row.expression} for row in rows]
+
+    def update_suggested_price_formulas(
+        self, formulas: list[dict[str, int | str]]
+    ) -> list[dict[str, int | str]]:
+        existing = {
+            row.category_id: row
+            for row in self._session.scalars(select(SuggestedPriceFormula)).all()
+        }
+        submitted = {int(item["category_id"]): str(item["expression"]) for item in formulas}
+        for category_id, row in existing.items():
+            if category_id not in submitted:
+                self._session.delete(row)
+        for category_id, expression in submitted.items():
+            row = existing.get(category_id)
+            if row is None:
+                self._session.add(
+                    SuggestedPriceFormula(category_id=category_id, expression=expression)
+                )
+            else:
+                row.expression = expression
+        self._session.flush()
+        return self.get_suggested_price_formulas()
 
     def get_threshold(self) -> int:
         row = self._session.get(Setting, LOW_STOCK_THRESHOLD_KEY)

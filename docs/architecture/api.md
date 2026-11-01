@@ -12,8 +12,8 @@ Base: `/api/v1`. OpenAPI served by FastAPI (`/openapi.json`, `/docs`); committed
 | `POST /api/v1/products` | yes | create product (toman integer) → 201 |
 | `GET /api/v1/integrations/parsina/status` | yes | sync state: `configured`, `source` (`parsina` \| `csv`), `running`, `running_since`, `last_attempt_at`, `last_success_at`, `last_error`, last-run counters, `interval_minutes` |
 | `POST /api/v1/integrations/parsina/sync` | yes | starts a manual sync in the background → `202 {status: "running"}`; `409 conflict` when any run (manual or scheduled) already holds the lock; `503` when the source is not configured. Production syncs Parsina; development re-imports `data/parsina-products.csv` |
-| `GET /api/v1/settings` | yes | `{low_stock_threshold, default_page_size}` — below-or-equal means «کم» |
-| `PUT /api/v1/settings` | yes | partial `{low_stock_threshold?: int ≥ 0, default_page_size?: 10\|20\|50}` → updated settings |
+| `GET /api/v1/settings` | yes | `{low_stock_threshold, default_page_size, sync_interval_minutes, suggested_price_formulas}` — formulas are category-specific arithmetic expressions using `x` |
+| `PUT /api/v1/settings` | yes | partial settings update; `suggested_price_formulas` replaces the saved `{category_id, expression}` list. Expressions allow numeric constants, `x`, and arithmetic operators |
 
 Errors: `{ error: { code, message, details? } }` with codes `unauthorized`, `validation_error`, `rate_limited`. All user-facing `message` and `details` strings are Persian — the frontend never surfaces raw fetch/network/English errors and maps missing-body cases to per-status Persian fallbacks (`ApiRequestError` carries `status`, `code`, `details`).
 

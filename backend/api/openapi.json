@@ -205,6 +205,61 @@
             }
           },
           {
+            "name": "competitor_store",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "digikala",
+                    "technolife",
+                    "other"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Competitor Store"
+            }
+          },
+          {
+            "name": "min_competitor_price",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Competitor Price"
+            }
+          },
+          {
+            "name": "max_competitor_price",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Max Competitor Price"
+            }
+          },
+          {
             "name": "min_stock",
             "in": "query",
             "required": false,
@@ -409,6 +464,214 @@
                   },
                   "type": "array",
                   "title": "Response Product Groups Api V1 Products Groups Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/products/{product_id}/competitors": {
+      "get": {
+        "summary": "List Competitor Listings",
+        "operationId": "list_competitor_listings_api_v1_products__product_id__competitors_get",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Product Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CompetitorListingOut"
+                  },
+                  "title": "Response List Competitor Listings Api V1 Products  Product Id  Competitors Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create Competitor Listing",
+        "operationId": "create_competitor_listing_api_v1_products__product_id__competitors_post",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Product Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompetitorListingCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompetitorListingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/competitors/{listing_id}": {
+      "patch": {
+        "summary": "Update Competitor Listing",
+        "operationId": "update_competitor_listing_api_v1_competitors__listing_id__patch",
+        "parameters": [
+          {
+            "name": "listing_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Listing Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompetitorListingUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompetitorListingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete Competitor Listing",
+        "operationId": "delete_competitor_listing_api_v1_competitors__listing_id__delete",
+        "parameters": [
+          {
+            "name": "listing_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Listing Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/competitors/{listing_id}/check": {
+      "post": {
+        "summary": "Check Competitor Listing",
+        "operationId": "check_competitor_listing_api_v1_competitors__listing_id__check_post",
+        "parameters": [
+          {
+            "name": "listing_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Listing Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompetitorListingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -637,6 +900,461 @@
           "created_at"
         ],
         "title": "CategoryOut"
+      },
+      "CompetitorListingCreate": {
+        "properties": {
+          "store": {
+            "type": "string",
+            "enum": [
+              "digikala",
+              "technolife",
+              "other"
+            ],
+            "title": "Store"
+          },
+          "url": {
+            "type": "string",
+            "maxLength": 2048,
+            "minLength": 12,
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "store",
+          "url"
+        ],
+        "title": "CompetitorListingCreate"
+      },
+      "CompetitorListingOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "product_id": {
+            "type": "integer",
+            "title": "Product Id"
+          },
+          "store": {
+            "type": "string",
+            "enum": [
+              "digikala",
+              "technolife",
+              "other"
+            ],
+            "title": "Store"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "success",
+              "not_found",
+              "unavailable",
+              "blocked",
+              "failed",
+              "manual"
+            ],
+            "title": "Status"
+          },
+          "fetched_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fetched Price"
+          },
+          "fetched_currency": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "IRR",
+                  "IRT"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fetched Currency"
+          },
+          "fetched_in_stock": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fetched In Stock"
+          },
+          "manual_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manual Price"
+          },
+          "manual_currency": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "IRR",
+                  "IRT"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manual Currency"
+          },
+          "manual_in_stock": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manual In Stock"
+          },
+          "effective_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Price"
+          },
+          "effective_currency": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "IRR",
+                  "IRT"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Currency"
+          },
+          "effective_in_stock": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective In Stock"
+          },
+          "price_is_fresh": {
+            "type": "boolean",
+            "title": "Price Is Fresh"
+          },
+          "last_checked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Checked At"
+          },
+          "last_success_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Success At"
+          },
+          "manual_updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manual Updated At"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "product_id",
+          "store",
+          "url",
+          "is_active",
+          "status",
+          "fetched_price",
+          "fetched_currency",
+          "fetched_in_stock",
+          "manual_price",
+          "manual_currency",
+          "manual_in_stock",
+          "effective_price",
+          "effective_currency",
+          "effective_in_stock",
+          "price_is_fresh",
+          "last_checked_at",
+          "last_success_at",
+          "manual_updated_at",
+          "last_error",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "CompetitorListingOut"
+      },
+      "CompetitorListingUpdate": {
+        "properties": {
+          "store": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "digikala",
+                  "technolife",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Store"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2048,
+                "minLength": 12
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          },
+          "manual_price": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1000000000000000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manual Price"
+          },
+          "manual_currency": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "IRR",
+                  "IRT"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manual Currency"
+          },
+          "manual_in_stock": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manual In Stock"
+          }
+        },
+        "type": "object",
+        "title": "CompetitorListingUpdate"
+      },
+      "CompetitorPriceOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "store": {
+            "type": "string",
+            "enum": [
+              "digikala",
+              "technolife",
+              "other"
+            ],
+            "title": "Store"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "success",
+              "not_found",
+              "unavailable",
+              "blocked",
+              "failed",
+              "manual"
+            ],
+            "title": "Status"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "IRR",
+                  "IRT"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "in_stock": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "In Stock"
+          },
+          "is_fresh": {
+            "type": "boolean",
+            "title": "Is Fresh"
+          },
+          "is_manual": {
+            "type": "boolean",
+            "title": "Is Manual"
+          },
+          "last_checked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Checked At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "store",
+          "url",
+          "status",
+          "price",
+          "currency",
+          "in_stock",
+          "is_fresh",
+          "is_manual",
+          "last_checked_at"
+        ],
+        "title": "CompetitorPriceOut"
       },
       "ErrorBody": {
         "properties": {
@@ -915,6 +1633,13 @@
             ],
             "title": "Synced At"
           },
+          "competitor_prices": {
+            "items": {
+              "$ref": "#/components/schemas/CompetitorPriceOut"
+            },
+            "type": "array",
+            "title": "Competitor Prices"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -977,13 +1702,21 @@
           "sync_interval_minutes": {
             "type": "integer",
             "title": "Sync Interval Minutes"
+          },
+          "suggested_price_formulas": {
+            "items": {
+              "$ref": "#/components/schemas/SuggestedPriceFormulaOut"
+            },
+            "type": "array",
+            "title": "Suggested Price Formulas"
           }
         },
         "type": "object",
         "required": [
           "low_stock_threshold",
           "default_page_size",
-          "sync_interval_minutes"
+          "sync_interval_minutes",
+          "suggested_price_formulas"
         ],
         "title": "SettingsOut"
       },
@@ -1033,10 +1766,66 @@
               }
             ],
             "title": "Sync Interval Minutes"
+          },
+          "suggested_price_formulas": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SuggestedPriceFormulaIn"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Price Formulas"
           }
         },
         "type": "object",
         "title": "SettingsUpdateIn"
+      },
+      "SuggestedPriceFormulaIn": {
+        "properties": {
+          "category_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Category Id"
+          },
+          "expression": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Expression"
+          }
+        },
+        "type": "object",
+        "required": [
+          "category_id",
+          "expression"
+        ],
+        "title": "SuggestedPriceFormulaIn"
+      },
+      "SuggestedPriceFormulaOut": {
+        "properties": {
+          "category_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Category Id"
+          },
+          "expression": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Expression"
+          }
+        },
+        "type": "object",
+        "required": [
+          "category_id",
+          "expression"
+        ],
+        "title": "SuggestedPriceFormulaOut"
       },
       "SyncRunOut": {
         "properties": {

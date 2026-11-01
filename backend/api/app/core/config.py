@@ -42,6 +42,8 @@ class Settings(BaseSettings):
     )
     # Development-only product catalog (app_env=development); ignored in production.
     products_csv_path: str = Field(default=str(_DEFAULT_PRODUCTS_CSV_PATH))
+    competitor_request_interval_seconds: float = Field(default=5.0, ge=1, le=300)
+    competitor_price_ttl_hours: int = Field(default=24, ge=1, le=720)
 
     @field_validator("database_url", mode="before")
     @classmethod

@@ -16,7 +16,7 @@ def get_settings_view(
     _admin: Admin = Depends(require_admin),  # noqa: B008
     session: Session = Depends(get_db),  # noqa: B008
 ) -> SettingsOut:
-    return SettingsOut(**SettingsService(session).get_all())
+    return SettingsOut.model_validate(SettingsService(session).get_all())
 
 
 @router.put("/settings", response_model=SettingsOut)
@@ -29,14 +29,20 @@ def update_settings(
     threshold = svc.get_threshold()
     page_size = svc.get_page_size()
     interval = svc.get_sync_interval()
+    formulas = svc.get_suggested_price_formulas()
     if payload.low_stock_threshold is not None:
         threshold = svc.update_threshold(payload.low_stock_threshold)
     if payload.default_page_size is not None:
         page_size = svc.update_page_size(payload.default_page_size)
     if payload.sync_interval_minutes is not None:
         interval = svc.update_sync_interval(payload.sync_interval_minutes)
+    if payload.suggested_price_formulas is not None:
+        formulas = svc.update_suggested_price_formulas(
+            [item.model_dump() for item in payload.suggested_price_formulas]
+        )
     return SettingsOut(
         low_stock_threshold=threshold,
         default_page_size=page_size,
         sync_interval_minutes=interval,
+        suggested_price_formulas=formulas,
     )

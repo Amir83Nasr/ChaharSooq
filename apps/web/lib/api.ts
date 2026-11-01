@@ -25,6 +25,7 @@ export interface ProductOut {
   is_active: boolean
   category: CategoryOut | null
   synced_at: string | null
+  competitor_prices: CompetitorPrice[]
   created_at: string
 }
 
@@ -33,6 +34,55 @@ export interface ProductPage {
   total: number
   page: number
   page_size: number
+}
+
+export type CompetitorStore = "digikala" | "technolife" | "other"
+export type CompetitorCurrency = "IRR" | "IRT"
+export type CompetitorStatus =
+  | "pending"
+  | "success"
+  | "not_found"
+  | "unavailable"
+  | "blocked"
+  | "failed"
+  | "manual"
+
+export interface CompetitorListing {
+  id: number
+  product_id: number
+  store: CompetitorStore
+  url: string
+  is_active: boolean
+  status: CompetitorStatus
+  fetched_price: number | null
+  fetched_currency: CompetitorCurrency | null
+  fetched_in_stock: boolean | null
+  manual_price: number | null
+  manual_currency: CompetitorCurrency | null
+  manual_in_stock: boolean | null
+  effective_price: number | null
+  effective_currency: CompetitorCurrency | null
+  effective_in_stock: boolean | null
+  price_is_fresh: boolean
+  last_checked_at: string | null
+  last_success_at: string | null
+  manual_updated_at: string | null
+  last_error: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CompetitorPrice {
+  id: number
+  store: CompetitorStore
+  url: string
+  status: CompetitorStatus
+  price: number | null
+  currency: CompetitorCurrency | null
+  in_stock: boolean | null
+  is_fresh: boolean
+  is_manual: boolean
+  last_checked_at: string | null
 }
 
 export interface InventorySummary {
@@ -118,12 +168,19 @@ export interface SettingsOut {
   low_stock_threshold: number
   default_page_size: number
   sync_interval_minutes: number
+  suggested_price_formulas: SuggestedPriceFormula[]
+}
+
+export interface SuggestedPriceFormula {
+  category_id: number
+  expression: string
 }
 
 export interface SettingsUpdate {
   low_stock_threshold?: number
   default_page_size?: number
   sync_interval_minutes?: number
+  suggested_price_formulas?: SuggestedPriceFormula[]
 }
 
 export interface ProductFilters {
@@ -133,6 +190,9 @@ export interface ProductFilters {
   main_group?: string
   min_price?: number
   max_price?: number
+  competitor_store?: CompetitorStore
+  min_competitor_price?: number
+  max_competitor_price?: number
   min_stock?: number
   max_stock?: number
   in_stock?: boolean
@@ -202,6 +262,12 @@ export const api = {
       search.set("min_price", String(params.min_price))
     if (params.max_price !== undefined)
       search.set("max_price", String(params.max_price))
+    if (params.competitor_store)
+      search.set("competitor_store", params.competitor_store)
+    if (params.min_competitor_price !== undefined)
+      search.set("min_competitor_price", String(params.min_competitor_price))
+    if (params.max_competitor_price !== undefined)
+      search.set("max_competitor_price", String(params.max_competitor_price))
     if (params.min_stock !== undefined)
       search.set("min_stock", String(params.min_stock))
     if (params.max_stock !== undefined)
@@ -213,6 +279,48 @@ export const api = {
     if (params.page_size) search.set("page_size", String(params.page_size))
     const suffix = search.size ? `?${search}` : ""
     return request<ProductPage>(`/api/v1/products${suffix}`)
+  },
+  competitorListings(productId: number) {
+    return request<CompetitorListing[]>(
+      `/api/v1/products/${productId}/competitors`
+    )
+  },
+  createCompetitorListing(
+    productId: number,
+    store: CompetitorStore,
+    url: string
+  ) {
+    return request<CompetitorListing>(
+      `/api/v1/products/${productId}/competitors`,
+      { method: "POST", body: JSON.stringify({ store, url }) }
+    )
+  },
+  updateCompetitorListing(
+    id: number,
+    patch: Partial<
+      Pick<
+        CompetitorListing,
+        | "store"
+        | "url"
+        | "is_active"
+        | "manual_price"
+        | "manual_currency"
+        | "manual_in_stock"
+      >
+    >
+  ) {
+    return request<CompetitorListing>(`/api/v1/competitors/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    })
+  },
+  deleteCompetitorListing(id: number) {
+    return request<undefined>(`/api/v1/competitors/${id}`, { method: "DELETE" })
+  },
+  checkCompetitorListing(id: number) {
+    return request<CompetitorListing>(`/api/v1/competitors/${id}/check`, {
+      method: "POST",
+    })
   },
   categories() {
     return request<CategoryOut[]>("/api/v1/categories")

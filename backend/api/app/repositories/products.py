@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
-from sqlalchemy import ColumnElement, delete, func, not_, or_, select
+from sqlalchemy import ColumnElement, and_, case, delete, exists, func, not_, or_, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models import Product
+from app.models import CompetitorListing, Product
 
 ProductSort = Literal["newest", "cheapest", "most_expensive"]
 
@@ -84,6 +85,10 @@ class ProductRepository:
         main_group: str | None,
         min_price: int | None,
         max_price: int | None,
+        competitor_store: str | None,
+        min_competitor_price: int | None,
+        max_competitor_price: int | None,
+        competitor_price_since: datetime,
         min_stock: int | None,
         max_stock: int | None,
         in_stock: bool | None,
@@ -121,6 +126,40 @@ class ProductRepository:
             criteria.append(Product.price >= min_price)
         if max_price is not None:
             criteria.append(Product.price <= max_price)
+        if competitor_store or min_competitor_price is not None or max_competitor_price is not None:
+            manual_fresh = and_(
+                CompetitorListing.manual_price.is_not(None),
+                CompetitorListing.manual_updated_at >= competitor_price_since,
+            )
+            fetched_fresh = and_(
+                CompetitorListing.fetched_price.is_not(None),
+                CompetitorListing.last_success_at >= competitor_price_since,
+            )
+            manual_toman = case(
+                (CompetitorListing.manual_currency == "IRR", CompetitorListing.manual_price / 10),
+                else_=CompetitorListing.manual_price,
+            )
+            fetched_toman = case(
+                (CompetitorListing.fetched_currency == "IRR", CompetitorListing.fetched_price / 10),
+                else_=CompetitorListing.fetched_price,
+            )
+            current_price = case(
+                (manual_fresh, manual_toman),
+                (fetched_fresh, fetched_toman),
+                else_=None,
+            )
+            price_criteria: list[ColumnElement[bool]] = [
+                CompetitorListing.product_id == Product.id,
+                CompetitorListing.is_active.is_(True),
+                current_price.is_not(None),
+            ]
+            if competitor_store:
+                price_criteria.append(CompetitorListing.store == competitor_store)
+            if min_competitor_price is not None:
+                price_criteria.append(current_price >= min_competitor_price)
+            if max_competitor_price is not None:
+                price_criteria.append(current_price <= max_competitor_price)
+            criteria.append(exists(select(1).where(*price_criteria)))
         if in_stock is True:
             criteria.append(Product.stock > 0)
         elif in_stock is False:

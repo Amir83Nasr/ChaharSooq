@@ -16,6 +16,7 @@ def test_settings_default_and_update(client: TestClient) -> None:
         "low_stock_threshold": 5,
         "default_page_size": 0,
         "sync_interval_minutes": 60,
+        "suggested_price_formulas": [],
     }
     r = client.put(
         "/api/v1/settings",
@@ -26,11 +27,13 @@ def test_settings_default_and_update(client: TestClient) -> None:
         "low_stock_threshold": 3,
         "default_page_size": 100,
         "sync_interval_minutes": 60,
+        "suggested_price_formulas": [],
     }
     assert client.get("/api/v1/settings").json() == {
         "low_stock_threshold": 3,
         "default_page_size": 100,
         "sync_interval_minutes": 60,
+        "suggested_price_formulas": [],
     }
 
 
@@ -42,6 +45,7 @@ def test_settings_partial_update_keeps_other_field(client: TestClient) -> None:
         "low_stock_threshold": 5,
         "default_page_size": 500,
         "sync_interval_minutes": 60,
+        "suggested_price_formulas": [],
     }
 
 

@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models import Category, Product
 from app.repositories import ProductRepository, ProductSort
 from app.schemas import ProductIn
@@ -29,6 +32,9 @@ class ProductService:
         main_group: str | None,
         min_price: int | None,
         max_price: int | None,
+        competitor_store: str | None = None,
+        min_competitor_price: int | None = None,
+        max_competitor_price: int | None = None,
         min_stock: int | None,
         max_stock: int | None,
         in_stock: bool | None,
@@ -50,6 +56,11 @@ class ProductService:
             main_group=(main_group or "").strip() or None,
             min_price=min_price,
             max_price=max_price,
+            competitor_store=competitor_store,
+            min_competitor_price=min_competitor_price,
+            max_competitor_price=max_competitor_price,
+            competitor_price_since=datetime.now(UTC)
+            - timedelta(hours=get_settings().competitor_price_ttl_hours),
             min_stock=min_stock,
             max_stock=max_stock,
             in_stock=in_stock,

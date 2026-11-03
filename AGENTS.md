@@ -104,4 +104,10 @@ This is an admin panel with password login.
 - Match the surrounding file's naming, comment density, and idiom.
 - Do not refactor unrelated code in a focused change.
 
+## 9. Task tracking
+
+- For any multi-step task, maintain an explicit todo list with small, concrete steps.
+- Keep it continuously updated: mark a step in-progress when starting it, completed right after finishing it, and add newly discovered steps immediately.
+- The list must reflect ground truth at all times, including at the very end of the task — update it before the final response.
+
 <!-- END:turborepo-agent-rules -->

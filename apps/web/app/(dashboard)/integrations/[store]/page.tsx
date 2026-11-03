@@ -2,8 +2,8 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ArrowUpRight, CircleHelp } from "lucide-react"
 
-import { PageHeader } from "@workspace/ui/components/page-header"
-import { Button } from "@workspace/ui/components/button"
+import { PageHeader } from "@workspace/ui/layout/page-header"
+import { Button } from "@workspace/ui/primitives/button"
 
 const STORES = {
   sofa: {

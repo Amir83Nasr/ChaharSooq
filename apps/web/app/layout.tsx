@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from "next"
 
 import "@workspace/ui/globals.css"
-import { ThemeColorSync } from "@/components/theme-color-sync"
-import { ThemeProvider } from "@/components/theme-provider"
+import { ThemeColorSync } from "@/components/layout/theme-color-sync"
+import { ThemeProvider } from "@/components/layout/theme-provider"
 import { cn } from "@workspace/ui/lib/utils"
 
 import { iranYekanX } from "./fonts"

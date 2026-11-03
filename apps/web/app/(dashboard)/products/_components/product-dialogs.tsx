@@ -4,17 +4,18 @@ import {
   ResponsiveDialogDescription,
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
-} from "@workspace/ui/components/responsive-dialog"
-import { Price } from "@workspace/ui/components/price"
-import { PersianNumber } from "@workspace/ui/components/persian-number"
+} from "@workspace/ui/primitives/responsive-dialog"
+import { Price } from "@workspace/ui/persian/price"
+import { PersianNumber } from "@workspace/ui/persian/persian-number"
 import type { ProductOut } from "@/lib/api"
 import { ProductCompetitorPrices } from "./product-competitor-prices"
 
 export function ProductDetailDialog(props: {
   selected: ProductOut | null
   onClose: () => void
+  onCompetitorChanged?: () => void
 }) {
-  const { selected, onClose } = props
+  const { selected, onClose, onCompetitorChanged } = props
   return (
     <ResponsiveDialog
       open={selected !== null}
@@ -24,7 +25,7 @@ export function ProductDetailDialog(props: {
     >
       <ResponsiveDialogContent
         aria-label="جزئیات کالا"
-        className="max-h-[90dvh] overflow-y-auto sm:max-w-5xl"
+        className="no-scrollbar max-h-[90dvh] overflow-y-auto sm:max-w-5xl"
       >
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>{selected?.name ?? ""}</ResponsiveDialogTitle>
@@ -33,7 +34,7 @@ export function ProductDetailDialog(props: {
           </ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
         {selected ? (
-          <div className="min-h-0 space-y-4 overflow-y-auto">
+          <div className="no-scrollbar min-h-0 space-y-4 overflow-y-auto">
             <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <div className="rounded-md border border-border px-3 py-2">
                 <dt className="text-xs text-muted-foreground">موجودی</dt>
@@ -50,7 +51,10 @@ export function ProductDetailDialog(props: {
             </dl>
             {!selected.main_group_name?.startsWith("فرش") &&
             !selected.main_group_name?.startsWith("مبلمان") ? (
-              <ProductCompetitorPrices productId={selected.id} />
+              <ProductCompetitorPrices
+                productId={selected.id}
+                onChanged={onCompetitorChanged}
+              />
             ) : (
               <section className="rounded-lg border border-dashed border-border bg-muted/30 p-4 text-center">
                 <p className="text-sm font-medium">

@@ -4,8 +4,8 @@ import Link from "next/link"
 
 import { AlertTriangle, Home, RefreshCw } from "lucide-react"
 
-import { Button } from "@workspace/ui/components/button"
-import { ErrorState } from "@workspace/ui/components/state"
+import { Button } from "@workspace/ui/primitives/button"
+import { ErrorState } from "@workspace/ui/feedback/state"
 
 export default function RootError({
   error,

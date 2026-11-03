@@ -1,0 +1,17 @@
+# Auto-detect text files, normalize to LF on commit.
+* text=auto eol=lf
+
+# Persian docs and sources stay UTF-8 without BOM.
+*.md text diff
+*.py text diff=python
+*.ts text diff=typescript
+*.tsx text diff=typescript
+
+# Binary — never normalize or diff as text.
+*.woff2 binary
+*.woff binary
+*.ttf binary
+*.pdf binary
+*.png binary
+*.jpg binary
+*.ico binary

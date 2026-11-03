@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.api.deps import get_db, require_admin
+from app.api.dependencies import get_db, require_admin
 from app.core.database import get_engine
 from app.models import Admin, ParsinaSyncState
 from app.schemas import SyncRunOut, SyncStatusOut

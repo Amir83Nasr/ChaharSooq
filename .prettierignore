@@ -5,3 +5,8 @@ node_modules/
 coverage/
 pnpm-lock.yaml
 .pnpm-store/
+uv.lock
+*.min.js
+*.min.css
+# Generated artifact — formatted by export_openapi.py, never by hand.
+backend/api/openapi.json

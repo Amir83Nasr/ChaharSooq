@@ -6,14 +6,17 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
-} from "@workspace/ui/components/select"
-import { Button } from "@workspace/ui/components/button"
-import { Input } from "@workspace/ui/components/input"
+} from "@workspace/ui/primitives/select"
+import { Button } from "@workspace/ui/primitives/button"
+import { Input } from "@workspace/ui/primitives/input"
 import {
   formatPersianNumber,
   parsePriceFilterInput,
 } from "@workspace/ui/lib/number"
-import { DataTableToolbar, SearchInput } from "@/components/data-table-toolbar"
+import {
+  DataTableToolbar,
+  SearchInput,
+} from "@/components/data/data-table-toolbar"
 import type { ProductSort } from "@/lib/api"
 import { COMPETITOR_MARKETS, type CompetitorMarket } from "./products-table"
 

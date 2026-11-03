@@ -5,7 +5,7 @@
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
 
-import { PageHeader } from "@workspace/ui/components/page-header"
+import { PageHeader } from "@workspace/ui/layout/page-header"
 import { useIsMobile } from "@workspace/ui/hooks/use-mobile"
 import {
   api,
@@ -18,7 +18,7 @@ import {
   type ProductSort,
 } from "@/lib/api"
 import { DEFAULT_LOW_STOCK_THRESHOLD } from "@/lib/inventory"
-import { ParsinaSyncPanel } from "@/components/parsina-sync-panel"
+import { ParsinaSyncPanel } from "@/components/data/parsina-sync-panel"
 import { ProductDetailDialog } from "./_components/product-dialogs"
 import { ProductsTable, ProductsTableError } from "./_components/products-table"
 import {
@@ -297,6 +297,7 @@ export default function ProductsPage() {
       <ProductDetailDialog
         selected={selected}
         onClose={() => setSelected(null)}
+        onCompetitorChanged={refreshData}
       />
     </>
   )

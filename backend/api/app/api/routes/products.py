@@ -5,7 +5,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, require_admin
+from app.api.dependencies import get_db, require_admin
 from app.models import Admin
 from app.schemas import (
     InventorySummaryOut,

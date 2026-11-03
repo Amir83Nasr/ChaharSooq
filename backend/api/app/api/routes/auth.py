@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_admin, get_db
+from app.api.dependencies import get_current_admin, get_db
 from app.core.config import get_settings
 from app.models import Admin
 from app.schemas import ErrorEnvelope, LoginIn, LoginOut, MeOut

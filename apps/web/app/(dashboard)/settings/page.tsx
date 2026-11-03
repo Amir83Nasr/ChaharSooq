@@ -15,15 +15,15 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@workspace/ui/components/card"
-import { PageHeader } from "@workspace/ui/components/page-header"
+} from "@workspace/ui/primitives/card"
+import { PageHeader } from "@workspace/ui/layout/page-header"
 
-import { InventoryThresholdSettings } from "@/components/inventory-threshold-settings"
-import { CompetitorStoreSettings } from "@/components/competitor-store-settings"
-import { PageSizeSettings } from "@/components/page-size-settings"
-import { SyncIntervalSettings } from "@/components/sync-interval-settings"
-import { SuggestedPriceSettings } from "@/components/suggested-price-settings"
-import { ThemeSettings } from "@/components/theme-settings"
+import { InventoryThresholdSettings } from "@/components/settings/inventory-threshold-settings"
+import { CompetitorStoreSettings } from "@/components/settings/competitor-store-settings"
+import { PageSizeSettings } from "@/components/settings/page-size-settings"
+import { SyncIntervalSettings } from "@/components/settings/sync-interval-settings"
+import { SuggestedPriceSettings } from "@/components/settings/suggested-price-settings"
+import { ThemeSettings } from "@/components/settings/theme-settings"
 
 export const metadata: Metadata = { title: "چهارسوق | تنظیمات" }
 

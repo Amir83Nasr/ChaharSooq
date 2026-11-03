@@ -1,12 +1,10 @@
 import { cookies } from "next/headers"
 
+import { apiOrigin } from "./env"
+
 /* Server-side session check — forwards browser cookies to the API. */
 
-const API = (
-  process.env.API_URL_INTERNAL ??
-  process.env.NEXT_PUBLIC_API_URL ??
-  "http://localhost:8000"
-).replace(/\/+$/, "")
+const API = apiOrigin()
 
 export interface SessionAdmin {
   username: string

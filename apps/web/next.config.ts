@@ -11,8 +11,10 @@ function loadEnvFile(filePath: string) {
   if (!fs.existsSync(filePath)) return
   const content = fs.readFileSync(filePath, "utf8")
   for (const rawLine of content.split(/\r?\n/)) {
-    const line = rawLine.trim()
+    let line = rawLine.trim()
     if (!line || line.startsWith("#")) continue
+    // Support `export KEY=value` like dotenv does.
+    if (line.startsWith("export ")) line = line.slice("export ".length).trim()
     const eq = line.indexOf("=")
     if (eq === -1) continue
     const key = line.slice(0, eq).trim()

@@ -12,6 +12,7 @@ Parsina listing enforces. Connection strings never appear in errors/logs.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Literal
 
 from sqlalchemy import create_engine, select
@@ -20,6 +21,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from app.models.catalog import Product
+
+log = logging.getLogger("charsooq")
 
 _DEV_UNIT_FALLBACK = "عدد"
 
@@ -67,7 +70,7 @@ class DevDatabaseCommoditySource:
             try:
                 engine.dispose()  # type: ignore[possibly-undefined]
             except Exception:  # noqa: BLE001 — dispose must not mask fetch errors
-                pass
+                log.warning("dev-db engine dispose failed", exc_info=True)
 
         rows: list[dict[str, Any]] = [_to_raw(p) for p in products]
         return rows, len(rows), _unit_titles(products)

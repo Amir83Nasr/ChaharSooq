@@ -33,7 +33,7 @@ make install           # install frontend + backend deps
 make db-up             # start dev postgres (compose, host :5433)
 make db-migrate        # apply Alembic migrations to dev database
 make db-seed           # create dev admin (DEV_ADMIN_PASSWORD, default secret123)
-make db-seed-parsina   # load data/parsina-products.csv into the dev catalog (replaces products)
+make db-seed-parsina   # load data/parsina.csv into the dev catalog (replaces products)
 make dev-all           # postgres + migrate, then backend :8000 + frontend :3000
 ```
 
@@ -74,26 +74,26 @@ uv run --project backend/api pytest -q             # backend tests
 
 Each app owns its env file: [backend/api/.env.example](backend/api/.env.example) (copy to `backend/api/.env.local`) and [apps/web/.env.example](apps/web/.env.example) (copy to `apps/web/.env.local`). Never commit real secrets. The backend reads its env file by absolute path, so the API, Alembic, and the seed scripts always target the same configuration. A shared root `.env.local` (or `.env`) is also loaded by both apps as a fallback, which is convenient for LAN/mobile dev (e.g. whitelisting device IPs in `ALLOWED_DEV_ORIGINS` / `CORS_ORIGINS`); per-app values take precedence.
 
-| Variable | Purpose |
-| --- | --- |
-| `APP_ENV` | `development` / `test` / `production` (Secure cookies only in production) |
-| `DATABASE_URL` | SQLAlchemy URL, e.g. `postgresql+psycopg://charsooq:charsooq@localhost:5433/charsooq` |
-| `SESSION_SECRET` | Session signing secret; change the dev default in production |
-| `SESSION_SAMESITE` | `lax` (same-site dev) / `none` (Vercel frontend + separate API host) |
-| `API_URL_INTERNAL` | Server-side API origin for Next `/api/*` rewrites; falls back to `NEXT_PUBLIC_API_URL` |
-| `NEXT_PUBLIC_API_URL` | API origin fallback for rewrites (browser always calls same-origin `/api/*`) |
-| `CORS_ORIGINS` | Backend CORS allowlist, comma-separated |
-| `ALLOWED_DEV_ORIGINS` | Extra Next.js dev origins, comma-separated |
-| `ADMIN_USER` / `ADMIN_PASSWORD` | Admin seed credentials. `make db-seed` uses `ADMIN_PASSWORD` or `DEV_ADMIN_PASSWORD` (default `secret123`). `make db-seed-prod` **requires** `ADMIN_PASSWORD=…` on the command line |
-| `PARSINA_*` | Parsina accounting API (URL, credentials, org, year, optional warehouse/sale-type). Empty = integration off. `PARSINA_SYNC_INTERVAL_MINUTES` (default 60) seeds the initial auto-sync interval and `PARSINA_SYNC_ENABLED` toggles the backend scheduler |
-| `PRODUCTS_CSV_PATH` | Development-only product CSV; defaults to `<repo>/data/parsina-products.csv` |
+| Variable                        | Purpose                                                                                                                                                                                                                                                 |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `APP_ENV`                       | `development` / `test` / `production` (Secure cookies only in production)                                                                                                                                                                               |
+| `DATABASE_URL`                  | SQLAlchemy URL, e.g. `postgresql+psycopg://charsooq:charsooq@localhost:5433/charsooq`                                                                                                                                                                   |
+| `SESSION_SECRET`                | Session signing secret; change the dev default in production                                                                                                                                                                                            |
+| `SESSION_SAMESITE`              | `lax` (same-site dev) / `none` (Vercel frontend + separate API host)                                                                                                                                                                                    |
+| `API_URL_INTERNAL`              | Server-side API origin for Next `/api/*` rewrites; falls back to `NEXT_PUBLIC_API_URL`                                                                                                                                                                  |
+| `NEXT_PUBLIC_API_URL`           | API origin fallback for rewrites (browser always calls same-origin `/api/*`)                                                                                                                                                                            |
+| `CORS_ORIGINS`                  | Backend CORS allowlist, comma-separated                                                                                                                                                                                                                 |
+| `ALLOWED_DEV_ORIGINS`           | Extra Next.js dev origins, comma-separated                                                                                                                                                                                                              |
+| `ADMIN_USER` / `ADMIN_PASSWORD` | Admin seed credentials. `make db-seed` uses `ADMIN_PASSWORD` or `DEV_ADMIN_PASSWORD` (default `secret123`). `make db-seed-prod` **requires** `ADMIN_PASSWORD=…` on the command line                                                                     |
+| `PARSINA_*`                     | Parsina accounting API (URL, credentials, org, year, optional warehouse/sale-type). Empty = integration off. `PARSINA_SYNC_INTERVAL_MINUTES` (default 60) seeds the initial auto-sync interval and `PARSINA_SYNC_ENABLED` toggles the backend scheduler |
+| `PRODUCTS_CSV_PATH`             | Development-only product CSV; defaults to `<repo>/data/parsina.csv`                                                                                                                                                                                     |
 
 ## Product data sources
 
 Products mirror an external catalog (`external_id` = Parsina `goodId`), and the GET endpoints always read the local mirror. Where the mirror comes from depends on `APP_ENV`:
 
 - **production** — live Parsina API (`PARSINA_*` credentials). The backend scheduler syncs at the interval configured in Settings (default `PARSINA_SYNC_INTERVAL_MINUTES`, 60); the products page has a «به‌روزرسانی اطلاعات» button for a manual run.
-- **development** — `data/parsina-products.csv` (an export of the live catalog, same field names). `make db-seed-parsina` loads it and replaces the dev product mirror; the same button re-imports the file. No Parsina credentials are needed and the scheduler stays off. The export only carries `countUnit` ids, so the CSV source supplies mock unit titles to keep the dev catalog identical to production.
+- **development** — `data/parsina.csv` (an export of the live catalog, same field names). `make db-seed-parsina` loads it and replaces the dev product mirror; the same button re-imports the file. No Parsina credentials are needed; the scheduler ticks on the same interval from the CSV, like production. The export only carries `countUnit` ids, so the CSV source supplies mock unit titles to keep the dev catalog identical to production.
 
 Both paths share one validation/apply routine and one DB lock, so runs never overlap. Manual runs return `202` and the UI polls `GET /integrations/parsina/status` until the run finishes, then re-fetches the table in place. A failed or partial fetch never overwrites the last successful data; rows missing from a complete listing are deactivated, never deleted.
 
@@ -106,7 +106,7 @@ Competitor links and observations are stored separately from the Parsina catalog
 ```bash
 make db-migrate        # dev: start postgres + `alembic upgrade head`
 make db-seed            # dev admin user
-make db-seed-parsina    # dev product catalog from data/parsina-products.csv
+make db-seed-parsina    # dev product catalog from data/parsina.csv
 
 make db-migrate-prod                          # prod Neon: migrations (reads .env.production)
 make db-seed-prod ADMIN_PASSWORD=<password>   # prod Neon: admin user (password required)

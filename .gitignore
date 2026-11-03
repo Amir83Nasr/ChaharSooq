@@ -39,7 +39,10 @@ node_modules
 venv/
 
 # ─── LOCAL DATA ───────────────────────────────────────────
-data/
+# Root-scoped on purpose: a bare `data/` would also match (and hide from both
+# git and Tailwind's gitignore-aware scanner) any other `data/` directory,
+# e.g. apps/web/components/data/.
+/data/
 
 # ─── BACKUPS ──────────────────────────────────────────────
 *.bak
@@ -59,6 +62,9 @@ Thumbs.db
 .idea/
 .vscode/*
 TODO.md
+
+# ─── BACKEND DEPLOY CLUTTER ───────────────────────────────
+**/.fastapicloud/
 
 # ─── ! ────────────────────────────────────────────────────
 !.env.example

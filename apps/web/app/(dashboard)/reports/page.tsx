@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 
-import { PageHeader } from "@workspace/ui/components/page-header"
-import { EmptyState } from "@workspace/ui/components/state"
+import { PageHeader } from "@workspace/ui/layout/page-header"
+import { EmptyState } from "@workspace/ui/feedback/state"
 
 export const metadata: Metadata = { title: "چهارسوق | گزارش‌ها" }
 

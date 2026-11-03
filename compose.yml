@@ -14,6 +14,7 @@ x-api-image: &api-image
 services:
   postgres:
     image: postgres:18
+    restart: unless-stopped
     environment:
       POSTGRES_USER: charsooq
       POSTGRES_PASSWORD: charsooq
@@ -41,6 +42,7 @@ services:
 
   api:
     <<: *api-image
+    restart: unless-stopped
     environment: *api-env
     ports:
       - "8000:8000"
@@ -56,13 +58,15 @@ services:
       dockerfile: Dockerfile.web
       args:
         API_URL_INTERNAL: http://api:8000
+    restart: unless-stopped
     environment:
       API_URL_INTERNAL: http://api:8000
       NEXT_PUBLIC_API_URL: http://localhost:8000
     ports:
       - "3000:3000"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
 
 volumes:
   pgdata:

@@ -1,18 +1,20 @@
 """Parsina integration — client contract, sync rules, endpoints (mocked HTTP)."""
 
+import csv
 import json
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
-from app.core.config import ParsinaSettings
+from app.core.config import ParsinaSettings, get_parsina_settings, get_settings
 from app.core.database import get_engine
 from app.integrations.parsina import (
     CommodityRow,
@@ -279,8 +281,62 @@ def test_scheduled_sync_noop_when_not_configured() -> None:
         interval_minutes=15,
         transport=httpx.MockTransport(fake),
     )
-    assert result is None  # env has no Parsina credentials in tests
+    assert result is None  # test env never ticks; no Parsina credentials either
     assert fake.auth_calls == 0
+
+
+@pytest.fixture()
+def dev_csv_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[Path]:
+    """Pretend to be the dev process: APP_ENV=development + a tiny CSV fixture."""
+    path = tmp_path / "parsina.csv"
+    with path.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["goodId", "goodCode", "goodName"])
+        writer.writerow(["1", "A-1", "کالا یک"])
+        writer.writerow(["2", "A-2", "کالا دو"])
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("PRODUCTS_CSV_PATH", str(path))
+    get_settings.cache_clear()
+    get_parsina_settings.cache_clear()
+    yield path
+    get_settings.cache_clear()
+    get_parsina_settings.cache_clear()
+
+
+def test_scheduled_sync_runs_csv_in_development(session: Session, dev_csv_env: Path) -> None:
+    assert dev_csv_env.is_file()
+    result = run_scheduled_sync(
+        session_factory=lambda: Session(get_engine()),
+        interval_minutes=60,
+    )
+    assert result is not None
+    assert (result.created, result.updated, result.processed) == (2, 0, 2)
+    assert {p.external_id for p in session.execute(select(Product)).scalars()} == {1, 2}
+
+
+def test_scheduled_sync_respects_interval_in_development(
+    session: Session, dev_csv_env: Path
+) -> None:
+    assert dev_csv_env.is_file()
+    first = run_scheduled_sync(session_factory=lambda: Session(get_engine()), interval_minutes=60)
+    assert first is not None
+    assert (
+        run_scheduled_sync(session_factory=lambda: Session(get_engine()), interval_minutes=60)
+        is None
+    )
+
+
+def test_scheduler_starts_in_development(client: TestClient, dev_csv_env: Path) -> None:
+    assert dev_csv_env.is_file()
+    from app.core.scheduler import SyncScheduler
+
+    factory = sessionmaker(bind=get_engine(), autoflush=False, expire_on_commit=False)
+    scheduler = SyncScheduler(factory)
+    scheduler.start()
+    try:
+        assert scheduler._thread is not None and scheduler._thread.is_alive()
+    finally:
+        scheduler.stop()
 
 
 # ── ENDPOINTS ────────────────────────────────────────────────

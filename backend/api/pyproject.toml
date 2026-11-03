@@ -20,6 +20,7 @@ dev = [
   "httpx>=0.27",
   "ruff>=0.8",
   "pyright>=1.1",
+  "pytest-cov>=7.1.0",
 ]
 
 [tool.ruff]
@@ -27,10 +28,14 @@ target-version = "py312"
 line-length = 100
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "ASYNC"]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "S", "DTZ", "A", "C4"]
+# TRY/EM intentionally off: user-facing Persian error strings are raised
+# inline by design (see services + integrations); wrapping every raise
+# in a variable/message-class would add noise without safety value.
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"]
+# Tests use asserts and fixture credentials by design.
+"tests/**" = ["S101", "S105", "S106"]
 "migrations/**" = ["E", "F", "I"]
 
 [tool.ruff.format]
@@ -39,6 +44,17 @@ quote-style = "double"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+addopts = ["--cov=app", "--cov-report=term-missing"]
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["tests/*", "migrations/*", "scripts/*"]
+relative_files = true
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_covered = false
 
 [tool.pyright]
 typeCheckingMode = "strict"

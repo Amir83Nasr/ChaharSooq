@@ -9,11 +9,11 @@ import {
   Trash2,
 } from "lucide-react"
 
-import { Badge } from "@workspace/ui/components/badge"
-import { Button } from "@workspace/ui/components/button"
-import { Input } from "@workspace/ui/components/input"
-import { Price } from "@workspace/ui/components/price"
-import { PersianDateTime } from "@workspace/ui/components/persian-date"
+import { Badge } from "@workspace/ui/primitives/badge"
+import { Button } from "@workspace/ui/primitives/button"
+import { Input } from "@workspace/ui/primitives/input"
+import { Price } from "@workspace/ui/persian/price"
+import { PersianDateTime } from "@workspace/ui/persian/persian-date"
 import {
   ApiRequestError,
   api,
@@ -278,8 +278,7 @@ function FilledSlotCard({
         <span className="ms-auto flex gap-1">
           <Button
             size="sm"
-            variant="ghost"
-            className="text-destructive"
+            variant="destructive"
             disabled={busy}
             onClick={onDelete}
           >
@@ -382,7 +381,13 @@ function EmptySlotCard({
   )
 }
 
-export function ProductCompetitorPrices({ productId }: { productId: number }) {
+export function ProductCompetitorPrices({
+  productId,
+  onChanged,
+}: {
+  productId: number
+  onChanged?: () => void
+}) {
   const [listings, setListings] = useState<CompetitorListing[]>([])
   const [loading, setLoading] = useState(true)
   const [busyKey, setBusyKey] = useState<number | string | null>(null)
@@ -412,6 +417,7 @@ export function ProductCompetitorPrices({ productId }: { productId: number }) {
         current.map((listing) => (listing.id === id ? updated : listing))
       )
       setError(null)
+      onChanged?.()
     } catch (err) {
       setError(toPersianError(err))
     } finally {
@@ -431,9 +437,23 @@ export function ProductCompetitorPrices({ productId }: { productId: number }) {
       )
       setListings((current) => [...current, created])
       setError(null)
+      // بررسی خودکار دفعهٔ اول: کاربر نباید دستی «بررسی لینک» بزند.
+      try {
+        setBusyKey(created.id)
+        const checked = await api.checkCompetitorListing(created.id)
+        setListings((current) =>
+          current.map((listing) =>
+            listing.id === created.id ? checked : listing
+          )
+        )
+      } catch (checkErr) {
+        setError(toPersianError(checkErr))
+      } finally {
+        setBusyKey(null)
+      }
+      onChanged?.()
     } catch (err) {
       setError(toPersianError(err))
-    } finally {
       setBusyKey(null)
     }
   }
@@ -444,6 +464,7 @@ export function ProductCompetitorPrices({ productId }: { productId: number }) {
       await api.deleteCompetitorListing(id)
       setListings((current) => current.filter((listing) => listing.id !== id))
       setError(null)
+      onChanged?.()
     } catch (err) {
       setError(toPersianError(err))
     } finally {
@@ -459,9 +480,10 @@ export function ProductCompetitorPrices({ productId }: { productId: number }) {
       <div>
         <h3 className="font-semibold">قیمت فروشگاه‌های دیگر</h3>
         <p className="mt-1 text-xs leading-5 text-muted-foreground">
-          برای هر فروشگاه یک کارت وجود دارد. لینک را وارد کنید تا ذخیره شود؛ با
-          «بررسی لینک» قیمت به‌صورت خودکار به‌روزرسانی می‌شود و با «حذف» لینک
-          دستی پاک می‌شود. قیمت فقط تا ۲۴ ساعت تازه محسوب می‌شود.
+          برای هر فروشگاه یک کارت وجود دارد. لینک را وارد کنید تا ذخیره و
+          به‌صورت خودکار بررسی شود؛ با «بررسی لینک» می‌توانید بعداً قیمت را
+          به‌روزرسانی کنید و با «حذف» لینک دستی پاک می‌شود. قیمت فقط تا ۲۴ ساعت
+          تازه محسوب می‌شود.
         </p>
       </div>
 

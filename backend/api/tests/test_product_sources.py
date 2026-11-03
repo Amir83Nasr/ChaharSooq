@@ -46,7 +46,7 @@ FIELDS = [
     "wareRemain",
 ]
 
-FIXTURE = Path(__file__).resolve().parents[3] / "data" / "parsina-products.csv"
+FIXTURE = Path(__file__).resolve().parents[3] / "data" / "parsina.csv"
 
 
 def _row(

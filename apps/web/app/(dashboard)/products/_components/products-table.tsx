@@ -6,26 +6,26 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@workspace/ui/components/table"
-import { TablePagination } from "@workspace/ui/components/pagination"
+} from "@workspace/ui/primitives/table"
+import { TablePagination } from "@workspace/ui/primitives/pagination"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@workspace/ui/components/select"
-import { Button } from "@workspace/ui/components/button"
-import { EmptyState } from "@workspace/ui/components/state"
-import { Price } from "@workspace/ui/components/price"
-import { PersianNumber } from "@workspace/ui/components/persian-number"
+} from "@workspace/ui/primitives/select"
+import { Button } from "@workspace/ui/primitives/button"
+import { EmptyState } from "@workspace/ui/feedback/state"
+import { Price } from "@workspace/ui/persian/price"
+import { PersianNumber } from "@workspace/ui/persian/persian-number"
 import { formatPersianNumber } from "@workspace/ui/lib/number"
-import { Skeleton } from "@workspace/ui/components/skeleton"
+import { Skeleton } from "@workspace/ui/primitives/skeleton"
 import { CircleAlert, PackageSearch, RefreshCw } from "lucide-react"
-import { StockCell } from "@/components/products-stock-cell"
+import { StockCell } from "@/components/data/products-stock-cell"
 import type { ProductOut, ProductPage } from "@/lib/api"
 
-import { PAGE_SIZE_OPTIONS } from "@/components/page-size-settings"
+import { PAGE_SIZE_OPTIONS } from "@/components/settings/page-size-settings"
 
 interface TableProps {
   page: ProductPage | null

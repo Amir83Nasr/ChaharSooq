@@ -4,7 +4,7 @@ Development only. Replaces the whole product mirror with the CSV catalog so the
 dev UI shows the same shaped data as production without Parsina credentials.
 Run via `make db-seed-parsina` (which applies migrations first).
 
-The CSV path defaults to `<repo>/data/parsina-products.csv` and can be
+The CSV path defaults to `<repo>/data/parsina.csv` and can be
 overridden with `PRODUCTS_CSV_PATH`.
 """
 

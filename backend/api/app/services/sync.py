@@ -215,7 +215,7 @@ class ProductSyncService:
                 continue
             if product is None:
                 product = Product(external_id=row.good_id, sku=row.good_code, name=row.good_name)
-                self._session.add(product)
+                self._products.stage(product)
                 created += 1
             else:
                 updated += 1
@@ -284,27 +284,45 @@ class ProductSyncService:
         return f"خطای همگام‌سازی: {exc}"
 
 
+def _due(session: Session, *, interval_minutes: int) -> bool:
+    """True unless a previous attempt ran more recently than the interval."""
+    last_attempt = SyncStateRepository(session).get().last_attempt_at
+    if last_attempt is not None:
+        if last_attempt.tzinfo is None:
+            last_attempt = last_attempt.replace(tzinfo=UTC)
+        if datetime.now(UTC) < last_attempt + timedelta(minutes=interval_minutes):
+            return False
+    return True
+
+
 def run_scheduled_sync(
     *,
     session_factory: Callable[[], Session],
     interval_minutes: int,
     transport: BaseTransport | None = None,
 ) -> SyncResult | None:
-    """One scheduler tick: no-op unless production AND configured, enabled, due.
+    """One scheduler tick: no-op unless configured, enabled, and due.
 
-    With `DEV_DATABASE_URL` set, the tick copies the dev mirror (simulation);
-    otherwise it requires Parsina credentials, same as the manual button.
+    Development ticks from the CSV fixture so dev mirrors the production
+    timing. Production ticks from the dev mirror when `DEV_DATABASE_URL` is
+    set (simulation); otherwise it requires Parsina credentials, same as the
+    manual button.
     """
-    if not get_settings().is_production:
-        return None
-    if get_settings().dev_database_url.strip():
+    app_settings = get_settings()
+    if app_settings.app_env == "development":
         with session_factory() as session:
-            last_attempt = SyncStateRepository(session).get().last_attempt_at
-            if last_attempt is not None:
-                if last_attempt.tzinfo is None:
-                    last_attempt = last_attempt.replace(tzinfo=UTC)
-                if datetime.now(UTC) < last_attempt + timedelta(minutes=interval_minutes):
-                    return None
+            if not _due(session, interval_minutes=interval_minutes):
+                return None
+            try:
+                return ProductSyncService(session, transport=transport).run()
+            except (SyncBusyError, SyncNotConfiguredError):
+                return None
+    if not app_settings.is_production:
+        return None
+    if app_settings.dev_database_url.strip():
+        with session_factory() as session:
+            if not _due(session, interval_minutes=interval_minutes):
+                return None
             try:
                 return ProductSyncService(session, transport=transport).run()
             except SyncBusyError:
@@ -313,12 +331,8 @@ def run_scheduled_sync(
     if not settings.is_configured or not settings.parsina_sync_enabled:
         return None
     with session_factory() as session:
-        last_attempt = SyncStateRepository(session).get().last_attempt_at
-        if last_attempt is not None:
-            if last_attempt.tzinfo is None:
-                last_attempt = last_attempt.replace(tzinfo=UTC)
-            if datetime.now(UTC) < last_attempt + timedelta(minutes=interval_minutes):
-                return None
+        if not _due(session, interval_minutes=interval_minutes):
+            return None
         try:
             return ProductSyncService(session, settings=settings, transport=transport).run()
         except SyncBusyError:

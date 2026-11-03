@@ -4,17 +4,17 @@ Constraints for coding agents on **چهارسوق (Charsooq)**, a Persian, RTL-f
 
 ## 1. Repository map
 
-| Path                                                       | Contents                                                             |
-| ---------------------------------------------------------- | -------------------------------------------------------------------- |
-| `apps/web`                                               | Next.js app: routes, app-level components, API client, e2e tests     |
-| `packages/ui`                                            | Shared UI kit: shadcn primitives, Persian formatting, global styles  |
-| `packages/eslint-config`, `packages/typescript-config` | Shared ESLint and TypeScript configs                                 |
-| `backend/api`                                            | FastAPI service: `app/`, `migrations/`, `tests/`, `scripts/` |
-| `backend/api/openapi.json`                               | Committed OpenAPI snapshot. Generated; never edit by hand            |
-| `docs/`                                                  | Architecture notes, ADRs, API notes                                  |
-| `.github/workflows/`                                     | CI and deploy                                                        |
-| `Dockerfile.*`, `compose.yml`                          | Container images and the local stack                                 |
-| `data/`                                                  | Local-only data files (gitignored)                                   |
+| Path                                                   | Contents                                                            |
+| ------------------------------------------------------ | ------------------------------------------------------------------- |
+| `apps/web`                                             | Next.js app: routes, app-level components, API client, e2e tests    |
+| `packages/ui`                                          | Shared UI kit: shadcn primitives, Persian formatting, global styles |
+| `packages/eslint-config`, `packages/typescript-config` | Shared ESLint and TypeScript configs                                |
+| `backend/api`                                          | FastAPI service: `app/`, `migrations/`, `tests/`, `scripts/`        |
+| `backend/api/openapi.json`                             | Committed OpenAPI snapshot. Generated; never edit by hand           |
+| `docs/`                                                | Architecture notes, ADRs, API notes                                 |
+| `.github/workflows/`                                   | CI and deploy                                                       |
+| `Dockerfile.*`, `compose.yml`                          | Container images and the local stack                                |
+| `data/`                                                | Local-only data files (gitignored)                                  |
 
 Do not add a workspace or top-level folder without a documented reason (an ADR).
 

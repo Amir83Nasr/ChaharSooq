@@ -189,3 +189,8 @@ class ProductRepository:
         self._session.add(product)
         self._session.flush()
         return product
+
+    def stage(self, product: Product) -> Product:
+        """Attach a new row without flushing — caller flushes in bulk."""
+        self._session.add(product)
+        return product

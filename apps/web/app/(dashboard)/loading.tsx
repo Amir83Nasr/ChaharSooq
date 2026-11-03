@@ -1,4 +1,4 @@
-import { Skeleton } from "@workspace/ui/components/skeleton"
+import { Skeleton } from "@workspace/ui/primitives/skeleton"
 
 export default function DashboardLoading() {
   return (

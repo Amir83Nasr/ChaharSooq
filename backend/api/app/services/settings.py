@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from typing import Literal
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_parsina_settings
-from app.models import Setting, SuggestedPriceFormula
+from app.models import SuggestedPriceFormula
+from app.repositories import SettingsRepository, SuggestedPriceFormulaRepository
 
 LOW_STOCK_THRESHOLD_KEY = "low_stock_threshold"
 DEFAULT_LOW_STOCK_THRESHOLD = 5
@@ -32,7 +32,8 @@ ALLOWED_COMPETITOR_STORES: tuple[Literal["digikala", "technolife"], ...] = (
 
 class SettingsService:
     def __init__(self, session: Session) -> None:
-        self._session = session
+        self._settings = SettingsRepository(session)
+        self._formulas = SuggestedPriceFormulaRepository(session)
 
     def get_all(self) -> dict[str, object]:
         return {
@@ -44,32 +45,28 @@ class SettingsService:
         }
 
     def get_suggested_price_formulas(self) -> list[dict[str, str]]:
-        rows = self._session.scalars(
-            select(SuggestedPriceFormula).order_by(SuggestedPriceFormula.top_group)
-        )
+        rows = self._formulas.list_ordered()
         return [{"top_group": row.top_group, "expression": row.expression} for row in rows]
 
     def update_suggested_price_formulas(
         self, formulas: list[dict[str, str]]
     ) -> list[dict[str, str]]:
-        existing = {
-            row.top_group: row for row in self._session.scalars(select(SuggestedPriceFormula)).all()
-        }
+        existing = self._formulas.get_map()
         submitted = {str(item["top_group"]): str(item["expression"]) for item in formulas}
         for top_group, row in existing.items():
             if top_group not in submitted:
-                self._session.delete(row)
+                self._formulas.delete(row)
         for top_group, expression in submitted.items():
             row = existing.get(top_group)
             if row is None:
-                self._session.add(SuggestedPriceFormula(top_group=top_group, expression=expression))
+                new_row = SuggestedPriceFormula(top_group=top_group, expression=expression)
+                self._formulas.add(new_row)
             else:
-                row.expression = expression
-        self._session.flush()
+                self._formulas.update_expression(row, expression)
         return self.get_suggested_price_formulas()
 
     def get_threshold(self) -> int:
-        row = self._session.get(Setting, LOW_STOCK_THRESHOLD_KEY)
+        row = self._settings.get(LOW_STOCK_THRESHOLD_KEY)
         if row is None:
             return DEFAULT_LOW_STOCK_THRESHOLD
         try:
@@ -79,17 +76,11 @@ class SettingsService:
         return max(value, 0)
 
     def update_threshold(self, threshold: int) -> int:
-        row = self._session.get(Setting, LOW_STOCK_THRESHOLD_KEY)
-        if row is None:
-            row = Setting(key=LOW_STOCK_THRESHOLD_KEY, value=str(threshold))
-            self._session.add(row)
-        else:
-            row.value = str(threshold)
-        self._session.flush()
+        self._settings.upsert(LOW_STOCK_THRESHOLD_KEY, str(threshold))
         return threshold
 
     def get_page_size(self) -> int:
-        row = self._session.get(Setting, DEFAULT_PAGE_SIZE_KEY)
+        row = self._settings.get(DEFAULT_PAGE_SIZE_KEY)
         if row is None:
             return DEFAULT_PAGE_SIZE
         try:
@@ -99,17 +90,11 @@ class SettingsService:
         return value if value in ALLOWED_PAGE_SIZES else DEFAULT_PAGE_SIZE
 
     def update_page_size(self, page_size: int) -> int:
-        row = self._session.get(Setting, DEFAULT_PAGE_SIZE_KEY)
-        if row is None:
-            row = Setting(key=DEFAULT_PAGE_SIZE_KEY, value=str(page_size))
-            self._session.add(row)
-        else:
-            row.value = str(page_size)
-        self._session.flush()
+        self._settings.upsert(DEFAULT_PAGE_SIZE_KEY, str(page_size))
         return page_size
 
     def get_sync_interval(self) -> int:
-        row = self._session.get(Setting, SYNC_INTERVAL_KEY)
+        row = self._settings.get(SYNC_INTERVAL_KEY)
         if row is None:
             return DEFAULT_SYNC_INTERVAL_MINUTES
         try:
@@ -119,17 +104,11 @@ class SettingsService:
         return min(max(value, MIN_SYNC_INTERVAL_MINUTES), MAX_SYNC_INTERVAL_MINUTES)
 
     def update_sync_interval(self, minutes: int) -> int:
-        row = self._session.get(Setting, SYNC_INTERVAL_KEY)
-        if row is None:
-            row = Setting(key=SYNC_INTERVAL_KEY, value=str(minutes))
-            self._session.add(row)
-        else:
-            row.value = str(minutes)
-        self._session.flush()
+        self._settings.upsert(SYNC_INTERVAL_KEY, str(minutes))
         return minutes
 
     def get_competitor_store(self) -> Literal["digikala", "technolife"]:
-        row = self._session.get(Setting, DEFAULT_COMPETITOR_STORE_KEY)
+        row = self._settings.get(DEFAULT_COMPETITOR_STORE_KEY)
         if row is None:
             return DEFAULT_COMPETITOR_STORE
         value = row.value.strip()
@@ -140,11 +119,5 @@ class SettingsService:
     def update_competitor_store(
         self, store: Literal["digikala", "technolife"]
     ) -> Literal["digikala", "technolife"]:
-        row = self._session.get(Setting, DEFAULT_COMPETITOR_STORE_KEY)
-        if row is None:
-            row = Setting(key=DEFAULT_COMPETITOR_STORE_KEY, value=store)
-            self._session.add(row)
-        else:
-            row.value = store
-        self._session.flush()
+        self._settings.upsert(DEFAULT_COMPETITOR_STORE_KEY, store)
         return store

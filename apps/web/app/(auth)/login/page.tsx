@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 
-import { LoginShell } from "@/components/login-shell"
+import { LoginShell } from "@/components/auth/login-shell"
 import { getSessionAdmin } from "@/lib/auth"
 
 export const metadata: Metadata = {

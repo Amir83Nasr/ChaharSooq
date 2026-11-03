@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation"
-import { SidebarInset, SidebarProvider } from "@workspace/ui/components/sidebar"
+import { SidebarInset, SidebarProvider } from "@workspace/ui/primitives/sidebar"
 
-import { AppSidebar } from "@/components/app-sidebar"
-import { DashboardHeader } from "@/components/dashboard-header"
-import { LogoutProvider } from "@/components/logout-menu-item"
+import { AppSidebar } from "@/components/layout/app-sidebar"
+import { DashboardHeader } from "@/components/layout/dashboard-header"
+import { LogoutProvider } from "@/components/auth/logout-menu-item"
 import { getSessionAdmin } from "@/lib/auth"
 
 export default async function DashboardLayout({

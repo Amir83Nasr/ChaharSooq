@@ -1,7 +1,7 @@
 import Link from "next/link"
 
-import { Button } from "@workspace/ui/components/button"
-import { EmptyState } from "@workspace/ui/components/state"
+import { Button } from "@workspace/ui/primitives/button"
+import { EmptyState } from "@workspace/ui/feedback/state"
 
 export default function NotFound() {
   return (

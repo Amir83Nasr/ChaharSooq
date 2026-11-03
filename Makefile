@@ -55,7 +55,7 @@ db-seed: db-up ## Create dev admin user (ADMIN_USER, ADMIN_PASSWORD or DEV_ADMIN
 	ADMIN_USER="$(strip $(ADMIN_USER))" ADMIN_PASSWORD="$(strip $(or $(ADMIN_PASSWORD),$(DEV_ADMIN_PASSWORD)))" \
 	uv run --project backend/api python backend/api/scripts/seed_admin.py
 
-db-seed-parsina: db-migrate ## Load data/parsina-products.csv into dev DB (replaces products)
+db-seed-parsina: db-migrate ## Load data/parsina.csv into dev DB (replaces products)
 	uv run --project backend/api python backend/api/scripts/seed_parsina_products.py
 
 db-clear-products: db-up ## Delete all products + competitor listings from dev DB (refuses production)

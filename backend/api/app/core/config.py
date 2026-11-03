@@ -20,7 +20,7 @@ _ENV_FILES = (
 )
 
 # Only the development source reads this file; production uses Parsina.
-_DEFAULT_PRODUCTS_CSV_PATH = _REPO_ROOT / "data" / "parsina-products.csv"
+_DEFAULT_PRODUCTS_CSV_PATH = _REPO_ROOT / "data" / "parsina.csv"
 
 
 class Settings(BaseSettings):

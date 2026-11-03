@@ -1,18 +1,22 @@
-"""Background scheduler — periodic Parsina sync, independent of any browser.
+"""Background scheduler — periodic product sync, independent of any browser.
 
 Runs in a daemon thread inside the API process. Multi-worker/multi-instance
 safety comes from the DB lock in ProductSyncService, not from this loop.
+Development ticks on the same interval from the CSV fixture so dev mirrors
+the production timing; only tests never start it.
 """
 
 from __future__ import annotations
 
 import logging
 import threading
+from pathlib import Path
 
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import get_parsina_settings, get_settings
 from app.core.database import get_engine
+from app.integrations.parsina_csv import CsvCommoditySource
 from app.services.sync import run_scheduled_sync
 
 log = logging.getLogger("charsooq.scheduler")
@@ -29,27 +33,44 @@ class SyncScheduler:
         self._thread: threading.Thread | None = None
 
     def start(self) -> None:
-        if not get_settings().is_production:
-            # Development serves the CSV fixture; no periodic network sync.
-            log.info("scheduler off: live sync runs only in production")
-            return
-        settings = get_parsina_settings()
-        dev_simulation = bool(get_settings().dev_database_url.strip())
-        if not dev_simulation and (not settings.is_configured or not settings.parsina_sync_enabled):
-            log.info("scheduler off: parsina not configured")
+        app_settings = get_settings()
+        if app_settings.app_env == "development":
+            # Dev mirrors prod timing from the CSV fixture (same interval,
+            # same lock, same status reporting) — no Parsina credentials needed.
+            if not CsvCommoditySource(Path(app_settings.products_csv_path)).is_configured:
+                log.info("scheduler off: product CSV fixture not configured")
+                return
+        elif app_settings.is_production:
+            settings = get_parsina_settings()
+            dev_simulation = bool(app_settings.dev_database_url.strip())
+            if not dev_simulation and (
+                not settings.is_configured or not settings.parsina_sync_enabled
+            ):
+                log.info("scheduler off: parsina not configured")
+                return
+        else:
+            log.info("scheduler off: sync loop runs only in development and production")
             return
         if self._thread is not None and self._thread.is_alive():
             return
         self._stop.clear()
         self._thread = threading.Thread(target=self._loop, name="parsina-sync", daemon=True)
         self._thread.start()
-        if dev_simulation:
+        if app_settings.app_env == "development":
+            log.info(
+                "scheduler on (development CSV): every %d min",
+                get_parsina_settings().parsina_sync_interval_minutes,
+            )
+        elif app_settings.dev_database_url.strip():
             log.info(
                 "scheduler on (dev-db simulation): every %d min",
-                settings.parsina_sync_interval_minutes,
+                get_parsina_settings().parsina_sync_interval_minutes,
             )
         else:
-            log.info("scheduler on: every %d min", settings.parsina_sync_interval_minutes)
+            log.info(
+                "scheduler on: every %d min",
+                get_parsina_settings().parsina_sync_interval_minutes,
+            )
 
     def stop(self) -> None:
         self._stop.set()

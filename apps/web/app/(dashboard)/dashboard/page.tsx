@@ -2,8 +2,8 @@ import type { Metadata } from "next"
 
 import { Wrench } from "lucide-react"
 
-import { Card, CardContent } from "@workspace/ui/components/card"
-import { PageHeader } from "@workspace/ui/components/page-header"
+import { Card, CardContent } from "@workspace/ui/primitives/card"
+import { PageHeader } from "@workspace/ui/layout/page-header"
 
 export const metadata: Metadata = { title: "چهارسوق | داشبورد" }
 

@@ -1,18 +1,17 @@
 # Git hooks. Install with `make install` (or `pnpm exec lefthook install`).
-# pre-commit stays fast: only staged files. pre-push runs the broader checks.
+# pre-commit stays fast: only staged files, per-file commands. pre-push runs the broader checks.
 pre-commit:
   parallel: true
   commands:
     format:
-      glob: "*.{ts,tsx}"
+      glob: "*.{ts,tsx,mts,mjs,js,json,css,md}"
       run: pnpm exec prettier --write {staged_files}
       stage_fixed: true
     lint:
-      glob: "*.{ts,tsx}"
-      run: pnpm lint
+      glob: "*.{ts,tsx,mts}"
+      run: pnpm exec eslint --no-warn-ignored {staged_files}
     ruff-check:
       glob: "backend/**/*.py"
-      exclude: backend/api/tests/**
       run: uv run --project backend/api ruff check {staged_files}
     ruff-format:
       glob: "backend/**/*.py"

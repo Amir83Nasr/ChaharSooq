@@ -7,8 +7,8 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models import Category, Product
-from app.repositories import ProductRepository, ProductSort
+from app.models import Product
+from app.repositories import CategoryRepository, ProductRepository, ProductSort
 from app.schemas import ProductIn
 
 INVALID_CATEGORY_ERROR = "دسته‌بندی نامعتبر است"
@@ -20,8 +20,8 @@ class InvalidCategoryError(ValueError):
 
 class ProductService:
     def __init__(self, session: Session) -> None:
-        self._session = session
         self._repos = ProductRepository(session)
+        self._categories = CategoryRepository(session)
 
     def list(
         self,
@@ -70,10 +70,7 @@ class ProductService:
         )
 
     def create(self, payload: ProductIn) -> Product:
-        if (
-            payload.category_id is not None
-            and self._session.get(Category, payload.category_id) is None
-        ):
+        if payload.category_id is not None and self._categories.get(payload.category_id) is None:
             raise InvalidCategoryError
         return self._repos.add(Product(**payload.model_dump()))
 

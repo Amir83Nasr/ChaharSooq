@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, require_admin
+from app.api.dependencies import get_db, require_admin
 from app.models import Admin
 from app.schemas import SettingsOut, SettingsUpdateIn
 from app.services import SettingsService

@@ -39,6 +39,17 @@ class CompetitorRepository:
     def get(self, listing_id: int) -> CompetitorListing | None:
         return self._session.get(CompetitorListing, listing_id)
 
+    def get_by_product_store(
+        self, product_id: int, store: str, exclude_id: int | None = None
+    ) -> CompetitorListing | None:
+        query = select(CompetitorListing).where(
+            CompetitorListing.product_id == product_id,
+            CompetitorListing.store == store,
+        )
+        if exclude_id is not None:
+            query = query.where(CompetitorListing.id != exclude_id)
+        return self._session.execute(query).scalars().first()
+
     def add(self, listing: CompetitorListing) -> CompetitorListing:
         self._session.add(listing)
         self._session.flush()

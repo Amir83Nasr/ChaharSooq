@@ -12,7 +12,6 @@ import {
   ApiRequestError,
   GENERIC_ERROR_MESSAGE,
   type CategoryOut,
-  type CompetitorStore,
   type ProductOut,
   type ProductPage,
   type ProductSort,
@@ -45,8 +44,6 @@ export default function ProductsPage() {
   const [stock, setStock] = useState<StockFilter>("all")
   const [minPrice, setMinPrice] = useState("")
   const [maxPrice, setMaxPrice] = useState("")
-  const [competitorStore, setCompetitorStore] =
-    useState<CompetitorStore | null>(null)
   const [threshold, setThreshold] = useState(DEFAULT_LOW_STOCK_THRESHOLD)
   // Bumped after a sync lands — re-fetches table + stats in place, keeping
   // search/sort/paging state untouched.
@@ -148,7 +145,6 @@ export default function ProductsPage() {
         top_group: topGroup ?? undefined,
         min_price: Number.isFinite(min) ? min : undefined,
         max_price: Number.isFinite(max) ? max : undefined,
-        competitor_store: competitorStore ?? undefined,
         ...stockParams,
         sort,
         page: pageNum,
@@ -189,7 +185,6 @@ export default function ProductsPage() {
     threshold,
     minPrice,
     maxPrice,
-    competitorStore,
     dataVersion,
   ])
 
@@ -213,8 +208,7 @@ export default function ProductsPage() {
     topGroup !== null ||
     stock !== "all" ||
     minPrice.trim() !== "" ||
-    maxPrice.trim() !== "" ||
-    competitorStore !== null
+    maxPrice.trim() !== ""
 
   function clearFilters() {
     setQ("")
@@ -224,7 +218,6 @@ export default function ProductsPage() {
     setStock("all")
     setMinPrice("")
     setMaxPrice("")
-    setCompetitorStore(null)
     setPageNum(1)
   }
 
@@ -245,7 +238,6 @@ export default function ProductsPage() {
         stock={stock}
         minPrice={minPrice}
         maxPrice={maxPrice}
-        competitorStore={competitorStore}
         hasFilters={hasFilters}
         onQ={(v) => {
           setQ(v)
@@ -269,10 +261,6 @@ export default function ProductsPage() {
         }}
         onMaxPrice={(v) => {
           setMaxPrice(v)
-          resetPage()
-        }}
-        onCompetitorStore={(v) => {
-          setCompetitorStore(v)
           resetPage()
         }}
         onClear={clearFilters}

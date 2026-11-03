@@ -51,7 +51,17 @@ export function ProductDetailDialog(props: {
             {!selected.main_group_name?.startsWith("فرش") &&
             !selected.main_group_name?.startsWith("مبلمان") ? (
               <ProductCompetitorPrices productId={selected.id} />
-            ) : null}
+            ) : (
+              <section className="rounded-lg border border-dashed border-border bg-muted/30 p-4 text-center">
+                <p className="text-sm font-medium">
+                  مقایسهٔ قیمت برای این دسته‌بندی هنوز در دست پیاده‌سازی است.
+                </p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  در فاز فعلی فقط کالاهای لوازم خانگی قیمت فروشگاه‌های دیگر را
+                  دارند.
+                </p>
+              </section>
+            )}
           </div>
         ) : null}
       </ResponsiveDialogContent>

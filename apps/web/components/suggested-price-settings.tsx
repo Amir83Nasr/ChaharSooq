@@ -5,12 +5,12 @@ import { useEffect, useState } from "react"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 
-import { api, type CategoryOut, type SuggestedPriceFormula } from "@/lib/api"
+import { api, type SuggestedPriceFormula, type TopGroup } from "@/lib/api"
+
+const TOP_GROUPS: TopGroup[] = ["فرش", "مبلمان", "لوازم خانگی"]
 
 export function SuggestedPriceSettings() {
-  const [categories, setCategories] = useState<CategoryOut[]>([])
   const [formulas, setFormulas] = useState<SuggestedPriceFormula[]>([])
-  const [categoryToAdd, setCategoryToAdd] = useState("")
   const [loaded, setLoaded] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -18,10 +18,10 @@ export function SuggestedPriceSettings() {
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([api.categories(), api.settings()])
-      .then(([categoryRows, settings]) => {
+    api
+      .settings()
+      .then((settings) => {
         if (cancelled) return
-        setCategories(categoryRows)
         setFormulas(settings.suggested_price_formulas)
         setLoaded(true)
       })
@@ -35,30 +35,22 @@ export function SuggestedPriceSettings() {
     }
   }, [])
 
-  const configured = new Set(formulas.map((formula) => formula.category_id))
-  const available = categories.filter(
-    (category) => !configured.has(category.id)
-  )
-
-  function updateFormula(categoryId: number, expression: string) {
-    setFormulas((current) =>
-      current.map((formula) =>
-        formula.category_id === categoryId
-          ? { ...formula, expression }
-          : formula
-      )
+  function expressionFor(topGroup: TopGroup): string {
+    return (
+      formulas.find((formula) => formula.top_group === topGroup)?.expression ??
+      ""
     )
-    setSaved(false)
   }
 
-  function addFormula() {
-    const categoryId = Number(categoryToAdd)
-    if (!categoryId) return
-    setFormulas((current) => [
-      ...current,
-      { category_id: categoryId, expression: "x" },
-    ])
-    setCategoryToAdd("")
+  function updateFormula(topGroup: TopGroup, expression: string) {
+    setFormulas((current) => {
+      if (current.some((formula) => formula.top_group === topGroup)) {
+        return current.map((formula) =>
+          formula.top_group === topGroup ? { ...formula, expression } : formula
+        )
+      }
+      return [...current, { top_group: topGroup, expression }]
+    })
     setSaved(false)
   }
 
@@ -67,8 +59,11 @@ export function SuggestedPriceSettings() {
     setError(null)
     setSaved(false)
     try {
+      const payload = formulas.filter(
+        (formula) => formula.expression.trim() !== ""
+      )
       const data = await api.updateSettings({
-        suggested_price_formulas: formulas,
+        suggested_price_formulas: payload,
       })
       setFormulas(data.suggested_price_formulas)
       setSaved(true)
@@ -95,80 +90,26 @@ export function SuggestedPriceSettings() {
         تعریف کنید. منبع و مقدار روزانه x پس از مشخص‌شدن اتصال داده، به این
         فرمول وصل می‌شود.
       </p>
-      {formulas.map((formula) => {
-        const category = categories.find(
-          (item) => item.id === formula.category_id
-        )
-        return (
-          <div
-            key={formula.category_id}
-            className="flex flex-col gap-2 sm:flex-row sm:items-center"
-          >
-            <label
-              className="min-w-36 text-sm"
-              htmlFor={`formula-${formula.category_id}`}
-            >
-              {category?.name ?? `دسته ${formula.category_id}`}
-            </label>
-            <Input
-              id={`formula-${formula.category_id}`}
-              dir="ltr"
-              className="text-left"
-              value={formula.expression}
-              onChange={(event) =>
-                updateFormula(formula.category_id, event.target.value)
-              }
-              placeholder="مثلاً x * 1.05"
-              aria-label={`فرمول قیمت پیشنهادی ${category?.name ?? "دسته‌بندی"}`}
-              maxLength={256}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setFormulas((current) =>
-                  current.filter(
-                    (item) => item.category_id !== formula.category_id
-                  )
-                )
-                setSaved(false)
-              }}
-              disabled={busy}
-            >
-              حذف
-            </Button>
-          </div>
-        )
-      })}
-      {available.length > 0 ? (
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <select
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-            value={categoryToAdd}
-            onChange={(event) => setCategoryToAdd(event.target.value)}
-            aria-label="انتخاب دسته‌بندی برای افزودن فرمول"
-          >
-            <option value="">انتخاب دسته‌بندی</option>
-            {available.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={addFormula}
-            disabled={!categoryToAdd || busy}
-          >
-            افزودن فرمول
-          </Button>
+      {TOP_GROUPS.map((topGroup) => (
+        <div
+          key={topGroup}
+          className="flex flex-col gap-2 sm:flex-row sm:items-center"
+        >
+          <label className="min-w-36 text-sm" htmlFor={`formula-${topGroup}`}>
+            {topGroup}
+          </label>
+          <Input
+            id={`formula-${topGroup}`}
+            dir="ltr"
+            className="text-left"
+            value={expressionFor(topGroup)}
+            onChange={(event) => updateFormula(topGroup, event.target.value)}
+            placeholder="مثلاً x * 1.05"
+            aria-label={`فرمول قیمت پیشنهادی ${topGroup}`}
+            maxLength={256}
+          />
         </div>
-      ) : categories.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          برای تعریف فرمول ابتدا دسته‌بندی ایجاد کنید.
-        </p>
-      ) : null}
+      ))}
       <div>
         <Button onClick={save} disabled={busy}>
           {busy ? "در حال ذخیره…" : "ذخیره فرمول‌ها"}

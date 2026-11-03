@@ -232,6 +232,19 @@ def _as_object(value: object) -> list[dict[str, object]]:
     return []
 
 
+def _iter_offers(value: object) -> object:
+    """Yield offer dicts, descending into nested AggregateOffer.offers."""
+    if isinstance(value, list):
+        for item in value:
+            yield from _iter_offers(item)
+    elif isinstance(value, dict):
+        if value.get("price") is not None:
+            yield value
+        nested = value.get("offers")
+        if nested is not None:
+            yield from _iter_offers(nested)
+
+
 def _price_from_json_ld(html: str) -> FetchedPrice | None:
     parser = JsonLdParser()
     parser.feed(html)
@@ -246,10 +259,7 @@ def _price_from_json_ld(html: str) -> FetchedPrice | None:
             if not any(str(kind).lower().rsplit("/", 1)[-1] == "product" for kind in types):
                 continue
             offers = item.get("offers")
-            offer_list = offers if isinstance(offers, list) else [offers]
-            for offer in offer_list:
-                if not isinstance(offer, dict):
-                    continue
+            for offer in _iter_offers(offers):
                 raw_price = offer.get("price")
                 currency = str(offer.get("priceCurrency", "")).upper()
                 try:

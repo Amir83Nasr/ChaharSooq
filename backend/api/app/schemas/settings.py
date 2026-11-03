@@ -24,12 +24,12 @@ class SettingsUpdateIn(BaseModel):
 
     @field_validator("suggested_price_formulas")
     @classmethod
-    def validate_unique_formula_categories(
+    def validate_unique_formula_top_groups(
         cls, formulas: list[SuggestedPriceFormulaIn] | None
     ) -> list[SuggestedPriceFormulaIn] | None:
         if formulas is None:
             return None
-        category_ids = [formula.category_id for formula in formulas]
-        if len(category_ids) != len(set(category_ids)):
+        top_groups = [formula.top_group for formula in formulas]
+        if len(top_groups) != len(set(top_groups)):
             raise ValueError("برای هر دسته‌بندی فقط یک فرمول می‌توان ثبت کرد")
         return formulas

@@ -2,12 +2,15 @@
 
 import ast
 import math
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+TopGroup = Literal["فرش", "مبلمان", "لوازم خانگی"]
+
 
 class SuggestedPriceFormulaIn(BaseModel):
-    category_id: int = Field(gt=0)
+    top_group: TopGroup
     expression: str = Field(min_length=1, max_length=256)
 
     @field_validator("expression")

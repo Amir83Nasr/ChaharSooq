@@ -86,6 +86,8 @@ class CompetitorService:
     def _out(self, row: CompetitorListing) -> CompetitorListingOut:
         now = datetime.now(UTC)
         ttl = timedelta(hours=get_settings().competitor_price_ttl_hours)
+        # Manual values always win over fetched ones (and over the future
+        # automatic name-based search): a fresh manual price/in-stock is effective.
         manual_fresh = (
             row.manual_updated_at is not None and now - _aware(row.manual_updated_at) <= ttl
         )
@@ -166,6 +168,13 @@ class CompetitorService:
             raise CompetitorNotFoundError
         if not _is_appliance(product.main_group_name):
             raise InvalidCompetitorProductError("این فاز فقط برای کالاهای لوازم خانگی است")
+        # Manual links (digikala / technolife) take priority over the future
+        # automatic name-based search: at most one manual link per store.
+        if (
+            payload.store in ("digikala", "technolife")
+            and self._repo.get_by_product_store(product_id, payload.store) is not None
+        ):
+            raise InvalidCompetitorProductError("برای این فروشگاه قبلاً یک لینک ثبت شده است")
         try:
             url = validate_url(payload.url, payload.store)
         except ValueError as exc:
@@ -195,6 +204,11 @@ class CompetitorService:
                 raise InvalidCompetitorProductError(str(exc)) from exc
             link_changed = target_store != row.store or target_url != row.url
             if link_changed:
+                if target_store in ("digikala", "technolife") and (
+                    self._repo.get_by_product_store(row.product_id, target_store, exclude_id=row.id)
+                    is not None
+                ):
+                    raise InvalidCompetitorProductError("برای این فروشگاه قبلاً یک لینک ثبت شده است")
                 row.store = target_store
                 row.url = target_url
                 row.status = "pending"

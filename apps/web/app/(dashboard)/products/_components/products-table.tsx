@@ -134,7 +134,7 @@ function ProductsTableHead() {
             اختلاف درصد
           </TableHead>
           <TableHead scope="col" className="text-center">
-            تغییرات قیمت
+            قیمت پیشنهادی
           </TableHead>
           <TableHead scope="col" className="text-center">
             موجودی

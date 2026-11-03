@@ -171,8 +171,10 @@ export interface SettingsOut {
   suggested_price_formulas: SuggestedPriceFormula[]
 }
 
+export type TopGroup = "فرش" | "مبلمان" | "لوازم خانگی"
+
 export interface SuggestedPriceFormula {
-  category_id: number
+  top_group: TopGroup
   expression: string
 }
 

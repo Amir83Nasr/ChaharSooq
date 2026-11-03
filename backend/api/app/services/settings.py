@@ -33,29 +33,26 @@ class SettingsService:
             "suggested_price_formulas": self.get_suggested_price_formulas(),
         }
 
-    def get_suggested_price_formulas(self) -> list[dict[str, int | str]]:
+    def get_suggested_price_formulas(self) -> list[dict[str, str]]:
         rows = self._session.scalars(
-            select(SuggestedPriceFormula).order_by(SuggestedPriceFormula.category_id)
+            select(SuggestedPriceFormula).order_by(SuggestedPriceFormula.top_group)
         )
-        return [{"category_id": row.category_id, "expression": row.expression} for row in rows]
+        return [{"top_group": row.top_group, "expression": row.expression} for row in rows]
 
     def update_suggested_price_formulas(
-        self, formulas: list[dict[str, int | str]]
-    ) -> list[dict[str, int | str]]:
+        self, formulas: list[dict[str, str]]
+    ) -> list[dict[str, str]]:
         existing = {
-            row.category_id: row
-            for row in self._session.scalars(select(SuggestedPriceFormula)).all()
+            row.top_group: row for row in self._session.scalars(select(SuggestedPriceFormula)).all()
         }
-        submitted = {int(item["category_id"]): str(item["expression"]) for item in formulas}
-        for category_id, row in existing.items():
-            if category_id not in submitted:
+        submitted = {str(item["top_group"]): str(item["expression"]) for item in formulas}
+        for top_group, row in existing.items():
+            if top_group not in submitted:
                 self._session.delete(row)
-        for category_id, expression in submitted.items():
-            row = existing.get(category_id)
+        for top_group, expression in submitted.items():
+            row = existing.get(top_group)
             if row is None:
-                self._session.add(
-                    SuggestedPriceFormula(category_id=category_id, expression=expression)
-                )
+                self._session.add(SuggestedPriceFormula(top_group=top_group, expression=expression))
             else:
                 row.expression = expression
         self._session.flush()

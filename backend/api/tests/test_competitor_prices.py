@@ -146,3 +146,15 @@ def test_json_ld_product_price_is_parsed() -> None:
     </script></html>
     """
     assert _price_from_html(page) == FetchedPrice(Decimal("42500000"), "IRT", True)
+
+
+def test_nested_aggregate_offer_price_is_parsed() -> None:
+    page = """
+    <html><script type="application/ld+json">
+    {"@type":"Product","offers":{"@type":"AggregateOffer","priceCurrency":"IRR",
+    "lowPrice":2329000,"highPrice":2900000,"offerCount":2,
+    "offers":[{"price":2329000,"priceCurrency":"IRR",
+    "availability":"https://schema.org/InStock"}]}}
+    </script></html>
+    """
+    assert _price_from_html(page) == FetchedPrice(Decimal("2329000"), "IRR", True)

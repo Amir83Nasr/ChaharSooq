@@ -244,6 +244,7 @@ export default function ProductsPage() {
         topGroup={topGroup}
         sort={sort}
         stock={stock}
+        market={market}
         minPrice={minPrice}
         maxPrice={maxPrice}
         hasFilters={hasFilters}
@@ -263,6 +264,7 @@ export default function ProductsPage() {
           setStock(v)
           resetPage()
         }}
+        onMarketChange={setMarket}
         onMinPrice={(v) => {
           setMinPrice(v)
           resetPage()
@@ -286,7 +288,6 @@ export default function ProductsPage() {
           showPageSize={!isMobile}
           hasFilters={hasFilters}
           market={market}
-          onMarketChange={setMarket}
           onSelect={setSelected}
           onPageChange={changePage}
           onPageSize={changePageSize}

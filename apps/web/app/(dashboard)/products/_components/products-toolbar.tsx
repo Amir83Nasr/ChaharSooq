@@ -15,6 +15,7 @@ import {
 } from "@workspace/ui/lib/number"
 import { DataTableToolbar, SearchInput } from "@/components/data-table-toolbar"
 import type { ProductSort } from "@/lib/api"
+import { COMPETITOR_MARKETS, type CompetitorMarket } from "./products-table"
 
 export type StockFilter = "all" | "in" | "out" | "low"
 
@@ -36,6 +37,7 @@ interface ToolbarProps {
   topGroup: string | null
   sort: ProductSort
   stock: StockFilter
+  market: CompetitorMarket
   minPrice: string
   maxPrice: string
   hasFilters: boolean
@@ -43,6 +45,7 @@ interface ToolbarProps {
   onTopGroup: (v: string | null) => void
   onSort: (v: ProductSort) => void
   onStock: (v: StockFilter) => void
+  onMarketChange: (v: CompetitorMarket) => void
   onMinPrice: (v: string) => void
   onMaxPrice: (v: string) => void
   onClear: () => void
@@ -54,6 +57,7 @@ export function ProductsToolbar(props: ToolbarProps) {
     topGroup,
     sort,
     stock,
+    market,
     minPrice,
     maxPrice,
     hasFilters,
@@ -61,6 +65,7 @@ export function ProductsToolbar(props: ToolbarProps) {
     onTopGroup,
     onSort,
     onStock,
+    onMarketChange,
     onMinPrice,
     onMaxPrice,
     onClear,
@@ -126,6 +131,31 @@ export function ProductsToolbar(props: ToolbarProps) {
             <SelectItem value="in">موجود</SelectItem>
             <SelectItem value="out">ناموجود</SelectItem>
             <SelectItem value="low">کم</SelectItem>
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+      <Select
+        value={market}
+        onValueChange={(v) => onMarketChange(v as CompetitorMarket)}
+      >
+        <SelectTrigger className="w-full sm:w-44" aria-label="فروشگاه رقیب">
+          <SelectValue>
+            {(value: CompetitorMarket | null) =>
+              value
+                ? (COMPETITOR_MARKETS.find((m) => m.store === value)?.label ??
+                  "فروشگاه رقیب")
+                : "فروشگاه رقیب"
+            }
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent align="start">
+          <SelectGroup>
+            <SelectLabel>فروشگاه رقیب</SelectLabel>
+            {COMPETITOR_MARKETS.map((m) => (
+              <SelectItem key={m.store} value={m.store}>
+                {m.label}
+              </SelectItem>
+            ))}
           </SelectGroup>
         </SelectContent>
       </Select>

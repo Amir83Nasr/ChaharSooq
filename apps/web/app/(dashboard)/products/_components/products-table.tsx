@@ -36,7 +36,6 @@ interface TableProps {
   showPageSize: boolean
   hasFilters: boolean
   market: CompetitorMarket
-  onMarketChange: (market: CompetitorMarket) => void
   onSelect: (item: ProductOut) => void
   onPageChange: (p: number) => void
   onPageSize: (n: number) => void
@@ -72,12 +71,13 @@ function brandOf(name: string | null, top: string | null): string | null {
   return n
 }
 
-type CompetitorMarket = "digikala" | "technolife"
+export type CompetitorMarket = "digikala" | "technolife"
 
-const COMPETITOR_MARKETS: { store: CompetitorMarket; label: string }[] = [
-  { store: "digikala", label: "دیجی‌کالا" },
-  { store: "technolife", label: "تکنولایف" },
-]
+export const COMPETITOR_MARKETS: { store: CompetitorMarket; label: string }[] =
+  [
+    { store: "digikala", label: "دیجی‌کالا" },
+    { store: "technolife", label: "تکنولایف" },
+  ]
 
 const COMPETITOR_STATUS_LABELS: Record<string, string> = {
   pending: "در انتظار بررسی",
@@ -113,13 +113,12 @@ function formatDiffPercent(diff: number): string {
 }
 
 // Shared by the data, skeleton and error rows so the column layout never shifts.
-// In data rows the competitor header offers an instant market toggle
-// (segmented buttons, no dropdown overlay) between the two stores.
-function ProductsTableHead(props: {
-  market?: CompetitorMarket
-  onMarketChange?: (market: CompetitorMarket) => void
-}) {
-  const { market = "digikala", onMarketChange } = props
+// The competitor store is picked in the toolbar filters; the header only
+// labels which store the column currently shows.
+function ProductsTableHead(props: { market?: CompetitorMarket }) {
+  const { market = "digikala" } = props
+  const marketLabel =
+    COMPETITOR_MARKETS.find((m) => m.store === market)?.label ?? "دیجی‌کالا"
   return (
     <>
       <colgroup>
@@ -153,38 +152,11 @@ function ProductsTableHead(props: {
             قیمت
           </TableHead>
           <TableHead scope="col" className="text-center">
-            <span className="inline-flex flex-col items-center gap-1.5">
+            <span className="inline-flex flex-col items-center gap-0.5">
               <span>قیمت رقبا</span>
-              {onMarketChange ? (
-                <span
-                  className="inline-flex items-center gap-0.5 rounded-full border border-border bg-muted/60 p-0.5"
-                  role="radiogroup"
-                  aria-label="انتخاب فروشگاه رقیب"
-                >
-                  {COMPETITOR_MARKETS.map((m) => {
-                    const active = m.store === market
-                    return (
-                      <button
-                        key={m.store}
-                        type="button"
-                        role="radio"
-                        aria-checked={active}
-                        aria-label={m.label}
-                        onClick={() => {
-                          if (!active) onMarketChange(m.store)
-                        }}
-                        className={
-                          active
-                            ? "rounded-full bg-background px-2.5 py-0.5 text-[11px] font-medium shadow-sm"
-                            : "rounded-full px-2.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
-                        }
-                      >
-                        {m.label}
-                      </button>
-                    )
-                  })}
-                </span>
-              ) : null}
+              <span className="text-[11px] font-normal text-muted-foreground">
+                {marketLabel}
+              </span>
             </span>
           </TableHead>
           <TableHead scope="col" className="text-center">
@@ -238,7 +210,6 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
     showPageSize,
     hasFilters,
     market,
-    onMarketChange,
     onSelect,
     onPageChange,
     onPageSize,
@@ -264,7 +235,7 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
   return (
     <div className="space-y-6">
       <Table className="min-w-212 table-fixed">
-        <ProductsTableHead market={market} onMarketChange={onMarketChange} />
+        <ProductsTableHead market={market} />
         <TableBody>
           {page.items.map((item, i) => {
             const rowNumber =

@@ -34,7 +34,8 @@ class SyncScheduler:
             log.info("scheduler off: live sync runs only in production")
             return
         settings = get_parsina_settings()
-        if not settings.is_configured or not settings.parsina_sync_enabled:
+        dev_simulation = bool(get_settings().dev_database_url.strip())
+        if not dev_simulation and (not settings.is_configured or not settings.parsina_sync_enabled):
             log.info("scheduler off: parsina not configured")
             return
         if self._thread is not None and self._thread.is_alive():
@@ -42,7 +43,13 @@ class SyncScheduler:
         self._stop.clear()
         self._thread = threading.Thread(target=self._loop, name="parsina-sync", daemon=True)
         self._thread.start()
-        log.info("scheduler on: every %d min", settings.parsina_sync_interval_minutes)
+        if dev_simulation:
+            log.info(
+                "scheduler on (dev-db simulation): every %d min",
+                settings.parsina_sync_interval_minutes,
+            )
+        else:
+            log.info("scheduler on: every %d min", settings.parsina_sync_interval_minutes)
 
     def stop(self) -> None:
         self._stop.set()

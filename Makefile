@@ -58,6 +58,9 @@ db-seed: db-up ## Create dev admin user (ADMIN_USER, ADMIN_PASSWORD or DEV_ADMIN
 db-seed-parsina: db-migrate ## Load data/parsina-products.csv into dev DB (replaces products)
 	uv run --project backend/api python backend/api/scripts/seed_parsina_products.py
 
+db-clear-products: db-up ## Delete all products + competitor listings from dev DB (refuses production)
+	uv run --project backend/api python backend/api/scripts/clear_products.py
+
 # ─── DATABASE: PROD (NEON) ────────────────────────────────
 # NOTE: never `set -a; . .env` here — DATABASE_URL contains `&` and shell
 # sourcing dies with `parse error near '&'`, silently falling back to the

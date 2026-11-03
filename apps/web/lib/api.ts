@@ -95,8 +95,8 @@ export interface InventorySummary {
 
 export interface SyncStatus {
   configured: boolean
-  /** Live Parsina API in production; local CSV fixture in development. */
-  source: "parsina" | "csv"
+  /** Live Parsina API, dev-database simulation, or local CSV fixture. */
+  source: "parsina" | "csv" | "dev"
   running: boolean
   running_since: string | null
   last_attempt_at: string | null
@@ -168,10 +168,13 @@ export interface SettingsOut {
   low_stock_threshold: number
   default_page_size: number
   sync_interval_minutes: number
+  default_competitor_store: DefaultCompetitorStore
   suggested_price_formulas: SuggestedPriceFormula[]
 }
 
 export type TopGroup = "فرش" | "مبلمان" | "لوازم خانگی"
+
+export type DefaultCompetitorStore = "digikala" | "technolife"
 
 export interface SuggestedPriceFormula {
   top_group: TopGroup
@@ -182,6 +185,7 @@ export interface SettingsUpdate {
   low_stock_threshold?: number
   default_page_size?: number
   sync_interval_minutes?: number
+  default_competitor_store?: DefaultCompetitorStore
   suggested_price_formulas?: SuggestedPriceFormula[]
 }
 

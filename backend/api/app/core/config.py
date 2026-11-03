@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     )
     # Development-only product catalog (app_env=development); ignored in production.
     products_csv_path: str = Field(default=str(_DEFAULT_PRODUCTS_CSV_PATH))
+    # Production sync simulation: when set, APP_ENV=production syncs products
+    # from this dev database instead of the live Parsina API, through the same
+    # ProductSyncService path (button + scheduler behave identically).
+    dev_database_url: str = Field(default="")
     competitor_request_interval_seconds: float = Field(default=5.0, ge=1, le=300)
     competitor_price_ttl_hours: int = Field(default=24, ge=1, le=720)
 

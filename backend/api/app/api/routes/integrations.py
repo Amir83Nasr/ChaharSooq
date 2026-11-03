@@ -94,11 +94,12 @@ def parsina_sync(
     except SyncBusyError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
     threading.Thread(target=_run_manual, name="parsina-sync-manual", daemon=True).start()
-    message = (
-        "بارگذاری داده آزمایشی محصولات آغاز شد"
-        if service.source_label == "csv"
-        else "همگام‌سازی با پارسینا آغاز شد"
-    )
+    if service.source_label == "csv":
+        message = "بارگذاری داده آزمایشی محصولات آغاز شد"
+    elif service.source_label == "dev":
+        message = "همگام‌سازی با دیتابیس dev آغاز شد"
+    else:
+        message = "همگام‌سازی با پارسینا آغاز شد"
     return SyncRunOut(status="running", message=message)
 
 

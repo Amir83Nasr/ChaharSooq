@@ -2,6 +2,8 @@
 
 `ProductSyncService` only depends on this small protocol, so validation, locking,
 and apply rules stay identical regardless of where the rows came from.
+When `DEV_DATABASE_URL` is set, production syncs from the dev database
+instead of Parsina (button + scheduler simulation, see `dev_db.py`).
 """
 
 from __future__ import annotations
@@ -10,13 +12,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 from app.core.config import ParsinaSettings, Settings
+from app.integrations.dev_db import DevDatabaseCommoditySource
 from app.integrations.parsina import ParsinaClient
 from app.integrations.parsina_csv import CsvCommoditySource
 
 if TYPE_CHECKING:
     from httpx import BaseTransport
 
-SourceLabel = Literal["parsina", "csv"]
+SourceLabel = Literal["parsina", "csv", "dev"]
 
 
 class CommoditySource(Protocol):
@@ -57,7 +60,14 @@ def build_commodity_source(
     parsina_settings: ParsinaSettings,
     transport: BaseTransport | None = None,
 ) -> CommoditySource:
-    """Development reads the CSV fixture; every other environment hits Parsina."""
+    """Development reads the CSV fixture; production reads Parsina or dev DB.
+
+    `DEV_DATABASE_URL` switches production to the dev-database simulation:
+    the sync button and the scheduler copy the dev mirror instead of calling
+    Parsina, with identical validation, locking, and status reporting.
+    """
     if app_settings.app_env == "development":
         return CsvCommoditySource(Path(app_settings.products_csv_path))
+    if app_settings.dev_database_url.strip():
+        return DevDatabaseCommoditySource(app_settings.dev_database_url)
     return ParsinaCommoditySource(parsina_settings, transport=transport)

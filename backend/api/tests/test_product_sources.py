@@ -1,4 +1,4 @@
-"""Product sources — dev CSV fixture and environment-based source selection."""
+"""Product sources — dev CSV fixture, dev DB simulation, source selection."""
 
 import csv
 from collections.abc import Iterator
@@ -7,16 +7,20 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from app.core.config import ParsinaSettings, Settings
-from app.core.database import get_engine
+from app.core.database import Base, get_engine
+from app.integrations.dev_db import (
+    DevDatabaseCommoditySource,
+    DevDbSourceError,
+)
 from app.integrations.parsina import parse_commodity
 from app.integrations.parsina_csv import CsvCommoditySource, CsvSourceError
 from app.integrations.sources import ParsinaCommoditySource, build_commodity_source
 from app.models import Product
-from app.services.sync import ProductSyncService
+from app.services.sync import ProductSyncService, SyncNotConfiguredError
 
 FIELDS = [
     "goodId",
@@ -181,6 +185,77 @@ def test_production_selects_parsina_source() -> None:
     assert isinstance(source, ParsinaCommoditySource)
 
 
+def test_production_selects_dev_source_when_dev_url_set(tmp_path: Path) -> None:
+    url = f"sqlite:///{tmp_path / 'dev.db'}"
+    source = build_commodity_source(
+        app_settings=Settings(app_env="production", dev_database_url=url),
+        parsina_settings=ParsinaSettings(),
+    )
+    assert isinstance(source, DevDatabaseCommoditySource)
+    assert source.label == "dev"
+    assert source.is_configured is True
+
+
+def _make_dev_db(path: Path) -> str:
+    """Separate sqlite file acting as the dev product mirror."""
+    url = f"sqlite:///{path}"
+    engine = create_engine(url)
+    Base.metadata.create_all(engine)
+    with Session(engine) as s:
+        s.add(
+            Product(
+                external_id=1,
+                name="کالا یک",
+                sku="A-1",
+                price=Decimal(1000),
+                stock=Decimal(3),
+                main_group_name="گروه اصلی",
+                unit_id=4,
+                unit_name="عدد",
+            )
+        )
+        s.add(
+            Product(
+                external_id=2,
+                name="کالا دو",
+                sku="A-2",
+                price=Decimal(2000),
+                stock=Decimal(5),
+                main_group_name="گروه اصلی",
+                unit_id=4,
+                unit_name="عدد",
+            )
+        )
+        s.commit()
+    engine.dispose()
+    return url
+
+
+def test_dev_db_source_fetch_returns_parsina_shaped_rows(tmp_path: Path) -> None:
+    url = _make_dev_db(tmp_path / "dev.db")
+    raw_rows, total, units = DevDatabaseCommoditySource(url).fetch()
+
+    assert total == len(raw_rows) == 2
+    assert units == {4: "عدد"}
+    row = parse_commodity(raw_rows[0])
+    assert row is not None
+    assert row.good_id in {1, 2}
+    assert row.sale_price in {Decimal(1000), Decimal(2000)}
+
+
+def test_dev_db_source_requires_url(session: Session) -> None:
+    source = DevDatabaseCommoditySource("")
+    assert source.is_configured is False
+    with pytest.raises(SyncNotConfiguredError):
+        ProductSyncService(session, source=source).run()
+
+
+def test_dev_db_source_reports_unreachable_db(tmp_path: Path) -> None:
+    url = f"sqlite:///{tmp_path / 'missing-dir' / 'dev.db'}"
+    with pytest.raises(DevDbSourceError):
+        DevDatabaseCommoditySource(url).fetch()
+
+
 def test_explicit_settings_pin_parsina_source(session: Session) -> None:
     service = ProductSyncService(session, settings=ParsinaSettings())
     assert service.source_label == "parsina"
@@ -221,3 +296,41 @@ def test_csv_sync_replace_drops_existing_catalog(session: Session, tmp_path: Pat
     rows = session.execute(select(Product)).scalars().all()
     assert len(rows) == 1
     assert rows[0].external_id == 1
+
+
+# ── DEV-DB SYNC ──────────────────────────────────────────────
+
+
+def test_dev_db_sync_inserts_then_updates(session: Session, tmp_path: Path) -> None:
+    url = _make_dev_db(tmp_path / "dev.db")
+
+    first = ProductSyncService(session, source=DevDatabaseCommoditySource(url)).run()
+    assert (first.created, first.updated, first.processed) == (2, 0, 2)
+
+    second = ProductSyncService(session, source=DevDatabaseCommoditySource(url)).run()
+    assert (second.created, second.updated, second.processed) == (0, 2, 2)
+
+    products = session.execute(select(Product)).scalars().all()
+    assert len(products) == 2
+    assert {p.external_id for p in products} == {1, 2}
+    assert {p.unit_name for p in products} == {"عدد"}
+
+
+def test_dev_db_sync_deactivates_rows_removed_from_dev(session: Session, tmp_path: Path) -> None:
+    db_path = tmp_path / "dev.db"
+    url = _make_dev_db(db_path)
+    ProductSyncService(session, source=DevDatabaseCommoditySource(url)).run()
+
+    engine = create_engine(url)
+    with Session(engine) as s:
+        victim = s.execute(select(Product).where(Product.external_id == 2)).scalar_one()
+        s.delete(victim)
+        s.commit()
+    engine.dispose()
+
+    result = ProductSyncService(session, source=DevDatabaseCommoditySource(url)).run()
+    assert result.deactivated == 1
+    session.expire_all()
+    rows = {p.external_id: p for p in session.execute(select(Product)).scalars()}
+    assert rows[1] is not None and rows[1].is_active
+    assert rows[2] is not None and not rows[2].is_active

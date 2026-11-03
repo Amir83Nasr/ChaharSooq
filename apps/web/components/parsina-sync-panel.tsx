@@ -145,7 +145,9 @@ export function ParsinaSyncPanel({ onSynced, onUnauthorized }: Props) {
           <span>
             {status?.source === "csv"
               ? "فایل داده آزمایشی محصولات یافت نشد."
-              : "اتصال پارسینا تنظیم نشده است."}
+              : status?.source === "dev"
+                ? "اتصال دیتابیس dev تنظیم نشده است."
+                : "اتصال پارسینا تنظیم نشده است."}
           </span>
         ) : running ? (
           <span>

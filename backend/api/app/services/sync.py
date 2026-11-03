@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy.orm import Session
 
 from app.core.config import ParsinaSettings, get_parsina_settings, get_settings
+from app.integrations.dev_db import DevDbSourceError
 from app.integrations.parsina import (
     CommodityRow,
     ParsinaAuthError,
@@ -160,6 +161,8 @@ class ProductSyncService:
     def _not_configured_message(self) -> str:
         if self._source.label == "csv":
             return "فایل داده آزمایشی محصولات یافت نشد"
+        if self._source.label == "dev":
+            return "اتصال دیتابیس dev تنظیم نشده است"
         return "تنظیمات اتصال پارسینا کامل نیست"
 
     # ── FETCH / VALIDATE ─────────────────────────────────────
@@ -266,6 +269,8 @@ class ProductSyncService:
     def _describe(self, exc: Exception) -> str:
         if isinstance(exc, CsvSourceError):
             return f"خطای داده آزمایشی: {exc}"
+        if isinstance(exc, DevDbSourceError):
+            return f"خطای دیتابیس dev: {exc}"
         if isinstance(exc, ParsinaAuthError):
             return f"خطای احراز هویت پارسینا: {exc}"
         if isinstance(exc, ParsinaNetworkError):
@@ -273,6 +278,8 @@ class ProductSyncService:
         if isinstance(exc, ParsinaResponseError):
             if self._source.label == "csv":
                 return f"داده آزمایشی نامعتبر است: {exc}"
+            if self._source.label == "dev":
+                return f"داده دیتابیس dev نامعتبر است: {exc}"
             return f"پاسخ نامعتبر پارسینا: {exc}"
         return f"خطای همگام‌سازی: {exc}"
 
@@ -283,9 +290,25 @@ def run_scheduled_sync(
     interval_minutes: int,
     transport: BaseTransport | None = None,
 ) -> SyncResult | None:
-    """One scheduler tick: no-op unless production AND configured, enabled, due."""
+    """One scheduler tick: no-op unless production AND configured, enabled, due.
+
+    With `DEV_DATABASE_URL` set, the tick copies the dev mirror (simulation);
+    otherwise it requires Parsina credentials, same as the manual button.
+    """
     if not get_settings().is_production:
         return None
+    if get_settings().dev_database_url.strip():
+        with session_factory() as session:
+            last_attempt = SyncStateRepository(session).get().last_attempt_at
+            if last_attempt is not None:
+                if last_attempt.tzinfo is None:
+                    last_attempt = last_attempt.replace(tzinfo=UTC)
+                if datetime.now(UTC) < last_attempt + timedelta(minutes=interval_minutes):
+                    return None
+            try:
+                return ProductSyncService(session, transport=transport).run()
+            except SyncBusyError:
+                return None
     settings = get_parsina_settings()
     if not settings.is_configured or not settings.parsina_sync_enabled:
         return None

@@ -122,6 +122,10 @@
   * {
     @apply border-border outline-ring/50;
     }
+  ::selection {
+    background: #000;
+    color: #fff;
+    }
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-sans), Tahoma, Arial, sans-serif;

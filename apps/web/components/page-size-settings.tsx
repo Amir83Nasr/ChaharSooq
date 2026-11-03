@@ -4,7 +4,6 @@ import { useEffect, useState } from "react"
 
 import { Button } from "@workspace/ui/components/button"
 import { PersianNumber } from "@workspace/ui/components/persian-number"
-import { cn } from "@workspace/ui/lib/utils"
 
 import { api } from "@/lib/api"
 
@@ -84,10 +83,9 @@ export function PageSizeSettings() {
               aria-checked={active}
               disabled={busy}
               onClick={() => save(n)}
-              className={cn("h-auto min-h-10 leading-tight whitespace-normal!")}
             >
               {n === 0 ? (
-                <span>نمایش همه محصولات</span>
+                <span>همه</span>
               ) : (
                 <>
                   <PersianNumber value={n} />

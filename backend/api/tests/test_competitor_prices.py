@@ -2,12 +2,15 @@
 
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
+from typing import Any
 
 from fastapi.testclient import TestClient
 from pytest import MonkeyPatch
 from sqlalchemy.orm import Session
 
 from app.core.database import get_engine
+from app.integrations import competitor_prices as prices
 from app.integrations.competitor_prices import FetchedPrice, PriceFetchError, _price_from_html
 from app.models import CompetitorListing
 from tests.helpers import login
@@ -158,3 +161,287 @@ def test_nested_aggregate_offer_price_is_parsed() -> None:
     </script></html>
     """
     assert _price_from_html(page) == FetchedPrice(Decimal("2329000"), "IRR", True)
+
+
+def _stub_settings(monkeypatch: MonkeyPatch, interval: float = 0.0) -> None:
+    monkeypatch.setattr(
+        prices,
+        "get_settings",
+        lambda: SimpleNamespace(
+            competitor_request_interval_seconds=interval, competitor_price_ttl_hours=24
+        ),
+    )
+
+
+class _FakeApiResponse:
+    def __init__(self, status_code: int, payload: Any = None) -> None:
+        self.status_code = status_code
+        self._payload = payload
+
+    def json(self) -> Any:
+        if self._payload is None:
+            raise ValueError("no JSON body")
+        return self._payload
+
+
+class _FakeApiClient:
+    response: _FakeApiResponse = _FakeApiResponse(404)
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        pass
+
+    def __enter__(self) -> "_FakeApiClient":
+        return self
+
+    def __exit__(self, *args: Any) -> None:
+        return None
+
+    def get(self, url: str) -> _FakeApiResponse:
+        assert url.startswith("https://api.digikala.com/v2/product/")
+        return _FakeApiClient.response
+
+
+def _stub_digikala_api(monkeypatch: MonkeyPatch, response: _FakeApiResponse) -> None:
+    _FakeApiClient.response = response
+    monkeypatch.setattr(prices.httpx, "Client", _FakeApiClient)
+
+
+def _marketable_payload(price: int = 27000000) -> dict[str, Any]:
+    return {
+        "status": 200,
+        "data": {
+            "product": {
+                "id": 16621422,
+                "status": "marketable",
+                "default_variant": {
+                    "id": 57647981,
+                    "status": "marketable",
+                    "price": {"selling_price": price, "rrp_price": 30000000},
+                },
+            }
+        },
+    }
+
+
+def test_digikala_product_id_is_extracted_from_url() -> None:
+    assert (
+        prices._digikala_product_id("https://www.digikala.com/product/dkp-16621422/") == "16621422"
+    )
+    assert (
+        prices._digikala_product_id("https://www.digikala.com/product/dkp-16621422/some-title")
+        == "16621422"
+    )
+    assert prices._digikala_product_id("https://www.digikala.com/mag/") is None
+
+
+def test_digikala_api_marketable_price_is_parsed(monkeypatch: MonkeyPatch) -> None:
+    _stub_settings(monkeypatch)
+    _stub_digikala_api(monkeypatch, _FakeApiResponse(200, _marketable_payload()))
+    assert prices._fetch_digikala_api("16621422") == FetchedPrice(Decimal("27000000"), "IRR", True)
+
+
+def test_digikala_api_out_of_stock_without_price(monkeypatch: MonkeyPatch) -> None:
+    _stub_settings(monkeypatch)
+    payload = {
+        "status": 200,
+        "data": {"product": {"id": 111111, "status": "out_of_stock", "default_variant": []}},
+    }
+    _stub_digikala_api(monkeypatch, _FakeApiResponse(200, payload))
+    assert prices._fetch_digikala_api("111111") == FetchedPrice(None, None, False)
+
+
+def test_digikala_api_missing_product_is_not_found(monkeypatch: MonkeyPatch) -> None:
+    _stub_settings(monkeypatch)
+    _stub_digikala_api(monkeypatch, _FakeApiResponse(404, {"status": 404}))
+    try:
+        prices._fetch_digikala_api("99999999999")
+    except PriceFetchError as exc:
+        assert exc.status == "not_found"
+    else:
+        raise AssertionError("expected PriceFetchError")
+
+
+def test_digikala_api_rate_limit_blocks_host(monkeypatch: MonkeyPatch) -> None:
+    _stub_settings(monkeypatch)
+    _stub_digikala_api(monkeypatch, _FakeApiResponse(403, {}))
+    prices._host_blocked_until.pop("digikala", None)
+    try:
+        prices._fetch_digikala_api("16621422")
+    except PriceFetchError as exc:
+        assert exc.status == "blocked"
+    else:
+        raise AssertionError("expected PriceFetchError")
+    assert prices._host_blocked_until.get("digikala", 0) > 0
+
+
+def test_fetch_falls_back_to_digikala_api_when_page_has_no_json_ld(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    _stub_settings(monkeypatch)
+    prices._page_cache.clear()
+    monkeypatch.setattr(prices, "_robots_allows", lambda _url: None)
+    monkeypatch.setattr(
+        prices, "_request", lambda _url, **_kwargs: (200, "<html><body>shell</body></html>", _url)
+    )
+    monkeypatch.setattr(
+        prices,
+        "_fetch_digikala_api",
+        lambda _pid: FetchedPrice(Decimal("27000000"), "IRR", True),
+    )
+    result = prices.fetch_competitor_price(
+        "digikala", "https://www.digikala.com/product/dkp-16621422/"
+    )
+    assert result.amount == Decimal("27000000")
+    assert result.currency == "IRR"
+    assert result.in_stock is True
+    assert result.observed_at is not None
+
+
+def test_fetch_digikala_without_product_id_stays_unavailable(monkeypatch: MonkeyPatch) -> None:
+    _stub_settings(monkeypatch)
+    prices._page_cache.clear()
+    monkeypatch.setattr(prices, "_robots_allows", lambda _url: None)
+    monkeypatch.setattr(
+        prices, "_request", lambda _url, **_kwargs: (200, "<html><body>shell</body></html>", _url)
+    )
+    try:
+        prices.fetch_competitor_price("digikala", "https://www.digikala.com/mag/")
+    except PriceFetchError as exc:
+        assert exc.status == "unavailable"
+    else:
+        raise AssertionError("expected PriceFetchError")
+
+
+class _FakeStreamResponse:
+    def __init__(self, status_code: int, location: str | None, body: bytes) -> None:
+        self.status_code = status_code
+        self.headers = {"location": location or "", "content-type": "text/html"}
+        self._body = body
+
+    @property
+    def is_redirect(self) -> bool:
+        return self.status_code in (301, 302, 303, 307, 308) and bool(self.headers["location"])
+
+    def iter_bytes(self) -> Any:
+        yield self._body
+
+
+class _FakeStreamContext:
+    def __init__(self, response: _FakeStreamResponse) -> None:
+        self._response = response
+
+    def __enter__(self) -> _FakeStreamResponse:
+        return self._response
+
+    def __exit__(self, *args: Any) -> None:
+        return None
+
+
+class _FakeStreamClient:
+    routes: dict[str, _FakeStreamResponse] = {}
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        pass
+
+    def __enter__(self) -> "_FakeStreamClient":
+        return self
+
+    def __exit__(self, *args: Any) -> None:
+        return None
+
+    def stream(self, method: str, url: str) -> _FakeStreamContext:
+        assert method == "GET"
+        return _FakeStreamContext(_FakeStreamClient.routes[url])
+
+
+def test_request_follows_technolife_redirect_chain(monkeypatch: MonkeyPatch) -> None:
+    _stub_settings(monkeypatch)
+    monkeypatch.setattr(prices, "_assert_public_dns", lambda _host: None)
+    body = (
+        b'<html><script type="application/ld+json">'
+        b'{"@type":"Product","offers":{"price":112900000,"priceCurrency":"IRR",'
+        b'"availability":"https://schema.org/InStock"}}</script></html>'
+    )
+    slug = "https://www.technolife.com/product-122293/title"
+    _FakeStreamClient.routes = {
+        "https://www.technolife.ir/product-122293/": _FakeStreamResponse(
+            301, "https://www.technolife.com/product-122293/", b""
+        ),
+        "https://www.technolife.com/product-122293/": _FakeStreamResponse(
+            308, "/product-122293", b""
+        ),
+        "https://www.technolife.com/product-122293": _FakeStreamResponse(
+            301, "https://www.technolife.com/product-122293/a", b""
+        ),
+        "https://www.technolife.com/product-122293/a": _FakeStreamResponse(307, slug, b""),
+        slug: _FakeStreamResponse(200, None, body),
+    }
+    monkeypatch.setattr(prices.httpx, "Client", _FakeStreamClient)
+    prices._page_cache.clear()
+    prices._host_last_request.clear()
+    monkeypatch.setattr(prices, "_robots_allows", lambda _url: None)
+    result = prices.fetch_competitor_price(
+        "technolife", "https://www.technolife.ir/product-122293/"
+    )
+    assert result.amount == Decimal("112900000")
+    assert result.currency == "IRR"
+    assert result.in_stock is True
+
+
+def test_out_of_stock_offer_keeps_price_but_marks_unavailable() -> None:
+    page = """
+    <html><script type="application/ld+json">
+    {"@type":"Product","offers":{"@type":"AggregateOffer","priceCurrency":"IRR",
+    "highPrice":123187500,"lowPrice":112900000,"offerCount":1,
+    "offers":[{"price":112900000,"priceCurrency":"IRR",
+    "availability":"https://schema.org/OutOfStock"}]}}
+    </script></html>
+    """
+    assert _price_from_html(page) == FetchedPrice(Decimal("112900000"), "IRR", False)
+
+
+def test_rate_limit_slot_acquired_once_per_redirect_chain(monkeypatch: MonkeyPatch) -> None:
+    _stub_settings(monkeypatch)
+    monkeypatch.setattr(prices, "_assert_public_dns", lambda _host: None)
+    body = (
+        b'<html><script type="application/ld+json">'
+        b'{"@type":"Product","offers":{"price":1000,"priceCurrency":"IRR",'
+        b'"availability":"https://schema.org/InStock"}}</script></html>'
+    )
+    final = "https://www.technolife.com/product-1/title"
+    _FakeStreamClient.routes = {
+        "https://www.technolife.ir/product-1/": _FakeStreamResponse(
+            301, "https://www.technolife.com/product-1/", b""
+        ),
+        "https://www.technolife.com/product-1/": _FakeStreamResponse(308, final, b""),
+        final: _FakeStreamResponse(200, None, body),
+    }
+    monkeypatch.setattr(prices.httpx, "Client", _FakeStreamClient)
+    calls: list[str] = []
+    real_acquire = prices._acquire_slot
+
+    def counting_acquire(rate_key: str) -> None:
+        calls.append(rate_key)
+        real_acquire(rate_key)
+
+    monkeypatch.setattr(prices, "_acquire_slot", counting_acquire)
+    prices._page_cache.clear()
+    prices._host_last_request.clear()
+    monkeypatch.setattr(prices, "_robots_allows", lambda _url: None)
+    prices.fetch_competitor_price("technolife", "https://www.technolife.ir/product-1/")
+    # Three HTTP hops, but only one interval wait: redirect hops must not
+    # each sleep a full interval.
+    assert calls == ["technolife"]
+
+
+def test_page_cache_evicts_oldest_when_full(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(prices, "_PAGE_CACHE_MAX_ENTRIES", 2)
+    prices._page_cache.clear()
+    first = FetchedPrice(Decimal("1"), "IRR", True)
+    prices._cache_set("https://a.example/", first)
+    prices._cache_set("https://b.example/", FetchedPrice(Decimal("2"), "IRR", True))
+    prices._cache_set("https://c.example/", FetchedPrice(Decimal("3"), "IRR", True))
+    assert prices._cache_get("https://a.example/") is None
+    assert prices._cache_get("https://b.example/") is not None
+    assert prices._cache_get("https://c.example/") is not None
+    prices._page_cache.clear()

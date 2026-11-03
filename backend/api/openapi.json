@@ -1703,6 +1703,14 @@
             "type": "integer",
             "title": "Sync Interval Minutes"
           },
+          "default_competitor_store": {
+            "type": "string",
+            "enum": [
+              "digikala",
+              "technolife"
+            ],
+            "title": "Default Competitor Store"
+          },
           "suggested_price_formulas": {
             "items": {
               "$ref": "#/components/schemas/SuggestedPriceFormulaOut"
@@ -1716,6 +1724,7 @@
           "low_stock_threshold",
           "default_page_size",
           "sync_interval_minutes",
+          "default_competitor_store",
           "suggested_price_formulas"
         ],
         "title": "SettingsOut"
@@ -1766,6 +1775,21 @@
               }
             ],
             "title": "Sync Interval Minutes"
+          },
+          "default_competitor_store": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "digikala",
+                  "technolife"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Competitor Store"
           },
           "suggested_price_formulas": {
             "anyOf": [

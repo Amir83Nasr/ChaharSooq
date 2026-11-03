@@ -11,6 +11,7 @@ class SettingsOut(BaseModel):
     low_stock_threshold: int
     default_page_size: int
     sync_interval_minutes: int
+    default_competitor_store: Literal["digikala", "technolife"]
     suggested_price_formulas: list[SuggestedPriceFormulaOut]
 
 
@@ -20,6 +21,7 @@ class SettingsUpdateIn(BaseModel):
     low_stock_threshold: int | None = Field(default=None, ge=0, le=1_000_000)
     default_page_size: Literal[0, 10, 20, 50, 100, 500] | None = None
     sync_interval_minutes: int | None = Field(default=None, ge=1, le=10080)
+    default_competitor_store: Literal["digikala", "technolife"] | None = None
     suggested_price_formulas: list[SuggestedPriceFormulaIn] | None = None
 
     @field_validator("suggested_price_formulas")

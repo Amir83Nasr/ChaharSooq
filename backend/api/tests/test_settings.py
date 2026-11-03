@@ -16,6 +16,7 @@ def test_settings_default_and_update(client: TestClient) -> None:
         "low_stock_threshold": 5,
         "default_page_size": 0,
         "sync_interval_minutes": 60,
+        "default_competitor_store": "digikala",
         "suggested_price_formulas": [],
     }
     r = client.put(
@@ -27,12 +28,14 @@ def test_settings_default_and_update(client: TestClient) -> None:
         "low_stock_threshold": 3,
         "default_page_size": 100,
         "sync_interval_minutes": 60,
+        "default_competitor_store": "digikala",
         "suggested_price_formulas": [],
     }
     assert client.get("/api/v1/settings").json() == {
         "low_stock_threshold": 3,
         "default_page_size": 100,
         "sync_interval_minutes": 60,
+        "default_competitor_store": "digikala",
         "suggested_price_formulas": [],
     }
 
@@ -45,6 +48,7 @@ def test_settings_partial_update_keeps_other_field(client: TestClient) -> None:
         "low_stock_threshold": 5,
         "default_page_size": 500,
         "sync_interval_minutes": 60,
+        "default_competitor_store": "digikala",
         "suggested_price_formulas": [],
     }
 
@@ -59,6 +63,25 @@ def test_settings_reject_invalid_page_size(client: TestClient) -> None:
     login(client)
     assert client.put("/api/v1/settings", json={"default_page_size": 15}).status_code == 422
     assert client.put("/api/v1/settings", json={"default_page_size": 7}).status_code == 422
+
+
+def test_settings_default_competitor_store_update(client: TestClient) -> None:
+    login(client)
+    r = client.put("/api/v1/settings", json={"default_competitor_store": "technolife"})
+    assert r.status_code == 200, r.text
+    assert r.json()["default_competitor_store"] == "technolife"
+    assert client.get("/api/v1/settings").json()["default_competitor_store"] == "technolife"
+    r = client.put("/api/v1/settings", json={"default_competitor_store": "digikala"})
+    assert r.status_code == 200, r.text
+    assert r.json()["default_competitor_store"] == "digikala"
+
+
+def test_settings_reject_invalid_competitor_store(client: TestClient) -> None:
+    login(client)
+    r = client.put("/api/v1/settings", json={"default_competitor_store": "other"})
+    assert r.status_code == 422
+    r = client.put("/api/v1/settings", json={"default_competitor_store": "digifresh"})
+    assert r.status_code == 422
 
 
 def test_database_url_trailing_whitespace_stripped() -> None:

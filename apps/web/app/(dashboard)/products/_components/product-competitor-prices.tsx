@@ -13,37 +13,18 @@ import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Price } from "@workspace/ui/components/price"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@workspace/ui/components/select"
-import {
-  formatPersianNumber,
-  parsePriceFilterInput,
-} from "@workspace/ui/lib/number"
 import { PersianDateTime } from "@workspace/ui/components/persian-date"
 import {
   ApiRequestError,
   api,
-  type CompetitorCurrency,
   type CompetitorListing,
   type CompetitorStore,
 } from "@/lib/api"
 
-/** فروشگاه‌های قابل انتخاب در دیالوگ محصول (فقط لوازم خانگی). */
+/** دو کارت ثابت دیالوگ محصول (فقط لوازم خانگی). */
 const DIALOG_STORES: CompetitorStore[] = ["digikala", "technolife"]
 
 const STORE_LABELS: Record<CompetitorStore, string> = {
-  digikala: "دیجی‌کالا",
-  technolife: "تکنولایف",
-  other: "سایر فروشگاه‌ها",
-}
-
-/** هر دو فروشگاه لینک دستی‌اند و نسبت به جست‌وجوی خودکار آینده بر اساس نام کالا اولویت دارند. */
-const STORE_OPTION_LABELS: Record<CompetitorStore, string> = {
   digikala: "دیجی‌کالا",
   technolife: "تکنولایف",
   other: "سایر فروشگاه‌ها",
@@ -60,12 +41,6 @@ const STORE_URL_HINTS: Record<CompetitorStore, string> = {
   technolife: "دامنهٔ مجاز: technolife.ir",
   other: "",
 }
-
-/** برای هر فروشگاه (دیجی‌کالا / تکنولایف) فقط یک لینک دستی مجاز است. */
-const SINGLE_LINK_STORES: ReadonlySet<CompetitorStore> = new Set([
-  "digikala",
-  "technolife",
-])
 
 function isUrlMatchingStore(url: string, store: CompetitorStore): boolean {
   const raw = url.trim()
@@ -86,12 +61,6 @@ function isUrlMatchingStore(url: string, store: CompetitorStore): boolean {
     return true
   }
 }
-
-/**
- * دیجی‌کالا درخواست خودکار را تشخیص می‌دهد و صفحهٔ خالی برمی‌گرداند؛
- * پس بررسی لینک فقط برای تکنولایف فعال است.
- */
-const AUTO_CHECK_STORES: ReadonlySet<CompetitorStore> = new Set(["technolife"])
 
 function listingStoreLabel(listing: CompetitorListing): string {
   if (listing.store !== "other") return STORE_LABELS[listing.store]
@@ -135,70 +104,43 @@ function toPersianError(error: unknown): string {
   return "عملیات انجام نشد. دوباره تلاش کنید."
 }
 
-function PriceListingCard({
+function FilledSlotCard({
   listing,
   busy,
-  takenStores,
+  onLinkUpdate,
   onCheck,
-  onSave,
-  onToggle,
   onDelete,
 }: {
   listing: CompetitorListing
   busy: boolean
-  takenStores: ReadonlySet<CompetitorStore>
-  onCheck: (store: CompetitorStore, url: string) => void
-  onSave: (
-    store: CompetitorStore,
-    url: string,
-    price: number | null,
-    currency: CompetitorCurrency,
-    inStock: boolean | null
-  ) => void
-  onToggle: () => void
+  onLinkUpdate: (url: string) => void
+  onCheck: (url: string) => void
   onDelete: () => void
 }) {
-  const [store, setStore] = useState<CompetitorStore>(listing.store)
   const [url, setUrl] = useState(listing.url)
-  const [manualPrice, setManualPrice] = useState(
-    listing.manual_price === null ? "" : String(listing.manual_price)
-  )
-  const [currency, setCurrency] = useState<CompetitorCurrency>(
-    listing.manual_currency ?? listing.fetched_currency ?? "IRT"
-  )
-  const [inStock, setInStock] = useState(
-    listing.manual_in_stock === null
-      ? "unknown"
-      : listing.manual_in_stock
-        ? "yes"
-        : "no"
-  )
 
   useEffect(() => {
-    setStore(listing.store)
     setUrl(listing.url)
-    setManualPrice(
-      listing.manual_price === null ? "" : String(listing.manual_price)
-    )
-    setCurrency(listing.manual_currency ?? listing.fetched_currency ?? "IRT")
-    setInStock(
-      listing.manual_in_stock === null
-        ? "unknown"
-        : listing.manual_in_stock
-          ? "yes"
-          : "no"
-    )
   }, [listing])
 
-  const numericPrice = parsePriceFilterInput(manualPrice)
-  const autoCheck = AUTO_CHECK_STORES.has(store)
   const trimmedUrl = url.trim()
   const urlMismatch =
-    trimmedUrl !== "" && !isUrlMatchingStore(trimmedUrl, store)
-  const storeTakenByOther =
-    SINGLE_LINK_STORES.has(store) &&
-    store !== listing.store &&
-    takenStores.has(store)
+    trimmedUrl !== "" && !isUrlMatchingStore(trimmedUrl, listing.store)
+  const linkDirty = trimmedUrl !== listing.url.trim()
+  const canPersist = !busy && !urlMismatch && trimmedUrl !== ""
+
+  function persistLink() {
+    const trimmed = url.trim()
+    if (!trimmed) return
+    if (!isUrlMatchingStore(trimmed, listing.store)) return
+    if (trimmed === listing.url.trim()) return
+    onLinkUpdate(trimmed)
+  }
+
+  function handleUrlBlur() {
+    setUrl((current) => current.trim())
+    persistLink()
+  }
 
   return (
     <article className="space-y-3 rounded-lg border border-border bg-background p-3 sm:p-4">
@@ -206,8 +148,21 @@ function PriceListingCard({
         <div className="flex flex-wrap items-center gap-1.5">
           <Badge variant="secondary">{listingStoreLabel(listing)}</Badge>
           <Badge variant={statusBadgeVariant(listing.status)}>
-            {listing.is_active ? STATUS_LABELS[listing.status] : "غیرفعال"}
+            {STATUS_LABELS[listing.status]}
           </Badge>
+          {busy ? (
+            <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+              <LoaderCircle
+                className="size-3.5 animate-spin"
+                aria-hidden="true"
+              />
+              در حال ذخیرهٔ خودکار…
+            </span>
+          ) : linkDirty && canPersist ? (
+            <span className="text-[11px] text-muted-foreground">
+              تغییر ذخیره نشده؛ با خروج از کادر لینک ذخیره می‌شود
+            </span>
+          ) : null}
         </div>
         <a
           href={listing.url}
@@ -261,13 +216,6 @@ function PriceListingCard({
         </div>
       </div>
 
-      {store === "digikala" ? (
-        <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-700 dark:text-amber-300">
-          بررسی خودکار دیجی‌کالا فعلاً در دسترس نیست؛ قیمت را دستی وارد و ذخیره
-          کنید.
-        </p>
-      ) : null}
-
       {listing.last_error ? (
         <p role="alert" className="text-xs text-destructive">
           {listing.last_error}
@@ -278,157 +226,56 @@ function PriceListingCard({
         <p className="text-xs font-medium text-muted-foreground">
           لینک صفحهٔ محصول
         </p>
-        <div className="space-y-2">
-          <Select
-            value={store}
-            onValueChange={(value) => setStore(value as CompetitorStore)}
-          >
-            <SelectTrigger
-              aria-label="فروشگاه یا سایت منبع"
-              className="w-full sm:w-48"
-            >
-              <SelectValue>{STORE_OPTION_LABELS[store]}</SelectValue>
-            </SelectTrigger>
-            <SelectContent align="start">
-              {DIALOG_STORES.map((option) => {
-                const disabled =
-                  SINGLE_LINK_STORES.has(option) &&
-                  option !== listing.store &&
-                  takenStores.has(option)
-                return (
-                  <SelectItem key={option} value={option} disabled={disabled}>
-                    {STORE_OPTION_LABELS[option]}
-                  </SelectItem>
-                )
-              })}
-              {listing.store === "other" ? (
-                <SelectItem value="other">سایر فروشگاه‌ها</SelectItem>
-              ) : null}
-            </SelectContent>
-          </Select>
-          <div className="min-w-0 space-y-1">
-            <Input
-              type="url"
-              value={url}
-              onChange={(event) => setUrl(event.target.value)}
-              onBlur={(event) => setUrl(event.target.value.trim())}
-              placeholder={STORE_URL_PLACEHOLDERS[store]}
-              aria-label="لینک صفحه محصول"
-              aria-invalid={urlMismatch || undefined}
-              title={trimmedUrl || undefined}
-              dir="ltr"
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="off"
-              spellCheck={false}
-              inputMode="url"
-              className="h-10 w-full min-w-0 text-left text-sm text-ellipsis"
-              required
-            />
-            {STORE_URL_HINTS[store] ? (
-              <p className="text-[11px] leading-4 text-muted-foreground">
-                {STORE_URL_HINTS[store]}
-              </p>
-            ) : null}
-            {urlMismatch ? (
-              <p
-                role="alert"
-                className="text-[11px] leading-4 text-destructive"
-              >
-                دامنهٔ لینک با فروشگاه انتخاب‌شده هم‌خوانی ندارد.
-              </p>
-            ) : null}
-            {storeTakenByOther ? (
-              <p
-                role="alert"
-                className="text-[11px] leading-4 text-destructive"
-              >
-                برای {STORE_LABELS[store]} قبلاً یک لینک ثبت شده است؛ ابتدا لینک
-                قبلی را حذف کنید.
-              </p>
-            ) : null}
-          </div>
-        </div>
-      </div>
-
-      <div className="space-y-1.5">
-        <p className="text-xs font-medium text-muted-foreground">قیمت دستی</p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_9rem]">
+        <div className="min-w-0 space-y-1">
           <Input
-            value={manualPrice === "" ? "" : formatPersianNumber(manualPrice)}
-            onChange={(event) =>
-              setManualPrice(parsePriceFilterInput(event.target.value))
-            }
-            placeholder="مثلاً ۲۵٬۰۰۰٬۰۰۰"
-            aria-label="قیمت دستی"
-            inputMode="numeric"
-            className="col-span-2 sm:col-span-1"
+            type="url"
+            value={url}
+            onChange={(event) => setUrl(event.target.value)}
+            onBlur={handleUrlBlur}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault()
+                ;(event.target as HTMLInputElement).blur()
+              }
+            }}
+            placeholder={STORE_URL_PLACEHOLDERS[listing.store]}
+            aria-label={`لینک صفحه محصول ${listingStoreLabel(listing)}`}
+            aria-invalid={urlMismatch || undefined}
+            title={trimmedUrl || undefined}
+            dir="ltr"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            inputMode="url"
+            className="h-10 w-full min-w-0 text-left text-sm text-ellipsis"
+            required
+            disabled={busy}
           />
-          <Select
-            value={currency}
-            onValueChange={(value) => setCurrency(value as CompetitorCurrency)}
-          >
-            <SelectTrigger aria-label="واحد پول">
-              <SelectValue>{currency === "IRR" ? "ریال" : "تومان"}</SelectValue>
-            </SelectTrigger>
-            <SelectContent align="start">
-              <SelectItem value="IRT">تومان</SelectItem>
-              <SelectItem value="IRR">ریال</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select
-            value={inStock}
-            onValueChange={(value) => setInStock(value ?? "unknown")}
-          >
-            <SelectTrigger aria-label="موجودی فروشگاه">
-              <SelectValue>
-                {inStock === "yes"
-                  ? "موجود"
-                  : inStock === "no"
-                    ? "ناموجود"
-                    : "موجودی نامشخص"}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent align="start">
-              <SelectItem value="unknown">موجودی نامشخص</SelectItem>
-              <SelectItem value="yes">موجود</SelectItem>
-              <SelectItem value="no">ناموجود</SelectItem>
-            </SelectContent>
-          </Select>
+          {STORE_URL_HINTS[listing.store] ? (
+            <p className="text-[11px] leading-4 text-muted-foreground">
+              {STORE_URL_HINTS[listing.store]}
+            </p>
+          ) : null}
+          {urlMismatch ? (
+            <p role="alert" className="text-[11px] leading-4 text-destructive">
+              دامنهٔ لینک با فروشگاه انتخاب‌شده هم‌خوانی ندارد.
+            </p>
+          ) : null}
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <Button
           size="sm"
-          disabled={busy || storeTakenByOther || trimmedUrl === ""}
-          onClick={() =>
-            onSave(
-              store,
-              url.trim(),
-              numericPrice === "" ? null : Number(numericPrice),
-              currency,
-              inStock === "unknown" ? null : inStock === "yes"
-            )
-          }
+          variant="outline"
+          disabled={busy || trimmedUrl === "" || urlMismatch}
+          onClick={() => onCheck(url.trim())}
         >
-          ذخیرهٔ اصلاحات
+          {busy ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}
+          بررسی لینک
         </Button>
-        {autoCheck ? (
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={busy || storeTakenByOther || trimmedUrl === ""}
-            onClick={() => onCheck(store, url.trim())}
-          >
-            {busy ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}
-            بررسی لینک
-          </Button>
-        ) : null}
         <span className="ms-auto flex gap-1">
-          <Button size="sm" variant="ghost" disabled={busy} onClick={onToggle}>
-            {listing.is_active ? "غیرفعال‌کردن" : "فعال‌کردن"}
-          </Button>
           <Button
             size="sm"
             variant="ghost"
@@ -444,19 +291,102 @@ function PriceListingCard({
   )
 }
 
+function EmptySlotCard({
+  store,
+  busy,
+  onCreate,
+}: {
+  store: CompetitorStore
+  busy: boolean
+  onCreate: (url: string) => void
+}) {
+  const [url, setUrl] = useState("")
+  const trimmedUrl = url.trim()
+  const urlMismatch =
+    trimmedUrl !== "" && !isUrlMatchingStore(trimmedUrl, store)
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const trimmed = url.trim()
+    if (!trimmed || urlMismatch) return
+    onCreate(trimmed)
+  }
+
+  return (
+    <article className="space-y-3 rounded-lg border border-dashed border-border bg-background p-3 sm:p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badge variant="secondary">{STORE_LABELS[store]}</Badge>
+          <span className="text-[11px] text-muted-foreground">
+            لینکی ثبت نشده است
+          </span>
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-2">
+        <p className="text-xs font-medium text-muted-foreground">
+          لینک صفحهٔ محصول {STORE_LABELS[store]} را وارد کنید
+        </p>
+        <div className="min-w-0 space-y-1">
+          <Input
+            type="url"
+            value={url}
+            onChange={(event) => setUrl(event.target.value)}
+            onBlur={(event) => setUrl(event.target.value.trim())}
+            placeholder={STORE_URL_PLACEHOLDERS[store]}
+            aria-label={`لینک صفحه محصول ${STORE_LABELS[store]}`}
+            aria-invalid={urlMismatch || undefined}
+            title={trimmedUrl || undefined}
+            dir="ltr"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            inputMode="url"
+            className="h-10 w-full min-w-0 text-left text-sm text-ellipsis"
+            required
+            disabled={busy}
+          />
+          {STORE_URL_HINTS[store] ? (
+            <p className="text-[11px] leading-4 text-muted-foreground">
+              {STORE_URL_HINTS[store]}
+            </p>
+          ) : null}
+          {urlMismatch ? (
+            <p role="alert" className="text-[11px] leading-4 text-destructive">
+              دامنهٔ لینک با فروشگاه انتخاب‌شده هم‌خوانی ندارد.
+            </p>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="submit"
+            size="sm"
+            disabled={busy || trimmedUrl === "" || urlMismatch}
+          >
+            {busy ? <LoaderCircle className="animate-spin" /> : <Plus />}
+            ثبت لینک
+          </Button>
+          {busy ? (
+            <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+              <LoaderCircle
+                className="size-3.5 animate-spin"
+                aria-hidden="true"
+              />
+              در حال ذخیره…
+            </span>
+          ) : null}
+        </div>
+      </form>
+    </article>
+  )
+}
+
 export function ProductCompetitorPrices({ productId }: { productId: number }) {
   const [listings, setListings] = useState<CompetitorListing[]>([])
-  const [store, setStore] = useState<CompetitorStore>("digikala")
-  const [url, setUrl] = useState("")
   const [loading, setLoading] = useState(true)
-  const [busyId, setBusyId] = useState<number | "create" | null>(null)
+  const [busyKey, setBusyKey] = useState<number | string | null>(null)
   const [error, setError] = useState<string | null>(null)
-
-  const takenStores = new Set(listings.map((listing) => listing.store))
-  const trimmedNewUrl = url.trim()
-  const newUrlMismatch =
-    trimmedNewUrl !== "" && !isUrlMatchingStore(trimmedNewUrl, store)
-  const newStoreTaken = SINGLE_LINK_STORES.has(store) && takenStores.has(store)
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -475,7 +405,7 @@ export function ProductCompetitorPrices({ productId }: { productId: number }) {
   }, [refresh])
 
   async function mutate(id: number, action: () => Promise<CompetitorListing>) {
-    setBusyId(id)
+    setBusyKey(id)
     try {
       const updated = await action()
       setListings((current) =>
@@ -485,19 +415,14 @@ export function ProductCompetitorPrices({ productId }: { productId: number }) {
     } catch (err) {
       setError(toPersianError(err))
     } finally {
-      setBusyId(null)
+      setBusyKey(null)
     }
   }
 
-  async function addListing(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  async function createListing(store: CompetitorStore, url: string) {
     const trimmed = url.trim()
     if (!trimmed) return
-    if (SINGLE_LINK_STORES.has(store) && takenStores.has(store)) {
-      setError(`برای ${STORE_LABELS[store]} قبلاً یک لینک ثبت شده است.`)
-      return
-    }
-    setBusyId("create")
+    setBusyKey(`create-${store}`)
     try {
       const created = await api.createCompetitorListing(
         productId,
@@ -505,17 +430,16 @@ export function ProductCompetitorPrices({ productId }: { productId: number }) {
         trimmed
       )
       setListings((current) => [...current, created])
-      setUrl("")
       setError(null)
     } catch (err) {
       setError(toPersianError(err))
     } finally {
-      setBusyId(null)
+      setBusyKey(null)
     }
   }
 
   async function removeListing(id: number) {
-    setBusyId(id)
+    setBusyKey(id)
     try {
       await api.deleteCompetitorListing(id)
       setListings((current) => current.filter((listing) => listing.id !== id))
@@ -523,99 +447,23 @@ export function ProductCompetitorPrices({ productId }: { productId: number }) {
     } catch (err) {
       setError(toPersianError(err))
     } finally {
-      setBusyId(null)
+      setBusyKey(null)
     }
   }
+
+  const byStore = new Map(listings.map((listing) => [listing.store, listing]))
+  const otherListings = listings.filter((listing) => listing.store === "other")
 
   return (
     <section className="space-y-4 rounded-lg border border-border bg-muted/30 p-4 text-start">
       <div>
         <h3 className="font-semibold">قیمت فروشگاه‌های دیگر</h3>
         <p className="mt-1 text-xs leading-5 text-muted-foreground">
-          لینک‌های دستی دیجی‌کالا و تکنولایف در اولویت‌اند و نسبت به جست‌وجوی
-          خودکار آینده بر اساس نام کالا اولویت خواهند داشت. برای هر فروشگاه فقط
-          یک لینک دستی می‌توان ثبت کرد. قیمت تکنولایف با «بررسی لینک» به‌صورت
-          خودکار به‌روزرسانی می‌شود؛ قیمت دیجی‌کالا را دستی وارد کنید. قیمت فقط
-          تا ۲۴ ساعت تازه محسوب می‌شود.
+          برای هر فروشگاه یک کارت وجود دارد. لینک را وارد کنید تا ذخیره شود؛ با
+          «بررسی لینک» قیمت به‌صورت خودکار به‌روزرسانی می‌شود و با «حذف» لینک
+          دستی پاک می‌شود. قیمت فقط تا ۲۴ ساعت تازه محسوب می‌شود.
         </p>
       </div>
-
-      <form onSubmit={addListing} className="space-y-2">
-        <p className="text-xs font-medium text-muted-foreground">
-          افزودن لینک دستی جدید
-        </p>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <Select
-            value={store}
-            onValueChange={(value) => setStore(value as CompetitorStore)}
-          >
-            <SelectTrigger aria-label="فروشگاه رقیب" className="w-full sm:w-48">
-              <SelectValue>{STORE_OPTION_LABELS[store]}</SelectValue>
-            </SelectTrigger>
-            <SelectContent align="start">
-              {DIALOG_STORES.map((option) => (
-                <SelectItem
-                  key={option}
-                  value={option}
-                  disabled={
-                    SINGLE_LINK_STORES.has(option) && takenStores.has(option)
-                  }
-                >
-                  {STORE_OPTION_LABELS[option]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            type="submit"
-            disabled={busyId !== null || newStoreTaken || trimmedNewUrl === ""}
-            className="w-full sm:ms-auto sm:w-auto"
-          >
-            {busyId === "create" ? (
-              <LoaderCircle className="animate-spin" />
-            ) : (
-              <Plus />
-            )}
-            افزودن لینک
-          </Button>
-        </div>
-        <div className="min-w-0 space-y-1">
-          <Input
-            type="url"
-            value={url}
-            onChange={(event) => setUrl(event.target.value)}
-            onBlur={(event) => setUrl(event.target.value.trim())}
-            placeholder={STORE_URL_PLACEHOLDERS[store]}
-            aria-label="لینک صفحهٔ محصول رقیب"
-            aria-invalid={newUrlMismatch || undefined}
-            title={trimmedNewUrl || undefined}
-            dir="ltr"
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck={false}
-            inputMode="url"
-            className="h-10 w-full min-w-0 text-left text-sm text-ellipsis"
-            required
-          />
-          {STORE_URL_HINTS[store] ? (
-            <p className="text-[11px] leading-4 text-muted-foreground">
-              {STORE_URL_HINTS[store]}
-            </p>
-          ) : null}
-          {newUrlMismatch ? (
-            <p role="alert" className="text-[11px] leading-4 text-destructive">
-              دامنهٔ لینک با فروشگاه انتخاب‌شده هم‌خوانی ندارد.
-            </p>
-          ) : null}
-          {newStoreTaken ? (
-            <p role="alert" className="text-[11px] leading-4 text-destructive">
-              برای {STORE_LABELS[store]} قبلاً یک لینک ثبت شده است؛ برای ثبت
-              لینک جدید ابتدا لینک قبلی را حذف کنید.
-            </p>
-          ) : null}
-        </div>
-      </form>
 
       {error ? (
         <p role="alert" className="text-sm text-destructive">
@@ -626,49 +474,80 @@ export function ProductCompetitorPrices({ productId }: { productId: number }) {
         <p className="text-sm text-muted-foreground">
           در حال بارگذاری منابع قیمت…
         </p>
-      ) : listings.length ? (
+      ) : (
         <div className="space-y-3">
-          {listings.map((listing) => (
-            <PriceListingCard
+          {DIALOG_STORES.map((store) => {
+            const listing = byStore.get(store)
+            if (!listing) {
+              return (
+                <EmptySlotCard
+                  key={store}
+                  store={store}
+                  busy={busyKey === `create-${store}`}
+                  onCreate={(url) => void createListing(store, url)}
+                />
+              )
+            }
+            return (
+              <FilledSlotCard
+                key={listing.id}
+                listing={listing}
+                busy={busyKey === listing.id}
+                onLinkUpdate={(url) =>
+                  void mutate(listing.id, () =>
+                    api.updateCompetitorListing(listing.id, {
+                      store: listing.store,
+                      url,
+                      is_active: true,
+                    })
+                  )
+                }
+                onCheck={(url) =>
+                  void mutate(listing.id, async () => {
+                    if (url !== listing.url.trim()) {
+                      await api.updateCompetitorListing(listing.id, {
+                        store: listing.store,
+                        url,
+                        is_active: true,
+                      })
+                    }
+                    return api.checkCompetitorListing(listing.id)
+                  })
+                }
+                onDelete={() => void removeListing(listing.id)}
+              />
+            )
+          })}
+          {otherListings.map((listing) => (
+            <FilledSlotCard
               key={listing.id}
               listing={listing}
-              busy={busyId === listing.id}
-              takenStores={takenStores}
-              onCheck={(updatedStore, updatedUrl) =>
-                void mutate(listing.id, async () => {
-                  await api.updateCompetitorListing(listing.id, {
-                    store: updatedStore,
-                    url: updatedUrl,
+              busy={busyKey === listing.id}
+              onLinkUpdate={(url) =>
+                void mutate(listing.id, () =>
+                  api.updateCompetitorListing(listing.id, {
+                    store: listing.store,
+                    url,
+                    is_active: true,
                   })
+                )
+              }
+              onCheck={(url) =>
+                void mutate(listing.id, async () => {
+                  if (url !== listing.url.trim()) {
+                    await api.updateCompetitorListing(listing.id, {
+                      store: listing.store,
+                      url,
+                      is_active: true,
+                    })
+                  }
                   return api.checkCompetitorListing(listing.id)
                 })
-              }
-              onSave={(updatedStore, updatedUrl, price, currency, inStock) =>
-                void mutate(listing.id, () =>
-                  api.updateCompetitorListing(listing.id, {
-                    store: updatedStore,
-                    url: updatedUrl,
-                    manual_price: price,
-                    manual_currency: currency,
-                    manual_in_stock: inStock,
-                  })
-                )
-              }
-              onToggle={() =>
-                void mutate(listing.id, () =>
-                  api.updateCompetitorListing(listing.id, {
-                    is_active: !listing.is_active,
-                  })
-                )
               }
               onDelete={() => void removeListing(listing.id)}
             />
           ))}
         </div>
-      ) : (
-        <p className="rounded-md border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
-          هنوز لینک رقیبی برای این کالا ثبت نشده است.
-        </p>
       )}
     </section>
   )

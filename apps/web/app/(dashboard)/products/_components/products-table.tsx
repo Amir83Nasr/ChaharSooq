@@ -19,6 +19,7 @@ import { Button } from "@workspace/ui/components/button"
 import { EmptyState } from "@workspace/ui/components/state"
 import { Price } from "@workspace/ui/components/price"
 import { PersianNumber } from "@workspace/ui/components/persian-number"
+import { formatPersianNumber } from "@workspace/ui/lib/number"
 import { Skeleton } from "@workspace/ui/components/skeleton"
 import { CircleAlert, PackageSearch, RefreshCw } from "lucide-react"
 import { StockCell } from "@/components/products-stock-cell"
@@ -34,6 +35,8 @@ interface TableProps {
   pageSize: number
   showPageSize: boolean
   hasFilters: boolean
+  market: CompetitorMarket
+  onMarketChange: (market: CompetitorMarket) => void
   onSelect: (item: ProductOut) => void
   onPageChange: (p: number) => void
   onPageSize: (n: number) => void
@@ -69,19 +72,12 @@ function brandOf(name: string | null, top: string | null): string | null {
   return n
 }
 
-function competitorSources(
-  top: string | null
-): { store: string; label: string }[] {
-  if (top === "فرش") return [{ store: "digifresh", label: "دیجی‌فرش" }]
-  if (top === "مبلمان") return [{ store: "sofa", label: "سوفا" }]
-  if (top === "لوازم خانگی") {
-    return [
-      { store: "digikala", label: "دیجی‌کالا" },
-      { store: "technolife", label: "تکنولایف" },
-    ]
-  }
-  return []
-}
+type CompetitorMarket = "digikala" | "technolife"
+
+const COMPETITOR_MARKETS: { store: CompetitorMarket; label: string }[] = [
+  { store: "digikala", label: "دیجی‌کالا" },
+  { store: "technolife", label: "تکنولایف" },
+]
 
 const COMPETITOR_STATUS_LABELS: Record<string, string> = {
   pending: "در انتظار بررسی",
@@ -93,8 +89,37 @@ const COMPETITOR_STATUS_LABELS: Record<string, string> = {
   manual: "قیمت تازه ثبت نشده",
 }
 
+// IRR (ریال) → تومان برای مقایسه با قیمت کالا.
+function toTomanAmount(
+  price: number | null,
+  currency: string | null
+): number | null {
+  if (price === null || price === undefined) return null
+  if (currency === "IRR") return Math.round(price / 10)
+  return price
+}
+
+// اختلاف درصد قیمت ما نسبت به رقیب: مثبت یعنی گران‌تر از رقیب.
+function diffPercent(ours: number, theirs: number | null): number | null {
+  if (theirs === null || theirs <= 0 || ours <= 0) return null
+  return ((ours - theirs) / theirs) * 100
+}
+
+function formatDiffPercent(diff: number): string {
+  const rounded = Math.round(diff * 10) / 10
+  const clean = Object.is(rounded, -0) ? 0 : rounded
+  const absStr = Math.abs(clean).toFixed(1).replace(/\.0$/, "")
+  return `${formatPersianNumber(absStr)}٪`
+}
+
 // Shared by the data, skeleton and error rows so the column layout never shifts.
-function ProductsTableHead() {
+// In data rows the competitor header offers an instant market toggle
+// (segmented buttons, no dropdown overlay) between the two stores.
+function ProductsTableHead(props: {
+  market?: CompetitorMarket
+  onMarketChange?: (market: CompetitorMarket) => void
+}) {
+  const { market = "digikala", onMarketChange } = props
   return (
     <>
       <colgroup>
@@ -105,9 +130,9 @@ function ProductsTableHead() {
         <col className="w-40" />
         <col className="w-20" />
         <col className="w-28" />
+        <col className="w-36" />
         <col className="w-28" />
         <col className="w-20" />
-        <col className="w-24" />
         <col className="w-24" />
       </colgroup>
       <TableHeader>
@@ -128,7 +153,39 @@ function ProductsTableHead() {
             قیمت
           </TableHead>
           <TableHead scope="col" className="text-center">
-            قیمت رقبا
+            <span className="inline-flex flex-col items-center gap-1.5">
+              <span>قیمت رقبا</span>
+              {onMarketChange ? (
+                <span
+                  className="inline-flex items-center gap-0.5 rounded-full border border-border bg-muted/60 p-0.5"
+                  role="radiogroup"
+                  aria-label="انتخاب فروشگاه رقیب"
+                >
+                  {COMPETITOR_MARKETS.map((m) => {
+                    const active = m.store === market
+                    return (
+                      <button
+                        key={m.store}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        aria-label={m.label}
+                        onClick={() => {
+                          if (!active) onMarketChange(m.store)
+                        }}
+                        className={
+                          active
+                            ? "rounded-full bg-background px-2.5 py-0.5 text-[11px] font-medium shadow-sm"
+                            : "rounded-full px-2.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+                        }
+                      >
+                        {m.label}
+                      </button>
+                    )
+                  })}
+                </span>
+              ) : null}
+            </span>
           </TableHead>
           <TableHead scope="col" className="text-center">
             اختلاف درصد
@@ -180,10 +237,14 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
     pageSize,
     showPageSize,
     hasFilters,
+    market,
+    onMarketChange,
     onSelect,
     onPageChange,
     onPageSize,
   } = props
+  const marketLabel =
+    COMPETITOR_MARKETS.find((m) => m.store === market)?.label ?? "دیجی‌کالا"
   if (!page) return <ProductTableSkeleton />
   if (page.items.length === 0) {
     return (
@@ -203,7 +264,7 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
   return (
     <div className="space-y-6">
       <Table className="min-w-212 table-fixed">
-        <ProductsTableHead />
+        <ProductsTableHead market={market} onMarketChange={onMarketChange} />
         <TableBody>
           {page.items.map((item, i) => {
             const rowNumber =
@@ -213,20 +274,20 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
               i +
               1
             const top = topGroupOf(item.main_group_name)
-            const sources = [
-              ...competitorSources(top),
-              ...item.competitor_prices
-                .filter((price) => price.store === "other")
-                .map((price) => {
-                  let label = "سایر فروشگاه‌ها"
-                  try {
-                    label = new URL(price.url).hostname
-                  } catch {
-                    // Preserve a useful label if a saved URL cannot be parsed.
-                  }
-                  return { store: price.store, label }
-                }),
-            ]
+            const isAppliance = top === "لوازم خانگی"
+            const competitor = isAppliance
+              ? (item.competitor_prices.find(
+                  (price) => price.store === market
+                ) ?? null)
+              : null
+            const amount = toTomanAmount(
+              competitor?.price ?? null,
+              competitor?.currency ?? null
+            )
+            const pct =
+              isAppliance && competitor?.is_fresh === true
+                ? diffPercent(item.price, amount)
+                : null
             return (
               <TableRow
                 key={item.id}
@@ -282,44 +343,44 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                   <Price value={item.price} />
                 </TableCell>
                 <TableCell className="text-center">
-                  <div className="space-y-1">
-                    {sources.map(({ store, label }) => {
-                      const competitor = item.competitor_prices.find(
-                        (price) => price.store === store
-                      )
-                      const amount =
-                        competitor?.price !== null &&
-                        competitor?.currency === "IRR"
-                          ? Math.round(competitor.price / 10)
-                          : competitor?.price
-                      return (
-                        <span key={store} className="block text-xs">
-                          <span className="text-muted-foreground">
-                            {label}:{" "}
-                          </span>
-                          {competitor?.is_fresh &&
-                          amount !== null &&
-                          amount !== undefined ? (
-                            <Price value={amount} />
-                          ) : (
-                            <span className="text-muted-foreground">
-                              {competitor
-                                ? (COMPETITOR_STATUS_LABELS[
-                                    competitor.status
-                                  ] ?? "نیازمند بررسی")
-                                : "لینک ثبت نشده"}
-                            </span>
-                          )}
-                        </span>
-                      )
-                    })}
-                    {sources.length === 0 ? (
-                      <span className="text-muted-foreground">—</span>
-                    ) : null}
-                  </div>
+                  {!isAppliance ? (
+                    <span className="text-muted-foreground">—</span>
+                  ) : competitor?.is_fresh &&
+                    amount !== null &&
+                    amount !== undefined ? (
+                    <Price value={amount} />
+                  ) : (
+                    <span className="text-xs text-muted-foreground">
+                      {competitor
+                        ? (COMPETITOR_STATUS_LABELS[competitor.status] ??
+                          "نیازمند بررسی")
+                        : "لینک ثبت نشده"}
+                    </span>
+                  )}
                 </TableCell>
-                <TableCell className="text-center text-muted-foreground">
-                  —
+                <TableCell className="text-center">
+                  {!isAppliance || pct === null ? (
+                    <span className="text-muted-foreground">—</span>
+                  ) : Object.is(Math.round(pct * 10) / 10, 0) || pct === 0 ? (
+                    <span
+                      className="block text-xs text-muted-foreground"
+                      title={`${marketLabel}: بدون اختلاف`}
+                    >
+                      بدون اختلاف
+                    </span>
+                  ) : (
+                    <span
+                      className={`block text-xs font-medium ${
+                        pct > 0
+                          ? "text-destructive"
+                          : "text-emerald-600 dark:text-emerald-400"
+                      }`}
+                      title={`${marketLabel}: ${formatDiffPercent(pct)} ${pct > 0 ? "گران‌تر" : "ارزان‌تر"} از رقیب`}
+                    >
+                      {formatDiffPercent(pct)}{" "}
+                      {pct > 0 ? "گران‌تر" : "ارزان‌تر"}
+                    </span>
+                  )}
                 </TableCell>
                 <TableCell className="text-center text-muted-foreground">
                   —

@@ -1,6 +1,13 @@
 import type { Metadata } from "next"
 
-import { Clock, MoonStar, PackageMinus, Rows3, Sigma } from "lucide-react"
+import {
+  Clock,
+  MoonStar,
+  PackageMinus,
+  Rows3,
+  Sigma,
+  Store,
+} from "lucide-react"
 
 import {
   Card,
@@ -12,6 +19,7 @@ import {
 import { PageHeader } from "@workspace/ui/components/page-header"
 
 import { InventoryThresholdSettings } from "@/components/inventory-threshold-settings"
+import { CompetitorStoreSettings } from "@/components/competitor-store-settings"
 import { PageSizeSettings } from "@/components/page-size-settings"
 import { SyncIntervalSettings } from "@/components/sync-interval-settings"
 import { SuggestedPriceSettings } from "@/components/suggested-price-settings"
@@ -47,6 +55,20 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent>
           <ThemeSettings />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Store className="size-4" />
+            بازار پیش‌فرض قیمت رقبا
+          </CardTitle>
+          <CardDescription>
+            در جدول محصولات، ستون «قیمت رقبا» اول قیمت کدام فروشگاه را نشان بدهد
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <CompetitorStoreSettings />
         </CardContent>
       </Card>
       <Card>

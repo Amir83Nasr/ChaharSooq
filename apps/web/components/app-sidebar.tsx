@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   BarChart3,
+  Bot,
   Boxes,
   Laptop,
   LayoutDashboard,
@@ -13,6 +14,7 @@ import {
   ShoppingBag,
   ShoppingCart,
   Sofa,
+  Sparkles,
   Store,
   Tag,
   Truck,
@@ -61,6 +63,23 @@ const NAV = [
       { href: "/products", label: "محصولات", icon: Package },
       { href: "/inventory", label: "موجودی انبار", icon: Boxes, soon: true },
       { href: "/suppliers", label: "تأمین‌کنندگان", icon: Truck, soon: true },
+    ],
+  },
+  {
+    group: "هوش مصنوعی",
+    items: [
+      {
+        href: "/ai-assistant",
+        label: "دستیار هوشمند",
+        icon: Sparkles,
+        soon: true,
+      },
+      {
+        href: "/ai-pricing",
+        label: "قیمت‌گذاری هوشمند",
+        icon: Bot,
+        soon: true,
+      },
     ],
   },
   {

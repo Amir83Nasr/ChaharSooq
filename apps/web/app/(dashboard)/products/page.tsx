@@ -12,6 +12,7 @@ import {
   ApiRequestError,
   GENERIC_ERROR_MESSAGE,
   type CategoryOut,
+  type DefaultCompetitorStore,
   type ProductOut,
   type ProductPage,
   type ProductSort,
@@ -45,6 +46,7 @@ export default function ProductsPage() {
   const [minPrice, setMinPrice] = useState("")
   const [maxPrice, setMaxPrice] = useState("")
   const [threshold, setThreshold] = useState(DEFAULT_LOW_STOCK_THRESHOLD)
+  const [market, setMarket] = useState<DefaultCompetitorStore>("digikala")
   // Bumped after a sync lands — re-fetches table + stats in place, keeping
   // search/sort/paging state untouched.
   const [dataVersion, setDataVersion] = useState(0)
@@ -93,8 +95,8 @@ export default function ProductsPage() {
     }
   }, [goLogin])
 
-  // Low-stock threshold + default page size come from server settings
-  // so every device agrees.
+  // Low-stock threshold + default page size + default competitor market come
+  // from server settings so every device agrees.
   useEffect(() => {
     let cancelled = false
     api
@@ -111,6 +113,12 @@ export default function ProductsPage() {
           data.default_page_size === 500
         ) {
           setPageSize(data.default_page_size)
+        }
+        if (
+          data.default_competitor_store === "digikala" ||
+          data.default_competitor_store === "technolife"
+        ) {
+          setMarket(data.default_competitor_store)
         }
         if (Number.isFinite(data.sync_interval_minutes)) {
           const ms =
@@ -277,6 +285,8 @@ export default function ProductsPage() {
           pageSize={pageSize}
           showPageSize={!isMobile}
           hasFilters={hasFilters}
+          market={market}
+          onMarketChange={setMarket}
           onSelect={setSelected}
           onPageChange={changePage}
           onPageSize={changePageSize}

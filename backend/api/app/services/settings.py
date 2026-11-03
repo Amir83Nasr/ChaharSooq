@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -20,6 +22,13 @@ DEFAULT_SYNC_INTERVAL_MINUTES = get_parsina_settings().parsina_sync_interval_min
 MIN_SYNC_INTERVAL_MINUTES = 1
 MAX_SYNC_INTERVAL_MINUTES = 10080
 
+DEFAULT_COMPETITOR_STORE_KEY = "default_competitor_store"
+DEFAULT_COMPETITOR_STORE: Literal["digikala", "technolife"] = "digikala"
+ALLOWED_COMPETITOR_STORES: tuple[Literal["digikala", "technolife"], ...] = (
+    "digikala",
+    "technolife",
+)
+
 
 class SettingsService:
     def __init__(self, session: Session) -> None:
@@ -30,6 +39,7 @@ class SettingsService:
             "low_stock_threshold": self.get_threshold(),
             "default_page_size": self.get_page_size(),
             "sync_interval_minutes": self.get_sync_interval(),
+            "default_competitor_store": self.get_competitor_store(),
             "suggested_price_formulas": self.get_suggested_price_formulas(),
         }
 
@@ -117,3 +127,24 @@ class SettingsService:
             row.value = str(minutes)
         self._session.flush()
         return minutes
+
+    def get_competitor_store(self) -> Literal["digikala", "technolife"]:
+        row = self._session.get(Setting, DEFAULT_COMPETITOR_STORE_KEY)
+        if row is None:
+            return DEFAULT_COMPETITOR_STORE
+        value = row.value.strip()
+        if value == "technolife":
+            return "technolife"
+        return "digikala"
+
+    def update_competitor_store(
+        self, store: Literal["digikala", "technolife"]
+    ) -> Literal["digikala", "technolife"]:
+        row = self._session.get(Setting, DEFAULT_COMPETITOR_STORE_KEY)
+        if row is None:
+            row = Setting(key=DEFAULT_COMPETITOR_STORE_KEY, value=store)
+            self._session.add(row)
+        else:
+            row.value = store
+        self._session.flush()
+        return store

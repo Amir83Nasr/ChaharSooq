@@ -24,7 +24,7 @@ export function ProductDetailDialog(props: {
     >
       <ResponsiveDialogContent
         aria-label="جزئیات کالا"
-        className="max-h-[90dvh] max-w-3xl overflow-y-auto"
+        className="max-h-[90dvh] overflow-y-auto sm:max-w-5xl"
       >
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>{selected?.name ?? ""}</ResponsiveDialogTitle>

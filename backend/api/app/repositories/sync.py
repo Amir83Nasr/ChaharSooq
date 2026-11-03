@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, cast
 
 from sqlalchemy import or_, update
@@ -13,6 +13,21 @@ from app.models.parsina import SYNC_STATE_ID
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import CursorResult
+
+
+def _acquired_by_us(state: ParsinaSyncState | None, now: datetime) -> bool:
+    """Fallback ownership check for drivers without UPDATE rowcount.
+
+    SQLite returns tz-naive datetimes, so compare in a common tz; otherwise
+    a naive `running_since == aware now` is always False and the lock holder
+    would wrongly report "busy" to itself.
+    """
+    if state is None or state.running_since is None:
+        return False
+    acquired_at = state.running_since
+    if acquired_at.tzinfo is None:
+        acquired_at = acquired_at.replace(tzinfo=UTC)
+    return acquired_at == now
 
 
 class SyncStateRepository:
@@ -54,7 +69,7 @@ class SyncStateRepository:
         if rowcount >= 0:
             return rowcount == 1
         state = self._session.get(ParsinaSyncState, SYNC_STATE_ID)
-        return state is not None and state.running_since == now
+        return _acquired_by_us(state, now)
 
     def release(self, *, success: bool, error: str | None = None) -> None:
         state = self.ensure_state()

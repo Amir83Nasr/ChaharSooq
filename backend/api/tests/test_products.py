@@ -29,6 +29,13 @@ def test_product_validation_envelope(client: TestClient) -> None:
     assert r.json()["error"]["code"] == "validation_error"
 
 
+def test_products_reject_page_size_above_service_cap(client: TestClient) -> None:
+    login(client)
+    r = client.get("/api/v1/products", params={"page_size": 501})
+    assert r.status_code == 422
+    assert r.json()["error"]["code"] == "validation_error"
+
+
 def test_product_search_covers_sku(client: TestClient) -> None:
     seed(client)
     page = client.get("/api/v1/products", params={"q": "CHE-"}).json()

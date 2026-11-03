@@ -23,7 +23,9 @@ from app.integrations.parsina import (
     parse_commodity,
 )
 from app.models import Product
+from app.models.parsina import ParsinaSyncState
 from app.repositories import SyncStateRepository
+from app.repositories.sync import _acquired_by_us
 from app.services.sync import (
     ProductSyncService,
     SyncBusyError,
@@ -256,6 +258,18 @@ def test_sync_acquire_then_run_acquired_matches_run(session: Session) -> None:
 def test_sync_fails_without_settings(session: Session) -> None:
     with pytest.raises(SyncNotConfiguredError):
         ProductSyncService(session, settings=ParsinaSettings()).run()
+
+
+def test_acquired_by_us_tolerates_naive_datetimes() -> None:
+    """SQLite returns tz-naive datetimes; the lock holder must still match."""
+    now = datetime.now(UTC)
+    assert _acquired_by_us(None, now) is False
+    assert _acquired_by_us(ParsinaSyncState(id=1, running_since=None), now) is False
+    assert (
+        _acquired_by_us(ParsinaSyncState(id=1, running_since=now.replace(tzinfo=None)), now) is True
+    )
+    other = datetime.now(UTC).replace(year=datetime.now(UTC).year + 1)
+    assert _acquired_by_us(ParsinaSyncState(id=1, running_since=other), now) is False
 
 
 def test_scheduled_sync_noop_when_not_configured() -> None:

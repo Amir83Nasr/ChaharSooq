@@ -341,7 +341,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 100000,
+              "maximum": 500,
               "minimum": 0,
               "default": 0,
               "title": "Page Size"
@@ -1787,10 +1787,14 @@
       },
       "SuggestedPriceFormulaIn": {
         "properties": {
-          "category_id": {
-            "type": "integer",
-            "exclusiveMinimum": 0.0,
-            "title": "Category Id"
+          "top_group": {
+            "type": "string",
+            "enum": [
+              "فرش",
+              "مبلمان",
+              "لوازم خانگی"
+            ],
+            "title": "Top Group"
           },
           "expression": {
             "type": "string",
@@ -1801,17 +1805,21 @@
         },
         "type": "object",
         "required": [
-          "category_id",
+          "top_group",
           "expression"
         ],
         "title": "SuggestedPriceFormulaIn"
       },
       "SuggestedPriceFormulaOut": {
         "properties": {
-          "category_id": {
-            "type": "integer",
-            "exclusiveMinimum": 0.0,
-            "title": "Category Id"
+          "top_group": {
+            "type": "string",
+            "enum": [
+              "فرش",
+              "مبلمان",
+              "لوازم خانگی"
+            ],
+            "title": "Top Group"
           },
           "expression": {
             "type": "string",
@@ -1822,7 +1830,7 @@
         },
         "type": "object",
         "required": [
-          "category_id",
+          "top_group",
           "expression"
         ],
         "title": "SuggestedPriceFormulaOut"
@@ -1863,7 +1871,8 @@
             "type": "string",
             "enum": [
               "parsina",
-              "csv"
+              "csv",
+              "dev"
             ],
             "title": "Source",
             "default": "parsina"

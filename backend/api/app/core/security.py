@@ -4,7 +4,6 @@ import hashlib
 import secrets
 
 from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError
 
 _hasher = PasswordHasher()  # argon2id is the default
 
@@ -16,7 +15,10 @@ def hash_password(password: str) -> str:
 def verify_password(password_hash: str, password: str) -> bool:
     try:
         return _hasher.verify(password_hash, password)
-    except VerifyMismatchError:
+    except Exception:
+        # argon2 signals failure version-dependently (VerifyMismatchError,
+        # InvalidHashError, even KeyError on garbage input) — every failure
+        # mode must fail closed, never surface as a 500 on login.
         return False
 
 

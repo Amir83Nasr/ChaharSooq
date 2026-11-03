@@ -1,7 +1,10 @@
 """Auth flow — login/me/logout, validation envelope."""
 
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
+from app.core.database import get_engine
+from app.models import Admin
 from app.services import LOGIN_ERROR
 from tests.helpers import login
 
@@ -39,3 +42,13 @@ def test_login_me_logout_cycle(client: TestClient) -> None:
     assert client.get("/api/v1/auth/me").json() == {"username": "admin"}
     assert client.post("/api/v1/auth/logout").status_code == 204
     assert client.get("/api/v1/auth/me").status_code == 401
+
+
+def test_login_with_corrupt_hash_is_401_not_500(client: TestClient) -> None:
+    with Session(get_engine()) as s:
+        admin = s.query(Admin).filter_by(username="admin").one()
+        admin.password_hash = "not-a-valid-argon2-hash"
+        s.commit()
+    r = client.post("/api/v1/auth/login", json={"username": "admin", "password": "secret123"})
+    assert r.status_code == 401
+    assert r.json()["error"]["code"] == "unauthorized"

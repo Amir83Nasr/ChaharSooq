@@ -39,7 +39,10 @@ def list_products(
     in_stock: bool | None = Query(default=None),
     sort: Literal["newest", "cheapest", "most_expensive"] = Query(default="newest"),
     page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=0, ge=0, le=100000),
+    # 0 means "all" (uncapped); any explicit size is clamped to 500 in the
+    # service, so the route bound matches that instead of implying up-to-100k
+    # paging that does not exist.
+    page_size: int = Query(default=0, ge=0, le=500),
     _admin: Admin = Depends(require_admin),  # noqa: B008
     session: Session = Depends(get_db),  # noqa: B008
 ) -> ProductPage:

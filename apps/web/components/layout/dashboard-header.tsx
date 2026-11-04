@@ -1,42 +1,14 @@
-"use client"
-
-import Link from "next/link"
-
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@workspace/ui/primitives/breadcrumb"
 import { Separator } from "@workspace/ui/primitives/separator"
 import { SidebarTrigger } from "@workspace/ui/primitives/sidebar"
-import { usePathname } from "next/navigation"
-import { Fragment } from "react"
 
 import { ThemeToggle } from "@/components/layout/theme-toggle"
 import { HeaderDateTime } from "@/components/layout/header-datetime"
-
-const breadcrumbLabels: Record<string, string> = {
-  dashboard: "داشبورد",
-  products: "محصولات",
-  reports: "گزارش‌ها",
-  settings: "تنظیمات",
-  integrations: "یکپارچه‌سازی",
-  sofa: "سوفا",
-  digifresh: "دیجی‌فرش",
-  digikala: "دیجی‌کالا",
-  technolife: "تکنولایف",
-}
+import { DashboardBreadcrumbs } from "@/components/layout/dashboard-breadcrumbs"
 
 export function DashboardHeader() {
-  const pathname = usePathname()
-  const segments = pathname.split("/").filter(Boolean)
-  const crumbs = segments.map((seg, i) => ({
-    label: breadcrumbLabels[seg] ?? seg,
-    href: "/" + segments.slice(0, i + 1).join("/"),
-  }))
+  // Server shell: only DashboardBreadcrumbs re-renders on navigation.
+  // ThemeToggle and HeaderDateTime are isolated client islands, so the
+  // per-second clock tick never re-renders the header or breadcrumbs.
 
   // TEST-UI-1: glass header (revert to bg-background if laggy/bad).
   return (
@@ -46,24 +18,7 @@ export function DashboardHeader() {
         <span className="me-2 hidden shrink-0 items-center min-[420px]:flex">
           <Separator orientation="vertical" className="h-4" />
         </span>
-        <Breadcrumb dir="rtl" className="min-w-0">
-          <BreadcrumbList className="flex-nowrap [&_a]:truncate [&_span]:truncate [&>li]:min-w-0">
-            {crumbs.map((crumb, i) => (
-              <Fragment key={crumb.href}>
-                <BreadcrumbItem>
-                  {i < crumbs.length - 1 ? (
-                    <BreadcrumbLink render={<Link href={crumb.href} />}>
-                      {crumb.label}
-                    </BreadcrumbLink>
-                  ) : (
-                    <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
-                  )}
-                </BreadcrumbItem>
-                {i < crumbs.length - 1 && <BreadcrumbSeparator />}
-              </Fragment>
-            ))}
-          </BreadcrumbList>
-        </Breadcrumb>
+        <DashboardBreadcrumbs />
       </div>
       <div className="flex shrink-0 items-center gap-1.5 px-3 sm:gap-2 sm:px-4">
         <ThemeToggle />

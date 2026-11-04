@@ -249,6 +249,14 @@ function toApiError(status: number, body: ApiError | null): ApiRequestError {
   )
 }
 
+// Coalesces concurrent settings reads (the settings page mounts six cards
+// at once; the products page fires categories+settings+products on reload)
+// and reuses the result briefly across navigations. Errors are never
+// cached; saves refresh the entry below.
+const SETTINGS_TTL_MS = 15_000
+let settingsCache: { data: SettingsOut; expires: number } | null = null
+let settingsInflight: Promise<SettingsOut> | null = null
+
 export const api = {
   login(username: string, password: string) {
     return request<{ ok: boolean }>("/api/v1/auth/login", {
@@ -257,12 +265,29 @@ export const api = {
     })
   },
   settings() {
-    return request<SettingsOut>("/api/v1/settings")
+    const cached = settingsCache
+    if (cached && cached.expires > Date.now()) {
+      return Promise.resolve(cached.data)
+    }
+    if (!settingsInflight) {
+      settingsInflight = request<SettingsOut>("/api/v1/settings")
+        .then((data) => {
+          settingsCache = { data, expires: Date.now() + SETTINGS_TTL_MS }
+          return data
+        })
+        .finally(() => {
+          settingsInflight = null
+        })
+    }
+    return settingsInflight
   },
   updateSettings(patch: SettingsUpdate) {
     return request<SettingsOut>("/api/v1/settings", {
       method: "PUT",
       body: JSON.stringify(patch),
+    }).then((data) => {
+      settingsCache = { data, expires: Date.now() + SETTINGS_TTL_MS }
+      return data
     })
   },
   me() {

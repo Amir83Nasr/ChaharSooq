@@ -54,6 +54,10 @@ export default function ProductsPage() {
   const refreshData = useCallback(() => setDataVersion((v) => v + 1), [])
   // Auto-refresh cadence follows the configured sync interval.
   const [autoRefreshMs, setAutoRefreshMs] = useState(24 * 60 * 60 * 1000)
+  // Gates the product query until server settings resolve, so a reload
+  // issues one product request (with the real threshold/page size) instead
+  // of flashing an intermediate result fetched with local defaults.
+  const [settingsLoaded, setSettingsLoaded] = useState(false)
 
   useEffect(() => {
     if (!autoRefreshMs || autoRefreshMs <= 0) return
@@ -148,14 +152,18 @@ export default function ProductsPage() {
             Math.max(1, Math.floor(data.sync_interval_minutes)) * 60 * 1000
           setAutoRefreshMs(ms)
         }
+        setSettingsLoaded(true)
       })
-      .catch(() => {})
+      .catch(() => {
+        if (!cancelled) setSettingsLoaded(true)
+      })
     return () => {
       cancelled = true
     }
   }, [])
 
   useEffect(() => {
+    if (!settingsLoaded) return
     let cancelled = false
     setError(null)
     const min = minPrice.trim() === "" ? undefined : Number(minPrice)
@@ -217,6 +225,7 @@ export default function ProductsPage() {
     minPrice,
     maxPrice,
     dataVersion,
+    settingsLoaded,
   ])
 
   const totalPages = page

@@ -1,3 +1,4 @@
+import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 import { SidebarInset, SidebarProvider } from "@workspace/ui/primitives/sidebar"
 
@@ -13,8 +14,14 @@ export default async function DashboardLayout({
 }) {
   const admin = await getSessionAdmin()
   if (!admin) redirect("/login")
+  // Respect the persisted sidebar state so a reload doesn't snap the
+  // layout back to expanded. The layout is already dynamic (auth check
+  // above reads cookies), so this adds no prerendering cost.
+  const sidebarState = (await cookies()).get("sidebar_state")?.value
+  const defaultOpen = sidebarState !== "false"
   return (
     <SidebarProvider
+      defaultOpen={defaultOpen}
       style={
         {
           "--sidebar-width": "calc(var(--spacing) * 72)",

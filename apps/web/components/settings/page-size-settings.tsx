@@ -64,10 +64,6 @@ export function PageSizeSettings() {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-sm text-muted-foreground">
-        جدول محصولات در بارگذاری اول با این تعداد ردیف نمایش داده می‌شود. «همه»
-        کل لیست را بدون صفحه‌بندی نمایش می‌دهد.
-      </p>
       <div
         className="grid grid-cols-2 gap-2 sm:grid-cols-4"
         role="radiogroup"

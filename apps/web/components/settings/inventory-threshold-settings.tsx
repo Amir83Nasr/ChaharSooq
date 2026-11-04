@@ -78,9 +78,6 @@ export function InventoryThresholdSettings() {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-sm text-muted-foreground">
-        کالایی که موجودی آن از این عدد کمتر یا مساوی باشد، «کم» محسوب می‌شود.
-      </p>
       <div className="flex items-center gap-2">
         <Input
           value={value === "" ? "" : formatPersianNumber(value)}

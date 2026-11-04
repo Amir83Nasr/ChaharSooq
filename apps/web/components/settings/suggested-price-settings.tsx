@@ -85,11 +85,6 @@ export function SuggestedPriceSettings() {
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-sm text-muted-foreground">
-        برای هر دسته‌بندی می‌توانید عبارت ریاضی قیمت پیشنهادی را با متغیر x
-        تعریف کنید. منبع و مقدار روزانه x پس از مشخص‌شدن اتصال داده، به این
-        فرمول وصل می‌شود.
-      </p>
       {TOP_GROUPS.map((topGroup) => (
         <div
           key={topGroup}

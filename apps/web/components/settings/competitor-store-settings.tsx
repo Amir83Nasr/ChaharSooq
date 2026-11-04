@@ -66,10 +66,6 @@ export function CompetitorStoreSettings() {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-sm text-muted-foreground">
-        در جدول محصولات، ستون «قیمت رقبا» به‌صورت پیش‌فرض قیمت کدام فروشگاه را
-        نشان بدهد. کاربر می‌تواند در هدر جدول به‌صورت موقت بازار دیگری را ببیند.
-      </p>
       <div
         className="grid grid-cols-2 gap-2"
         role="radiogroup"

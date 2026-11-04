@@ -78,10 +78,6 @@ export function SyncIntervalSettings() {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-sm text-muted-foreground">
-        هر چند دقیقه یکبار کاتالوگ محصولات به‌طور خودکار از حسابداری به‌روز شود.
-        مثلاً ۱۲۰ برای هر ۲ ساعت.
-      </p>
       <div className="flex items-center gap-2">
         <Input
           value={value === "" ? "" : formatPersianNumber(value)}

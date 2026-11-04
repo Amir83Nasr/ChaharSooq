@@ -80,10 +80,6 @@ export function CompetitorSyncIntervalSettings() {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-sm text-muted-foreground">
-        هر چند دقیقه یکبار قیمت همه فروشگاه‌های دیگر به‌طور خودکار به‌روز شود.
-        مثلاً ۳۶۰ برای هر ۶ ساعت. فاصله کمتر یعنی فشار بیشتر روی فروشگاه‌ها.
-      </p>
       <div className="flex items-center gap-2">
         <Input
           value={value === "" ? "" : formatPersianNumber(value)}

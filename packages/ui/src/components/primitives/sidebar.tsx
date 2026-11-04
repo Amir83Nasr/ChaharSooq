@@ -333,7 +333,9 @@ function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
         // The inset's inline-start margin (ms-0 <-> ms-2 for the inset
         // variant) must animate with the same duration/easing as the sidebar
         // gap + panel; without this the content snaps while the panel slides.
-        "relative flex w-full flex-1 flex-col bg-background transition-[margin] duration-350 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ms-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ms-2",
+        // NOTE: `margin` alone does not cover the logical `margin-inline-start`
+        // set by ms-*, so both properties are listed.
+        "relative flex w-full flex-1 flex-col bg-background transition-[margin-inline-start,margin] duration-350 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ms-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ms-2",
         className
       )}
       {...props}

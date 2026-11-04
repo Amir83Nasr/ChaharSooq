@@ -27,9 +27,10 @@ export default async function DashboardLayout({
         {/* min-w-0 lets the inset shrink below its content's min-content
             width, so wide inner scrollers (tables) scroll inside their own
             container instead of pushing the whole page sideways. */}
-        <SidebarInset className="bg-grid-pattern h-dvh min-w-0 overflow-hidden md:h-[calc(100dvh-1rem)]">
+        <SidebarInset className="bg-grid-pattern h-dvh min-w-0 overflow-hidden border border-border md:h-[calc(100dvh-1rem)]">
           <DashboardHeader />
-          <div className="no-scrollbar flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-x-clip overflow-y-auto p-4">
+          {/* TEST-UI-1b: pull content under header so glass blur is visible */}
+          <div className="-mt-16 no-scrollbar flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-x-clip overflow-y-auto p-4 pt-20">
             {children}
           </div>
         </SidebarInset>

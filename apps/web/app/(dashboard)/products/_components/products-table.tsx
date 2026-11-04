@@ -168,7 +168,7 @@ export function ProductTableSkeleton() {
       <Table className="min-w-192 table-fixed">
         <ProductsTableHead />
         <TableBody>
-          {Array.from({ length: 10 }).map((_, i) => (
+          {Array.from({ length: 13 }).map((_, i) => (
             <TableRow key={i}>
               {Array.from({ length: COLUMN_COUNT }).map((_, j) => {
                 const centered = j === 0 || j === 2 || j >= 5

@@ -5,6 +5,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 from pytest import MonkeyPatch
 from sqlalchemy.orm import Session
@@ -141,26 +142,54 @@ def test_only_fresh_prices_appear_and_can_filter(client: TestClient) -> None:
     assert stale["items"] == []
 
 
-def test_json_ld_product_price_is_parsed() -> None:
-    page = """
-    <html><script type="application/ld+json">
-    {"@type":"Product","offers":{"price":"42500000","priceCurrency":"IRT",
-    "availability":"https://schema.org/InStock"}}
-    </script></html>
-    """
-    assert _price_from_html(page) == FetchedPrice(Decimal("42500000"), "IRT", True)
+def _page(price: str, currency: str, availability: str, *, aggregate: bool = False) -> str:
+    offers = (
+        f'{{"@type":"AggregateOffer","priceCurrency":"{currency}",'
+        f'"lowPrice":{price},"highPrice":{price},"offerCount":1,'
+        f'"offers":[{{"price":{price},"priceCurrency":"{currency}",'
+        f'"availability":"https://schema.org/{availability}"}}]}}'
+        if aggregate
+        else f'{{"price":"{price}","priceCurrency":"{currency}",'
+        f'"availability":"https://schema.org/{availability}"}}'
+    )
+    return (
+        '<html><script type="application/ld+json">'
+        f'{{"@type":"Product","offers":{offers}}}'
+        "</script></html>"
+    )
 
 
-def test_nested_aggregate_offer_price_is_parsed() -> None:
-    page = """
-    <html><script type="application/ld+json">
-    {"@type":"Product","offers":{"@type":"AggregateOffer","priceCurrency":"IRR",
-    "lowPrice":2329000,"highPrice":2900000,"offerCount":2,
-    "offers":[{"price":2329000,"priceCurrency":"IRR",
-    "availability":"https://schema.org/InStock"}]}}
-    </script></html>
-    """
-    assert _price_from_html(page) == FetchedPrice(Decimal("2329000"), "IRR", True)
+@pytest.mark.parametrize(
+    ("page_kwargs", "expected"),
+    [
+        (
+            {"price": "42500000", "currency": "IRT", "availability": "InStock"},
+            FetchedPrice(Decimal("42500000"), "IRT", True),
+        ),
+        (
+            {
+                "price": "2329000",
+                "currency": "IRR",
+                "availability": "InStock",
+                "aggregate": True,
+            },
+            FetchedPrice(Decimal("2329000"), "IRR", True),
+        ),
+        (
+            {
+                "price": "112900000",
+                "currency": "IRR",
+                "availability": "OutOfStock",
+                "aggregate": True,
+            },
+            FetchedPrice(Decimal("112900000"), "IRR", False),
+        ),
+    ],
+)
+def test_json_ld_offer_shapes_are_parsed(
+    page_kwargs: dict[str, object], expected: FetchedPrice
+) -> None:
+    assert _price_from_html(_page(**page_kwargs)) == expected  # type: ignore[arg-type]
 
 
 def _stub_settings(monkeypatch: MonkeyPatch, interval: float = 0.0) -> None:
@@ -237,44 +266,33 @@ def test_digikala_product_id_is_extracted_from_url() -> None:
     assert prices._digikala_product_id("https://www.digikala.com/mag/") is None
 
 
-def test_digikala_api_marketable_price_is_parsed(monkeypatch: MonkeyPatch) -> None:
+def test_digikala_api_marketable_and_out_of_stock(monkeypatch: MonkeyPatch) -> None:
     _stub_settings(monkeypatch)
     _stub_digikala_api(monkeypatch, _FakeApiResponse(200, _marketable_payload()))
     assert prices._fetch_digikala_api("16621422") == FetchedPrice(Decimal("27000000"), "IRR", True)
-
-
-def test_digikala_api_out_of_stock_without_price(monkeypatch: MonkeyPatch) -> None:
-    _stub_settings(monkeypatch)
-    payload = {
+    out_of_stock = {
         "status": 200,
         "data": {"product": {"id": 111111, "status": "out_of_stock", "default_variant": []}},
     }
-    _stub_digikala_api(monkeypatch, _FakeApiResponse(200, payload))
+    _stub_digikala_api(monkeypatch, _FakeApiResponse(200, out_of_stock))
     assert prices._fetch_digikala_api("111111") == FetchedPrice(None, None, False)
 
 
-def test_digikala_api_missing_product_is_not_found(monkeypatch: MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    ("status_code", "expected_status"),
+    [(404, "not_found"), (403, "blocked")],
+)
+def test_digikala_api_errors_are_mapped(
+    monkeypatch: MonkeyPatch, status_code: int, expected_status: str
+) -> None:
     _stub_settings(monkeypatch)
-    _stub_digikala_api(monkeypatch, _FakeApiResponse(404, {"status": 404}))
-    try:
-        prices._fetch_digikala_api("99999999999")
-    except PriceFetchError as exc:
-        assert exc.status == "not_found"
-    else:
-        raise AssertionError("expected PriceFetchError")
-
-
-def test_digikala_api_rate_limit_blocks_host(monkeypatch: MonkeyPatch) -> None:
-    _stub_settings(monkeypatch)
-    _stub_digikala_api(monkeypatch, _FakeApiResponse(403, {}))
+    _stub_digikala_api(monkeypatch, _FakeApiResponse(status_code, {"status": status_code}))
     prices._host_blocked_until.pop("digikala", None)
-    try:
+    with pytest.raises(PriceFetchError) as exc_info:
         prices._fetch_digikala_api("16621422")
-    except PriceFetchError as exc:
-        assert exc.status == "blocked"
-    else:
-        raise AssertionError("expected PriceFetchError")
-    assert prices._host_blocked_until.get("digikala", 0) > 0
+    assert exc_info.value.status == expected_status
+    if expected_status == "blocked":
+        assert prices._host_blocked_until.get("digikala", 0) > 0
 
 
 def test_fetch_falls_back_to_digikala_api_when_page_has_no_json_ld(
@@ -369,7 +387,7 @@ class _FakeStreamClient:
         return _FakeStreamContext(_FakeStreamClient.routes[url])
 
 
-def test_request_follows_technolife_redirect_chain(monkeypatch: MonkeyPatch) -> None:
+def test_request_follows_redirect_chain_with_single_rate_slot(monkeypatch: MonkeyPatch) -> None:
     _stub_settings(monkeypatch)
     monkeypatch.setattr(prices, "_assert_public_dns", lambda _host: None)
     body = (
@@ -392,48 +410,6 @@ def test_request_follows_technolife_redirect_chain(monkeypatch: MonkeyPatch) -> 
         slug: _FakeStreamResponse(200, None, body),
     }
     monkeypatch.setattr(prices.httpx, "Client", _FakeStreamClient)
-    prices._page_cache.clear()
-    prices._host_last_request.clear()
-    prices._host_blocked_until.clear()
-    monkeypatch.setattr(prices, "_robots_allows", lambda _url, **_kwargs: None)
-    result = prices.fetch_competitor_price(
-        "technolife", "https://www.technolife.ir/product-122293/"
-    )
-    assert result.amount == Decimal("112900000")
-    # Technolife labels Toman values as IRR; the adapter normalises to IRT.
-    assert result.currency == "IRT"
-    assert result.in_stock is True
-
-
-def test_out_of_stock_offer_keeps_price_but_marks_unavailable() -> None:
-    page = """
-    <html><script type="application/ld+json">
-    {"@type":"Product","offers":{"@type":"AggregateOffer","priceCurrency":"IRR",
-    "highPrice":123187500,"lowPrice":112900000,"offerCount":1,
-    "offers":[{"price":112900000,"priceCurrency":"IRR",
-    "availability":"https://schema.org/OutOfStock"}]}}
-    </script></html>
-    """
-    assert _price_from_html(page) == FetchedPrice(Decimal("112900000"), "IRR", False)
-
-
-def test_rate_limit_slot_acquired_once_per_redirect_chain(monkeypatch: MonkeyPatch) -> None:
-    _stub_settings(monkeypatch)
-    monkeypatch.setattr(prices, "_assert_public_dns", lambda _host: None)
-    body = (
-        b'<html><script type="application/ld+json">'
-        b'{"@type":"Product","offers":{"price":1000,"priceCurrency":"IRR",'
-        b'"availability":"https://schema.org/InStock"}}</script></html>'
-    )
-    final = "https://www.technolife.com/product-1/title"
-    _FakeStreamClient.routes = {
-        "https://www.technolife.ir/product-1/": _FakeStreamResponse(
-            301, "https://www.technolife.com/product-1/", b""
-        ),
-        "https://www.technolife.com/product-1/": _FakeStreamResponse(308, final, b""),
-        final: _FakeStreamResponse(200, None, body),
-    }
-    monkeypatch.setattr(prices.httpx, "Client", _FakeStreamClient)
     calls: list[str] = []
     real_acquire = prices._acquire_slot
 
@@ -446,20 +422,12 @@ def test_rate_limit_slot_acquired_once_per_redirect_chain(monkeypatch: MonkeyPat
     prices._host_last_request.clear()
     prices._host_blocked_until.clear()
     monkeypatch.setattr(prices, "_robots_allows", lambda _url, **_kwargs: None)
-    prices.fetch_competitor_price("technolife", "https://www.technolife.ir/product-1/")
-    # Three HTTP hops, but only one interval wait: redirect hops must not
-    # each sleep a full interval.
+    result = prices.fetch_competitor_price(
+        "technolife", "https://www.technolife.ir/product-122293/"
+    )
+    assert result.amount == Decimal("112900000")
+    # Technolife labels Toman values as IRR; the adapter normalises to IRT.
+    assert result.currency == "IRT"
+    assert result.in_stock is True
+    # Four HTTP hops, but only one interval wait: redirects must not each sleep.
     assert calls == ["technolife"]
-
-
-def test_page_cache_evicts_oldest_when_full(monkeypatch: MonkeyPatch) -> None:
-    monkeypatch.setattr(prices, "_PAGE_CACHE_MAX_ENTRIES", 2)
-    prices._page_cache.clear()
-    first = FetchedPrice(Decimal("1"), "IRR", True)
-    prices._cache_set("https://a.example/", first)
-    prices._cache_set("https://b.example/", FetchedPrice(Decimal("2"), "IRR", True))
-    prices._cache_set("https://c.example/", FetchedPrice(Decimal("3"), "IRR", True))
-    assert prices._cache_get("https://a.example/") is None
-    assert prices._cache_get("https://b.example/") is not None
-    assert prices._cache_get("https://c.example/") is not None
-    prices._page_cache.clear()

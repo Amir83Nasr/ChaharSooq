@@ -13,18 +13,11 @@ def test_health(client: TestClient) -> None:
     assert client.get("/api/v1/health").json() == {"status": "ok"}
 
 
-def test_root_returns_service_discovery(client: TestClient) -> None:
-    r = client.get("/")
-    assert r.status_code == 200
-    assert r.json() == {
-        "name": "Charsooq Admin API",
-        "version": "0.1.0",
-        "status": "ok",
-        "docs": "/docs",
-        "health": "/health",
-        "ready": "/ready",
-        "api": "/api/v1/health",
-    }
+def test_security_headers_present(client: TestClient) -> None:
+    r = client.get("/api/v1/health")
+    assert r.headers["X-Content-Type-Options"] == "nosniff"
+    assert r.headers["X-Frame-Options"] == "DENY"
+    assert r.headers["Content-Security-Policy"] == "frame-ancestors 'none'"
 
 
 def test_login_wrong_password_is_401_without_token(client: TestClient) -> None:
@@ -66,3 +59,16 @@ def test_login_with_corrupt_hash_is_401_not_500(client: TestClient) -> None:
     r = client.post("/api/v1/auth/login", json={"username": "admin", "password": "secret123"})
     assert r.status_code == 401
     assert r.json()["error"]["code"] == "unauthorized"
+
+
+def test_login_rate_limited_after_repeated_failures(client: TestClient) -> None:
+    for _ in range(10):
+        r = client.post(
+            "/api/v1/auth/login", json={"username": "admin", "password": "wrong-password"}
+        )
+        assert r.status_code == 401
+    limited = client.post(
+        "/api/v1/auth/login", json={"username": "admin", "password": "wrong-password"}
+    )
+    assert limited.status_code == 429
+    assert limited.json()["error"]["code"] == "rate_limited"

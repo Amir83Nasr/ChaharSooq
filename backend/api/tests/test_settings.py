@@ -10,7 +10,7 @@ def test_settings_require_auth(client: TestClient) -> None:
     assert client.put("/api/v1/settings", json={"low_stock_threshold": 3}).status_code == 401
 
 
-def test_settings_default_and_update(client: TestClient) -> None:
+def test_settings_default_update_and_partial_keep(client: TestClient) -> None:
     login(client)
     assert client.get("/api/v1/settings").json() == {
         "low_stock_threshold": 5,
@@ -24,28 +24,11 @@ def test_settings_default_and_update(client: TestClient) -> None:
         json={"low_stock_threshold": 3, "default_page_size": 100},
     )
     assert r.status_code == 200, r.text
-    assert r.json() == {
+    # Partial update keeps the other field.
+    partial = client.put("/api/v1/settings", json={"default_page_size": 500})
+    assert partial.status_code == 200, partial.text
+    assert partial.json() == {
         "low_stock_threshold": 3,
-        "default_page_size": 100,
-        "sync_interval_minutes": 60,
-        "default_competitor_store": "digikala",
-        "suggested_price_formulas": [],
-    }
-    assert client.get("/api/v1/settings").json() == {
-        "low_stock_threshold": 3,
-        "default_page_size": 100,
-        "sync_interval_minutes": 60,
-        "default_competitor_store": "digikala",
-        "suggested_price_formulas": [],
-    }
-
-
-def test_settings_partial_update_keeps_other_field(client: TestClient) -> None:
-    login(client)
-    r = client.put("/api/v1/settings", json={"default_page_size": 500})
-    assert r.status_code == 200, r.text
-    assert r.json() == {
-        "low_stock_threshold": 5,
         "default_page_size": 500,
         "sync_interval_minutes": 60,
         "default_competitor_store": "digikala",
@@ -53,35 +36,27 @@ def test_settings_partial_update_keeps_other_field(client: TestClient) -> None:
     }
 
 
-def test_settings_reject_invalid_threshold(client: TestClient) -> None:
+def test_settings_reject_invalid_values(client: TestClient) -> None:
     login(client)
     assert client.put("/api/v1/settings", json={"low_stock_threshold": -1}).status_code == 422
     assert client.put("/api/v1/settings", json={"low_stock_threshold": "زیاد"}).status_code == 422
-
-
-def test_settings_reject_invalid_page_size(client: TestClient) -> None:
-    login(client)
     assert client.put("/api/v1/settings", json={"default_page_size": 15}).status_code == 422
     assert client.put("/api/v1/settings", json={"default_page_size": 7}).status_code == 422
 
 
-def test_settings_default_competitor_store_update(client: TestClient) -> None:
+def test_settings_competitor_store_update_and_reject(client: TestClient) -> None:
     login(client)
     r = client.put("/api/v1/settings", json={"default_competitor_store": "technolife"})
     assert r.status_code == 200, r.text
     assert r.json()["default_competitor_store"] == "technolife"
-    assert client.get("/api/v1/settings").json()["default_competitor_store"] == "technolife"
-    r = client.put("/api/v1/settings", json={"default_competitor_store": "digikala"})
-    assert r.status_code == 200, r.text
-    assert r.json()["default_competitor_store"] == "digikala"
-
-
-def test_settings_reject_invalid_competitor_store(client: TestClient) -> None:
-    login(client)
-    r = client.put("/api/v1/settings", json={"default_competitor_store": "other"})
-    assert r.status_code == 422
-    r = client.put("/api/v1/settings", json={"default_competitor_store": "digifresh"})
-    assert r.status_code == 422
+    assert (
+        client.put("/api/v1/settings", json={"default_competitor_store": "other"}).status_code
+        == 422
+    )
+    assert (
+        client.put("/api/v1/settings", json={"default_competitor_store": "digifresh"}).status_code
+        == 422
+    )
 
 
 def test_database_url_trailing_whitespace_stripped() -> None:

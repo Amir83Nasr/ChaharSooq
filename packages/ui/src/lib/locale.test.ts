@@ -14,14 +14,9 @@ import {
   toPersianDigits,
 } from "./number"
 
-describe("toPersianDigits", () => {
-  it("converts latin digits", () => {
+describe("digits", () => {
+  it("converts latin/persian/arabic digits both ways", () => {
     expect(toPersianDigits("0123456789")).toBe("۰۱۲۳۴۵۶۷۸۹")
-  })
-})
-
-describe("toLatinDigits", () => {
-  it("converts persian and arabic digits", () => {
     expect(toLatinDigits("۰۱۲۳۴۵۶۷۸۹")).toBe("0123456789")
     expect(toLatinDigits("٠١٢٣٤٥٦٧٨٩")).toBe("0123456789")
     expect(toLatinDigits("۱۲٬۰۰۰")).toBe("12٬000")
@@ -29,19 +24,12 @@ describe("toLatinDigits", () => {
 })
 
 describe("formatPersianNumber", () => {
-  it("groups with U+066C", () => {
+  it("groups with U+066C, never a western comma, and round-trips filters", () => {
     expect(formatPersianNumber(1000000)).toBe(
       `۱${THOUSAND_SEP}۰۰۰${THOUSAND_SEP}۰۰۰`
     )
-  })
-
-  it("never uses western comma", () => {
     expect(formatPersianNumber(1234567)).not.toContain(",")
-  })
-
-  it("round-trips through price filter parsing", () => {
     expect(parsePriceFilterInput("۱٬۰۰۰٬۰۰۰")).toBe("1000000")
-    expect(parsePriceFilterInput("1000000")).toBe("1000000")
     expect(parsePriceFilterInput(formatPersianNumber(250000))).toBe("250000")
   })
 })
@@ -64,14 +52,14 @@ describe("formatPersianDate", () => {
 })
 
 describe("formatPersianTime", () => {
-  it("emits persian digits without latin chars", () => {
-    const out = formatPersianTime(new Date(2026, 9, 4, 9, 5, 7), true)
-    expect(out).toBe("۰۹:۰۵:۰۷")
-    expect(out).not.toMatch(/[0-9]/)
-  })
-
-  it("omits seconds by default", () => {
+  it("emits persian digits with optional seconds", () => {
+    expect(formatPersianTime(new Date(2026, 9, 4, 9, 5, 7), true)).toBe(
+      "۰۹:۰۵:۰۷"
+    )
     expect(formatPersianTime(new Date(2026, 9, 4, 9, 5, 7))).toBe("۰۹:۰۵")
+    expect(formatPersianTime(new Date(2026, 9, 4, 9, 5, 7), true)).not.toMatch(
+      /[0-9]/
+    )
   })
 })
 

@@ -7,6 +7,7 @@ from tests.helpers import login, seed
 
 def test_products_require_auth(client: TestClient) -> None:
     assert client.get("/api/v1/products").status_code == 401
+    assert client.get("/api/v1/products/summary").status_code == 401
 
 
 def test_product_crud_roundtrip(client: TestClient) -> None:
@@ -36,22 +37,26 @@ def test_products_reject_page_size_above_service_cap(client: TestClient) -> None
     assert r.json()["error"]["code"] == "validation_error"
 
 
-def test_product_search_covers_sku(client: TestClient) -> None:
-    seed(client)
-    page = client.get("/api/v1/products", params={"q": "CHE-"}).json()
-    assert [i["sku"] for i in page["items"]] == ["CHE-1"]
-
-
-def test_product_filters_and_sort(client: TestClient) -> None:
+def test_product_listing_filters_sort_and_search(client: TestClient) -> None:
     ids = seed(client)
+    # SKU search
+    assert [
+        i["sku"] for i in client.get("/api/v1/products", params={"q": "CHE-"}).json()["items"]
+    ] == ["CHE-1"]
+    # Category + stock + price range + sort in one seeded catalog:
+    # TEA-1 (100×5), CHE-1 (300×0), COF-1 (200×2)
     by_cat = client.get("/api/v1/products", params={"category_id": ids["لبنیات"]}).json()
     assert [i["sku"] for i in by_cat["items"]] == ["CHE-1"]
-    in_stock = client.get("/api/v1/products", params={"in_stock": True}).json()
-    assert in_stock["total"] == 2
+    assert client.get("/api/v1/products", params={"in_stock": True}).json()["total"] == 2
     ranged = client.get("/api/v1/products", params={"min_price": 150, "max_price": 250}).json()
     assert [i["sku"] for i in ranged["items"]] == ["COF-1"]
     cheapest = client.get("/api/v1/products", params={"sort": "cheapest"}).json()
     assert [i["price"] for i in cheapest["items"]] == [100, 200, 300]
+    # Stock windows
+    low = client.get("/api/v1/products", params={"in_stock": True, "max_stock": 5}).json()
+    assert {i["sku"] for i in low["items"]} == {"TEA-1", "COF-1"}
+    assert client.get("/api/v1/products", params={"min_stock": 6}).json()["total"] == 0
+    assert client.get("/api/v1/products", params={"min_stock": -1}).status_code == 422
 
 
 def test_product_pagination_total(client: TestClient) -> None:
@@ -69,19 +74,6 @@ def test_product_invalid_category_rejected(client: TestClient) -> None:
         json={"name": "x", "sku": "X-1", "price": 1, "category_id": 9999},
     )
     assert r.status_code == 422
-
-
-def test_product_stock_range_filters(client: TestClient) -> None:
-    seed(client)
-    low = client.get("/api/v1/products", params={"in_stock": True, "max_stock": 5}).json()
-    assert {i["sku"] for i in low["items"]} == {"TEA-1", "COF-1"}
-    good = client.get("/api/v1/products", params={"min_stock": 6}).json()
-    assert good["total"] == 0
-    assert client.get("/api/v1/products", params={"min_stock": -1}).status_code == 422
-
-
-def test_products_summary_requires_auth(client: TestClient) -> None:
-    assert client.get("/api/v1/products/summary").status_code == 401
 
 
 def test_products_summary_counts(client: TestClient) -> None:

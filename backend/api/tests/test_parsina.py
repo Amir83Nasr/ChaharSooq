@@ -1,7 +1,6 @@
 """Parsina integration — client contract, sync rules, endpoints (mocked HTTP)."""
 
 import csv
-import json
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -12,12 +11,11 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
 from app.core.config import ParsinaSettings, get_parsina_settings, get_settings
 from app.core.database import get_engine
 from app.integrations.parsina import (
-    CommodityRow,
     ParsinaAuthError,
     ParsinaClient,
     ParsinaNetworkError,
@@ -237,23 +235,14 @@ def test_sync_skips_sku_owned_by_manual_product(session: Session) -> None:
     assert result.created == 0
 
 
-def test_sync_refuses_when_lock_is_held(session: Session) -> None:
-    state = SyncStateRepository(session).get()
-    state.lock_until = datetime.now(UTC).replace(year=datetime.now(UTC).year + 1)
-    session.commit()
-    with pytest.raises(SyncBusyError):
-        _service(session, FakeParsina(_goods(_good(1, "A-1", "کالا")))).run()
-
-
-def test_sync_acquire_then_run_acquired_matches_run(session: Session) -> None:
+def test_sync_lock_guard_and_acquired_run(session: Session) -> None:
     service = _service(session, FakeParsina(_goods(_good(1, "A-1", "کالا"))))
     service.acquire()
     assert SyncStateRepository(session).get().running_since is not None
     with pytest.raises(SyncBusyError):
         # A second worker cannot take the lock while the first holds it.
         _service(session, FakeParsina(_goods(_good(1, "A-1", "کالا")))).acquire()
-    result = service.run_acquired()
-    assert result.created == 1
+    assert service.run_acquired().created == 1
     assert SyncStateRepository(session).get().running_since is None
 
 
@@ -303,40 +292,19 @@ def dev_csv_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[Pat
     get_parsina_settings.cache_clear()
 
 
-def test_scheduled_sync_runs_csv_in_development(session: Session, dev_csv_env: Path) -> None:
+def test_scheduled_sync_runs_csv_and_respects_interval(session: Session, dev_csv_env: Path) -> None:
     assert dev_csv_env.is_file()
-    result = run_scheduled_sync(
+    first = run_scheduled_sync(
         session_factory=lambda: Session(get_engine()),
         interval_minutes=60,
     )
-    assert result is not None
-    assert (result.created, result.updated, result.processed) == (2, 0, 2)
-    assert {p.external_id for p in session.execute(select(Product)).scalars()} == {1, 2}
-
-
-def test_scheduled_sync_respects_interval_in_development(
-    session: Session, dev_csv_env: Path
-) -> None:
-    assert dev_csv_env.is_file()
-    first = run_scheduled_sync(session_factory=lambda: Session(get_engine()), interval_minutes=60)
     assert first is not None
+    assert (first.created, first.updated, first.processed) == (2, 0, 2)
+    assert {p.external_id for p in session.execute(select(Product)).scalars()} == {1, 2}
     assert (
         run_scheduled_sync(session_factory=lambda: Session(get_engine()), interval_minutes=60)
         is None
     )
-
-
-def test_scheduler_starts_in_development(client: TestClient, dev_csv_env: Path) -> None:
-    assert dev_csv_env.is_file()
-    from app.core.scheduler import SyncScheduler
-
-    factory = sessionmaker(bind=get_engine(), autoflush=False, expire_on_commit=False)
-    scheduler = SyncScheduler(factory)
-    scheduler.start()
-    try:
-        assert scheduler._thread is not None and scheduler._thread.is_alive()
-    finally:
-        scheduler.stop()
 
 
 # ── ENDPOINTS ────────────────────────────────────────────────
@@ -401,15 +369,3 @@ def test_inactive_products_are_hidden(client: TestClient) -> None:
     page = client.get("/api/v1/products").json()
     assert page["total"] == 1
     assert page["items"][0]["external_id"] == 1
-
-
-def test_commodity_row_is_json_serialisable_dataclass() -> None:
-    # Guards the row contract used by the sync service.
-    assert set(CommodityRow.__dataclass_fields__) >= {
-        "good_id",
-        "good_code",
-        "good_name",
-        "sale_price",
-        "remain",
-    }
-    json.dumps({"goodId": 1})

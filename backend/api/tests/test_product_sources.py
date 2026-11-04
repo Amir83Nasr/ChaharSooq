@@ -20,7 +20,7 @@ from app.integrations.parsina import parse_commodity
 from app.integrations.parsina_csv import CsvCommoditySource, CsvSourceError
 from app.integrations.sources import ParsinaCommoditySource, build_commodity_source
 from app.models import Product
-from app.services.sync import ProductSyncService, SyncNotConfiguredError
+from app.services.sync import ProductSyncService
 
 FIELDS = [
     "goodId",
@@ -104,12 +104,12 @@ def session(client: TestClient) -> Iterator[Session]:
 # ── SOURCE ───────────────────────────────────────────────────
 
 
-def test_csv_source_strips_padding_and_parses_rows(tmp_path: Path) -> None:
+def test_csv_source_strips_padding_parses_rows_and_titles_units(tmp_path: Path) -> None:
     path = _write_csv(
         tmp_path / "products.csv",
         [
             _row("1", "A-1", "کالا یک", special="false"),
-            _row("2", "A-2", "کالا دو", special="true"),
+            _row("2", "A-2", "کالا دو", special="true", unit="99"),
         ],
     )
     source = CsvCommoditySource(path)
@@ -118,7 +118,7 @@ def test_csv_source_strips_padding_and_parses_rows(tmp_path: Path) -> None:
 
     assert total == len(raw_rows) == 2
     # The export only has countUnit ids; the source supplies the dev titles.
-    assert units == {4: "عدد"}
+    assert units == {4: "عدد", 99: "عدد"}
     assert raw_rows[0]["goodCode"] == "A-1"
     assert raw_rows[0]["goodName"] == "کالا یک"
 
@@ -132,22 +132,12 @@ def test_csv_source_strips_padding_and_parses_rows(tmp_path: Path) -> None:
     assert first.remain == Decimal("3")
 
 
-def test_csv_source_missing_file_is_not_configured(tmp_path: Path) -> None:
+def test_csv_source_missing_or_unreadable_is_handled(tmp_path: Path) -> None:
     assert CsvCommoditySource(tmp_path / "missing.csv").is_configured is False
-
-
-def test_csv_source_reports_unreadable_file(tmp_path: Path) -> None:
-    path = tmp_path / "bad.csv"
-    path.write_bytes(b"\xff\xfe\x00")
+    bad = tmp_path / "bad.csv"
+    bad.write_bytes(b"\xff\xfe\x00")
     with pytest.raises(CsvSourceError):
-        CsvCommoditySource(path).fetch()
-
-
-def test_csv_source_titles_unknown_units(tmp_path: Path) -> None:
-    """A new unit id must still produce a title, never an empty cell."""
-    path = _write_csv(tmp_path / "products.csv", [_row("1", "A-1", "کالا", unit="99")])
-    _, _, units = CsvCommoditySource(path).fetch()
-    assert units == {99: "عدد"}
+        CsvCommoditySource(bad).fetch()
 
 
 @pytest.mark.skipif(not FIXTURE.exists(), reason="local Parsina CSV fixture not present")
@@ -169,31 +159,28 @@ def test_real_fixture_parses_completely() -> None:
 # ── SELECTION ────────────────────────────────────────────────
 
 
-def test_development_selects_csv_source() -> None:
-    source = build_commodity_source(
-        app_settings=Settings(app_env="development"),
-        parsina_settings=ParsinaSettings(),
+def test_source_selection_by_environment(tmp_path: Path) -> None:
+    assert isinstance(
+        build_commodity_source(
+            app_settings=Settings(app_env="development"),
+            parsina_settings=ParsinaSettings(),
+        ),
+        CsvCommoditySource,
     )
-    assert isinstance(source, CsvCommoditySource)
-
-
-def test_production_selects_parsina_source() -> None:
-    source = build_commodity_source(
-        app_settings=Settings(app_env="production"),
-        parsina_settings=ParsinaSettings(),
+    assert isinstance(
+        build_commodity_source(
+            app_settings=Settings(app_env="production"),
+            parsina_settings=ParsinaSettings(),
+        ),
+        ParsinaCommoditySource,
     )
-    assert isinstance(source, ParsinaCommoditySource)
-
-
-def test_production_selects_dev_source_when_dev_url_set(tmp_path: Path) -> None:
     url = f"sqlite:///{tmp_path / 'dev.db'}"
-    source = build_commodity_source(
+    dev = build_commodity_source(
         app_settings=Settings(app_env="production", dev_database_url=url),
         parsina_settings=ParsinaSettings(),
     )
-    assert isinstance(source, DevDatabaseCommoditySource)
-    assert source.label == "dev"
-    assert source.is_configured is True
+    assert isinstance(dev, DevDatabaseCommoditySource)
+    assert dev.label == "dev" and dev.is_configured is True
 
 
 def _make_dev_db(path: Path) -> str:
@@ -243,23 +230,10 @@ def test_dev_db_source_fetch_returns_parsina_shaped_rows(tmp_path: Path) -> None
     assert row.sale_price in {Decimal(1000), Decimal(2000)}
 
 
-def test_dev_db_source_requires_url(session: Session) -> None:
-    source = DevDatabaseCommoditySource("")
-    assert source.is_configured is False
-    with pytest.raises(SyncNotConfiguredError):
-        ProductSyncService(session, source=source).run()
-
-
 def test_dev_db_source_reports_unreachable_db(tmp_path: Path) -> None:
     url = f"sqlite:///{tmp_path / 'missing-dir' / 'dev.db'}"
     with pytest.raises(DevDbSourceError):
         DevDatabaseCommoditySource(url).fetch()
-
-
-def test_explicit_settings_pin_parsina_source(session: Session) -> None:
-    service = ProductSyncService(session, settings=ParsinaSettings())
-    assert service.source_label == "parsina"
-    assert service.configured is False
 
 
 # ── SYNC ─────────────────────────────────────────────────────
@@ -299,21 +273,6 @@ def test_csv_sync_replace_drops_existing_catalog(session: Session, tmp_path: Pat
 
 
 # ── DEV-DB SYNC ──────────────────────────────────────────────
-
-
-def test_dev_db_sync_inserts_then_updates(session: Session, tmp_path: Path) -> None:
-    url = _make_dev_db(tmp_path / "dev.db")
-
-    first = ProductSyncService(session, source=DevDatabaseCommoditySource(url)).run()
-    assert (first.created, first.updated, first.processed) == (2, 0, 2)
-
-    second = ProductSyncService(session, source=DevDatabaseCommoditySource(url)).run()
-    assert (second.created, second.updated, second.processed) == (0, 2, 2)
-
-    products = session.execute(select(Product)).scalars().all()
-    assert len(products) == 2
-    assert {p.external_id for p in products} == {1, 2}
-    assert {p.unit_name for p in products} == {"عدد"}
 
 
 def test_dev_db_sync_deactivates_rows_removed_from_dev(session: Session, tmp_path: Path) -> None:

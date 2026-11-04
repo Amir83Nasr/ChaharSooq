@@ -196,7 +196,10 @@ class _FakeApiClient:
     def __exit__(self, *args: Any) -> None:
         return None
 
-    def get(self, url: str) -> _FakeApiResponse:
+    def close(self) -> None:
+        return None
+
+    def get(self, url: str, headers: Any = None, **kwargs: Any) -> _FakeApiResponse:
         assert url.startswith("https://api.digikala.com/v2/product/")
         return _FakeApiClient.response
 
@@ -279,14 +282,16 @@ def test_fetch_falls_back_to_digikala_api_when_page_has_no_json_ld(
 ) -> None:
     _stub_settings(monkeypatch)
     prices._page_cache.clear()
-    monkeypatch.setattr(prices, "_robots_allows", lambda _url: None)
+    prices._host_blocked_until.clear()
+    prices._host_last_request.clear()
+    monkeypatch.setattr(prices, "_robots_allows", lambda _url, **_kwargs: None)
     monkeypatch.setattr(
         prices, "_request", lambda _url, **_kwargs: (200, "<html><body>shell</body></html>", _url)
     )
     monkeypatch.setattr(
         prices,
         "_fetch_digikala_api",
-        lambda _pid: FetchedPrice(Decimal("27000000"), "IRR", True),
+        lambda _pid, **_kwargs: FetchedPrice(Decimal("27000000"), "IRR", True),
     )
     result = prices.fetch_competitor_price(
         "digikala", "https://www.digikala.com/product/dkp-16621422/"
@@ -300,7 +305,9 @@ def test_fetch_falls_back_to_digikala_api_when_page_has_no_json_ld(
 def test_fetch_digikala_without_product_id_stays_unavailable(monkeypatch: MonkeyPatch) -> None:
     _stub_settings(monkeypatch)
     prices._page_cache.clear()
-    monkeypatch.setattr(prices, "_robots_allows", lambda _url: None)
+    prices._host_blocked_until.clear()
+    prices._host_last_request.clear()
+    monkeypatch.setattr(prices, "_robots_allows", lambda _url, **_kwargs: None)
     monkeypatch.setattr(
         prices, "_request", lambda _url, **_kwargs: (200, "<html><body>shell</body></html>", _url)
     )
@@ -349,7 +356,15 @@ class _FakeStreamClient:
     def __exit__(self, *args: Any) -> None:
         return None
 
-    def stream(self, method: str, url: str) -> _FakeStreamContext:
+    def close(self) -> None:
+        return None
+
+    def get(self, url: str, headers: Any = None, **kwargs: Any) -> Any:
+        raise AssertionError("stream client should not be used for API GET in this test")
+
+    def stream(
+        self, method: str, url: str, headers: Any = None, **kwargs: Any
+    ) -> _FakeStreamContext:
         assert method == "GET"
         return _FakeStreamContext(_FakeStreamClient.routes[url])
 
@@ -379,7 +394,8 @@ def test_request_follows_technolife_redirect_chain(monkeypatch: MonkeyPatch) -> 
     monkeypatch.setattr(prices.httpx, "Client", _FakeStreamClient)
     prices._page_cache.clear()
     prices._host_last_request.clear()
-    monkeypatch.setattr(prices, "_robots_allows", lambda _url: None)
+    prices._host_blocked_until.clear()
+    monkeypatch.setattr(prices, "_robots_allows", lambda _url, **_kwargs: None)
     result = prices.fetch_competitor_price(
         "technolife", "https://www.technolife.ir/product-122293/"
     )
@@ -428,7 +444,8 @@ def test_rate_limit_slot_acquired_once_per_redirect_chain(monkeypatch: MonkeyPat
     monkeypatch.setattr(prices, "_acquire_slot", counting_acquire)
     prices._page_cache.clear()
     prices._host_last_request.clear()
-    monkeypatch.setattr(prices, "_robots_allows", lambda _url: None)
+    prices._host_blocked_until.clear()
+    monkeypatch.setattr(prices, "_robots_allows", lambda _url, **_kwargs: None)
     prices.fetch_competitor_price("technolife", "https://www.technolife.ir/product-1/")
     # Three HTTP hops, but only one interval wait: redirect hops must not
     # each sleep a full interval.

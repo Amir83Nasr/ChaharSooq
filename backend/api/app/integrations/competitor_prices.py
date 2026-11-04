@@ -32,10 +32,21 @@ STORE_HOSTS: dict[str, frozenset[str]] = {
 _lock = threading.Lock()
 _robot_cache: dict[str, tuple[float, RobotFileParser]] = {}
 _page_cache: dict[str, tuple[float, FetchedPrice]] = {}
+_dns_cache: dict[str, tuple[float, set[ipaddress.IPv4Address | ipaddress.IPv6Address]]] = {}
 _host_last_request: dict[str, float] = {}
 _host_blocked_until: dict[str, float] = {}
-_PAGE_CACHE_TTL_SECONDS = 120
+_PAGE_CACHE_TTL_SECONDS = 600
 _PAGE_CACHE_MAX_ENTRIES = 512
+_DNS_CACHE_TTL_SECONDS = 300
+_REQUEST_TIMEOUT = httpx.Timeout(connect=5.0, read=10.0, write=5.0, pool=5.0)
+_HTML_HEADERS = {"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"}
+_ROBOTS_HEADERS = {"User-Agent": USER_AGENT, "Accept": "text/plain,*/*"}
+_DIGIKALA_API_HEADERS = {
+    "User-Agent": USER_AGENT,
+    "Accept": "application/json",
+    "Referer": "https://www.digikala.com/",
+}
+_EARLY_PARSE_MIN_BYTES = 32_768
 
 
 class PriceFetchError(Exception):
@@ -102,6 +113,14 @@ def _normalise_url(url: str, store: str) -> str:
 
 
 def _assert_public_dns(host: str) -> None:
+    now = time.monotonic()
+    with _lock:
+        cached = _dns_cache.get(host)
+        if cached and cached[0] > now:
+            addresses = cached[1]
+            if not addresses or any(not address.is_global for address in addresses):
+                raise PriceFetchError("failed", "مقصد آدرس عمومی قابل‌قبولی ندارد")
+            return
     try:
         addresses = {
             ipaddress.ip_address(item[4][0])
@@ -111,6 +130,8 @@ def _assert_public_dns(host: str) -> None:
         raise PriceFetchError("failed", "دامنهٔ فروشگاه قابل دسترسی نیست") from exc
     if not addresses or any(not address.is_global for address in addresses):
         raise PriceFetchError("failed", "مقصد آدرس عمومی قابل‌قبولی ندارد")
+    with _lock:
+        _dns_cache[host] = (now + _DNS_CACHE_TTL_SECONDS, addresses)
 
 
 def _acquire_slot(rate_key: str) -> None:
@@ -160,33 +181,67 @@ def _cache_set(key: str, value: FetchedPrice) -> None:
         _page_cache[key] = (now + _PAGE_CACHE_TTL_SECONDS, value)
 
 
+def _stream_body_with_early_exit(response: Any, *, max_bytes: int) -> bytes:
+    """Read a streamed body, stopping early once structured price data appears.
+
+    JSON-LD product data lives in ``<head>`` (usually the first tens of KB)
+    while the rest of the page can be megabytes of body markup. As soon as
+    the accumulated prefix already yields a price, the remaining bytes are
+    skipped — the stream context still closes the connection cleanly.
+    """
+    body_parts: list[bytes] = []
+    total = 0
+    for chunk in response.iter_bytes():
+        total += len(chunk)
+        if total > max_bytes:
+            raise PriceFetchError("failed", "حجم صفحه از حد مجاز بیشتر است")
+        body_parts.append(chunk)
+        if total >= _EARLY_PARSE_MIN_BYTES and b"application/ld+json" in chunk.lower():
+            prefix = b"".join(body_parts)
+            if b"</script>" in prefix.lower():
+                # _price_from_json_ld swallows malformed-JSON prefixes and
+                # returns None, so a partial head simply keeps streaming.
+                if _price_from_json_ld(prefix.decode("utf-8", errors="replace")) is not None:
+                    return prefix
+    return b"".join(body_parts)
+
+
 def _request(
-    url: str, *, max_bytes: int = 2_000_000, html_only: bool = True
+    url: str,
+    *,
+    max_bytes: int = 2_000_000,
+    html_only: bool = True,
+    acquire_slot: bool = True,
+    client: httpx.Client | None = None,
 ) -> tuple[int, str, str]:
     current = url
     attempt = 0
-    first_hop = True
-    # Technolife slug-less links bounce across domains a few times
-    # (technolife.ir → technolife.com → slash normalisation → slug), so allow
-    # up to 8 redirects instead of failing on the 4th hop.
-    for _ in range(10):
-        parsed = urlsplit(current)
-        host = (parsed.hostname or "").lower().rstrip(".")
-        rate_key = _store_for_host(host)
-        _assert_public_dns(host)
-        if first_hop:
-            _acquire_slot(rate_key)
-            first_hop = False
-        elif _is_blocked(rate_key):
-            raise PriceFetchError("blocked", "دریافت از این فروشگاه موقتاً متوقف شده است")
-        try:
-            with httpx.Client(
-                timeout=httpx.Timeout(10.0),
-                follow_redirects=False,
-                trust_env=False,
-                headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"},
-            ) as client:
-                with client.stream("GET", current) as response:
+    owned = client is None
+    # One client for the whole redirect chain: reuses TCP/TLS + connection
+    # pool across hops instead of a fresh handshake per hop.
+    active = client or httpx.Client(
+        timeout=_REQUEST_TIMEOUT,
+        follow_redirects=False,
+        trust_env=False,
+        headers=_ROBOTS_HEADERS if not html_only else _HTML_HEADERS,
+    )
+    try:
+        # Technolife slug-less links bounce across domains a few times
+        # (technolife.ir → technolife.com → slash normalisation → slug), so allow
+        # up to 8 redirects instead of failing on the 4th hop.
+        for _ in range(10):
+            parsed = urlsplit(current)
+            host = (parsed.hostname or "").lower().rstrip(".")
+            rate_key = _store_for_host(host)
+            _assert_public_dns(host)
+            if acquire_slot:
+                _acquire_slot(rate_key)
+                acquire_slot = False
+            elif _is_blocked(rate_key):
+                raise PriceFetchError("blocked", "دریافت از این فروشگاه موقتاً متوقف شده است")
+            try:
+                headers = _ROBOTS_HEADERS if not html_only else _HTML_HEADERS
+                with active.stream("GET", current, headers=headers) as response:
                     if response.is_redirect:
                         status_code = response.status_code
                         location = response.headers.get("location")
@@ -196,52 +251,51 @@ def _request(
                         status_code = response.status_code
                         location = None
                         content_type = response.headers.get("content-type", "")
-                        body_parts: list[bytes] = []
-                        total = 0
-                        for chunk in response.iter_bytes():
-                            total += len(chunk)
-                            if total > max_bytes:
-                                raise PriceFetchError("failed", "حجم صفحه از حد مجاز بیشتر است")
-                            body_parts.append(chunk)
-                        body = b"".join(body_parts)
-        except httpx.HTTPError as exc:
-            if attempt == 0:
-                attempt = 1
-                time.sleep(get_settings().competitor_request_interval_seconds * 2)
+                        body = _stream_body_with_early_exit(response, max_bytes=max_bytes)
+            except httpx.HTTPError as exc:
+                if attempt == 0:
+                    attempt = 1
+                    time.sleep(get_settings().competitor_request_interval_seconds)
+                    continue
+                raise PriceFetchError("failed", "دریافت صفحه با خطای شبکه روبه‌رو شد") from exc
+            if status_code in (403, 429):
+                with _lock:
+                    _host_blocked_until[rate_key] = time.monotonic() + 6 * 60 * 60
+                log.warning("competitor store rate-limited store=%s http=%s", rate_key, status_code)
+                raise PriceFetchError(
+                    "blocked", f"فروشگاه درخواست را محدود کرد (HTTP {status_code})"
+                )
+            if 300 <= status_code < 400:
+                if not location:
+                    break
+                current = urljoin(current, location)
+                try:
+                    redirect_host = urlsplit(current).hostname or ""
+                except ValueError:
+                    raise PriceFetchError("failed", "تغییرمسیر نامعتبر است") from None
+                current = _normalise_url(current, _store_for_host(redirect_host))
+                attempt = 0
                 continue
-            raise PriceFetchError("failed", "دریافت صفحه با خطای شبکه روبه‌رو شد") from exc
-        if status_code in (403, 429):
-            with _lock:
-                _host_blocked_until[rate_key] = time.monotonic() + 6 * 60 * 60
-            log.warning("competitor store rate-limited store=%s http=%s", rate_key, status_code)
-            raise PriceFetchError("blocked", f"فروشگاه درخواست را محدود کرد (HTTP {status_code})")
-        if 300 <= status_code < 400:
-            if not location:
-                break
-            current = urljoin(current, location)
-            try:
-                redirect_host = urlsplit(current).hostname or ""
-            except ValueError:
-                raise PriceFetchError("failed", "تغییرمسیر نامعتبر است") from None
-            current = _normalise_url(current, _store_for_host(redirect_host))
-            attempt = 0
-            continue
-        if status_code >= 500:
-            if attempt == 0:
-                attempt = 1
-                time.sleep(get_settings().competitor_request_interval_seconds * 2)
-                continue
-            raise PriceFetchError("unavailable", f"فروشگاه موقتاً پاسخ‌گو نیست (HTTP {status_code})")
-        if status_code == 404:
-            raise PriceFetchError("not_found", "صفحهٔ محصول پیدا نشد")
-        if status_code >= 400:
-            raise PriceFetchError("failed", f"دریافت صفحه ناموفق بود (HTTP {status_code})")
-        if html_only and "html" not in content_type.lower():
-            raise PriceFetchError("unavailable", "محتوای لینک صفحهٔ محصول نیست")
-        encoding = "utf-8"
-        html = body.decode(encoding, errors="replace")
-        return status_code, html, current
-    raise PriceFetchError("failed", "تعداد تغییرمسیرهای صفحه بیش از حد مجاز است")
+            if status_code >= 500:
+                if attempt == 0:
+                    attempt = 1
+                    time.sleep(get_settings().competitor_request_interval_seconds)
+                    continue
+                raise PriceFetchError(
+                    "unavailable", f"فروشگاه موقتاً پاسخ‌گو نیست (HTTP {status_code})"
+                )
+            if status_code == 404:
+                raise PriceFetchError("not_found", "صفحهٔ محصول پیدا نشد")
+            if status_code >= 400:
+                raise PriceFetchError("failed", f"دریافت صفحه ناموفق بود (HTTP {status_code})")
+            if html_only and "html" not in content_type.lower():
+                raise PriceFetchError("unavailable", "محتوای لینک صفحهٔ محصول نیست")
+            html = body.decode("utf-8", errors="replace")
+            return status_code, html, current
+        raise PriceFetchError("failed", "تعداد تغییرمسیرهای صفحه بیش از حد مجاز است")
+    finally:
+        if owned:
+            active.close()
 
 
 def _store_for_host(host: str) -> str:
@@ -251,7 +305,7 @@ def _store_for_host(host: str) -> str:
     raise PriceFetchError("unavailable", "تغییرمسیر به دامنهٔ پشتیبانی‌نشده مجاز نیست")
 
 
-def _robots_allows(url: str) -> None:
+def _robots_allows(url: str, client: httpx.Client | None = None) -> None:
     host = urlsplit(url).hostname or ""
     with _lock:
         entry = _robot_cache.get(host)
@@ -263,7 +317,11 @@ def _robots_allows(url: str) -> None:
         parser = RobotFileParser()
         robots_url = f"https://{host}/robots.txt"
         try:
-            _, body, resolved_robots_url = _request(robots_url, max_bytes=256_000, html_only=False)
+            # robots.txt must not consume the check's rate-limit slot: the
+            # page/API fetch below already spaces this logical check.
+            _, body, resolved_robots_url = _request(
+                robots_url, max_bytes=256_000, html_only=False, acquire_slot=False, client=client
+            )
         except PriceFetchError as exc:
             # No robots.txt (404) means crawling is allowed; anything else
             # (network error, rate-limit) stays an availability problem.
@@ -375,75 +433,85 @@ def _digikala_product_id(url: str) -> str | None:
     return match.group(1) if match else None
 
 
-def _fetch_digikala_api(product_id: str) -> FetchedPrice:
+def _fetch_digikala_api(product_id: str, client: httpx.Client | None = None) -> FetchedPrice:
     """Read price/stock from Digikala's public product API (prices in Rial)."""
     api_url = f"{_DIGIKALA_API_BASE}/{product_id}/"
     attempt = 0
-    while True:
-        try:
-            with httpx.Client(
-                timeout=httpx.Timeout(10.0),
-                follow_redirects=False,
-                trust_env=False,
-                headers={
-                    "User-Agent": USER_AGENT,
-                    "Accept": "application/json",
-                    "Referer": "https://www.digikala.com/",
-                },
-            ) as client:
-                response = client.get(api_url)
-        except httpx.HTTPError as exc:
-            if attempt == 0:
-                attempt = 1
-                time.sleep(get_settings().competitor_request_interval_seconds * 2)
-                continue
-            raise PriceFetchError("failed", "دریافت قیمت دیجی‌کالا با خطای شبکه روبه‌رو شد") from exc
-        status_code = response.status_code
-        if status_code in (403, 429):
-            with _lock:
-                _host_blocked_until["digikala"] = time.monotonic() + 6 * 60 * 60
-            log.warning("competitor store rate-limited store=digikala http=%s", status_code)
-            raise PriceFetchError("blocked", f"دیجی‌کالا درخواست را محدود کرد (HTTP {status_code})")
-        if status_code == 404:
-            raise PriceFetchError("not_found", "صفحهٔ محصول در دیجی‌کالا پیدا نشد")
-        if status_code >= 500:
-            if attempt == 0:
-                attempt = 1
-                time.sleep(get_settings().competitor_request_interval_seconds * 2)
-                continue
-            raise PriceFetchError(
-                "unavailable", f"سرویس دیجی‌کالا موقتاً پاسخ‌گو نیست (HTTP {status_code})"
+    owned = client is None
+    active = client or httpx.Client(
+        timeout=_REQUEST_TIMEOUT,
+        follow_redirects=False,
+        trust_env=False,
+    )
+    try:
+        while True:
+            try:
+                response = active.get(api_url, headers=_DIGIKALA_API_HEADERS)
+            except httpx.HTTPError as exc:
+                if attempt == 0:
+                    attempt = 1
+                    time.sleep(get_settings().competitor_request_interval_seconds)
+                    continue
+                raise PriceFetchError(
+                    "failed", "دریافت قیمت دیجی‌کالا با خطای شبکه روبه‌رو شد"
+                ) from exc
+            status_code = response.status_code
+            if status_code in (403, 429):
+                with _lock:
+                    _host_blocked_until["digikala"] = time.monotonic() + 6 * 60 * 60
+                log.warning("competitor store rate-limited store=digikala http=%s", status_code)
+                raise PriceFetchError(
+                    "blocked", f"دیجی‌کالا درخواست را محدود کرد (HTTP {status_code})"
+                )
+            if status_code == 404:
+                raise PriceFetchError("not_found", "صفحهٔ محصول در دیجی‌کالا پیدا نشد")
+            if status_code >= 500:
+                if attempt == 0:
+                    attempt = 1
+                    time.sleep(get_settings().competitor_request_interval_seconds)
+                    continue
+                raise PriceFetchError(
+                    "unavailable", f"سرویس دیجی‌کالا موقتاً پاسخ‌گو نیست (HTTP {status_code})"
+                )
+            if status_code >= 400:
+                raise PriceFetchError(
+                    "failed", f"دریافت قیمت دیجی‌کالا ناموفق بود (HTTP {status_code})"
+                )
+            try:
+                payload = cast(dict[str, Any], response.json())
+                product = cast(dict[str, Any], payload["data"]["product"])
+            except (ValueError, KeyError, TypeError):
+                raise PriceFetchError(
+                    "unavailable", "پاسخ سرویس دیجی‌کالا قابل تفسیر نیست"
+                ) from None
+            product_status = str(product.get("status", ""))
+            variant = product.get("default_variant")
+            if isinstance(variant, list):
+                variant = None
+            variant_map = cast(
+                dict[str, Any] | None, variant if isinstance(variant, dict) else None
             )
-        if status_code >= 400:
-            raise PriceFetchError("failed", f"دریافت قیمت دیجی‌کالا ناموفق بود (HTTP {status_code})")
-        try:
-            payload = cast(dict[str, Any], response.json())
-            product = cast(dict[str, Any], payload["data"]["product"])
-        except (ValueError, KeyError, TypeError):
-            raise PriceFetchError("unavailable", "پاسخ سرویس دیجی‌کالا قابل تفسیر نیست") from None
-        product_status = str(product.get("status", ""))
-        variant = product.get("default_variant")
-        if isinstance(variant, list):
-            variant = None
-        variant_map = cast(dict[str, Any] | None, variant if isinstance(variant, dict) else None)
-        price = variant_map.get("price") if variant_map is not None else None
-        price_map = cast(dict[str, Any] | None, price if isinstance(price, dict) else None)
-        selling = price_map.get("selling_price") if price_map is not None else None
-        try:
-            amount = Decimal(str(selling)) if selling is not None else None
-        except InvalidOperation:
-            amount = None
-        if amount is not None and (not amount.is_finite() or amount <= 0):
-            amount = None
-        if amount is not None:
-            variant_status = variant_map.get("status") if variant_map is not None else None
-            in_stock = product_status == "marketable" and (
-                variant_map is None or variant_status == "marketable"
-            )
-            return FetchedPrice(amount, "IRR", in_stock)
-        if product_status in {"out_of_stock", "unmarketable", "not_sellable", "inactive"}:
-            return FetchedPrice(None, None, False)
-        raise PriceFetchError("unavailable", "قیمت معتبر در پاسخ دیجی‌کالا پیدا نشد")
+            price = variant_map.get("price") if variant_map is not None else None
+            price_map = cast(dict[str, Any] | None, price if isinstance(price, dict) else None)
+            selling = price_map.get("selling_price") if price_map is not None else None
+            try:
+                amount = Decimal(str(selling)) if selling is not None else None
+            except InvalidOperation:
+                amount = None
+            if amount is not None and (not amount.is_finite() or amount <= 0):
+                amount = None
+            if amount is not None:
+                variant_status = variant_map.get("status") if variant_map is not None else None
+                in_stock = product_status == "marketable" and (
+                    variant_map is None or variant_status == "marketable"
+                )
+                return FetchedPrice(amount, "IRR", in_stock)
+            if product_status in {"out_of_stock", "unmarketable", "not_sellable", "inactive"}:
+                return FetchedPrice(None, None, False)
+            raise PriceFetchError("unavailable", "قیمت معتبر در پاسخ دیجی‌کالا پیدا نشد")
+    finally:
+        if owned:
+            active.close()
 
 
 def fetch_competitor_price(store: str, url: str) -> FetchedPrice:
@@ -452,22 +520,47 @@ def fetch_competitor_price(store: str, url: str) -> FetchedPrice:
     cached = _cache_get(cache_key)
     if cached is not None:
         return cached
-    _robots_allows(safe_url)
-    _, html, _ = _request(safe_url)
-    result = STORE_PARSERS[store](html)
-    if result is None and store == "digikala":
-        # Digikala serves bot traffic a JS-shell page with no structured data;
-        # fall back to its public product API using the dkp-<id> in the URL.
-        # No extra rate-limit wait here: the page fetch above already spaced
-        # this logical check against the store interval.
-        product_id = _digikala_product_id(safe_url)
-        if product_id is None:
+    # One rate-limit slot per logical check: robots + redirects + API share it.
+    # Previously robots.txt consumed a slot and the page waited another full
+    # interval (~+5s on every cold check).
+    _acquire_slot(store)
+    with httpx.Client(timeout=_REQUEST_TIMEOUT, follow_redirects=False, trust_env=False) as client:
+        if store == "digikala":
+            # Bot traffic usually gets a JS-shell page without JSON-LD, so try
+            # the light public JSON API first and skip the heavy HTML fetch.
+            product_id = _digikala_product_id(safe_url)
+            if product_id is not None:
+                try:
+                    result = _fetch_digikala_api(product_id, client=client)
+                except PriceFetchError as exc:
+                    if exc.status in ("blocked", "not_found", "failed"):
+                        raise
+                    # "unavailable" (e.g. no price in API payload) falls
+                    # through to the HTML path below.
+                else:
+                    result = replace(result, observed_at=datetime.now(UTC))
+                    _cache_set(cache_key, result)
+                    _log_fetched(store, safe_url, result)
+                    return result
+        _robots_allows(safe_url, client=client)
+        _, html, _ = _request(safe_url, acquire_slot=False, client=client)
+        result = STORE_PARSERS[store](html)
+        if result is None and store == "digikala":
+            # HTML fallback missed (or API-first was skipped): last resort is
+            # the public product API using the dkp-<id> in the URL.
+            product_id = _digikala_product_id(safe_url)
+            if product_id is None:
+                raise PriceFetchError("unavailable", "قیمت معتبر در دادهٔ ساختاریافتهٔ صفحه پیدا نشد")
+            result = _fetch_digikala_api(product_id, client=client)
+        if result is None:
             raise PriceFetchError("unavailable", "قیمت معتبر در دادهٔ ساختاریافتهٔ صفحه پیدا نشد")
-        result = _fetch_digikala_api(product_id)
-    if result is None:
-        raise PriceFetchError("unavailable", "قیمت معتبر در دادهٔ ساختاریافتهٔ صفحه پیدا نشد")
-    result = replace(result, observed_at=datetime.now(UTC))
-    _cache_set(cache_key, result)
+        result = replace(result, observed_at=datetime.now(UTC))
+        _cache_set(cache_key, result)
+        _log_fetched(store, safe_url, result)
+        return result
+
+
+def _log_fetched(store: str, safe_url: str, result: FetchedPrice) -> None:
     host = (urlsplit(safe_url).hostname or "").lower()
     log.info(
         "competitor price fetched store=%s host=%s amount=%s currency=%s in_stock=%s",
@@ -477,4 +570,3 @@ def fetch_competitor_price(store: str, url: str) -> FetchedPrice:
         result.currency,
         result.in_stock,
     )
-    return result

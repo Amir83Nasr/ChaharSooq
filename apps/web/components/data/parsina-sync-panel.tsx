@@ -43,6 +43,10 @@ export function ParsinaSyncPanel({ onSynced, onUnauthorized }: Props) {
   const [status, setStatus] = useState<SyncStatus | null>(null)
   const [triggering, setTriggering] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // True after the first status round-trip settles (success or failure), so a
+  // failed first fetch still re-enables the manual button instead of locking
+  // it in a loading state.
+  const [primed, setPrimed] = useState(false)
   // Bumped after every manual press so the poll loop restarts at once and
   // the running state shows without waiting for the next idle tick.
   const [pollBump, setPollBump] = useState(0)
@@ -81,7 +85,11 @@ export function ParsinaSyncPanel({ onSynced, onUnauthorized }: Props) {
     }
 
     const tick = async () => {
-      if (cancelled || pollingRef.current) return
+      if (cancelled) return
+      if (pollingRef.current) {
+        schedule()
+        return
+      }
       pollingRef.current = true
       const controller = new AbortController()
       abortRef.current = controller
@@ -108,6 +116,7 @@ export function ParsinaSyncPanel({ onSynced, onUnauthorized }: Props) {
         }
       } finally {
         pollingRef.current = false
+        if (!cancelled) setPrimed(true)
         if (pollsRef.current > MAX_RUNNING_POLLS) {
           pollsRef.current = 0
           delay = IDLE_POLL_MS
@@ -124,6 +133,7 @@ export function ParsinaSyncPanel({ onSynced, onUnauthorized }: Props) {
     void tick()
     return () => {
       cancelled = true
+      pollingRef.current = false
       clearInterval(ticker)
       if (timerRef.current) clearTimeout(timerRef.current)
       abortRef.current?.abort()
@@ -158,9 +168,15 @@ export function ParsinaSyncPanel({ onSynced, onUnauthorized }: Props) {
 
   // While a run is active the backend owns the state: on the next poll the
   // completion is detected through `last_success_at` and the table refreshes.
+  // The button stays disabled with a spinning icon until the first status
+  // round-trip completes, so it reads as loading instead of active-but-stale.
+  const loading = status === null && !primed
   const running = triggering || status?.running === true
   const notConfigured = status !== null && !status.configured
-  const disabled = running || notConfigured
+  // Unified button animation: spinning icon during the initial load and while
+  // a run is active — identical in both sync panels.
+  const busy = !primed || running
+  const disabled = !primed || running || notConfigured
   const failed =
     status !== null && !running && !notConfigured && lastRunFailed(status)
 
@@ -172,14 +188,12 @@ export function ParsinaSyncPanel({ onSynced, onUnauthorized }: Props) {
       <Button
         onClick={runSync}
         disabled={disabled}
-        aria-busy={running}
+        aria-busy={busy}
         className="w-full justify-center gap-2"
       >
         <RefreshCw
           data-icon="inline-start"
-          className={
-            running ? "size-4 shrink-0 animate-spin" : "size-4 shrink-0"
-          }
+          className={busy ? "size-4 shrink-0 animate-spin" : "size-4 shrink-0"}
           aria-hidden="true"
         />
         به‌روزرسانی از پارسینا
@@ -190,7 +204,15 @@ export function ParsinaSyncPanel({ onSynced, onUnauthorized }: Props) {
         className="min-h-8 w-full text-start text-xs leading-4 text-muted-foreground"
         aria-live="polite"
       >
-        {notConfigured ? (
+        {loading ? (
+          <span className="inline-flex h-4 items-center">
+            <span
+              aria-hidden="true"
+              className="inline-block h-3 w-40 animate-pulse rounded bg-muted"
+            />
+            <span className="sr-only">در حال بارگذاری وضعیت…</span>
+          </span>
+        ) : notConfigured ? (
           <span>
             {status?.source === "csv"
               ? "فایل داده آزمایشی محصولات یافت نشد."

@@ -39,25 +39,14 @@ function RelativeMoment({ value, now }: { value: string; now: number }) {
   return <span title={formatPersianDateTime(value)}>{relative}</span>
 }
 
-/** Counters for the last completed bulk refresh, e.g. «۳ بررسی، ۲ به‌روز شد». */
-function Counters({ status }: { status: CompetitorSyncStatus }) {
-  const parts = [
-    `${toPersianDigits(status.last_checked)} بررسی`,
-    `${toPersianDigits(status.last_updated)} به‌روز شد`,
-  ]
-  if (status.last_failed > 0) {
-    parts.push(`${toPersianDigits(status.last_failed)} ناموفق`)
-  }
-  if (status.last_skipped > 0) {
-    parts.push(`${toPersianDigits(status.last_skipped)} نادیده گرفته شد`)
-  }
-  return <span> ({parts.join("، ")})</span>
-}
-
 export function CompetitorSyncPanel({ onSynced, onUnauthorized }: Props) {
   const [status, setStatus] = useState<CompetitorSyncStatus | null>(null)
   const [triggering, setTriggering] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // True after the first status round-trip settles (success or failure), so a
+  // failed first fetch still re-enables the manual button instead of locking
+  // it in a loading state.
+  const [primed, setPrimed] = useState(false)
   // Bumped after every manual press so the poll loop restarts at once and
   // the running state shows without waiting for the next idle tick.
   const [pollBump, setPollBump] = useState(0)
@@ -96,7 +85,11 @@ export function CompetitorSyncPanel({ onSynced, onUnauthorized }: Props) {
     }
 
     const tick = async () => {
-      if (cancelled || pollingRef.current) return
+      if (cancelled) return
+      if (pollingRef.current) {
+        schedule()
+        return
+      }
       pollingRef.current = true
       const controller = new AbortController()
       abortRef.current = controller
@@ -123,6 +116,7 @@ export function CompetitorSyncPanel({ onSynced, onUnauthorized }: Props) {
         }
       } finally {
         pollingRef.current = false
+        if (!cancelled) setPrimed(true)
         if (pollsRef.current > MAX_RUNNING_POLLS) {
           pollsRef.current = 0
           delay = IDLE_POLL_MS
@@ -139,6 +133,7 @@ export function CompetitorSyncPanel({ onSynced, onUnauthorized }: Props) {
     void tick()
     return () => {
       cancelled = true
+      pollingRef.current = false
       clearInterval(ticker)
       if (timerRef.current) clearTimeout(timerRef.current)
       abortRef.current?.abort()
@@ -173,10 +168,15 @@ export function CompetitorSyncPanel({ onSynced, onUnauthorized }: Props) {
 
   // While a run is active the backend owns the state: on the next poll the
   // completion is detected through `last_success_at` and the table refreshes.
+  // The button stays disabled with a spinning icon until the first status
+  // round-trip completes, so it reads as loading instead of active-but-stale.
+  const loading = status === null && !primed
   const running = triggering || status?.running === true
-  const disabled = running
-  const failed =
-    status !== null && !running && !status.running && lastRunFailed(status)
+  // Unified button animation: spinning icon during the initial load and while
+  // a run is active — identical in both sync panels.
+  const busy = !primed || running
+  const disabled = !primed || running
+  const failed = status !== null && !running && lastRunFailed(status)
 
   return (
     // Fixed width on sm+ so the status line wraps inside instead of
@@ -186,15 +186,13 @@ export function CompetitorSyncPanel({ onSynced, onUnauthorized }: Props) {
       <Button
         onClick={runSync}
         disabled={disabled}
-        aria-busy={running}
+        aria-busy={busy}
         variant="outline"
         className="w-full justify-center gap-2"
       >
         <RefreshCw
           data-icon="inline-start"
-          className={
-            running ? "size-4 shrink-0 animate-spin" : "size-4 shrink-0"
-          }
+          className={busy ? "size-4 shrink-0 animate-spin" : "size-4 shrink-0"}
           aria-hidden="true"
         />
         به‌روزرسانی قیمت رقبا
@@ -205,7 +203,15 @@ export function CompetitorSyncPanel({ onSynced, onUnauthorized }: Props) {
         className="min-h-8 w-full text-start text-xs leading-4 text-muted-foreground"
         aria-live="polite"
       >
-        {running ? (
+        {loading ? (
+          <span className="inline-flex h-4 items-center">
+            <span
+              aria-hidden="true"
+              className="inline-block h-3 w-40 animate-pulse rounded bg-muted"
+            />
+            <span className="sr-only">در حال بارگذاری وضعیت…</span>
+          </span>
+        ) : running ? (
           <span>
             به‌روزرسانی قیمت رقبا در حال اجراست
             {status?.running_since ? (
@@ -231,7 +237,6 @@ export function CompetitorSyncPanel({ onSynced, onUnauthorized }: Props) {
           <span>
             آخرین به‌روزرسانی موفق:{" "}
             <RelativeMoment value={status.last_success_at} now={now} />
-            <Counters status={status} />
           </span>
         ) : (
           <span>هنوز قیمت رقبا به‌روزرسانی نشده است.</span>

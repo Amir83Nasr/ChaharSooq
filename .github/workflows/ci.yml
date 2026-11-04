@@ -57,13 +57,50 @@ jobs:
       - run: uv run --project backend/api pyright
       - run: uv run --project backend/api pytest -q
       - name: Check OpenAPI snapshot is fresh
+        run: uv run --project backend/api python backend/api/scripts/check_openapi_fresh.py
+
+  migrations:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: charsooq
+          POSTGRES_PASSWORD: charsooq
+          POSTGRES_DB: charsooq_migtest
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U charsooq"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql+psycopg://charsooq:charsooq@localhost:5432/charsooq_migtest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+      - uses: astral-sh/setup-uv@v7
+      - run: uv sync --locked --project backend/api
+      # Fresh database straight to head, twice: upgrades must be idempotent.
+      - run: cd backend/api && uv run alembic upgrade head
+      - run: cd backend/api && uv run alembic upgrade head
+      # Exactly one head — a second head means an unmerged migration branch.
+      - name: Assert single head
         run: |
-          uv run --project backend/api python backend/api/scripts/export_openapi.py
-          git diff --exit-code backend/api/openapi.json
+          cd backend/api
+          heads="$(uv run alembic heads)"
+          echo "$heads"
+          [ "$(printf '%s' "$heads" | grep -c .)" -eq 1 ]
+      # Models and migrations must agree; drift fails the build here, not prod.
+      - name: Model/migration drift check
+        run: cd backend/api && uv run alembic check
+      # Full downgrade/upgrade round-trip: every migration must roll back too.
+      - name: Downgrade/upgrade round-trip
+        run: cd backend/api && uv run alembic downgrade base && uv run alembic upgrade head
 
   build:
     runs-on: ubuntu-latest
-    needs: [frontend, backend]
+    needs: [frontend, backend, migrations]
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4

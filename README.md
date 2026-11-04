@@ -116,6 +116,10 @@ make db-seed-prod ADMIN_PASSWORD=<password>   # prod Neon: admin user (password 
 
 Schema changes require an Alembic migration under `backend/api/migrations/`. Autogenerate from models, review, then apply (`make db-migrate`).
 
+- The API runs `upgrade head` on every boot (except tests), so deploys never need a manual migration — locally, in Docker, or on FastAPI Cloud.
+- CI proves it: fresh `upgrade head`, idempotent re-upgrade, single-head assertion, `alembic check` drift detection, and a downgrade/upgrade round-trip.
+- `make db-validate` runs the offline part locally (no database needed); `make check` includes it.
+
 ## API contract
 
 Base path `/api/v1`. Committed OpenAPI snapshot: [backend/api/openapi.json](backend/api/openapi.json) — regenerate after any route/schema change:
@@ -141,7 +145,7 @@ make build
 
 ## Deployment
 
-- Frontend: any Node 22 host (`next start`) behind TLS. Browser calls same-origin `/api/*`; Next rewrites to the API origin (`API_URL_INTERNAL`, else `NEXT_PUBLIC_API_URL`), so the session cookie stays first-party.
-- Backend: `uv run --project backend/api uvicorn app.main:app --app-dir backend/api --host 0.0.0.0 --port 8000` with `APP_ENV=production`, real `DATABASE_URL`, and a strong `SESSION_SECRET`. Or `make deploy-api` (FastAPI Cloud).
+- Frontend: Vercel (`vercel.json` pins pnpm install/build for the monorepo). Set `API_URL_INTERNAL` + `NEXT_PUBLIC_API_URL` to the API origin in Vercel Production env — the build fails fast if they still point at localhost. Browser calls same-origin `/api/*`; Next rewrites to the API origin, so the session cookie stays first-party.
+- Backend: FastAPI Cloud (`make deploy-api`). Set `APP_ENV=production`, real `DATABASE_URL`, strong `SESSION_SECRET`. Migrations run automatically on boot — no manual step.
 - Docker: `make docker-up` runs `web` + `api` + `postgres` from [compose.yml](compose.yml); a one-shot `migrate` service applies Alembic before the API starts.
 - See [docs/architecture/deployment.md](docs/architecture/deployment.md).

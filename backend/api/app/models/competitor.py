@@ -4,7 +4,15 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Literal
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Numeric, String
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -26,11 +34,12 @@ class CompetitorListing(Base):
     __table_args__ = (
         Index("ix_competitor_listings_product_id", "product_id"),
         Index("ix_competitor_listings_store", "store"),
-        Index(
-            "uq_competitor_listings_product_store",
+        # Matches 0010_query_indexes: a real constraint, not just a unique
+        # index, so concurrent inserts cannot create duplicates.
+        UniqueConstraint(
             "product_id",
             "store",
-            unique=True,
+            name="uq_competitor_listings_product_store",
         ),
         Index("ix_competitor_listings_last_success", "last_success_at"),
     )

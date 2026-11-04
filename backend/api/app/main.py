@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
@@ -75,10 +76,14 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    """Start/stop the Parsina scheduler with the process (never in tests)."""
+    """Migrate, then start/stop the Parsina scheduler (never in tests)."""
+    from app.core.migrations import upgrade_to_head
     from app.core.scheduler import build_scheduler
 
-    scheduler = None if get_settings().app_env == "test" else build_scheduler()
+    settings = get_settings()
+    if settings.app_env != "test":
+        upgrade_to_head()
+    scheduler = None if settings.app_env == "test" else build_scheduler()
     if scheduler is not None:
         scheduler.start()
     yield
@@ -147,18 +152,36 @@ def create_app() -> FastAPI:
             },
         )
 
+    @app.exception_handler(StarletteHTTPException)
     @app.exception_handler(HTTPException)
-    async def http_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    async def http_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         codes = {
             400: "bad_request",
             401: "unauthorized",
             403: "forbidden",
             404: "not_found",
+            405: "method_not_allowed",
             409: "conflict",
             422: "validation_error",
             429: "rate_limited",
         }
-        message = exc.detail if isinstance(exc.detail, str) else "خطایی رخ داد"
+        defaults = {
+            400: "درخواست نامعتبر است.",
+            401: "نام کاربری یا گذرواژه نادرست است.",
+            403: "دسترسی ندارید.",
+            404: "یافت نشد.",
+            405: "روش مجاز نیست.",
+            409: "این مقدار قبلاً ثبت شده است.",
+            422: "خطای اعتبارسنجی",
+            429: "تلاش‌های مکرر؛ لطفاً بعداً تلاش کنید.",
+        }
+        # Unmatched routes reach us with Starlette's English defaults
+        # ("Not Found", "Method Not Allowed") — never leak those to the UI.
+        detail = exc.detail if isinstance(exc.detail, str) else ""
+        if not detail.strip() or detail in ("Not Found", "Method Not Allowed"):
+            message = defaults.get(exc.status_code, "خطایی رخ داد")
+        else:
+            message = detail
         return JSONResponse(
             status_code=exc.status_code,
             content={"error": {"code": codes.get(exc.status_code, "error"), "message": message}},

@@ -43,10 +43,12 @@ def update_settings(
         formulas = svc.update_suggested_price_formulas(
             [item.model_dump() for item in payload.suggested_price_formulas]
         )
-    return SettingsOut(
-        low_stock_threshold=threshold,
-        default_page_size=page_size,
-        sync_interval_minutes=interval,
-        default_competitor_store=competitor_store,
-        suggested_price_formulas=formulas,
+    return SettingsOut.model_validate(
+        {
+            "low_stock_threshold": threshold,
+            "default_page_size": page_size,
+            "sync_interval_minutes": interval,
+            "default_competitor_store": competitor_store,
+            "suggested_price_formulas": formulas,
+        }
     )

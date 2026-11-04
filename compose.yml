@@ -30,7 +30,9 @@ services:
       retries: 10
 
   # One-shot schema upgrade. `api` starts only after this exits successfully,
-  # so a fresh volume never serves an empty database.
+  # so a fresh volume never serves an empty database. Belt and suspenders:
+  # the API also runs `upgrade head` in its lifespan on every boot, which is
+  # what migrates FastAPI Cloud and any `api`-only run without this service.
   migrate:
     <<: *api-image
     command: ["sh", "-c", "cd backend/api && alembic upgrade head"]

@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-.PHONY: build check db-migrate db-migrate-prod db-seed db-seed-parsina db-seed-prod db-sync-dev-to-prod sync-dev-to-prod sync-prod dev-to-prod db-up deploy-api dev-all dev-api dev-web docker-build docker-down docker-logs docker-up help install lint test typecheck
+.PHONY: build check db-clear-products db-migrate db-migrate-prod db-seed db-seed-parsina db-seed-prod db-sync-dev-to-prod sync-dev-to-prod sync-prod dev-to-prod db-up db-validate db-wait deploy-api dev-all dev-api dev-web docker-build docker-down docker-logs docker-up doctor help install lint openapi-check test test-e2e typecheck
 
 # ─── HELP ─────────────────────────────────────────────────
 help: ## Show this help message
@@ -21,6 +21,7 @@ help: ## Show this help message
 COMPOSE_FILE ?= compose.yml ## Compose file used by up/down/logs
 ADMIN_USER ?= admin ## Admin username for db-seed and db-seed-prod
 DEV_ADMIN_PASSWORD ?= secret123 ## Dev-only admin password for db-seed (never used in prod)
+DB_PORT ?= 5433 ## Host port of the dev postgres db-wait/dev-api expect
 YES ?= 0 ## Set YES=1 to skip the confirmation prompt for db-sync-dev-to-prod
 
 # ─── INSTALL / SETUP ──────────────────────────────────────
@@ -33,39 +34,48 @@ install: ## Install frontend and backend dependencies and git hooks
 dev-web: ## Start frontend dev server (turbo)
 	pnpm dev
 
-dev-api: ## Start backend API with reload (expects postgres up)
+dev-api: db-wait ## Start backend API with reload (waits for postgres first)
 	uv run --project backend/api uvicorn app.main:app --app-dir backend/api --host 0.0.0.0 --port 8000 --reload
 
-dev-all: db-migrate ## Start backend + frontend together (Ctrl-C stops both)
+dev-all: db-migrate ## Start backend + frontend together (stops both if either exits)
 	@uv run --project backend/api uvicorn app.main:app --app-dir backend/api --host 0.0.0.0 --port 8000 --reload & \
 	api=$$!; \
 	pnpm dev & \
 	web=$$!; \
 	trap 'kill $$api $$web 2>/dev/null' INT TERM EXIT; \
-	wait
+	while kill -0 $$api 2>/dev/null && kill -0 $$web 2>/dev/null; do sleep 1; done; \
+	echo "dev-all: one server exited - stopping the other"
 
 # ─── DATABASE: DEV ────────────────────────────────────────
 db-up: ## Start dev postgres (own container, port 5433)
 	docker compose -f $(COMPOSE_FILE) up -d postgres
 
+db-wait: ## Wait up to 20s for dev postgres to accept connections (no DB needed otherwise)
+	@for i in $$(seq 1 20); do \
+		python3 -c "import socket; s = socket.create_connection(('127.0.0.1', $(DB_PORT)), timeout=2); s.close()" 2>/dev/null \
+		&& { echo "postgres: accepting connections on 127.0.0.1:$(DB_PORT)"; exit 0; } \
+		|| sleep 1; \
+	done; \
+	echo "postgres is not reachable on 127.0.0.1:$(DB_PORT) - run make db-up" >&2; exit 1
+
 db-migrate: db-up ## Apply Alembic migrations to dev database
 	cd backend/api && uv run alembic upgrade head
 
-db-seed: db-up ## Create dev admin user (ADMIN_USER, ADMIN_PASSWORD or DEV_ADMIN_PASSWORD)
+db-seed: db-migrate ## Create dev admin user (ADMIN_USER, ADMIN_PASSWORD or DEV_ADMIN_PASSWORD)
 	ADMIN_USER="$(strip $(ADMIN_USER))" ADMIN_PASSWORD="$(strip $(or $(ADMIN_PASSWORD),$(DEV_ADMIN_PASSWORD)))" \
 	uv run --project backend/api python backend/api/scripts/seed_admin.py
 
 db-seed-parsina: db-migrate ## Load data/parsina.csv into dev DB (replaces products)
 	uv run --project backend/api python backend/api/scripts/seed_parsina_products.py
 
-db-clear-products: db-up ## Delete all products + competitor listings from dev DB (refuses production)
+db-clear-products: db-migrate ## Delete all products + competitor listings from dev DB (refuses production)
 	uv run --project backend/api python backend/api/scripts/clear_products.py
 
 # ─── DATABASE: PROD (NEON) ────────────────────────────────
 # NOTE: never `set -a; . .env` here — DATABASE_URL contains `&` and shell
 # sourcing dies with `parse error near '&'`, silently falling back to the
 # local dev database. `uv --env-file` parses dotenv safely instead.
-db-migrate-prod: ## Apply Alembic migrations to prod Neon (reads .env.production)
+db-migrate-prod: ## Manually apply migrations to prod Neon (fallback; deploys auto-migrate on boot)
 	cd backend/api && uv run --env-file $(CURDIR)/.env.production alembic upgrade head
 
 db-seed-prod: ## Create prod admin user (requires ADMIN_PASSWORD=... on the command line)
@@ -80,6 +90,22 @@ db-sync-dev-to-prod: ## Copy dev DB data (categories/settings/products/sync_stat
 
 # ─── Aliases (dev → prod sync) ───────────────────────────
 sync-dev-to-prod sync-prod dev-to-prod: db-sync-dev-to-prod ## Alias for db-sync-dev-to-prod
+
+# ─── DATABASE: VALIDATE (NO DB NEEDED) ───────────────────
+db-validate: ## Validate migrations offline: single head + SQL renders cleanly
+	cd backend/api && uv run alembic heads
+	cd backend/api && uv run alembic upgrade head --sql > /dev/null
+	@echo "migrations validate: single head, offline SQL OK"
+
+# ─── DOCTOR ───────────────────────────────────────────────
+doctor: ## Check toolchain, env files, and service reachability
+	@node --version && pnpm --version
+	@python3 --version && uv --version
+	@docker info > /dev/null 2>&1 && echo "docker: ok" || echo "docker: NOT RUNNING"
+	@test -f backend/api/.env.local || echo "missing backend/api/.env.local (copy from .env.example)"
+	@test -f apps/web/.env.local || echo "missing apps/web/.env.local (copy from .env.example)"
+	@cd backend/api && uv run alembic heads
+	@docker compose -f $(COMPOSE_FILE) ps postgres 2>/dev/null | grep -q healthy && echo "postgres: healthy" || echo "postgres: not healthy (run make db-up)"
 
 # ─── DOCKER ───────────────────────────────────────────────
 docker-build: ## Build Docker images (web + api)
@@ -113,7 +139,13 @@ test: ## Run frontend and backend tests
 	pnpm test
 	uv run --project backend/api pytest -q
 
+test-e2e: build ## Run Playwright e2e against the production build
+	pnpm --filter web test:e2e
+
+openapi-check: ## Fail if backend/api/openapi.json is stale (read-only, no DB needed)
+	uv run --project backend/api python backend/api/scripts/check_openapi_fresh.py
+
 build: ## Build web app for production
 	pnpm --filter web build
 
-check: lint typecheck test ## Run lint + typecheck + test
+check: lint typecheck test db-validate openapi-check ## Run lint + typecheck + test + offline migration and OpenAPI validation

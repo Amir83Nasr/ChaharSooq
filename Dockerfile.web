@@ -28,6 +28,7 @@ COPY --from=deps /app/apps/web/node_modules /app/apps/web/node_modules
 COPY --from=deps /app/packages /app/packages
 COPY --from=web-build /app/apps/web/.next /app/apps/web/.next
 COPY apps/web/package.json apps/web/next.config.ts /app/apps/web/
+COPY apps/web/scripts /app/apps/web/scripts
 COPY apps/web/app /app/apps/web/app
 COPY apps/web/components /app/apps/web/components
 COPY apps/web/lib /app/apps/web/lib

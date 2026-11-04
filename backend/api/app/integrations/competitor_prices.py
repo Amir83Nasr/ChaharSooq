@@ -9,6 +9,7 @@ import re
 import socket
 import threading
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
@@ -347,7 +348,7 @@ def _as_object(value: object) -> list[dict[str, object]]:
     return []
 
 
-def _iter_offers(value: object) -> object:
+def _iter_offers(value: object) -> Iterator[dict[str, object]]:
     """Yield offer dicts, descending into nested AggregateOffer.offers."""
     if isinstance(value, list):
         for item in value:

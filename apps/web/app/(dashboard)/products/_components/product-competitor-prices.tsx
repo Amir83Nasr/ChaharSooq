@@ -33,15 +33,9 @@ const STORE_LABELS: Record<CompetitorStore, string> = {
 }
 
 const STORE_URL_PLACEHOLDERS: Record<CompetitorStore, string> = {
-  digikala: "https://www.digikala.com/product/dkp-123456/",
-  technolife: "https://www.technolife.ir/product-123456/",
-  other: "https://example.com/product/123",
-}
-
-const STORE_URL_HINTS: Record<CompetitorStore, string> = {
-  digikala: "دامنهٔ مجاز: digikala.com",
-  technolife: "دامنهٔ مجاز: technolife.ir",
-  other: "",
+  digikala: "مثلاً https://www.digikala.com/product/…",
+  technolife: "مثلاً https://www.technolife.ir/product/…",
+  other: "مثلاً https://example.com/product/…",
 }
 
 function isUrlMatchingStore(url: string, store: CompetitorStore): boolean {
@@ -257,15 +251,10 @@ function FilledSlotCard({
             autoCapitalize="off"
             spellCheck={false}
             inputMode="url"
-            className="h-10 w-full min-w-0 text-left text-sm text-ellipsis"
+            className="h-10 w-full min-w-0 text-left text-sm text-ellipsis placeholder:font-normal placeholder:text-muted-foreground/40"
             required
             disabled={busy}
           />
-          {STORE_URL_HINTS[listing.store] ? (
-            <p className="text-[11px] leading-4 text-muted-foreground">
-              {STORE_URL_HINTS[listing.store]}
-            </p>
-          ) : null}
           {urlMismatch ? (
             <p role="alert" className="text-[11px] leading-4 text-destructive">
               دامنهٔ لینک با فروشگاه انتخاب‌شده هم‌خوانی ندارد.
@@ -365,15 +354,10 @@ function EmptySlotCard({
             autoCapitalize="off"
             spellCheck={false}
             inputMode="url"
-            className="h-10 w-full min-w-0 text-left text-sm text-ellipsis"
+            className="h-10 w-full min-w-0 text-left text-sm text-ellipsis placeholder:font-normal placeholder:text-muted-foreground/40"
             required
             disabled={busy}
           />
-          {STORE_URL_HINTS[store] ? (
-            <p className="text-[11px] leading-4 text-muted-foreground">
-              {STORE_URL_HINTS[store]}
-            </p>
-          ) : null}
           {urlMismatch ? (
             <p role="alert" className="text-[11px] leading-4 text-destructive">
               دامنهٔ لینک با فروشگاه انتخاب‌شده هم‌خوانی ندارد.

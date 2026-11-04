@@ -2,11 +2,21 @@
 
 from fastapi import APIRouter
 
-from app.api.routes import auth, categories, competitors, health, integrations, products, settings
+from app.api.routes import (
+    auth,
+    categories,
+    competitors,
+    dashboard,
+    health,
+    integrations,
+    products,
+    settings,
+)
 
 router = APIRouter()
 router.include_router(health.router)
 router.include_router(auth.router)
+router.include_router(dashboard.router)
 router.include_router(products.router)
 router.include_router(competitors.router)
 router.include_router(categories.router)

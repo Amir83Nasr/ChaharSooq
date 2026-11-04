@@ -126,6 +126,146 @@
         }
       }
     },
+    "/api/v1/dashboard/overview": {
+      "get": {
+        "summary": "Dashboard Overview",
+        "operationId": "dashboard_overview_api_v1_dashboard_overview_get",
+        "parameters": [
+          {
+            "name": "threshold",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 10,
+              "title": "Threshold"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardOverviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard/competitor-gaps": {
+      "get": {
+        "summary": "Dashboard Competitor Gaps",
+        "operationId": "dashboard_competitor_gaps_api_v1_dashboard_competitor_gaps_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 8,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CompetitorGapOut"
+                  },
+                  "title": "Response Dashboard Competitor Gaps Api V1 Dashboard Competitor Gaps Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard/attention": {
+      "get": {
+        "summary": "Dashboard Attention",
+        "operationId": "dashboard_attention_api_v1_dashboard_attention_get",
+        "parameters": [
+          {
+            "name": "threshold",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 10,
+              "title": "Threshold"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 20,
+              "minimum": 1,
+              "default": 5,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttentionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/products": {
       "get": {
         "summary": "List Products",
@@ -963,6 +1103,56 @@
   },
   "components": {
     "schemas": {
+      "AttentionItemOut": {
+        "properties": {
+          "product_id": {
+            "type": "integer",
+            "title": "Product Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "price": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Price"
+          },
+          "stock": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Stock"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "name",
+          "price",
+          "stock"
+        ],
+        "title": "AttentionItemOut"
+      },
+      "AttentionOut": {
+        "properties": {
+          "out": {
+            "items": {
+              "$ref": "#/components/schemas/AttentionItemOut"
+            },
+            "type": "array",
+            "title": "Out"
+          },
+          "low": {
+            "items": {
+              "$ref": "#/components/schemas/AttentionItemOut"
+            },
+            "type": "array",
+            "title": "Low"
+          }
+        },
+        "type": "object",
+        "title": "AttentionOut"
+      },
       "CategoryIn": {
         "properties": {
           "name": {
@@ -1001,6 +1191,46 @@
           "created_at"
         ],
         "title": "CategoryOut"
+      },
+      "CompetitorGapOut": {
+        "properties": {
+          "product_id": {
+            "type": "integer",
+            "title": "Product Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "our_price": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Our Price"
+          },
+          "competitor_price": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Competitor Price"
+          },
+          "competitor_store": {
+            "type": "string",
+            "title": "Competitor Store"
+          },
+          "diff_percent": {
+            "type": "number",
+            "title": "Diff Percent"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "name",
+          "our_price",
+          "competitor_price",
+          "competitor_store",
+          "diff_percent"
+        ],
+        "title": "CompetitorGapOut"
       },
       "CompetitorListingCreate": {
         "properties": {
@@ -1562,6 +1792,82 @@
           "running"
         ],
         "title": "CompetitorSyncStatusOut"
+      },
+      "DashboardGroupOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Count"
+          },
+          "stock_value": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Stock Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "count",
+          "stock_value"
+        ],
+        "title": "DashboardGroupOut"
+      },
+      "DashboardOverviewOut": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total"
+          },
+          "in_stock": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "In Stock"
+          },
+          "low": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Low"
+          },
+          "out": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Out"
+          },
+          "stock_value": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Stock Value"
+          },
+          "competitor_coverage": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Competitor Coverage"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/DashboardGroupOut"
+            },
+            "type": "array",
+            "title": "Groups"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "in_stock",
+          "low",
+          "out",
+          "stock_value",
+          "competitor_coverage"
+        ],
+        "title": "DashboardOverviewOut"
       },
       "ErrorBody": {
         "properties": {

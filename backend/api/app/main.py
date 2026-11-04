@@ -33,6 +33,7 @@ _FIELD_LABELS: dict[str, str] = {
     "category_id": "دسته‌بندی",
     "category": "دسته‌بندی",
     "q": "جست‌وجو",
+    "threshold": "آستانه",
     "page": "صفحه",
     "page_size": "اندازه صفحه",
     "main_group": "گروه اصلی",

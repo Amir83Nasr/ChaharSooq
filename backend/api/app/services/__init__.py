@@ -2,6 +2,7 @@
 
 from app.services.auth import LOGIN_ERROR, AuthService
 from app.services.catalog import CategoryService
+from app.services.dashboard import DashboardService
 from app.services.products import (
     INVALID_CATEGORY_ERROR,
     InvalidCategoryError,
@@ -37,6 +38,7 @@ __all__ = [
     "DEFAULT_PAGE_SIZE_KEY",
     "AuthService",
     "CategoryService",
+    "DashboardService",
     "InvalidCategoryError",
     "ProductService",
     "SettingsService",

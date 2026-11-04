@@ -93,6 +93,38 @@ export interface InventorySummary {
   stock_value: number
 }
 
+export interface DashboardGroup {
+  name: string
+  count: number
+  stock_value: number
+}
+
+export interface DashboardOverview extends InventorySummary {
+  competitor_coverage: number
+  groups: DashboardGroup[]
+}
+
+export interface CompetitorGap {
+  product_id: number
+  name: string
+  our_price: number
+  competitor_price: number
+  competitor_store: CompetitorStore
+  diff_percent: number
+}
+
+export interface AttentionItem {
+  product_id: number
+  name: string
+  price: number
+  stock: number
+}
+
+export interface Attention {
+  out: AttentionItem[]
+  low: AttentionItem[]
+}
+
 export interface SyncStatus {
   configured: boolean
   /** Live Parsina API, dev-database simulation, or local CSV fixture. */
@@ -389,6 +421,21 @@ export const api = {
   productsSummary(threshold: number) {
     return request<InventorySummary>(
       `/api/v1/products/summary?threshold=${threshold}`
+    )
+  },
+  dashboardOverview(threshold: number) {
+    return request<DashboardOverview>(
+      `/api/v1/dashboard/overview?threshold=${threshold}`
+    )
+  },
+  dashboardGaps(limit = 8) {
+    return request<CompetitorGap[]>(
+      `/api/v1/dashboard/competitor-gaps?limit=${limit}`
+    )
+  },
+  dashboardAttention(threshold: number, limit = 5) {
+    return request<Attention>(
+      `/api/v1/dashboard/attention?threshold=${threshold}&limit=${limit}`
     )
   },
   productGroups() {

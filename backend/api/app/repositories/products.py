@@ -3,14 +3,59 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Literal, NamedTuple
 
 from sqlalchemy import ColumnElement, and_, case, delete, exists, func, not_, or_, select
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.sql.elements import Case
 
 from app.models import CompetitorListing, Product
 
 ProductSort = Literal["newest", "cheapest", "most_expensive"]
+
+
+class CompetitorGapRow(NamedTuple):
+    product_id: int
+    name: str
+    our_price: float
+    store: str
+    competitor_price: float
+
+
+class AttentionRow(NamedTuple):
+    product_id: int
+    name: str
+    price: float
+    stock: float
+
+
+def effective_competitor_price(since: datetime) -> Case:
+    """One fresh competitor price in toman, or NULL.
+
+    Manual prices win over fetched ones; IRR values are converted to toman.
+    A price only counts while its observation is newer than `since`.
+    """
+    manual_fresh = and_(
+        CompetitorListing.manual_price.is_not(None),
+        CompetitorListing.manual_updated_at >= since,
+    )
+    fetched_fresh = and_(
+        CompetitorListing.fetched_price.is_not(None),
+        CompetitorListing.last_success_at >= since,
+    )
+    manual_toman = case(
+        (CompetitorListing.manual_currency == "IRR", CompetitorListing.manual_price / 10),
+        else_=CompetitorListing.manual_price,
+    )
+    fetched_toman = case(
+        (CompetitorListing.fetched_currency == "IRR", CompetitorListing.fetched_price / 10),
+        else_=CompetitorListing.fetched_price,
+    )
+    return case(
+        (manual_fresh, manual_toman),
+        (fetched_fresh, fetched_toman),
+        else_=None,
+    )
 
 
 class ProductRepository:
@@ -90,6 +135,103 @@ class ProductRepository:
             "stock_value": int(stock_value),
         }
 
+    def stock_by_group(self, *, limit: int) -> list[tuple[str, int, int]]:
+        """Top groups by stock value — one row per display group.
+
+        Blank/`NULL` group names collapse to "سایر" so the chart always
+        has a label. Only active products count.
+        """
+        group_name = func.coalesce(func.nullif(Product.main_group_name, ""), "سایر").label(
+            "group_name"
+        )
+        group_value = func.coalesce(func.sum(Product.stock * Product.price), 0)
+        rows = self._session.execute(
+            select(
+                group_name,
+                func.count().label("item_count"),
+                group_value.label("stock_value"),
+            )
+            .where(Product.is_active.is_(True))
+            .group_by(group_name)
+            .order_by(group_value.desc())
+            .limit(max(limit, 1))
+        ).all()
+        return [(str(name), int(count), int(value)) for name, count, value in rows]
+
+    def competitor_coverage(self, *, since: datetime) -> int:
+        """Active products with at least one fresh competitor price."""
+        price = effective_competitor_price(since)
+        return self._session.execute(
+            select(func.count(func.distinct(Product.id)))
+            .select_from(Product)
+            .join(CompetitorListing, CompetitorListing.product_id == Product.id)
+            .where(
+                Product.is_active.is_(True),
+                CompetitorListing.is_active.is_(True),
+                price.is_not(None),
+            )
+        ).scalar_one()
+
+    def competitor_gap_rows(self, *, since: datetime) -> list[CompetitorGapRow]:
+        """One row per fresh (product, listing) pair — the service picks
+        the best price per product and ranks the gaps."""
+        price = effective_competitor_price(since)
+        rows = self._session.execute(
+            select(
+                Product.id,
+                Product.name,
+                Product.price,
+                CompetitorListing.store,
+                price.label("comp_price"),
+            )
+            .join(CompetitorListing, CompetitorListing.product_id == Product.id)
+            .where(
+                Product.is_active.is_(True),
+                CompetitorListing.is_active.is_(True),
+                price.is_not(None),
+            )
+            .order_by(Product.id)
+        ).all()
+        return [
+            CompetitorGapRow(
+                product_id=int(product_id),
+                name=str(name),
+                our_price=float(our_price),
+                store=str(store),
+                competitor_price=float(comp_price),
+            )
+            for product_id, name, our_price, store, comp_price in rows
+        ]
+
+    def attention_items(
+        self, *, low_stock_threshold: int, limit: int
+    ) -> tuple[list[AttentionRow], list[AttentionRow]]:
+        """Costliest attention items: priciest out-of-stock first, then
+        priciest low-stock. Only active products."""
+        threshold = max(low_stock_threshold, 0)
+        capped = max(limit, 1)
+
+        def rows(stock_criteria: ColumnElement[bool]) -> list[AttentionRow]:
+            found = self._session.execute(
+                select(Product.id, Product.name, Product.price, Product.stock)
+                .where(Product.is_active.is_(True), stock_criteria)
+                .order_by(Product.price.desc())
+                .limit(capped)
+            ).all()
+            return [
+                AttentionRow(
+                    product_id=int(product_id),
+                    name=str(name),
+                    price=float(price),
+                    stock=float(stock),
+                )
+                for product_id, name, price, stock in found
+            ]
+
+        out = rows(Product.stock <= 0)
+        low = rows((Product.stock > 0) & (Product.stock <= threshold))
+        return out, low
+
     def list(
         self,
         *,
@@ -141,27 +283,7 @@ class ProductRepository:
         if max_price is not None:
             criteria.append(Product.price <= max_price)
         if competitor_store or min_competitor_price is not None or max_competitor_price is not None:
-            manual_fresh = and_(
-                CompetitorListing.manual_price.is_not(None),
-                CompetitorListing.manual_updated_at >= competitor_price_since,
-            )
-            fetched_fresh = and_(
-                CompetitorListing.fetched_price.is_not(None),
-                CompetitorListing.last_success_at >= competitor_price_since,
-            )
-            manual_toman = case(
-                (CompetitorListing.manual_currency == "IRR", CompetitorListing.manual_price / 10),
-                else_=CompetitorListing.manual_price,
-            )
-            fetched_toman = case(
-                (CompetitorListing.fetched_currency == "IRR", CompetitorListing.fetched_price / 10),
-                else_=CompetitorListing.fetched_price,
-            )
-            current_price = case(
-                (manual_fresh, manual_toman),
-                (fetched_fresh, fetched_toman),
-                else_=None,
-            )
+            current_price = effective_competitor_price(competitor_price_since)
             price_criteria: list[ColumnElement[bool]] = [
                 CompetitorListing.product_id == Product.id,
                 CompetitorListing.is_active.is_(True),

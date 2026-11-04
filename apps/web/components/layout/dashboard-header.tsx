@@ -38,8 +38,11 @@ export function DashboardHeader() {
     href: "/" + segments.slice(0, i + 1).join("/"),
   }))
 
+  // Solid background on purpose: a translucent + backdrop-blur header forces
+  // a full backdrop re-blur on every frame of the sidebar width animation,
+  // which makes the desktop toggle visibly laggy.
   return (
-    <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-2 overflow-hidden border-b bg-background/80 backdrop-blur-sm md:rounded-t-xl">
+    <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-2 overflow-hidden border-b bg-background md:rounded-t-xl">
       <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden px-3 sm:px-4">
         <SidebarTrigger className="-ms-1 shrink-0" />
         <span className="me-2 hidden shrink-0 items-center min-[420px]:flex">

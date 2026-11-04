@@ -214,13 +214,16 @@ function Sidebar({
       data-side={side}
       data-slot="sidebar"
     >
-      {/* This is what handles the sidebar gap on desktop */}
+      {/* This is what handles the sidebar gap on desktop.
+          The gap's width drives the push effect; it must share the exact
+          duration/easing of the sliding panel and the inset margins below so
+          all three move as one. The width change itself is layout work, but
+          the spacer is an empty box so it stays cheap. */}
       <div
         data-slot="sidebar-gap"
         className={cn(
-          "relative w-(--sidebar-width) bg-transparent transition-[width] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none",
+          "relative w-(--sidebar-width) shrink-0 bg-transparent transition-[width] duration-350 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
           "group-data-[collapsible=offcanvas]:w-0",
-          "group-data-[side=right]:rotate-180",
           variant === "floating" || variant === "inset"
             ? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]"
             : "group-data-[collapsible=icon]:w-(--sidebar-width-icon)"
@@ -229,8 +232,12 @@ function Sidebar({
       <div
         data-slot="sidebar-container"
         data-side={side}
+        inert={collapsible === "offcanvas" && state === "collapsed"}
         className={cn(
-          "fixed inset-y-0 z-10 hidden h-dvh w-(--sidebar-width) transition-[left,right,width] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] data-[side=left]:left-0 data-[side=left]:group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)] data-[side=right]:right-0 data-[side=right]:group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)] motion-reduce:transition-none md:flex",
+          // The panel itself never moves via left/right (layout thrash).
+          // It stays pinned and slides with a GPU-composited transform —
+          // see the [data-collapsible="offcanvas"] rules in globals.css.
+          "fixed inset-y-0 z-10 hidden h-dvh w-(--sidebar-width) transition-[transform,width] duration-350 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform data-[side=left]:left-0 data-[side=right]:right-0 motion-reduce:transition-none md:flex",
           // Adjust the padding for floating and inset variants.
           variant === "floating" || variant === "inset"
             ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
@@ -323,7 +330,10 @@ function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
     <main
       data-slot="sidebar-inset"
       className={cn(
-        "relative flex w-full flex-1 flex-col bg-background md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ms-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ms-2",
+        // The inset's inline-start margin (ms-0 <-> ms-2 for the inset
+        // variant) must animate with the same duration/easing as the sidebar
+        // gap + panel; without this the content snaps while the panel slides.
+        "relative flex w-full flex-1 flex-col bg-background transition-[margin] duration-350 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ms-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ms-2",
         className
       )}
       {...props}

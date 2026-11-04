@@ -150,17 +150,43 @@
 }
 
 /* ── SIDEBAR COLLAPSE MOTION ──────────────────────────
-   Smooth icon-collapse: the shell (width) animates over 300ms with an
-   ease-out curve. Every other property that changes with the collapse
-   state must itself be continuously animatable (width, max-width, gap,
-   margin, opacity, grid-template-rows, rotate, scale) — discrete flips
-   such as justify-content, margin-auto or padding snaps cause a visible
-   jump mid-animation, so the layout is start-anchored with constant
-   padding in both states and labels only fade + shrink. */
+   Desktop offcanvas is a three-part synchronized motion sharing one
+   duration/easing: the empty gap spacer animates width (the push), the
+   fixed panel slides with a GPU-composited transform (never left/right —
+   those force layout every frame), and the inset animates its
+   inline-start margin. Discrete flips such as justify-content, margin-auto
+   or padding snaps cause a visible jump mid-animation, so the layout is
+   start-anchored with constant padding in both states and labels only
+   fade + shrink. */
 
 :root {
-  --sidebar-transition-duration: 300ms;
-  --sidebar-transition-timing: cubic-bezier(0.32, 0.72, 0, 1);
+  --sidebar-transition-duration: 350ms;
+  --sidebar-transition-timing: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Desktop offcanvas slide. The panel stays pinned to its edge and moves
+   purely via transform so the animation stays on the compositor thread.
+   Physical directions: a right-side panel exits to the right, a left-side
+   panel exits to the left — identical in LTR and RTL. */
+.group[data-collapsible="offcanvas"]
+  [data-slot="sidebar-container"][data-side="right"] {
+  transform: translateX(100%);
+}
+
+.group[data-collapsible="offcanvas"]
+  [data-slot="sidebar-container"][data-side="left"] {
+  transform: translateX(-100%);
+}
+
+/* Layer hints only — no visual effect. Without these the browser may
+   re-rasterize the panel and re-run layout on the spacer every frame. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-slot="sidebar-container"] {
+    will-change: transform;
+  }
+  [data-slot="sidebar-gap"] {
+    will-change: width;
+  }
 }
 
 /* Inline text labels inside menu buttons / header */

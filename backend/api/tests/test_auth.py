@@ -13,6 +13,20 @@ def test_health(client: TestClient) -> None:
     assert client.get("/api/v1/health").json() == {"status": "ok"}
 
 
+def test_root_returns_service_discovery(client: TestClient) -> None:
+    r = client.get("/")
+    assert r.status_code == 200
+    assert r.json() == {
+        "name": "Charsooq Admin API",
+        "version": "0.1.0",
+        "status": "ok",
+        "docs": "/docs",
+        "health": "/health",
+        "ready": "/ready",
+        "api": "/api/v1/health",
+    }
+
+
 def test_login_wrong_password_is_401_without_token(client: TestClient) -> None:
     r = client.post("/api/v1/auth/login", json={"username": "admin", "password": "nope"})
     assert r.status_code == 401

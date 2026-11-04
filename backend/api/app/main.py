@@ -164,6 +164,20 @@ def create_app() -> FastAPI:
             content={"error": {"code": codes.get(exc.status_code, "error"), "message": message}},
         )
 
+    # Service discovery for humans hitting the bare origin (e.g. browsers).
+    # Excluded from the OpenAPI contract — /api/v1/* remains the documented API.
+    @app.get("/", include_in_schema=False)
+    def root() -> dict[str, str]:
+        return {
+            "name": app.title,
+            "version": app.version,
+            "status": "ok",
+            "docs": "/docs",
+            "health": "/health",
+            "ready": "/ready",
+            "api": "/api/v1/health",
+        }
+
     # Root probes (outside /api/v1) for container orchestrators and platform
     # health checks. Excluded from the OpenAPI contract — the versioned
     # /api/v1/health and /api/v1/ready aliases remain the documented ones.

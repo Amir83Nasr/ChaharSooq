@@ -384,7 +384,8 @@ def test_request_follows_technolife_redirect_chain(monkeypatch: MonkeyPatch) -> 
         "technolife", "https://www.technolife.ir/product-122293/"
     )
     assert result.amount == Decimal("112900000")
-    assert result.currency == "IRR"
+    # Technolife labels Toman values as IRR; the adapter normalises to IRT.
+    assert result.currency == "IRT"
     assert result.in_stock is True
 
 

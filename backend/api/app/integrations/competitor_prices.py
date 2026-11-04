@@ -345,8 +345,17 @@ def _parse_digikala(html: str) -> FetchedPrice | None:
 
 
 def _parse_technolife(html: str) -> FetchedPrice | None:
-    """Technolife adapter; kept separate for store-specific markup changes."""
-    return _price_from_json_ld(html)
+    """Technolife adapter; kept separate for store-specific markup changes.
+
+    Technolife labels its JSON-LD offer with ``priceCurrency: IRR`` while the
+    numeric value matches the Toman price shown on the page (e.g. 112900000
+    for «۱۱۲٬۹۰۰٬۰۰۰ تومان»). Dividing such values by 10 (IRR→toman) drops
+    one zero, so normalise them to IRT at the source.
+    """
+    result = _price_from_json_ld(html)
+    if result is not None and result.currency == "IRR":
+        return replace(result, currency="IRT")
+    return result
 
 
 STORE_PARSERS = {

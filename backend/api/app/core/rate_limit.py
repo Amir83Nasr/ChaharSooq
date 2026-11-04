@@ -16,11 +16,23 @@ def reset_rate_limits() -> None:
     _rate_buckets.clear()
 
 
-def rate_limited(ip: str) -> bool:
+def _prune(now: float, key: str) -> list[float]:
+    bucket = [t for t in _rate_buckets[key] if now - t < RATE_WINDOW_S]
+    _rate_buckets[key] = bucket
+    return bucket
+
+
+def rate_limited(key: str) -> bool:
+    """Return True when `key` (IP or `ip:username`) exceeded the window."""
     now = time.monotonic()
-    bucket = [t for t in _rate_buckets[ip] if now - t < RATE_WINDOW_S]
-    _rate_buckets[ip] = bucket
+    bucket = _prune(now, key)
     if len(bucket) >= RATE_LIMIT:
         return True
     bucket.append(now)
     return False
+
+
+def login_rate_key(ip: str, username: str | None = None) -> str:
+    """Combine IP with the attempted username so one user cannot lock all."""
+    name = (username or "").strip().lower()
+    return f"{ip}:{name}" if name else ip

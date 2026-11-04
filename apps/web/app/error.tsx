@@ -28,11 +28,7 @@ export default function RootError({
         <ErrorState
           icon={<AlertTriangle className="size-8" />}
           title="خطایی رخ داد"
-          hint={
-            error.message && error.message.trim().length > 0
-              ? error.message
-              : "مشکلی در بارگذاری این صفحه پیش آمد. لطفاً دوباره تلاش کنید."
-          }
+          hint="مشکلی در بارگذاری این صفحه پیش آمد. لطفاً دوباره تلاش کنید."
           action={
             <>
               <Button onClick={reset}>

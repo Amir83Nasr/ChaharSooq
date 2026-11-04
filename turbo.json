@@ -4,21 +4,28 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "env": ["API_URL_INTERNAL"],
+      "env": ["API_URL_INTERNAL", "NEXT_PUBLIC_API_URL"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"]
     },
     "lint": {
-      "dependsOn": ["^lint"]
+      "dependsOn": ["^lint"],
+      "inputs": ["$TURBO_DEFAULT$"],
+      "outputs": []
     },
     "format": {
-      "dependsOn": ["^format"]
+      "dependsOn": ["^format"],
+      "outputs": []
     },
     "test": {
-      "dependsOn": ["^test"]
+      "dependsOn": ["^test"],
+      "inputs": ["$TURBO_DEFAULT$"],
+      "outputs": []
     },
     "typecheck": {
-      "dependsOn": ["^typecheck"]
+      "dependsOn": ["^typecheck"],
+      "inputs": ["$TURBO_DEFAULT$"],
+      "outputs": []
     },
     "dev": {
       "cache": false,

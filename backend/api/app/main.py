@@ -4,16 +4,19 @@ import logging
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 from app.api import router
+from app.api.dependencies import get_db
 from app.core.config import get_settings
-from app.core.rate_limit import rate_limited
+from app.core.rate_limit import login_rate_key, rate_limited
 
 log = logging.getLogger("charsooq")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
@@ -63,6 +66,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "same-origin"
+        # Never allow this admin panel to be framed elsewhere.
+        response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
+        # HSTS is only meaningful behind TLS; harmless on plain HTTP.
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         return response
 
 
@@ -98,7 +105,18 @@ def create_app() -> FastAPI:
     ) -> Response:
         if request.url.path.endswith("/auth/login") and request.method == "POST":
             ip = request.client.host if request.client else "unknown"
-            if rate_limited(ip):
+            username: str | None = None
+            try:
+                body = await request.body()
+                if body:
+                    import json as _json
+
+                    data = _json.loads(body)
+                    if isinstance(data, dict) and isinstance(data.get("username"), str):
+                        username = data["username"]
+            except Exception:
+                username = None
+            if rate_limited(login_rate_key(ip, username)):
                 return JSONResponse(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     content={
@@ -145,6 +163,18 @@ def create_app() -> FastAPI:
             status_code=exc.status_code,
             content={"error": {"code": codes.get(exc.status_code, "error"), "message": message}},
         )
+
+    # Root probes (outside /api/v1) for container orchestrators and platform
+    # health checks. Excluded from the OpenAPI contract — the versioned
+    # /api/v1/health and /api/v1/ready aliases remain the documented ones.
+    @app.get("/health", include_in_schema=False)
+    def root_health() -> dict[str, str]:
+        return {"status": "ok"}
+
+    @app.get("/ready", include_in_schema=False)
+    def root_ready(session: Session = Depends(get_db)) -> dict[str, str]:  # noqa: B008
+        session.execute(text("SELECT 1"))
+        return {"status": "ready"}
 
     app.include_router(router)
     return app

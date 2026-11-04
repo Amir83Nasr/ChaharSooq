@@ -12,8 +12,10 @@ import {
 import { Badge } from "@workspace/ui/primitives/badge"
 import { Button } from "@workspace/ui/primitives/button"
 import { Input } from "@workspace/ui/primitives/input"
+import { Skeleton } from "@workspace/ui/primitives/skeleton"
 import { Price } from "@workspace/ui/persian/price"
 import { PersianDateTime } from "@workspace/ui/persian/persian-date"
+import { toTomanAmount } from "@/lib/money"
 import {
   ApiRequestError,
   api,
@@ -127,7 +129,7 @@ function FilledSlotCard({
   const urlMismatch =
     trimmedUrl !== "" && !isUrlMatchingStore(trimmedUrl, listing.store)
   const linkDirty = trimmedUrl !== listing.url.trim()
-  const canPersist = !busy && !urlMismatch && trimmedUrl !== ""
+  const canPersist = !busy && !urlMismatch && trimmedUrl !== "" && linkDirty
 
   function persistLink() {
     const trimmed = url.trim()
@@ -138,8 +140,9 @@ function FilledSlotCard({
   }
 
   function handleUrlBlur() {
+    // Only normalise whitespace here; persisting is explicit via the save
+    // button so a stray blur cannot PATCH the link by accident.
     setUrl((current) => current.trim())
-    persistLink()
   }
 
   return (
@@ -156,11 +159,11 @@ function FilledSlotCard({
                 className="size-3.5 animate-spin"
                 aria-hidden="true"
               />
-              در حال ذخیرهٔ خودکار…
+              در حال ذخیره…
             </span>
           ) : linkDirty && canPersist ? (
             <span className="text-[11px] text-muted-foreground">
-              تغییر ذخیره نشده؛ با خروج از کادر لینک ذخیره می‌شود
+              تغییر ذخیره نشده؛ دکمه «ذخیره لینک» را بزنید
             </span>
           ) : null}
         </div>
@@ -178,15 +181,21 @@ function FilledSlotCard({
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-md bg-muted/50 px-3 py-2">
         <div>
           <p className="text-xs text-muted-foreground">قیمت مؤثر</p>
-          {listing.price_is_fresh && listing.effective_price !== null ? (
+          {listing.effective_price !== null ? (
             <p className="text-base font-semibold">
               <Price
-                value={Math.round(
-                  listing.effective_currency === "IRR"
-                    ? listing.effective_price / 10
-                    : listing.effective_price
-                )}
+                value={
+                  toTomanAmount(
+                    listing.effective_price,
+                    listing.effective_currency
+                  ) ?? listing.effective_price
+                }
               />
+              {!listing.price_is_fresh ? (
+                <span className="ms-2 text-[11px] font-normal text-muted-foreground">
+                  (قدیمی)
+                </span>
+              ) : null}
             </p>
           ) : (
             <p className="text-sm text-muted-foreground">
@@ -269,6 +278,14 @@ function FilledSlotCard({
         <Button
           size="sm"
           variant="outline"
+          disabled={!canPersist}
+          onClick={persistLink}
+        >
+          ذخیره لینک
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
           disabled={busy || trimmedUrl === "" || urlMismatch}
           onClick={() => onCheck(url.trim())}
         >
@@ -280,7 +297,13 @@ function FilledSlotCard({
             size="sm"
             variant="destructive"
             disabled={busy}
-            onClick={onDelete}
+            onClick={() => {
+              if (
+                window.confirm("این لینک حذف شود؟ این عمل قابل بازگشت نیست.")
+              ) {
+                onDelete()
+              }
+            }}
           >
             <Trash2 /> حذف
           </Button>
@@ -437,7 +460,9 @@ export function ProductCompetitorPrices({
       )
       setListings((current) => [...current, created])
       setError(null)
-      // بررسی خودکار دفعهٔ اول: کاربر نباید دستی «بررسی لینک» بزند.
+      onChanged?.()
+      // بررسی خودکار دفعهٔ اول در پس‌زمینه: خطای آن داخل کارت (last_error)
+      // می‌نشیند و پیام سراسری موفقیت ساخت را خراب نمی‌کند.
       try {
         setBusyKey(created.id)
         const checked = await api.checkCompetitorListing(created.id)
@@ -446,12 +471,17 @@ export function ProductCompetitorPrices({
             listing.id === created.id ? checked : listing
           )
         )
-      } catch (checkErr) {
-        setError(toPersianError(checkErr))
+        onChanged?.()
+      } catch {
+        // Refresh so the card shows the fetch status/last_error instead.
+        try {
+          setListings(await api.competitorListings(productId))
+        } catch {
+          // Keep the created listing visible; the card will retry on demand.
+        }
       } finally {
         setBusyKey(null)
       }
-      onChanged?.()
     } catch (err) {
       setError(toPersianError(err))
       setBusyKey(null)
@@ -493,9 +523,18 @@ export function ProductCompetitorPrices({
         </p>
       ) : null}
       {loading ? (
-        <p className="text-sm text-muted-foreground">
-          در حال بارگذاری منابع قیمت…
-        </p>
+        <div className="space-y-3" aria-label="در حال بارگذاری منابع قیمت">
+          {DIALOG_STORES.map((store) => (
+            <div
+              key={store}
+              className="space-y-2 rounded-lg border border-border bg-background p-3 sm:p-4"
+            >
+              <Skeleton className="h-5 w-32" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-8 w-28" />
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="space-y-3">
           {DIALOG_STORES.map((store) => {

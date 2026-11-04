@@ -140,9 +140,13 @@ function isLinkActive(href: string, pathname: string) {
 
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
-  const { isMobile, setOpenMobile } = useSidebar()
+  const { isMobile, setOpenMobile, state } = useSidebar()
   const storesActive = pathname.startsWith("/integrations")
   const [storesOpen, setStoresOpen] = useState(storesActive)
+  // Links are keyboard-reachable only when the submenu is actually visible:
+  // open, and (on desktop) the sidebar expanded. On mobile the sidebar is
+  // a sheet, so the desktop collapsed state doesn't apply.
+  const submenuAccessible = storesOpen && (isMobile || state === "expanded")
 
   useEffect(() => {
     if (storesActive) setStoresOpen(true)
@@ -153,13 +157,13 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
   }
 
   return (
-    <Sidebar collapsible="icon" side="right" {...props}>
-      <SidebarHeader className="group-data-[collapsible=icon]:px-0">
-        <div className="flex items-center gap-2 px-2 py-1 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+    <Sidebar collapsible="offcanvas" side="right" {...props}>
+      <SidebarHeader>
+        <div className="flex items-center gap-2 px-0 py-1 transition-[gap] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] group-data-[collapsible=icon]:gap-0 motion-reduce:transition-none">
           <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary font-bold text-primary-foreground">
             چ
           </span>
-          <span className="flex min-w-0 flex-col group-data-[collapsible=icon]:hidden">
+          <span className="sidebar-collapse-label flex min-w-0 flex-col">
             <span className="text-sm font-bold">چهارسوق</span>
             <span className="text-xs text-muted-foreground">
               پنل مدیریت فروشگاه
@@ -169,17 +173,13 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         {NAV.map((entry) => (
-          <SidebarGroup
-            key={entry.group}
-            className="group-data-[collapsible=icon]:px-0"
-          >
+          <SidebarGroup key={entry.group}>
             <SidebarGroupLabel>{entry.group}</SidebarGroupLabel>
             <SidebarMenu>
               {entry.items.map((item) =>
                 "children" in item ? (
                   <SidebarMenuItem key={item.label}>
                     <SidebarMenuButton
-                      className="group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:justify-center"
                       render={
                         <button
                           type="button"
@@ -187,12 +187,12 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
                           onClick={() => setStoresOpen((open) => !open)}
                         >
                           <item.icon />
-                          <span className="group-data-[collapsible=icon]:hidden">
+                          <span className="sidebar-collapse-label">
                             {item.label}
                           </span>
                           <ChevronDown
                             className={cn(
-                              "ms-auto transition-transform group-data-[collapsible=icon]:hidden",
+                              "sidebar-collapse-fade ms-auto",
                               storesOpen && "rotate-180"
                             )}
                           />
@@ -201,35 +201,51 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
                       tooltip={item.label}
                       isActive={storesActive}
                     />
-                    {storesOpen ? (
-                      <SidebarMenuSub>
-                        {item.children.map((child) => (
-                          <SidebarMenuSubItem key={child.href}>
-                            <SidebarMenuSubButton
-                              render={
-                                <Link
-                                  href={child.href}
-                                  onClick={closeMobileSidebar}
-                                >
-                                  <span>{child.label}</span>
-                                </Link>
-                              }
-                              isActive={isLinkActive(child.href, pathname)}
-                            />
-                          </SidebarMenuSubItem>
-                        ))}
-                      </SidebarMenuSub>
-                    ) : null}
+                    <div
+                      className="sidebar-submenu-grid"
+                      data-open={storesOpen}
+                      aria-hidden={!submenuAccessible}
+                    >
+                      <div>
+                        <SidebarMenuSub aria-hidden={!submenuAccessible}>
+                          {item.children.map((child) => (
+                            <SidebarMenuSubItem
+                              key={child.href}
+                              aria-hidden={!submenuAccessible}
+                            >
+                              <SidebarMenuSubButton
+                                render={
+                                  <Link
+                                    href={child.href}
+                                    onClick={closeMobileSidebar}
+                                    tabIndex={
+                                      submenuAccessible ? undefined : -1
+                                    }
+                                  >
+                                    <span>{child.label}</span>
+                                  </Link>
+                                }
+                                isActive={isLinkActive(child.href, pathname)}
+                              />
+                            </SidebarMenuSubItem>
+                          ))}
+                        </SidebarMenuSub>
+                      </div>
+                    </div>
                   </SidebarMenuItem>
                 ) : item.soon ? (
-                  <SidebarMenuItem key={item.href}>
+                  <SidebarMenuItem key={item.href} aria-hidden={false}>
                     <div className="relative">
                       <SidebarMenuButton
-                        className="group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:justify-center"
                         render={
-                          <span aria-disabled="true" className="opacity-60">
+                          <span
+                            aria-disabled="true"
+                            tabIndex={-1}
+                            aria-label={`${item.label} — به‌زودی`}
+                            className="opacity-60"
+                          >
                             <item.icon />
-                            <span className="group-data-[collapsible=icon]:hidden">
+                            <span className="sidebar-collapse-label">
                               {item.label}
                             </span>
                           </span>
@@ -238,7 +254,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
                       />
                       <Badge
                         variant="secondary"
-                        className="inset-e-2 absolute top-1/2 h-5 -translate-y-1/2 px-1.5 text-[10px] group-data-[collapsible=icon]:hidden"
+                        className="sidebar-collapse-fade inset-e-2 absolute top-1/2 h-5 -translate-y-1/2 px-1.5 text-[10px]"
                       >
                         به‌زودی
                       </Badge>
@@ -247,11 +263,10 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
                 ) : (
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton
-                      className="group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:justify-center"
                       render={
                         <Link href={item.href} onClick={closeMobileSidebar}>
                           <item.icon />
-                          <span className="group-data-[collapsible=icon]:hidden">
+                          <span className="sidebar-collapse-label">
                             {item.label}
                           </span>
                         </Link>

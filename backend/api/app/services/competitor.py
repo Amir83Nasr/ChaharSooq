@@ -34,6 +34,10 @@ class InvalidCompetitorProductError(ValueError):
     pass
 
 
+class CompetitorThrottledError(ValueError):
+    """Check attempted before the politeness interval elapsed (HTTP 429)."""
+
+
 def validate_url(url: str, store: str) -> str:
     raw = url.strip()
     try:
@@ -259,7 +263,7 @@ class CompetitorService:
             row.last_checked_at is not None
             and (now - _aware(row.last_checked_at)).total_seconds() < interval
         ):
-            raise InvalidCompetitorProductError(
+            raise CompetitorThrottledError(
                 "برای جلوگیری از درخواست پرتکرار، کمی بعد دوباره تلاش کنید"
             )
         row.last_checked_at = now

@@ -32,10 +32,7 @@ export function LoginForm() {
     }
     setPending(true)
     try {
-      const t0 = Date.now()
-      const res = await api.login(username.trim(), password)
-      // eslint-disable-next-line no-console
-      console.info("login ok", { ms: Date.now() - t0, ok: res.ok })
+      await api.login(username.trim(), password)
       // Full reload (not router.push): picks up the fresh HttpOnly session
       // cookie server-side; push+refresh races and can leave user on /login.
       window.location.assign("/products")
@@ -64,11 +61,7 @@ export function LoginForm() {
 
   return (
     <div className="flex flex-col gap-6">
-      <form
-        onSubmit={onSubmit}
-        className="flex flex-col gap-6"
-        noValidate={false}
-      >
+      <form onSubmit={onSubmit} className="flex flex-col gap-6" noValidate>
         <div className="flex flex-col items-center gap-1 text-center">
           <h1 className="text-2xl font-bold">ورود به چهارسوق</h1>
           <p className="text-sm text-balance text-muted-foreground">

@@ -123,25 +123,22 @@
     @apply border-border outline-ring/50;
   }
   ::selection {
-    background: #000;
-    color: #fff;
+    background: var(--primary);
+    color: var(--primary-foreground);
   }
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-sans), Tahoma, Arial, sans-serif;
   }
   html {
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-  }
-  html::-webkit-scrollbar,
-  body::-webkit-scrollbar,
-  .no-scrollbar::-webkit-scrollbar {
-    display: none;
+    scrollbar-width: thin;
   }
   .no-scrollbar {
     scrollbar-width: none;
     -ms-overflow-style: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
   }
   .toman-glyph {
     font-family: var(--font-toman), var(--font-sans), Tahoma, sans-serif;
@@ -149,6 +146,111 @@
   button:not(:disabled),
   [role="button"]:not(:disabled) {
     cursor: pointer;
+  }
+}
+
+/* ── SIDEBAR COLLAPSE MOTION ──────────────────────────
+   Smooth icon-collapse: the shell (width) animates over 300ms with an
+   ease-out curve. Every other property that changes with the collapse
+   state must itself be continuously animatable (width, max-width, gap,
+   margin, opacity, grid-template-rows, rotate, scale) — discrete flips
+   such as justify-content, margin-auto or padding snaps cause a visible
+   jump mid-animation, so the layout is start-anchored with constant
+   padding in both states and labels only fade + shrink. */
+
+:root {
+  --sidebar-transition-duration: 300ms;
+  --sidebar-transition-timing: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Inline text labels inside menu buttons / header */
+.sidebar-collapse-label {
+  overflow: hidden;
+  white-space: nowrap;
+  max-width: 14rem;
+  opacity: 1;
+  transition:
+    max-width var(--sidebar-transition-duration)
+      var(--sidebar-transition-timing),
+    opacity 150ms ease;
+}
+
+.group[data-collapsible="icon"] .sidebar-collapse-label {
+  max-width: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Badges, chevrons and other trailing affordances: fade + collapse */
+.sidebar-collapse-fade {
+  overflow: hidden;
+  max-width: 4rem;
+  opacity: 1;
+  transform: scale(1);
+  transition:
+    max-width var(--sidebar-transition-duration)
+      var(--sidebar-transition-timing),
+    opacity 150ms ease,
+    transform 250ms var(--sidebar-transition-timing),
+    rotate 250ms var(--sidebar-transition-timing),
+    margin-inline-start var(--sidebar-transition-duration)
+      var(--sidebar-transition-timing);
+}
+
+.group[data-collapsible="icon"] .sidebar-collapse-fade {
+  max-width: 0;
+  margin-inline-start: 0;
+  opacity: 0;
+  transform: scale(0.85);
+  pointer-events: none;
+}
+
+/* Submenu open/close (grid-rows trick, no JS measurement needed).
+   The collapsed-sidebar rule below wins over [data-open="true"] by
+   specificity, so the height animates smoothly in both directions
+   instead of popping via display: none. Visibility flips only after
+   the fade-out (or immediately when showing, while still clipped),
+   so it never causes a visual snap. */
+.sidebar-submenu-grid {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition:
+    grid-template-rows var(--sidebar-transition-duration)
+      var(--sidebar-transition-timing),
+    opacity 200ms ease,
+    transform var(--sidebar-transition-duration)
+      var(--sidebar-transition-timing),
+    visibility 0s linear 250ms;
+}
+
+.sidebar-submenu-grid[data-open="true"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition-delay: 0s, 0s, 0s, 0s;
+}
+
+.sidebar-submenu-grid > div {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.group[data-collapsible="icon"] .sidebar-submenu-grid {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-collapse-label,
+  .sidebar-collapse-fade,
+  .sidebar-submenu-grid {
+    transition: none;
   }
 }
 
@@ -162,17 +264,23 @@
   --grid-line: rgba(255, 255, 255, 0.03);
 }
 
-.bg-grid-pattern,
-[data-slot="sidebar-inset"] {
+.bg-grid-pattern {
   background-image:
     linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
     linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
   background-size: 48px 48px;
 }
 
+/* Sidebar inset keeps a flat background: painting the grid on every inset
+   forces a repaint on each sidebar animation/scroll frame. Apply
+   .bg-grid-pattern explicitly where the pattern is wanted. */
 [data-slot="sidebar-inset"] {
-  background-attachment: fixed;
+  background-image: none;
 }
+
+/* NOTE: never add background-attachment: fixed here — it forces a full
+   repaint on every frame of the sidebar collapse animation (and on every
+   scroll frame), which makes the toggle visibly laggy. */
 
 @media (max-width: 767px) {
   button:not(.h-10):not(.h-11):not(.min-h-11):not(.size-10):not(.size-11),

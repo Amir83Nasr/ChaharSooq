@@ -26,6 +26,13 @@ class CompetitorListing(Base):
     __table_args__ = (
         Index("ix_competitor_listings_product_id", "product_id"),
         Index("ix_competitor_listings_store", "store"),
+        Index(
+            "uq_competitor_listings_product_store",
+            "product_id",
+            "store",
+            unique=True,
+        ),
+        Index("ix_competitor_listings_last_success", "last_success_at"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

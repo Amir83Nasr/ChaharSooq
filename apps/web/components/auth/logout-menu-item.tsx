@@ -96,13 +96,12 @@ export function LogoutMenuItem() {
 
   return (
     <SidebarMenuButton
-      className="group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:justify-center"
       render={<button type="button" onClick={requestLogout} />}
       tooltip="خروج"
       variant="destructive"
     >
       <LogOut />
-      <span className="group-data-[collapsible=icon]:hidden">خروج</span>
+      <span className="sidebar-collapse-label">خروج</span>
     </SidebarMenuButton>
   )
 }

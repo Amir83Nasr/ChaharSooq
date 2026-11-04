@@ -20,9 +20,11 @@ import { EmptyState } from "@workspace/ui/feedback/state"
 import { Price } from "@workspace/ui/persian/price"
 import { PersianNumber } from "@workspace/ui/persian/persian-number"
 import { formatPersianNumber } from "@workspace/ui/lib/number"
+import { formatPersianRelativeTime } from "@workspace/ui/lib/relative-time"
 import { Skeleton } from "@workspace/ui/primitives/skeleton"
 import { CircleAlert, PackageSearch, RefreshCw } from "lucide-react"
 import { StockCell } from "@/components/data/products-stock-cell"
+import { toTomanAmount } from "@/lib/money"
 import type { ProductOut, ProductPage } from "@/lib/api"
 
 import { PAGE_SIZE_OPTIONS } from "@/components/settings/page-size-settings"
@@ -41,7 +43,7 @@ interface TableProps {
   onPageSize: (n: number) => void
 }
 
-const COLUMN_COUNT = 11
+const COLUMN_COUNT = 10
 
 // Top-level groups for the catalog display: carpet, furniture, home appliances.
 function topGroupOf(name: string | null): string | null {
@@ -89,16 +91,6 @@ const COMPETITOR_STATUS_LABELS: Record<string, string> = {
   manual: "قیمت تازه ثبت نشده",
 }
 
-// IRR (ریال) → تومان برای مقایسه با قیمت کالا.
-function toTomanAmount(
-  price: number | null,
-  currency: string | null
-): number | null {
-  if (price === null || price === undefined) return null
-  if (currency === "IRR") return Math.round(price / 10)
-  return price
-}
-
 // اختلاف درصد قیمت ما نسبت به رقیب: مثبت یعنی گران‌تر از رقیب.
 function diffPercent(ours: number, theirs: number | null): number | null {
   if (theirs === null || theirs <= 0 || ours <= 0) return null
@@ -131,7 +123,6 @@ function ProductsTableHead(props: { market?: CompetitorMarket }) {
         <col className="w-28" />
         <col className="w-36" />
         <col className="w-28" />
-        <col className="w-20" />
         <col className="w-24" />
       </colgroup>
       <TableHeader>
@@ -163,9 +154,6 @@ function ProductsTableHead(props: { market?: CompetitorMarket }) {
             اختلاف درصد
           </TableHead>
           <TableHead scope="col" className="text-center">
-            قیمت پیشنهادی
-          </TableHead>
-          <TableHead scope="col" className="text-center">
             موجودی
           </TableHead>
         </TableRow>
@@ -177,7 +165,7 @@ function ProductsTableHead(props: { market?: CompetitorMarket }) {
 export function ProductTableSkeleton() {
   return (
     <div aria-label="در حال بارگذاری">
-      <Table className="min-w-212 table-fixed">
+      <Table className="min-w-192 table-fixed">
         <ProductsTableHead />
         <TableBody>
           {Array.from({ length: 10 }).map((_, i) => (
@@ -234,7 +222,7 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
   }
   return (
     <div className="space-y-6">
-      <Table className="min-w-212 table-fixed">
+      <Table className="min-w-192 table-fixed">
         <ProductsTableHead market={market} />
         <TableBody>
           {page.items.map((item, i) => {
@@ -316,10 +304,29 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                 <TableCell className="text-center">
                   {!isAppliance ? (
                     <span className="text-muted-foreground">—</span>
-                  ) : competitor?.is_fresh &&
+                  ) : competitor?.price !== null &&
+                    competitor?.price !== undefined &&
                     amount !== null &&
                     amount !== undefined ? (
-                    <Price value={amount} />
+                    <span className="inline-flex flex-col items-center gap-0.5">
+                      <Price value={amount} />
+                      {!competitor.is_fresh ? (
+                        <span
+                          className="text-[11px] text-muted-foreground"
+                          title={
+                            competitor.last_checked_at
+                              ? `آخرین بررسی: ${competitor.last_checked_at}`
+                              : "قیمت تازه دریافت نشده"
+                          }
+                        >
+                          {competitor.last_checked_at
+                            ? (formatPersianRelativeTime(
+                                competitor.last_checked_at
+                              ) ?? "قیمت قدیمی")
+                            : "قیمت قدیمی"}
+                        </span>
+                      ) : null}
+                    </span>
                   ) : (
                     <span className="text-xs text-muted-foreground">
                       {competitor
@@ -352,9 +359,6 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                       {pct > 0 ? "گران‌تر" : "ارزان‌تر"}
                     </span>
                   )}
-                </TableCell>
-                <TableCell className="text-center text-muted-foreground">
-                  —
                 </TableCell>
                 <TableCell className="text-center">
                   <StockCell value={item.stock} threshold={threshold} />
@@ -422,7 +426,7 @@ interface TableErrorProps {
 // only part guaranteed to be on screen.
 export function ProductsTableError({ message, onRetry }: TableErrorProps) {
   return (
-    <Table className="min-w-212 table-fixed">
+    <Table className="min-w-192 table-fixed">
       <ProductsTableHead />
       <TableBody>
         <TableRow className="hover:bg-transparent">

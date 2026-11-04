@@ -60,19 +60,28 @@ class ProductRepository:
         return len(stale)
 
     def summary(self, *, low_stock_threshold: int) -> dict[str, int]:
-        rows = self._session.execute(
-            select(Product.stock, Product.price).where(Product.is_active.is_(True))
-        ).all()
-        total = len(rows)
-        out = sum(1 for s, _ in rows if s <= 0)
-        low = sum(1 for s, _ in rows if 0 < s <= max(low_stock_threshold, 0))
-        in_stock = total - out - low
-        stock_value = sum(s * p for s, p in rows)
+        threshold = max(low_stock_threshold, 0)
+        active = Product.is_active.is_(True)
+        total = self._session.execute(
+            select(func.count()).select_from(Product).where(active)
+        ).scalar_one()
+        out_of_stock = self._session.execute(
+            select(func.count()).select_from(Product).where(active, Product.stock <= 0)
+        ).scalar_one()
+        low = self._session.execute(
+            select(func.count())
+            .select_from(Product)
+            .where(active, Product.stock > 0, Product.stock <= threshold)
+        ).scalar_one()
+        in_stock = total - out_of_stock - low
+        stock_value = self._session.execute(
+            select(func.coalesce(func.sum(Product.stock * Product.price), 0)).where(active)
+        ).scalar_one()
         return {
             "total": total,
             "in_stock": in_stock,
             "low": low,
-            "out": out,
+            "out": out_of_stock,
             "stock_value": int(stock_value),
         }
 
@@ -163,7 +172,7 @@ class ProductRepository:
         if in_stock is True:
             criteria.append(Product.stock > 0)
         elif in_stock is False:
-            criteria.append(Product.stock == 0)
+            criteria.append(Product.stock <= 0)
         if min_stock is not None:
             criteria.append(Product.stock >= min_stock)
         if max_stock is not None:
@@ -177,11 +186,14 @@ class ProductRepository:
             "cheapest": Product.price.asc(),
             "most_expensive": Product.price.desc(),
         }[sort]
+        # Hard cap for the legacy `page_size=0` ("show all") path: an uncapped
+        # select on a large catalog can OOM the worker, so treat it as a
+        # bounded export (first N rows, no offset).
         if page_size and page_size > 0:
             start = (page - 1) * page_size
             stmt = base.order_by(order).offset(start).limit(page_size)
         else:
-            stmt = base.order_by(order)
+            stmt = base.order_by(order).limit(500)
         rows = self._session.execute(stmt).unique().scalars().all()
         return list(rows), total
 

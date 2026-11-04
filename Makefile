@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-.PHONY: build check db-migrate db-migrate-prod db-seed db-seed-parsina db-seed-prod db-sync-dev-to-prod sync-dev-to-prod sync-prod dev-to-prod db-up deploy-api dev-all dev-api dev-web docker-down docker-logs docker-up help install lint test typecheck
+.PHONY: build check db-migrate db-migrate-prod db-seed db-seed-parsina db-seed-prod db-sync-dev-to-prod sync-dev-to-prod sync-prod dev-to-prod db-up deploy-api dev-all dev-api dev-web docker-build docker-down docker-logs docker-up help install lint test typecheck
 
 # ─── HELP ─────────────────────────────────────────────────
 help: ## Show this help message
@@ -25,7 +25,7 @@ YES ?= 0 ## Set YES=1 to skip the confirmation prompt for db-sync-dev-to-prod
 
 # ─── INSTALL / SETUP ──────────────────────────────────────
 install: ## Install frontend and backend dependencies and git hooks
-	pnpm install
+	pnpm install --frozen-lockfile
 	uv sync --locked
 	pnpm exec lefthook install
 
@@ -82,8 +82,11 @@ db-sync-dev-to-prod: ## Copy dev DB data (categories/settings/products/sync_stat
 sync-dev-to-prod sync-prod dev-to-prod: db-sync-dev-to-prod ## Alias for db-sync-dev-to-prod
 
 # ─── DOCKER ───────────────────────────────────────────────
-docker-up: ## Start services with Docker Compose
-	docker compose -f $(COMPOSE_FILE) up -d
+docker-build: ## Build Docker images (web + api)
+	docker compose -f $(COMPOSE_FILE) build
+
+docker-up: ## Start services with Docker Compose (rebuild images)
+	docker compose -f $(COMPOSE_FILE) up -d --build
 
 docker-down: ## Stop Docker Compose services
 	docker compose -f $(COMPOSE_FILE) down

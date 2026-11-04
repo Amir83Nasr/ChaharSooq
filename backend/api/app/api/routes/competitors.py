@@ -13,6 +13,7 @@ from app.schemas.competitor import (
 from app.services.competitor import (
     CompetitorNotFoundError,
     CompetitorService,
+    CompetitorThrottledError,
     InvalidCompetitorProductError,
 )
 
@@ -88,5 +89,7 @@ def check_competitor_listing(
         return CompetitorService(session).check(listing_id)
     except CompetitorNotFoundError:
         raise HTTPException(status_code=404, detail="منبع قیمت پیدا نشد") from None
-    except InvalidCompetitorProductError as exc:
+    except CompetitorThrottledError as exc:
         raise HTTPException(status_code=429, detail=str(exc)) from None
+    except InvalidCompetitorProductError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None

@@ -48,6 +48,7 @@ const API_BASE = (
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@workspace/ui"],
+  poweredByHeader: false,
   // LAN/mobile dev: set ALLOWED_DEV_ORIGINS=a,b (root or apps/web .env.local).
   // Empty by default, so only localhost may load the dev server.
   allowedDevOrigins: process.env.ALLOWED_DEV_ORIGINS
@@ -55,6 +56,18 @@ const nextConfig: NextConfig = {
         .map((s) => s.trim())
         .filter(Boolean)
     : [],
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "same-origin" },
+          { key: "X-Frame-Options", value: "DENY" },
+        ],
+      },
+    ]
+  },
   async rewrites() {
     return [{ source: "/api/:path*", destination: `${API_BASE}/api/:path*` }]
   },

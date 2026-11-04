@@ -8,14 +8,13 @@ type PriceProps = {
   value: number | bigint
 } & ComponentProps<"span">
 
-// ponytail: Toman glyph "تومانءءء" uses fallback font until --font-toman
-// lands; no API change.
+// Toman glyph uses fallback font until --font-toman lands; no API change.
 export function Price({ value, className, ...props }: PriceProps) {
   return (
     <span className={cn(className)} {...props}>
       {formatToman(value)}{" "}
       <span className="toman-glyph" aria-hidden="true">
-        تومانءء
+        تومان
       </span>
       <span className="sr-only">تومان</span>
     </span>

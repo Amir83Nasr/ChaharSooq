@@ -1,4 +1,4 @@
-import { DATE_SEP, FA_DIGITS, THOUSAND_SEP } from "./locale"
+import { DATE_SEP, DECIMAL_SEP, FA_DIGITS, THOUSAND_SEP } from "./locale"
 
 const LATIN_DIGIT_RE = /[0-9]/g
 
@@ -32,5 +32,8 @@ export function formatPersianNumber(value: number | string | bigint): string {
   const grouped = groupThousands(int)
   const ascii =
     frac !== undefined ? `${grouped}.${frac.replace(/[^0-9]/g, "")}` : grouped
-  return toPersianDigits(`${sign}${ascii}`).replace(".", DATE_SEP)
+  // Decimal mark is DECIMAL_SEP here; DATE_SEP stays reserved for Jalali dates.
+  return toPersianDigits(`${sign}${ascii}`).replace(".", DECIMAL_SEP)
 }
+
+export { DATE_SEP }

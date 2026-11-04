@@ -42,6 +42,9 @@ class Product(Base):
         Index("ix_products_category_id", "category_id"),
         Index("ix_products_sku", "sku"),
         Index("ix_products_main_group_name", "main_group_name"),
+        Index("ix_products_is_active", "is_active"),
+        Index("ix_products_price", "price"),
+        Index("ix_products_stock", "stock"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

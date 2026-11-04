@@ -63,7 +63,7 @@ def list_products(
         page=page,
         page_size=page_size,
     )
-    response_page_size = page_size if page_size > 0 else (total if total > 0 else 1)
+    response_page_size = page_size if page_size > 0 else (len(items) if items else 1)
     competitor_prices = CompetitorService(session).prices_for_products({p.id for p in items})
     return ProductPage(
         items=[

@@ -56,8 +56,27 @@ export default function ProductsPage() {
 
   useEffect(() => {
     if (!autoRefreshMs || autoRefreshMs <= 0) return
-    const id = setInterval(() => setDataVersion((v) => v + 1), autoRefreshMs)
-    return () => clearInterval(id)
+    let id: ReturnType<typeof setInterval> | undefined
+    const start = () => {
+      if (id !== undefined) return
+      id = setInterval(() => setDataVersion((v) => v + 1), autoRefreshMs)
+    }
+    const stop = () => {
+      if (id !== undefined) {
+        clearInterval(id)
+        id = undefined
+      }
+    }
+    const onVisibility = () => {
+      if (document.hidden) stop()
+      else start()
+    }
+    start()
+    document.addEventListener("visibilitychange", onVisibility)
+    return () => {
+      stop()
+      document.removeEventListener("visibilitychange", onVisibility)
+    }
   }, [autoRefreshMs])
 
   const goLogin = useCallback(() => {
@@ -71,7 +90,10 @@ export default function ProductsPage() {
   }, [q])
 
   const resetPage = useCallback(() => setPageNum(1), [])
-  const effectivePageSize = isMobile ? 0 : pageSize
+  // "Show all" (page_size=0) is a bounded export server-side (max 500 rows);
+  // on small screens always use the chosen page size so the first paint stays
+  // light.
+  const effectivePageSize = isMobile ? Math.max(pageSize, 10) || 10 : pageSize
   useEffect(() => {
     resetPage()
   }, [isMobile, resetPage])
@@ -214,6 +236,7 @@ export default function ProductsPage() {
   const hasFilters =
     debouncedQ !== "" ||
     topGroup !== null ||
+    sort !== "newest" ||
     stock !== "all" ||
     minPrice.trim() !== "" ||
     maxPrice.trim() !== ""

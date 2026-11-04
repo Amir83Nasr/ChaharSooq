@@ -7,7 +7,7 @@ export const DEFAULT_LOW_STOCK_THRESHOLD = 5
 
 export const STOCK_LABELS: Record<StockStatus, string> = {
   in: "موجود",
-  low: "کم",
+  low: "موجودی کم",
   out: "ناموجود",
 }
 

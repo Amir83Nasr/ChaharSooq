@@ -4,13 +4,13 @@ import type { StockStatus } from "@/lib/inventory"
 
 export function statusVariant(
   status: StockStatus
-): "secondary" | "warning" | "destructive" {
+): "success" | "warning" | "destructive" {
   if (status === "out") return "destructive"
   if (status === "low") return "warning"
-  return "secondary"
+  return "success"
 }
 
-/** Stock count cell: plain number when fine, badge when low (amber) or out (red). */
+/** Stock count cell: badge when in (green), low (amber) or out (red). */
 export function StockCell({
   value,
   threshold,
@@ -32,5 +32,9 @@ export function StockCell({
       </Badge>
     )
   }
-  return <PersianNumber value={value} />
+  return (
+    <Badge variant="success">
+      <PersianNumber value={value} />
+    </Badge>
+  )
 }

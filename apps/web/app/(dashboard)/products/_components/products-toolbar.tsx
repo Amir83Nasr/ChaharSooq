@@ -32,7 +32,7 @@ export const STOCK_FILTER_LABELS: Record<StockFilter, string> = {
   all: "همه موجودی‌ها",
   in: "موجود",
   out: "ناموجود",
-  low: "کم",
+  low: "موجودی کم",
 }
 
 interface ToolbarProps {
@@ -133,7 +133,7 @@ export function ProductsToolbar(props: ToolbarProps) {
             <SelectItem value="all">همه موجودی‌ها</SelectItem>
             <SelectItem value="in">موجود</SelectItem>
             <SelectItem value="out">ناموجود</SelectItem>
-            <SelectItem value="low">کم</SelectItem>
+            <SelectItem value="low">موجودی کم</SelectItem>
           </SelectGroup>
         </SelectContent>
       </Select>

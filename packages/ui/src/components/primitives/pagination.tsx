@@ -81,7 +81,16 @@ function TablePagination({
   onPageChange: (page: number) => void
   children?: React.ReactNode
 }) {
-  if (totalPages <= 1) return null
+  if (totalPages <= 1) {
+    if (!children) return null
+    return (
+      <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-3 px-4 py-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          {children}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-4 py-3">

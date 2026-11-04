@@ -282,7 +282,8 @@ export const api = {
       search.set("in_stock", String(params.in_stock))
     if (params.sort) search.set("sort", params.sort)
     if (params.page) search.set("page", String(params.page))
-    if (params.page_size) search.set("page_size", String(params.page_size))
+    if (params.page_size !== undefined)
+      search.set("page_size", String(params.page_size))
     const suffix = search.size ? `?${search}` : ""
     return request<ProductPage>(`/api/v1/products${suffix}`)
   },

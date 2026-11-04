@@ -186,14 +186,13 @@ class ProductRepository:
             "cheapest": Product.price.asc(),
             "most_expensive": Product.price.desc(),
         }[sort]
-        # Hard cap for the legacy `page_size=0` ("show all") path: an uncapped
-        # select on a large catalog can OOM the worker, so treat it as a
-        # bounded export (first N rows, no offset).
+        # `page_size=0` means "show all": return every matching row without a
+        # limit or offset so the table truly shows the whole filtered list.
         if page_size and page_size > 0:
             start = (page - 1) * page_size
             stmt = base.order_by(order).offset(start).limit(page_size)
         else:
-            stmt = base.order_by(order).limit(500)
+            stmt = base.order_by(order)
         rows = self._session.execute(stmt).unique().scalars().all()
         return list(rows), total
 

@@ -39,9 +39,8 @@ def list_products(
     in_stock: bool | None = Query(default=None),
     sort: Literal["newest", "cheapest", "most_expensive"] = Query(default="newest"),
     page: int = Query(default=1, ge=1),
-    # 0 means "all" (uncapped); any explicit size is clamped to 500 in the
-    # service, so the route bound matches that instead of implying up-to-100k
-    # paging that does not exist.
+    # 0 means "all" (uncapped, no offset); any explicit size is paginated
+    # and clamped to 500 in the service.
     page_size: int = Query(default=0, ge=0, le=500),
     _admin: Admin = Depends(require_admin),  # noqa: B008
     session: Session = Depends(get_db),  # noqa: B008
@@ -64,6 +63,9 @@ def list_products(
         page_size=page_size,
     )
     response_page_size = page_size if page_size > 0 else (len(items) if items else 1)
+    # "Show all" ignores the requested page offset, so always report page 1
+    # to keep row numbers and totalPages consistent on the client.
+    response_page = page if page_size > 0 else 1
     competitor_prices = CompetitorService(session).prices_for_products({p.id for p in items})
     return ProductPage(
         items=[
@@ -73,7 +75,7 @@ def list_products(
             for p in items
         ],
         total=total,
-        page=page,
+        page=response_page,
         page_size=response_page_size,
     )
 

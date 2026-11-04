@@ -90,7 +90,7 @@ export default function ProductsPage() {
   }, [q])
 
   const resetPage = useCallback(() => setPageNum(1), [])
-  // "Show all" (page_size=0) is a bounded export server-side (max 500 rows);
+  // "Show all" (page_size=0) returns the whole filtered list uncapped;
   // on small screens always use the chosen page size so the first paint stays
   // light.
   const effectivePageSize = isMobile ? Math.max(pageSize, 10) || 10 : pageSize
@@ -219,7 +219,9 @@ export default function ProductsPage() {
   ])
 
   const totalPages = page
-    ? Math.max(1, Math.ceil(page.total / page.page_size))
+    ? pageSize === 0
+      ? 1
+      : Math.max(1, Math.ceil(page.total / page.page_size))
     : 1
   const changePage = useCallback(
     (nextPage: number) =>

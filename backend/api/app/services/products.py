@@ -43,9 +43,8 @@ class ProductService:
         page_size: int,
     ) -> tuple[list[Product], int]:
         page = max(page, 1)
-        # `page_size=0` is the legacy "show all" path; the repository bounds
-        # it to 500 rows (see ProductRepository.list) to avoid OOM on large
-        # catalogs.
+        # `page_size=0` is the "show all" path: no limit, no offset.
+        # Any explicit size is paginated and clamped to 1..500.
         if page_size <= 0:
             page_size = 0
         else:

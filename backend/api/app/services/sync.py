@@ -4,7 +4,11 @@ Rules:
   * identity = Parsina goodId; re-runs update instead of duplicating;
   * nothing is written until the whole payload validates;
   * a short/invalid listing is rejected (previous data untouched);
-  * rows missing from a complete listing are deactivated, never deleted;
+  * every active row missing from a complete listing is deactivated
+    (soft-delete, never hard-deleted) so the mirror stays exact —
+    this includes manual rows (`external_id IS NULL`);
+  * the source (CSV in development, Parsina in production) is
+    authoritative and always wins, including on SKU collisions;
   * failures never overwrite `last_success_at`.
 """
 
@@ -205,14 +209,9 @@ class ProductSyncService:
             log.info("product catalog replaced: %d existing rows removed", removed)
         ids = {row.good_id for row in rows}
         existing = self._products.by_external_ids(ids)
-        taken_skus = self._products.sku_in_use({row.good_code for row in rows})
-        created = updated = skipped = 0
+        created = updated = 0
         for row in rows:
             product = existing.get(row.good_id)
-            if product is None and row.good_code in taken_skus:
-                # Legacy/smart rows own this SKU; skip rather than merge blindly.
-                skipped += 1
-                continue
             if product is None:
                 product = Product(external_id=row.good_id, sku=row.good_code, name=row.good_name)
                 self._products.stage(product)
@@ -231,7 +230,7 @@ class ProductSyncService:
             created=created,
             updated=updated,
             deactivated=deactivated,
-            skipped=skipped,
+            skipped=0,
         )
 
     def _assign(self, product: Product, row: CommodityRow, units: dict[int, str]) -> None:

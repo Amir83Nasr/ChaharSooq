@@ -227,12 +227,33 @@ def test_sync_deactivates_rows_missing_from_listing(session: Session) -> None:
     assert rows[2] is not None and not rows[2].is_active
 
 
-def test_sync_skips_sku_owned_by_manual_product(session: Session) -> None:
+def test_sync_source_wins_over_manual_sku_collision(session: Session) -> None:
+    """Exact mirror: the source row is created and the manual row is deactivated."""
     session.add(Product(name="دستی", sku="A-1", price=Decimal(1), stock=Decimal(1)))
     session.commit()
     result = _service(session, FakeParsina(_goods(_good(1, "A-1", "از پارسینا")))).run()
-    assert result.skipped == 1
-    assert result.created == 0
+    assert result.skipped == 0
+    assert result.created == 1
+    assert result.deactivated == 1
+    session.expire_all()
+    rows = session.execute(select(Product)).scalars().all()
+    assert len(rows) == 2
+    by_external = {p.external_id: p for p in rows}
+    assert by_external[1].is_active
+    assert by_external[1].name == "از پارسینا"
+    assert by_external[None] is not None and not by_external[None].is_active
+
+
+def test_sync_deactivates_manual_rows_missing_from_listing(session: Session) -> None:
+    """Manual rows are part of the mirror: absent = deactivated."""
+    session.add(Product(name="دستی", sku="MANUAL-1", price=Decimal(1), stock=Decimal(1)))
+    session.commit()
+    result = _service(session, FakeParsina(_goods(_good(1, "A-1", "از پارسینا")))).run()
+    assert result.deactivated == 1
+    session.expire_all()
+    rows = {p.sku: p for p in session.execute(select(Product)).scalars()}
+    assert rows["A-1"].is_active
+    assert not rows["MANUAL-1"].is_active
 
 
 def test_sync_lock_guard_and_acquired_run(session: Session) -> None:

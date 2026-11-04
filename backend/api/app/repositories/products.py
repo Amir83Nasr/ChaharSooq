@@ -26,14 +26,6 @@ class ProductRepository:
         ).scalars()
         return {p.external_id: p for p in rows if p.external_id is not None}
 
-    def sku_in_use(self, skus: set[str]) -> set[str]:
-        """SKUs already taken by rows with a different (or no) Parsina identity."""
-        if not skus:
-            return set()
-        return set(
-            self._session.execute(select(Product.sku).where(Product.sku.in_(skus))).scalars()
-        )
-
     def list_groups(self) -> list[str]:
         rows = self._session.execute(
             select(Product.main_group_name)
@@ -50,10 +42,23 @@ class ProductRepository:
         return total
 
     def deactivate_missing(self, keep_external_ids: set[int]) -> int:
-        """Soft-delete mirror rows absent from a *complete* Parsina listing."""
-        stmt = select(Product).where(Product.external_id.is_not(None), Product.is_active.is_(True))
+        """Soft-delete every active mirror row absent from a *complete* source listing.
+
+        The catalog is an exact mirror of the source (CSV in development,
+        Parsina in production): manual rows (`external_id IS NULL`) are also
+        deactivated when they are not in the listing, otherwise the table
+        can never shrink back to the source.
+        """
+        stmt = select(Product).where(Product.is_active.is_(True))
         if keep_external_ids:
-            stmt = stmt.where(Product.external_id.not_in(keep_external_ids))
+            # NULL never matches NOT IN (three-valued logic), so manual rows
+            # need an explicit IS NULL branch — otherwise they survive forever.
+            stmt = stmt.where(
+                or_(
+                    Product.external_id.is_(None),
+                    Product.external_id.not_in(keep_external_ids),
+                )
+            )
         stale = list(self._session.execute(stmt).scalars())
         for product in stale:
             product.is_active = False

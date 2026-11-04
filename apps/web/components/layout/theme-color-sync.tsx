@@ -4,8 +4,8 @@ import * as React from "react"
 import { useTheme } from "next-themes"
 
 // Hex approximations of --background (oklch) in globals.css:
-// light oklch(1 0 0), dark oklch(0.145 0 0).
-const THEME_COLORS = { light: "#ffffff", dark: "#0a0a0a" } as const
+// light oklch(1 0 0), dark oklch(0.17 0.008 285).
+const THEME_COLORS = { light: "#ffffff", dark: "#0f0f13" } as const
 
 function ThemeColorSync() {
   const { resolvedTheme } = useTheme()

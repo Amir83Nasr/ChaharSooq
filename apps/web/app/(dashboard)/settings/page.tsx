@@ -109,7 +109,7 @@ export default function SettingsPage() {
             فاصله به‌روزرسانی خودکار قیمت رقبا
           </CardTitle>
           <CardDescription>
-            هر چند دقیقه یکبار قیمت همه فروشگاه‌های دیگر به‌طور خودکار به‌روز
+            هر چند ساعت یکبار قیمت همه فروشگاه‌های دیگر به‌طور خودکار به‌روز
             شود؛ فاصله کمتر فشار بیشتر روی فروشگاه‌ها می‌آورد
           </CardDescription>
         </CardHeader>
@@ -124,7 +124,7 @@ export default function SettingsPage() {
             فاصله به‌روزرسانی خودکار
           </CardTitle>
           <CardDescription>
-            هر چند دقیقه یکبار کاتالوگ محصولات از حسابداری به‌روز شود
+            هر چند ساعت یکبار کاتالوگ محصولات از حسابداری به‌روز شود
           </CardDescription>
         </CardHeader>
         <CardContent>

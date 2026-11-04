@@ -15,8 +15,8 @@ def test_settings_default_update_and_partial_keep(client: TestClient) -> None:
     assert client.get("/api/v1/settings").json() == {
         "low_stock_threshold": 5,
         "default_page_size": 0,
-        "sync_interval_minutes": 60,
-        "competitor_sync_interval_minutes": 360,
+        "sync_interval_minutes": 1440,
+        "competitor_sync_interval_minutes": 1440,
         "default_competitor_store": "digikala",
         "suggested_price_formulas": [],
     }
@@ -31,8 +31,8 @@ def test_settings_default_update_and_partial_keep(client: TestClient) -> None:
     assert partial.json() == {
         "low_stock_threshold": 3,
         "default_page_size": 500,
-        "sync_interval_minutes": 60,
-        "competitor_sync_interval_minutes": 360,
+        "sync_interval_minutes": 1440,
+        "competitor_sync_interval_minutes": 1440,
         "default_competitor_store": "digikala",
         "suggested_price_formulas": [],
     }

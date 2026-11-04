@@ -6,11 +6,32 @@ import { Button } from "@workspace/ui/primitives/button"
 import { Input } from "@workspace/ui/primitives/input"
 import {
   formatPersianNumber,
-  parsePriceFilterInput,
+  toLatinDigits,
   toPersianDigits,
 } from "@workspace/ui/lib/number"
 
 import { api } from "@/lib/api"
+
+function minutesToHoursInput(minutes: number): string {
+  if (Number.isFinite(minutes) && minutes % 60 === 0) {
+    return String(minutes / 60)
+  }
+  const hours = minutes / 60
+  return String(Number(hours.toFixed(2)))
+}
+
+function parseHoursInput(value: string): string {
+  const withDot = toLatinDigits(value).replace(/٫/g, ".").replace(/٬/g, "")
+  const cleaned = withDot.replace(/[^0-9.]/g, "")
+  const dot = cleaned.indexOf(".")
+  if (dot === -1) return cleaned.slice(0, 3)
+  const intPart = cleaned.slice(0, dot).slice(0, 3)
+  const fracPart = cleaned
+    .slice(dot + 1)
+    .replace(/\./g, "")
+    .slice(0, 2)
+  return fracPart.length > 0 ? `${intPart || "0"}.${fracPart}` : `${intPart}.`
+}
 
 export function SyncIntervalSettings() {
   const [value, setValue] = useState("")
@@ -25,7 +46,7 @@ export function SyncIntervalSettings() {
       .settings()
       .then((data) => {
         if (!cancelled) {
-          setValue(String(data.sync_interval_minutes))
+          setValue(minutesToHoursInput(data.sync_interval_minutes))
           setLoaded(true)
         }
       })
@@ -41,15 +62,21 @@ export function SyncIntervalSettings() {
   }, [])
 
   async function save() {
-    const raw = value.trim()
-    if (raw === "") {
+    const raw = value.trim().replace(/٫/g, ".")
+    if (raw === "" || raw === ".") {
       setError("فاصله را وارد کنید.")
       setSaved(false)
       return
     }
-    const minutes = Number(raw)
-    if (!Number.isInteger(minutes) || minutes < 1 || minutes > 10080) {
-      setError("فاصله باید عدد صحیح بین ۱ تا ۱۰۰۸۰ دقیقه باشد.")
+    const hours = Number(raw)
+    if (!Number.isFinite(hours) || hours < 1 || hours > 168) {
+      setError("فاصله باید عددی بین ۱ تا ۱۶۸ ساعت باشد.")
+      setSaved(false)
+      return
+    }
+    const minutes = Math.round(hours * 60)
+    if (minutes < 1 || minutes > 10080) {
+      setError("فاصله باید عددی بین ۱ تا ۱۶۸ ساعت باشد.")
       setSaved(false)
       return
     }
@@ -58,7 +85,7 @@ export function SyncIntervalSettings() {
     setSaved(false)
     try {
       const data = await api.updateSettings({ sync_interval_minutes: minutes })
-      setValue(String(data.sync_interval_minutes))
+      setValue(minutesToHoursInput(data.sync_interval_minutes))
       setSaved(true)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "خطایی رخ داد.")
@@ -82,15 +109,15 @@ export function SyncIntervalSettings() {
         <Input
           value={value === "" ? "" : formatPersianNumber(value)}
           onChange={(e) => {
-            setValue(parsePriceFilterInput(e.target.value))
+            setValue(parseHoursInput(e.target.value))
             setSaved(false)
           }}
-          placeholder="مثلاً ۱۲۰"
-          aria-label="فاصله به‌روزرسانی خودکار (دقیقه)"
-          inputMode="numeric"
-          maxLength={5}
+          placeholder="مثلاً ۲۴"
+          aria-label="فاصله به‌روزرسانی خودکار (ساعت)"
+          inputMode="decimal"
+          maxLength={6}
         />
-        <span className="text-sm text-muted-foreground">دقیقه</span>
+        <span className="text-sm text-muted-foreground">ساعت</span>
         <Button onClick={save} disabled={busy || value.trim() === ""}>
           ذخیره
         </Button>

@@ -6,7 +6,6 @@ from typing import Literal
 
 from sqlalchemy.orm import Session
 
-from app.core.config import get_parsina_settings
 from app.models import SuggestedPriceFormula
 from app.repositories import SettingsRepository, SuggestedPriceFormulaRepository
 
@@ -18,12 +17,12 @@ DEFAULT_PAGE_SIZE = 0
 ALLOWED_PAGE_SIZES = (0, 10, 20, 50, 100, 500)
 
 SYNC_INTERVAL_KEY = "sync_interval_minutes"
-DEFAULT_SYNC_INTERVAL_MINUTES = get_parsina_settings().parsina_sync_interval_minutes
+DEFAULT_SYNC_INTERVAL_MINUTES = 1440
 MIN_SYNC_INTERVAL_MINUTES = 1
 MAX_SYNC_INTERVAL_MINUTES = 10080
 
 COMPETITOR_SYNC_INTERVAL_KEY = "competitor_sync_interval_minutes"
-DEFAULT_COMPETITOR_SYNC_INTERVAL_MINUTES = 360
+DEFAULT_COMPETITOR_SYNC_INTERVAL_MINUTES = 1440
 MIN_COMPETITOR_SYNC_INTERVAL_MINUTES = 15
 MAX_COMPETITOR_SYNC_INTERVAL_MINUTES = 10080
 

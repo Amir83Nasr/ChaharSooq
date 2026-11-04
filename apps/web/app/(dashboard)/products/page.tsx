@@ -52,8 +52,8 @@ export default function ProductsPage() {
   // search/sort/paging state untouched.
   const [dataVersion, setDataVersion] = useState(0)
   const refreshData = useCallback(() => setDataVersion((v) => v + 1), [])
-  // Auto-refresh cadence follows the configured sync interval (minutes).
-  const [autoRefreshMs, setAutoRefreshMs] = useState(60 * 60 * 1000)
+  // Auto-refresh cadence follows the configured sync interval.
+  const [autoRefreshMs, setAutoRefreshMs] = useState(24 * 60 * 60 * 1000)
 
   useEffect(() => {
     if (!autoRefreshMs || autoRefreshMs <= 0) return

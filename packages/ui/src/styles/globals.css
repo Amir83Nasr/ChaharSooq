@@ -297,10 +297,10 @@
   background-size: 48px 48px;
 }
 
-/* Sidebar inset keeps a flat background: painting the grid on every inset
-   forces a repaint on each sidebar animation/scroll frame. Apply
+/* Sidebar inset keeps a flat background by default: painting the grid on
+   every inset forces a repaint on each sidebar animation/scroll frame. Apply
    .bg-grid-pattern explicitly where the pattern is wanted. */
-[data-slot="sidebar-inset"] {
+[data-slot="sidebar-inset"]:not(.bg-grid-pattern) {
   background-image: none;
 }
 

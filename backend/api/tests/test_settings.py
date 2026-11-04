@@ -16,6 +16,7 @@ def test_settings_default_update_and_partial_keep(client: TestClient) -> None:
         "low_stock_threshold": 5,
         "default_page_size": 0,
         "sync_interval_minutes": 60,
+        "competitor_sync_interval_minutes": 360,
         "default_competitor_store": "digikala",
         "suggested_price_formulas": [],
     }
@@ -31,6 +32,7 @@ def test_settings_default_update_and_partial_keep(client: TestClient) -> None:
         "low_stock_threshold": 3,
         "default_page_size": 500,
         "sync_interval_minutes": 60,
+        "competitor_sync_interval_minutes": 360,
         "default_competitor_store": "digikala",
         "suggested_price_formulas": [],
     }
@@ -42,6 +44,21 @@ def test_settings_reject_invalid_values(client: TestClient) -> None:
     assert client.put("/api/v1/settings", json={"low_stock_threshold": "زیاد"}).status_code == 422
     assert client.put("/api/v1/settings", json={"default_page_size": 15}).status_code == 422
     assert client.put("/api/v1/settings", json={"default_page_size": 7}).status_code == 422
+
+
+def test_settings_competitor_sync_interval_update_and_reject(client: TestClient) -> None:
+    login(client)
+    r = client.put("/api/v1/settings", json={"competitor_sync_interval_minutes": 120})
+    assert r.status_code == 200, r.text
+    assert r.json()["competitor_sync_interval_minutes"] == 120
+    assert (
+        client.put("/api/v1/settings", json={"competitor_sync_interval_minutes": 5}).status_code
+        == 422
+    )
+    assert (
+        client.put("/api/v1/settings", json={"competitor_sync_interval_minutes": 20000}).status_code
+        == 422
+    )
 
 
 def test_settings_competitor_store_update_and_reject(client: TestClient) -> None:

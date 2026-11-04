@@ -9,6 +9,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     Numeric,
     String,
     UniqueConstraint,
@@ -25,6 +26,8 @@ CompetitorStore = Literal["digikala", "technolife"]
 CompetitorStatus = Literal[
     "pending", "success", "not_found", "unavailable", "blocked", "failed", "manual"
 ]
+
+COMPETITOR_SYNC_STATE_ID = 1
 
 
 class CompetitorListing(Base):
@@ -70,3 +73,20 @@ class CompetitorListing(Base):
     )
 
     product: Mapped["Product"] = relationship(back_populates="competitor_listings")
+
+
+class CompetitorSyncState(Base):
+    """Single row. Lock + last bulk-refresh bookkeeping for all listings."""
+
+    __tablename__ = "competitor_sync_state"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    lock_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    running_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    last_checked: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_updated: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_failed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_skipped: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

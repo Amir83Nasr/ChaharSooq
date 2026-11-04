@@ -1,5 +1,6 @@
 """Manual competitor link management and safe page parsing."""
 
+from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
@@ -14,7 +15,20 @@ from app.core.database import get_engine
 from app.integrations import competitor_prices as prices
 from app.integrations.competitor_prices import FetchedPrice, PriceFetchError, _price_from_html
 from app.models import CompetitorListing
+from app.models.competitor import CompetitorSyncState
+from app.services.competitor_sync import (
+    CompetitorSyncBusyError,
+    CompetitorSyncService,
+    run_scheduled_competitor_sync,
+)
 from tests.helpers import login
+
+
+@pytest.fixture()
+def db_session(client: TestClient) -> Iterator[Session]:
+    """Depends on `client` so the in-memory schema exists before use."""
+    with Session(get_engine()) as s:
+        yield s
 
 
 def _product_id(client: TestClient) -> int:
@@ -57,6 +71,40 @@ def test_manual_link_and_price_are_preserved_after_failed_check(
     assert body["manual_price"] == 25000000
     assert body["effective_price"] == 25000000
     assert body["last_error"] == "تست محدودیت"
+
+
+def test_bulk_check_refreshes_all_active_listings(
+    client: TestClient, monkeypatch: MonkeyPatch
+) -> None:
+    product_id = _product_id(client)
+    first = client.post(
+        f"/api/v1/products/{product_id}/competitors",
+        json={"store": "digikala", "url": "https://www.digikala.com/product/dkp-123456/"},
+    )
+    second = client.post(
+        f"/api/v1/products/{product_id}/competitors",
+        json={"store": "technolife", "url": "https://www.technolife.ir/product-122293/"},
+    )
+    assert first.status_code == 201, first.text
+    assert second.status_code == 201, second.text
+
+    def ok_fetch(_store: str, _url: str) -> FetchedPrice:
+        return FetchedPrice(Decimal("27000000"), "IRR", True, datetime.now(UTC))
+
+    monkeypatch.setattr("app.services.competitor.fetch_competitor_price", ok_fetch)
+    bulk = client.post(f"/api/v1/products/{product_id}/competitors/check")
+    assert bulk.status_code == 200, bulk.text
+    body = bulk.json()
+    assert len(body) == 2
+    assert {item["store"] for item in body} == {"digikala", "technolife"}
+    assert all(item["status"] == "success" for item in body)
+    assert all(item["effective_price"] == 27000000 for item in body)
+
+
+def test_bulk_check_unknown_product_is_not_found(client: TestClient) -> None:
+    login(client)
+    response = client.post("/api/v1/products/999999/competitors/check")
+    assert response.status_code == 404
 
 
 def test_internal_and_direct_ip_urls_are_rejected(client: TestClient) -> None:
@@ -431,3 +479,155 @@ def test_request_follows_redirect_chain_with_single_rate_slot(monkeypatch: Monke
     assert result.in_stock is True
     # Four HTTP hops, but only one interval wait: redirects must not each sleep.
     assert calls == ["technolife"]
+
+
+def _seed_two_products_with_links(client: TestClient) -> tuple[int, int]:
+    login(client)
+    first = client.post(
+        "/api/v1/products",
+        json={"name": "یخچال یک", "sku": "FRIDGE-A", "price": 100000000},
+    )
+    second = client.post(
+        "/api/v1/products",
+        json={"name": "یخچال دو", "sku": "FRIDGE-B", "price": 90000000},
+    )
+    assert first.status_code == 201, first.text
+    assert second.status_code == 201, second.text
+    first_id = first.json()["id"]
+    second_id = second.json()["id"]
+    created = client.post(
+        f"/api/v1/products/{first_id}/competitors",
+        json={"store": "digikala", "url": "https://www.digikala.com/product/dkp-123456/"},
+    )
+    assert created.status_code == 201, created.text
+    created = client.post(
+        f"/api/v1/products/{second_id}/competitors",
+        json={"store": "technolife", "url": "https://www.technolife.ir/product-122293/"},
+    )
+    assert created.status_code == 201, created.text
+    return first_id, second_id
+
+
+def test_global_sync_refreshes_every_active_link(
+    client: TestClient, db_session: Session, monkeypatch: MonkeyPatch
+) -> None:
+    _seed_two_products_with_links(client)
+
+    def ok_fetch(_store: str, _url: str) -> FetchedPrice:
+        return FetchedPrice(Decimal("27000000"), "IRR", True, datetime.now(UTC))
+
+    monkeypatch.setattr("app.services.competitor_sync.fetch_competitor_price", ok_fetch)
+    result = CompetitorSyncService(db_session).run()
+    assert (result.checked, result.updated, result.failed, result.skipped) == (2, 2, 0, 0)
+
+    state = db_session.get(CompetitorSyncState, 1)
+    assert state is not None
+    assert state.last_checked == 2
+    assert state.last_updated == 2
+    assert state.last_failed == 0
+    assert state.last_success_at is not None
+    assert state.last_error is None
+
+    rows = db_session.query(CompetitorListing).all()
+    assert len(rows) == 2
+    assert all(row.status == "success" for row in rows)
+    assert all(row.last_success_at is not None for row in rows)
+
+
+def test_global_sync_counts_failures_without_aborting(
+    client: TestClient, db_session: Session, monkeypatch: MonkeyPatch
+) -> None:
+    _seed_two_products_with_links(client)
+
+    def flaky_fetch(store: str, _url: str) -> FetchedPrice:
+        if store == "digikala":
+            return FetchedPrice(Decimal("27000000"), "IRR", True, datetime.now(UTC))
+        raise PriceFetchError("blocked", "تست محدودیت")
+
+    monkeypatch.setattr("app.services.competitor_sync.fetch_competitor_price", flaky_fetch)
+    result = CompetitorSyncService(db_session).run()
+    assert (result.checked, result.updated, result.failed) == (2, 1, 1)
+
+
+def test_global_sync_skips_inactive_links(
+    client: TestClient, db_session: Session, monkeypatch: MonkeyPatch
+) -> None:
+    first_id, _second_id = _seed_two_products_with_links(client)
+    listings = client.get(f"/api/v1/products/{first_id}/competitors").json()
+    assert len(listings) == 1
+    disabled = client.patch(f"/api/v1/competitors/{listings[0]['id']}", json={"is_active": False})
+    assert disabled.status_code == 200, disabled.text
+
+    def ok_fetch(_store: str, _url: str) -> FetchedPrice:
+        return FetchedPrice(Decimal("27000000"), "IRR", True, datetime.now(UTC))
+
+    monkeypatch.setattr("app.services.competitor_sync.fetch_competitor_price", ok_fetch)
+    result = CompetitorSyncService(db_session).run()
+    assert (result.checked, result.updated, result.skipped) == (1, 1, 1)
+
+
+def test_global_sync_second_run_while_locked_raises_busy(
+    client: TestClient, db_session: Session
+) -> None:
+    login(client)
+    CompetitorSyncService(db_session).acquire()
+    with Session(get_engine()) as other:
+        with pytest.raises(CompetitorSyncBusyError):
+            CompetitorSyncService(other).acquire()
+
+
+def test_global_sync_endpoints_require_auth(client: TestClient) -> None:
+    assert client.get("/api/v1/integrations/competitors/status").status_code == 401
+    assert client.post("/api/v1/integrations/competitors/sync").status_code == 401
+
+
+def test_global_sync_status_reports_idle_counters(client: TestClient) -> None:
+    login(client)
+    body = client.get("/api/v1/integrations/competitors/status").json()
+    assert body["running"] is False
+    assert body["last_checked"] == 0
+    assert body["last_updated"] == 0
+
+
+def test_global_sync_endpoint_returns_409_while_locked(client: TestClient) -> None:
+    login(client)
+    with Session(get_engine()) as s:
+        state = s.get(CompetitorSyncState, 1)
+        if state is None:
+            state = CompetitorSyncState(id=1)
+            s.add(state)
+        state.lock_until = datetime.now(UTC).replace(year=datetime.now(UTC).year + 1)
+        state.running_since = datetime.now(UTC)
+        s.commit()
+    response = client.post("/api/v1/integrations/competitors/sync")
+    assert response.status_code == 409
+    body = client.get("/api/v1/integrations/competitors/status").json()
+    assert body["running"] is True
+
+
+def test_scheduled_competitor_sync_runs_when_due(client: TestClient, db_session: Session) -> None:
+    result = run_scheduled_competitor_sync(
+        session_factory=lambda: Session(get_engine()), interval_minutes=360
+    )
+    assert result is not None
+    assert (result.checked, result.updated, result.failed, result.skipped) == (0, 0, 0, 0)
+
+
+def test_scheduled_competitor_sync_skips_before_interval_elapses(
+    client: TestClient, db_session: Session
+) -> None:
+    factory = lambda: Session(get_engine())  # noqa: E731
+    assert run_scheduled_competitor_sync(session_factory=factory, interval_minutes=360) is not None
+    assert run_scheduled_competitor_sync(session_factory=factory, interval_minutes=360) is None
+
+
+def test_scheduled_competitor_sync_skips_while_locked(
+    client: TestClient, db_session: Session
+) -> None:
+    CompetitorSyncService(db_session).acquire()
+    assert (
+        run_scheduled_competitor_sync(
+            session_factory=lambda: Session(get_engine()), interval_minutes=360
+        )
+        is None
+    )

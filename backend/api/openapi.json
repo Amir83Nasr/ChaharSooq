@@ -662,6 +662,49 @@
         }
       }
     },
+    "/api/v1/products/{product_id}/competitors/check": {
+      "post": {
+        "summary": "Check All Competitor Listings",
+        "operationId": "check_all_competitor_listings_api_v1_products__product_id__competitors_check_post",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Product Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CompetitorListingOut"
+                  },
+                  "title": "Response Check All Competitor Listings Api V1 Products  Product Id  Competitors Check Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/competitors/{listing_id}/check": {
       "post": {
         "summary": "Check Competitor Listing",
@@ -820,6 +863,42 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SyncRunOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/competitors/status": {
+      "get": {
+        "summary": "Competitors Status",
+        "operationId": "competitors_status_api_v1_integrations_competitors_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompetitorSyncStatusOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/competitors/sync": {
+      "post": {
+        "summary": "Competitors Sync",
+        "operationId": "competitors_sync_api_v1_integrations_competitors_sync_post",
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompetitorSyncRunOut"
                 }
               }
             }
@@ -1378,6 +1457,112 @@
         ],
         "title": "CompetitorPriceOut"
       },
+      "CompetitorSyncRunOut": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "running",
+            "title": "Status"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "CompetitorSyncRunOut",
+        "description": "Accepted trigger only — counters arrive via the status endpoint."
+      },
+      "CompetitorSyncStatusOut": {
+        "properties": {
+          "running": {
+            "type": "boolean",
+            "title": "Running"
+          },
+          "running_since": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Running Since"
+          },
+          "last_attempt_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Attempt At"
+          },
+          "last_success_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Success At"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "last_checked": {
+            "type": "integer",
+            "title": "Last Checked",
+            "default": 0
+          },
+          "last_updated": {
+            "type": "integer",
+            "title": "Last Updated",
+            "default": 0
+          },
+          "last_failed": {
+            "type": "integer",
+            "title": "Last Failed",
+            "default": 0
+          },
+          "last_skipped": {
+            "type": "integer",
+            "title": "Last Skipped",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "running"
+        ],
+        "title": "CompetitorSyncStatusOut"
+      },
       "ErrorBody": {
         "properties": {
           "code": {
@@ -1725,6 +1910,10 @@
             "type": "integer",
             "title": "Sync Interval Minutes"
           },
+          "competitor_sync_interval_minutes": {
+            "type": "integer",
+            "title": "Competitor Sync Interval Minutes"
+          },
           "default_competitor_store": {
             "type": "string",
             "enum": [
@@ -1746,6 +1935,7 @@
           "low_stock_threshold",
           "default_page_size",
           "sync_interval_minutes",
+          "competitor_sync_interval_minutes",
           "default_competitor_store",
           "suggested_price_formulas"
         ],
@@ -1797,6 +1987,19 @@
               }
             ],
             "title": "Sync Interval Minutes"
+          },
+          "competitor_sync_interval_minutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10080.0,
+                "minimum": 15.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Competitor Sync Interval Minutes"
           },
           "default_competitor_store": {
             "anyOf": [

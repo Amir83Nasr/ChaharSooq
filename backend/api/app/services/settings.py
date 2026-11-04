@@ -22,6 +22,11 @@ DEFAULT_SYNC_INTERVAL_MINUTES = get_parsina_settings().parsina_sync_interval_min
 MIN_SYNC_INTERVAL_MINUTES = 1
 MAX_SYNC_INTERVAL_MINUTES = 10080
 
+COMPETITOR_SYNC_INTERVAL_KEY = "competitor_sync_interval_minutes"
+DEFAULT_COMPETITOR_SYNC_INTERVAL_MINUTES = 360
+MIN_COMPETITOR_SYNC_INTERVAL_MINUTES = 15
+MAX_COMPETITOR_SYNC_INTERVAL_MINUTES = 10080
+
 DEFAULT_COMPETITOR_STORE_KEY = "default_competitor_store"
 DEFAULT_COMPETITOR_STORE: Literal["digikala", "technolife"] = "digikala"
 ALLOWED_COMPETITOR_STORES: tuple[Literal["digikala", "technolife"], ...] = (
@@ -40,6 +45,7 @@ class SettingsService:
             "low_stock_threshold": self.get_threshold(),
             "default_page_size": self.get_page_size(),
             "sync_interval_minutes": self.get_sync_interval(),
+            "competitor_sync_interval_minutes": self.get_competitor_sync_interval(),
             "default_competitor_store": self.get_competitor_store(),
             "suggested_price_formulas": self.get_suggested_price_formulas(),
         }
@@ -105,6 +111,23 @@ class SettingsService:
 
     def update_sync_interval(self, minutes: int) -> int:
         self._settings.upsert(SYNC_INTERVAL_KEY, str(minutes))
+        return minutes
+
+    def get_competitor_sync_interval(self) -> int:
+        row = self._settings.get(COMPETITOR_SYNC_INTERVAL_KEY)
+        if row is None:
+            return DEFAULT_COMPETITOR_SYNC_INTERVAL_MINUTES
+        try:
+            value = int(row.value)
+        except ValueError:
+            return DEFAULT_COMPETITOR_SYNC_INTERVAL_MINUTES
+        return min(
+            max(value, MIN_COMPETITOR_SYNC_INTERVAL_MINUTES),
+            MAX_COMPETITOR_SYNC_INTERVAL_MINUTES,
+        )
+
+    def update_competitor_sync_interval(self, minutes: int) -> int:
+        self._settings.upsert(COMPETITOR_SYNC_INTERVAL_KEY, str(minutes))
         return minutes
 
     def get_competitor_store(self) -> Literal["digikala", "technolife"]:

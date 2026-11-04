@@ -1,7 +1,7 @@
 """Dev-database commodity source — production sync simulation without Parsina.
 
 When `DEV_DATABASE_URL` is set, production builds this source instead of the
-live Parsina client: the "به‌روزرسانی اطلاعات" button (and the scheduler)
+live Parsina client: the "به‌روزرسانی از پارسینا" button (and the scheduler)
 copies the dev product mirror into the prod database through the exact same
 `ProductSyncService` validation/apply path. No network, no credentials.
 

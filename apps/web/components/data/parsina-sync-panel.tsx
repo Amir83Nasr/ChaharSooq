@@ -165,48 +165,29 @@ export function ParsinaSyncPanel({ onSynced, onUnauthorized }: Props) {
     status !== null && !running && !notConfigured && lastRunFailed(status)
 
   return (
-    // Full-width rows on mobile with the button pinned to the row's start
-    // edge: the status line underneath can change length without pushing
-    // the button around. On sm+ the panel shrinks to its content at the
-    // header's end edge, where `sm:items-end` keeps the same pinning.
-    <div className="flex w-full flex-col items-start gap-2 sm:w-auto sm:items-end">
-      <Button onClick={runSync} disabled={disabled} aria-busy={running}>
+    // Fixed width on sm+ so the status line wraps inside instead of
+    // stretching the panel and pushing the sibling panel around. Full-width
+    // stacked rows on mobile.
+    <div className="flex w-full flex-col gap-2 sm:w-56">
+      <Button
+        onClick={runSync}
+        disabled={disabled}
+        aria-busy={running}
+        className="w-full justify-center gap-2"
+      >
         <RefreshCw
-          className={running ? "animate-spin" : undefined}
+          data-icon="inline-start"
+          className={
+            running ? "size-4 shrink-0 animate-spin" : "size-4 shrink-0"
+          }
           aria-hidden="true"
         />
-        {/* Stable width in both states: the sizer (always the longer label)
-            reserves the width in normal flow while the overlay shows the
-            active label centered. The sizer uses transparent paint instead of
-            `visibility: hidden` — fully laid out in every engine — plus
-            `aria-hidden` and non-selectable text so it stays out of the way. */}
-        <span style={{ position: "relative", display: "inline-block" }}>
-          <span
-            aria-hidden="true"
-            style={{
-              color: "transparent",
-              userSelect: "none",
-              whiteSpace: "nowrap",
-            }}
-          >
-            در حال به‌روزرسانی…
-          </span>
-          <span
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {running ? "در حال به‌روزرسانی…" : "به‌روزرسانی اطلاعات"}
-          </span>
-        </span>
+        به‌روزرسانی از پارسینا
       </Button>
+      {/* Two-line reserve: short/long status states swap without moving
+          the content below. leading-4 locks the math (2 × 16px = min-h-8). */}
       <div
-        className="w-full text-start text-xs text-muted-foreground"
+        className="min-h-8 w-full text-start text-xs leading-4 text-muted-foreground"
         aria-live="polite"
       >
         {notConfigured ? (
@@ -249,7 +230,7 @@ export function ParsinaSyncPanel({ onSynced, onUnauthorized }: Props) {
         )}
       </div>
       {error ? (
-        <p role="alert" className="max-w-sm text-xs text-destructive">
+        <p role="alert" className="w-full text-xs text-destructive">
           {error}
         </p>
       ) : null}

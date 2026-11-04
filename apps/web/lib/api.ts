@@ -116,6 +116,18 @@ export interface SyncRun {
   message: string | null
 }
 
+export interface CompetitorSyncStatus {
+  running: boolean
+  running_since: string | null
+  last_attempt_at: string | null
+  last_success_at: string | null
+  last_error: string | null
+  last_checked: number
+  last_updated: number
+  last_failed: number
+  last_skipped: number
+}
+
 export interface ApiError {
   error: {
     code: string
@@ -168,6 +180,7 @@ export interface SettingsOut {
   low_stock_threshold: number
   default_page_size: number
   sync_interval_minutes: number
+  competitor_sync_interval_minutes: number
   default_competitor_store: DefaultCompetitorStore
   suggested_price_formulas: SuggestedPriceFormula[]
 }
@@ -185,6 +198,7 @@ export interface SettingsUpdate {
   low_stock_threshold?: number
   default_page_size?: number
   sync_interval_minutes?: number
+  competitor_sync_interval_minutes?: number
   default_competitor_store?: DefaultCompetitorStore
   suggested_price_formulas?: SuggestedPriceFormula[]
 }
@@ -329,6 +343,12 @@ export const api = {
       method: "POST",
     })
   },
+  checkAllCompetitorListings(productId: number) {
+    return request<CompetitorListing[]>(
+      `/api/v1/products/${productId}/competitors/check`,
+      { method: "POST" }
+    )
+  },
   categories() {
     return request<CategoryOut[]>("/api/v1/categories")
   },
@@ -362,5 +382,24 @@ export const api = {
     return request<SyncStatus>("/api/v1/integrations/parsina/status", {
       signal,
     })
+  },
+  competitorStatus() {
+    return request<CompetitorSyncStatus>(
+      "/api/v1/integrations/competitors/status"
+    )
+  },
+  competitorSync() {
+    return request<SyncRun>("/api/v1/integrations/competitors/sync", {
+      method: "POST",
+    })
+  },
+  /** Cancellable status read — used by the sync poller's unmount cleanup. */
+  competitorStatusSignal(signal: AbortSignal) {
+    return request<CompetitorSyncStatus>(
+      "/api/v1/integrations/competitors/status",
+      {
+        signal,
+      }
+    )
   },
 }

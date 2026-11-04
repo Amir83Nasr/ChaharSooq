@@ -79,6 +79,21 @@ def delete_competitor_listing(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.post(
+    "/products/{product_id}/competitors/check",
+    response_model=list[CompetitorListingOut],
+)
+def check_all_competitor_listings(
+    product_id: int,
+    _admin: Admin = Depends(require_admin),  # noqa: B008
+    session: Session = Depends(get_db),  # noqa: B008
+) -> list[CompetitorListingOut]:
+    try:
+        return CompetitorService(session).check_all(product_id)
+    except CompetitorNotFoundError:
+        raise HTTPException(status_code=404, detail="کالا پیدا نشد") from None
+
+
 @router.post("/competitors/{listing_id}/check", response_model=CompetitorListingOut)
 def check_competitor_listing(
     listing_id: int,

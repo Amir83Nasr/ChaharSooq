@@ -19,6 +19,7 @@ import {
 } from "@/lib/api"
 import { DEFAULT_LOW_STOCK_THRESHOLD } from "@/lib/inventory"
 import { ParsinaSyncPanel } from "@/components/data/parsina-sync-panel"
+import { CompetitorSyncPanel } from "@/components/data/competitor-sync-panel"
 import { ProductDetailDialog } from "./_components/product-dialogs"
 import { ProductsTable, ProductsTableError } from "./_components/products-table"
 import {
@@ -260,7 +261,13 @@ export default function ProductsPage() {
         title="محصولات"
         subtitle="مدیریت کالاهای فروشگاه"
         actions={
-          <ParsinaSyncPanel onSynced={refreshData} onUnauthorized={goLogin} />
+          <>
+            <ParsinaSyncPanel onSynced={refreshData} onUnauthorized={goLogin} />
+            <CompetitorSyncPanel
+              onSynced={refreshData}
+              onUnauthorized={goLogin}
+            />
+          </>
         }
       />
 

@@ -6,7 +6,7 @@ Accepted.
 
 ## Context
 
-The "به‌روزرسانی اطلاعات" button and the 15-minute scheduler sync products
+The "به‌روزرسانی از پارسینا" button and the 15-minute scheduler sync products
 from the live Parsina API in production. Until Parsina credentials are
 available in the deployed environment, the button must still work end to end
 — same locking, background run, status polling, counters, and validation —

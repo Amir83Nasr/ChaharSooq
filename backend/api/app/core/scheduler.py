@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.core.config import get_parsina_settings, get_settings
 from app.core.database import get_engine
 from app.integrations.parsina_csv import CsvCommoditySource
+from app.services.competitor_sync import run_scheduled_competitor_sync
 from app.services.sync import run_scheduled_sync
 
 log = logging.getLogger("charsooq.scheduler")
@@ -81,13 +82,19 @@ class SyncScheduler:
     def _loop(self) -> None:
         while not self._stop.is_set():
             try:
-                # Re-read the interval each tick so admin changes in Settings
+                # Re-read the intervals each tick so admin changes in Settings
                 # take effect without a process restart.
                 from app.services import SettingsService
 
                 with self._session_factory() as _s:
                     interval = SettingsService(_s).get_sync_interval()
                 run_scheduled_sync(session_factory=self._session_factory, interval_minutes=interval)
+                with self._session_factory() as _s:
+                    competitor_interval = SettingsService(_s).get_competitor_sync_interval()
+                run_scheduled_competitor_sync(
+                    session_factory=self._session_factory,
+                    interval_minutes=competitor_interval,
+                )
             except Exception:  # noqa: BLE001 — a bad tick must not kill the loop
                 log.exception("scheduled parsina sync crashed")
             self._stop.wait(TICK_SECONDS)

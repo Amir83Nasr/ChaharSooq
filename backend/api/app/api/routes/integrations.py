@@ -1,8 +1,8 @@
-"""Parsina integration handlers — manual sync trigger + status (auth required).
+"""Integration handlers — manual sync triggers + status (auth required).
 
-Manual sync is a background job: the POST returns at once and the UI polls
-`status`. The shared DB lock is taken inside the POST, so a double click,
-a second admin, and the 15-minute scheduler can never run in parallel.
+Both manual syncs are background jobs: the POST returns at once and the UI
+polls `status`. The shared DB lock is taken inside the POST, so a double
+click, a second admin, and the scheduler can never run in parallel.
 """
 
 import logging
@@ -15,8 +15,11 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.api.dependencies import get_db, require_admin
 from app.core.database import get_engine
 from app.models import Admin, ParsinaSyncState
+from app.models.competitor import CompetitorSyncState
 from app.schemas import SyncRunOut, SyncStatusOut
+from app.schemas.competitor import CompetitorSyncRunOut, CompetitorSyncStatusOut
 from app.services import SettingsService
+from app.services.competitor_sync import CompetitorSyncBusyError, CompetitorSyncService
 from app.services.sync import (
     ProductSyncService,
     SyncBusyError,
@@ -27,7 +30,7 @@ router = APIRouter()
 log = logging.getLogger("charsooq.integrations")
 
 
-def _is_running(state: ParsinaSyncState, *, now: datetime) -> bool:
+def _is_running(state: ParsinaSyncState | CompetitorSyncState, *, now: datetime) -> bool:
     if state.lock_until is None:
         return False
     lock_until = (
@@ -67,6 +70,31 @@ def _run_manual() -> None:
             log.exception("manual parsina sync failed")
 
 
+def _competitor_status(session: Session) -> CompetitorSyncStatusOut:
+    state = CompetitorSyncService(session).state()
+    return CompetitorSyncStatusOut(
+        running=_is_running(state, now=datetime.now(UTC)),
+        running_since=state.running_since,
+        last_attempt_at=state.last_attempt_at,
+        last_success_at=state.last_success_at,
+        last_error=state.last_error,
+        last_checked=state.last_checked,
+        last_updated=state.last_updated,
+        last_failed=state.last_failed,
+        last_skipped=state.last_skipped,
+    )
+
+
+def _run_competitor_manual() -> None:
+    """Worker thread — owns its own Session; the HTTP request has returned."""
+    factory = sessionmaker(bind=get_engine(), autoflush=False, expire_on_commit=False)
+    with factory() as session:
+        try:
+            CompetitorSyncService(session).run_acquired()
+        except Exception:  # noqa: BLE001 — failure is recorded in sync state
+            log.exception("manual competitor refresh failed")
+
+
 @router.get("/integrations/parsina/status", response_model=SyncStatusOut)
 def parsina_status(
     _admin: Admin = Depends(require_admin),  # noqa: B008
@@ -101,6 +129,34 @@ def parsina_sync(
     else:
         message = "همگام‌سازی با پارسینا آغاز شد"
     return SyncRunOut(status="running", message=message)
+
+
+@router.get("/integrations/competitors/status", response_model=CompetitorSyncStatusOut)
+def competitors_status(
+    _admin: Admin = Depends(require_admin),  # noqa: B008
+    session: Session = Depends(get_db),  # noqa: B008
+) -> CompetitorSyncStatusOut:
+    return _competitor_status(session)
+
+
+@router.post(
+    "/integrations/competitors/sync",
+    response_model=CompetitorSyncRunOut,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def competitors_sync(
+    _admin: Admin = Depends(require_admin),  # noqa: B008
+    session: Session = Depends(get_db),  # noqa: B008
+) -> CompetitorSyncRunOut:
+    service = CompetitorSyncService(session)
+    try:
+        service.acquire()
+    except CompetitorSyncBusyError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
+    threading.Thread(
+        target=_run_competitor_manual, name="competitor-sync-manual", daemon=True
+    ).start()
+    return CompetitorSyncRunOut(status="running", message="به‌روزرسانی قیمت رقبا آغاز شد")
 
 
 __all__ = ["router"]

@@ -36,6 +36,22 @@ class CompetitorRepository:
             ).scalars()
         )
 
+    def list_active(self) -> list[CompetitorListing]:
+        return list(
+            self._session.execute(
+                select(CompetitorListing)
+                .where(CompetitorListing.is_active.is_(True))
+                .order_by(CompetitorListing.created_at)
+            ).scalars()
+        )
+
+    def list_all(self) -> list[CompetitorListing]:
+        return list(
+            self._session.execute(
+                select(CompetitorListing).order_by(CompetitorListing.created_at)
+            ).scalars()
+        )
+
     def get(self, listing_id: int) -> CompetitorListing | None:
         return self._session.get(CompetitorListing, listing_id)
 

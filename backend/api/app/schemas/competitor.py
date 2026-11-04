@@ -66,3 +66,22 @@ class CompetitorPriceOut(BaseModel):
     is_fresh: bool
     is_manual: bool
     last_checked_at: datetime | None
+
+
+class CompetitorSyncRunOut(BaseModel):
+    """Accepted trigger only — counters arrive via the status endpoint."""
+
+    status: Literal["running"]
+    message: str | None = None
+
+
+class CompetitorSyncStatusOut(BaseModel):
+    running: bool
+    running_since: datetime | None = None
+    last_attempt_at: datetime | None = None
+    last_success_at: datetime | None = None
+    last_error: str | None = None
+    last_checked: int = 0
+    last_updated: int = 0
+    last_failed: int = 0
+    last_skipped: int = 0

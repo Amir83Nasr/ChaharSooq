@@ -266,6 +266,28 @@ class CompetitorService:
             raise CompetitorThrottledError(
                 "برای جلوگیری از درخواست پرتکرار، کمی بعد دوباره تلاش کنید"
             )
+        self._apply_check(row, now)
+        self._repo.flush()
+        return self._out(row)
+
+    def check_all(self, product_id: int) -> list[CompetitorListingOut]:
+        """Re-check every active link of a product and return the fresh list.
+
+        Per-listing politeness throttling is intentionally bypassed here: the
+        user explicitly asked for a bulk refresh and the store-level slot in
+        ``fetch_competitor_price`` still spaces external requests.
+        """
+        if self._repo.product(product_id) is None:
+            raise CompetitorNotFoundError
+        rows = self._repo.list_for_product(product_id)
+        for row in rows:
+            if not row.is_active:
+                continue
+            self._apply_check(row, datetime.now(UTC))
+        self._repo.flush()
+        return [self._out(row) for row in rows]
+
+    def _apply_check(self, row: CompetitorListing, now: datetime) -> None:
         row.last_checked_at = now
         try:
             result = fetch_competitor_price(row.store, row.url)
@@ -279,8 +301,6 @@ class CompetitorService:
             row.last_success_at = result.observed_at or now
             row.status = "success"
             row.last_error = None
-        self._repo.flush()
-        return self._out(row)
 
 
 def _aware(value: datetime) -> datetime:

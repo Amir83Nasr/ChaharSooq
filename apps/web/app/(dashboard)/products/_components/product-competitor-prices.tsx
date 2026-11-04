@@ -398,6 +398,7 @@ export function ProductCompetitorPrices({
   const [listings, setListings] = useState<CompetitorListing[]>([])
   const [loading, setLoading] = useState(true)
   const [busyKey, setBusyKey] = useState<number | string | null>(null)
+  const [checkAllBusy, setCheckAllBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
@@ -486,19 +487,55 @@ export function ProductCompetitorPrices({
     }
   }
 
+  async function checkAllListings() {
+    if (checkAllBusy || busyKey !== null) return
+    setCheckAllBusy(true)
+    try {
+      setListings(await api.checkAllCompetitorListings(productId))
+      setError(null)
+      onChanged?.()
+    } catch (err) {
+      setError(toPersianError(err))
+    } finally {
+      setCheckAllBusy(false)
+    }
+  }
+
+  const anyBusy = busyKey !== null || checkAllBusy
+
   const byStore = new Map(listings.map((listing) => [listing.store, listing]))
   const otherListings = listings.filter((listing) => listing.store === "other")
 
   return (
     <section className="space-y-4 rounded-lg border border-border bg-muted/30 p-4 text-start">
-      <div>
-        <h3 className="font-semibold">قیمت فروشگاه‌های دیگر</h3>
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">
-          برای هر فروشگاه یک کارت وجود دارد. لینک را وارد کنید تا ذخیره و
-          به‌صورت خودکار بررسی شود؛ با «بررسی لینک» می‌توانید بعداً قیمت را
-          به‌روزرسانی کنید و با «حذف» لینک دستی پاک می‌شود. قیمت فقط تا ۲۴ ساعت
-          تازه محسوب می‌شود.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <h3 className="font-semibold">قیمت فروشگاه‌های دیگر</h3>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            برای هر فروشگاه یک کارت وجود دارد. لینک را وارد کنید تا ذخیره و
+            به‌صورت خودکار بررسی شود؛ با «بررسی لینک» می‌توانید بعداً قیمت را
+            به‌روزرسانی کنید و با «حذف» لینک دستی پاک می‌شود. با «به‌روزرسانی
+            همه قیمت‌ها» همه لینک‌های فعال یکجا بررسی می‌شوند. قیمت فقط تا ۲۴
+            ساعت تازه محسوب می‌شود.
+          </p>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={loading || anyBusy || listings.length === 0}
+          onClick={() => void checkAllListings()}
+          aria-busy={checkAllBusy}
+          className="justify-center gap-2 sm:min-w-48"
+        >
+          <RefreshCw
+            data-icon="inline-start"
+            className={
+              checkAllBusy ? "size-4 shrink-0 animate-spin" : "size-4 shrink-0"
+            }
+            aria-hidden="true"
+          />
+          به‌روزرسانی همه قیمت‌ها
+        </Button>
       </div>
 
       {error ? (
@@ -528,7 +565,7 @@ export function ProductCompetitorPrices({
                 <EmptySlotCard
                   key={store}
                   store={store}
-                  busy={busyKey === `create-${store}`}
+                  busy={busyKey === `create-${store}` || checkAllBusy}
                   onCreate={(url) => void createListing(store, url)}
                 />
               )
@@ -537,7 +574,7 @@ export function ProductCompetitorPrices({
               <FilledSlotCard
                 key={listing.id}
                 listing={listing}
-                busy={busyKey === listing.id}
+                busy={busyKey === listing.id || checkAllBusy}
                 onLinkUpdate={(url) =>
                   void mutate(listing.id, () =>
                     api.updateCompetitorListing(listing.id, {
@@ -567,7 +604,7 @@ export function ProductCompetitorPrices({
             <FilledSlotCard
               key={listing.id}
               listing={listing}
-              busy={busyKey === listing.id}
+              busy={busyKey === listing.id || checkAllBusy}
               onLinkUpdate={(url) =>
                 void mutate(listing.id, () =>
                   api.updateCompetitorListing(listing.id, {

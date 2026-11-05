@@ -124,8 +124,12 @@ export function useWindowedRows(
     rafRef.current = requestAnimationFrame(() => recompute())
   }, [recompute])
 
-  // Mount: observe rows + container, listen to scroll, sync with restored scroll.
+  // Attach once rows exist. NOTE: this must depend on `count`, not run as a
+  // mount-only effect: on first mount the table shows the skeleton (no
+  // tbody), so a mount-only effect would early-return and never attach the
+  // scroll listener — leaving the window stuck on the first rows forever.
   React.useEffect(() => {
+    if (count === 0) return
     const body = bodyRef.current
     const container = body?.closest(
       '[data-slot="dashboard-scroll"]'
@@ -165,11 +169,6 @@ export function useWindowedRows(
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
       rafRef.current = 0
     }
-  }, [schedule])
-
-  // Row count changes (new fetch/filter): recompute the window.
-  React.useEffect(() => {
-    schedule()
   }, [count, schedule])
 
   // Stable per-index callbacks: a fresh closure every render would make

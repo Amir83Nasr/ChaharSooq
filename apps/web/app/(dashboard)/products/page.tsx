@@ -6,7 +6,6 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useCallback, useEffect, useState } from "react"
 
 import { PageHeader } from "@workspace/ui/layout/page-header"
-import { useIsMobile } from "@workspace/ui/hooks/use-mobile"
 import {
   api,
   ApiRequestError,
@@ -36,7 +35,6 @@ function stockFromParam(value: string | null): StockFilter {
 function ProductsPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const isMobile = useIsMobile()
   const [page, setPage] = useState<ProductPage | null>(null)
   const [categories, setCategories] = useState<CategoryOut[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -103,13 +101,6 @@ function ProductsPageContent() {
   }, [q])
 
   const resetPage = useCallback(() => setPageNum(1), [])
-  // "Show all" (page_size=0) returns the whole filtered list uncapped;
-  // on small screens always use the chosen page size so the first paint stays
-  // light.
-  const effectivePageSize = isMobile ? Math.max(pageSize, 10) || 10 : pageSize
-  useEffect(() => {
-    resetPage()
-  }, [isMobile, resetPage])
 
   useEffect(() => {
     let cancelled = false
@@ -195,7 +186,7 @@ function ProductsPageContent() {
         ...stockParams,
         sort,
         page: pageNum,
-        page_size: effectivePageSize,
+        page_size: pageSize,
       })
       .then((data) => {
         if (cancelled) return
@@ -224,7 +215,7 @@ function ProductsPageContent() {
   }, [
     goLogin,
     pageNum,
-    effectivePageSize,
+    pageSize,
     debouncedQ,
     topGroup,
     sort,
@@ -334,7 +325,7 @@ function ProductsPageContent() {
           pageNum={pageNum}
           totalPages={totalPages}
           pageSize={pageSize}
-          showPageSize={!isMobile}
+          showPageSize
           hasFilters={hasFilters}
           market={market}
           onSelect={setSelected}

@@ -77,10 +77,13 @@ export function useWindowedRows(
     const count = countRef.current
     const bodyRect = body.getBoundingClientRect()
     const containerRect = container.getBoundingClientRect()
-    const relTop = container.scrollTop + (bodyRect.top - containerRect.top)
-    const viewTop = Math.max(0, relTop - OVERSCAN_ROWS * EST_ROW_HEIGHT)
+    // Layout offset of the tbody inside the scroll container (constant).
+    const tbodyOffset = container.scrollTop + (bodyRect.top - containerRect.top)
+    // How far the container scrolled past the tbody top (negative above it).
+    const scrolled = container.scrollTop - tbodyOffset
+    const viewTop = Math.max(0, scrolled - OVERSCAN_ROWS * EST_ROW_HEIGHT)
     const viewBottom =
-      relTop + containerRect.height + OVERSCAN_ROWS * EST_ROW_HEIGHT
+      scrolled + containerRect.height + OVERSCAN_ROWS * EST_ROW_HEIGHT
 
     let acc = 0
     let start = 0

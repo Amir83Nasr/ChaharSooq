@@ -222,7 +222,7 @@ function Sidebar({
       <div
         data-slot="sidebar-gap"
         className={cn(
-          "relative w-(--sidebar-width) shrink-0 bg-transparent transition-[width] duration-350 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+          "relative w-(--sidebar-width) shrink-0 bg-transparent transition-[width] duration-220 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
           "group-data-[collapsible=offcanvas]:w-0",
           variant === "floating" || variant === "inset"
             ? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]"
@@ -237,7 +237,12 @@ function Sidebar({
           // The panel itself never moves via left/right (layout thrash).
           // It stays pinned and slides with a GPU-composited transform —
           // see the [data-collapsible="offcanvas"] rules in globals.css.
-          "fixed inset-y-0 z-10 hidden h-dvh w-(--sidebar-width) transition-[transform,width] duration-350 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform data-[side=left]:left-0 data-[side=right]:right-0 motion-reduce:transition-none md:flex",
+          // Only transform is transitioned: width is static in the
+          // offcanvas variant, and tracking it just adds style-recalc work
+          // on every toggle. No permanent will-change either (see
+          // globals.css) — the compositor promotes the panel while the
+          // 220ms slide runs and releases it after.
+          "fixed inset-y-0 z-10 hidden h-dvh w-(--sidebar-width) transition-transform duration-220 ease-[cubic-bezier(0.22,1,0.36,1)] data-[side=left]:left-0 data-[side=right]:right-0 motion-reduce:transition-none md:flex",
           // Adjust the padding for floating and inset variants.
           variant === "floating" || variant === "inset"
             ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
@@ -312,7 +317,7 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
       onClick={toggleSidebar}
       title="Toggle Sidebar"
       className={cn(
-        "absolute inset-y-0 z-20 hidden w-4 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:start-1/2 after:w-[2px] hover:after:bg-sidebar-border sm:flex ltr:-translate-x-1/2 rtl:-translate-x-1/2",
+        "absolute inset-y-0 z-20 hidden w-4 transition-[transform,background-color,opacity] ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:start-1/2 after:w-[2px] hover:after:bg-sidebar-border sm:flex ltr:-translate-x-1/2 rtl:-translate-x-1/2",
         "in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize rtl:in-data-[side=left]:cursor-e-resize rtl:in-data-[side=right]:cursor-w-resize",
         "[[data-side=left][data-state=collapsed]_&]:cursor-e-resize rtl:[[data-side=left][data-state=collapsed]_&]:cursor-w-resize [[data-side=right][data-state=collapsed]_&]:cursor-w-resize rtl:[[data-side=right][data-state=collapsed]_&]:cursor-e-resize",
         "group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:after:start-full hover:group-data-[collapsible=offcanvas]:bg-sidebar rtl:group-data-[collapsible=offcanvas]:-translate-x-0",
@@ -325,7 +330,17 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
   )
 }
 
-function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
+// Memoized on purpose: the sidebar open state lives in SidebarProvider above
+// this component, so every toggle re-renders the provider. Without memo the
+// whole page subtree (header + tables) would re-render on each toggle —
+// visible stutter on heavy pages. All toggle-driven visuals inside are pure
+// CSS (group-data-/peer-data- selectors), so skipping the re-render is safe
+// as long as callers pass stable props (the dashboard layout does: it only
+// renders once per navigation).
+const SidebarInset = React.memo(function SidebarInset({
+  className,
+  ...props
+}: React.ComponentProps<"main">) {
   return (
     <main
       data-slot="sidebar-inset"
@@ -335,13 +350,13 @@ function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
         // gap + panel; without this the content snaps while the panel slides.
         // NOTE: `margin` alone does not cover the logical `margin-inline-start`
         // set by ms-*, so both properties are listed.
-        "relative flex w-full flex-1 flex-col bg-background transition-[margin-inline-start,margin] duration-350 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ms-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ms-2",
+        "relative flex w-full flex-1 flex-col bg-background transition-[margin-inline-start,margin] duration-220 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ms-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ms-2",
         className
       )}
       {...props}
     />
   )
-}
+})
 
 function SidebarInput({
   className,

@@ -186,7 +186,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
                           aria-expanded={storesOpen}
                           onClick={() => setStoresOpen((open) => !open)}
                         >
-                          <item.icon />
+                          <item.icon className="sidebar-collapse-icon" />
                           <span className="sidebar-collapse-label">
                             {item.label}
                           </span>
@@ -244,7 +244,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
                             aria-label={`${item.label} — به‌زودی`}
                             className="opacity-60"
                           >
-                            <item.icon />
+                            <item.icon className="sidebar-collapse-icon" />
                             <span className="sidebar-collapse-label">
                               {item.label}
                             </span>
@@ -265,7 +265,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
                     <SidebarMenuButton
                       render={
                         <Link href={item.href} onClick={closeMobileSidebar}>
-                          <item.icon />
+                          <item.icon className="sidebar-collapse-icon" />
                           <span className="sidebar-collapse-label">
                             {item.label}
                           </span>

@@ -33,11 +33,26 @@ export default async function DashboardLayout({
         <AppSidebar variant="inset" />
         {/* min-w-0 lets the inset shrink below its content's min-content
             width, so wide inner scrollers (tables) scroll inside their own
-            container instead of pushing the whole page sideways. */}
-        <SidebarInset className="bg-grid-pattern h-dvh min-w-0 overflow-hidden border border-border md:h-[calc(100dvh-1rem)]">
+            container instead of pushing the whole page sideways.
+            PERF: the square pattern lives on a dedicated non-scrolling
+            layer below (same visuals), never as a background of the
+            animating inset or the scroll container — that repainted the
+            grid on every sidebar/scroll frame. */}
+        <SidebarInset className="h-dvh min-w-0 overflow-hidden border border-border md:h-[calc(100dvh-1rem)]">
+          {/* Static grid layer: absolute + non-scrolling, so sidebar slides
+              move a cached texture and list scrolling never repaints it. */}
+          <div
+            aria-hidden="true"
+            className="bg-grid-pattern pointer-events-none absolute inset-0 rounded-[inherit]"
+          />
           <DashboardHeader />
-          {/* TEST-UI-1b: pull content under header so glass blur is visible */}
-          <div className="-mt-16 no-scrollbar flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-x-clip overflow-y-auto p-4 pt-20">
+          {/* Pull content under the header so the glass blur stays visible.
+              data-slot="dashboard-scroll" marks the vertical scroll root for
+              windowed tables (see use-windowed-rows). */}
+          <div
+            data-slot="dashboard-scroll"
+            className="relative -mt-16 no-scrollbar flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-x-clip overflow-y-auto p-4 pt-20"
+          >
             {children}
           </div>
         </SidebarInset>

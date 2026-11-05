@@ -110,6 +110,46 @@ This is an admin panel with password login.
 - Keep it continuously updated: mark a step in-progress when starting it, completed right after finishing it, and add newly discovered steps immediately.
 - The list must reflect ground truth at all times, including at the very end of the task — update it before the final response.
 
+## 10. Motion performance (sidebar + theme)
+
+Desktop toggle/theme lag was caused by repainting the glass header and the
+grid together on every animation frame, plus layout-driven transitions.
+Glass (`backdrop-blur` header) and the square grid background are kept by
+design — optimize around them, never remove them:
+
+- Glass header: keep it translucent + blurred, with `isolate` so the blur
+  stays in its own stacking context. Do not raise the blur radius above
+  `backdrop-blur-md`.
+- Grid: never put `.bg-grid-pattern` on an animating or scrolling container
+  (`SidebarInset`, scroll divs). It lives on one dedicated absolute,
+  non-scrolling layer inside `SidebarInset` (see
+  `apps/web/app/(dashboard)/layout.tsx`).
+- Sidebar motion: one shared duration/easing (`--sidebar-transition-duration`,
+  currently 220ms — keep it at 220ms or less). The sliding panel transitions
+  only `transform`; never `left`/`right`/`width` on it. Keep gap, panel, and
+  inset durations in sync.
+- Staged choreography (pure CSS, direction-dependent delays — transitions
+  read params from the NEW state): the collapsed rules fade labels/icons
+  fast with no delay (close leads with content vanishing), the base rules
+  delay the fade-in by 80ms (open trails: panel slides + content shrinks
+  first). Total stays ~220ms. Never add a delay to the slide/push itself.
+- Never use `transition-all`. List only the animated props
+  (e.g. `transition-[transform,opacity]`,
+  `transition-[color,background-color,border-color,box-shadow,opacity]`).
+- No permanent `will-change` hints. The compositor promotes the transform
+  slide while it runs; standing hints pin layers and make the blurred
+  header more expensive.
+- Keep `disableTransitionOnChange` on the next-themes provider so a theme
+  flip never animates every element.
+- Never add `background-attachment: fixed` to grid/glass surfaces.
+- Huge lists ("show all" renders the whole catalog): window the rows
+  (`use-windowed-rows` — viewport slice + overscan + spacers, measured
+  heights, no new dependency). `content-visibility` does NOT apply to
+  `<tr>`/`<tbody>` (internal table boxes), so it can't fix table jank.
+- Root-cause record: [ADR 007](docs/adr/007-sidebar-theme-motion-performance.md)
+  — re-check it before touching header blur, grid placement, sidebar
+  duration, or global transitions.
+
 <!-- BEGIN:turborepo-agent-rules -->
 
 # This is NOT the Turborepo you know

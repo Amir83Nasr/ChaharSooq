@@ -23,6 +23,7 @@
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
   --color-ring: var(--ring);
+  --color-success: var(--success);
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
@@ -62,10 +63,11 @@
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  --muted-foreground: oklch(0.525 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
+  --success: oklch(0.51 0.105 166);
   --border: oklch(0.86 0 0);
   --input: oklch(0.86 0 0);
   --ring: oklch(0.708 0 0);
@@ -87,38 +89,41 @@
 
 .dark {
   color-scheme: dark;
-  /* Stepped elevation: background < sidebar < card < popover, so cards
-     lift off the page and floating layers lift off cards. */
-  --background: oklch(0.17 0.008 285);
+  /* Stepped elevation (page gutter < content inset < card < popover), so
+     the inset floats off the sidebar gutter and cards lift off the inset.
+     NOTE: --sidebar is the wrapper gutter + panel (darkest), --background
+     is the inset content surface — keep sidebar < background. */
+  --background: oklch(0.225 0.012 285);
   --foreground: oklch(0.96 0 0);
-  --card: oklch(0.235 0.01 285);
+  --card: oklch(0.265 0.013 285);
   --card-foreground: oklch(0.96 0 0);
-  --popover: oklch(0.28 0.012 285);
+  --popover: oklch(0.325 0.014 285);
   --popover-foreground: oklch(0.96 0 0);
   --primary: oklch(0.922 0 0);
   --primary-foreground: oklch(0.2 0.01 285);
-  --secondary: oklch(0.285 0.01 285);
+  --secondary: oklch(0.3 0.013 285);
   --secondary-foreground: oklch(0.96 0 0);
-  --muted: oklch(0.25 0.01 285);
+  --muted: oklch(0.28 0.013 285);
   --muted-foreground: oklch(0.76 0.005 285);
-  --accent: oklch(0.315 0.012 285);
+  --accent: oklch(0.345 0.014 285);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.68 0.19 22);
-  --border: oklch(1 0 0 / 13%);
-  --input: oklch(1 0 0 / 18%);
+  --success: oklch(0.773 0.154 163);
+  --border: oklch(1 0 0 / 14%);
+  --input: oklch(1 0 0 / 20%);
   --ring: oklch(0.7 0.01 285);
   --chart-1: oklch(0.75 0.13 250);
   --chart-2: oklch(0.78 0.15 150);
   --chart-3: oklch(0.82 0.15 85);
   --chart-4: oklch(0.75 0.16 300);
   --chart-5: oklch(0.72 0.17 15);
-  --sidebar: oklch(0.2 0.01 285);
+  --sidebar: oklch(0.18 0.01 285);
   --sidebar-foreground: oklch(0.96 0 0);
   --sidebar-primary: oklch(0.922 0 0);
   --sidebar-primary-foreground: oklch(0.2 0.01 285);
-  --sidebar-accent: oklch(0.3 0.012 285);
+  --sidebar-accent: oklch(0.3 0.013 285);
   --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 13%);
+  --sidebar-border: oklch(1 0 0 / 14%);
   --sidebar-ring: oklch(0.7 0.01 285);
 }
 
@@ -161,10 +166,14 @@
    inline-start margin. Discrete flips such as justify-content, margin-auto
    or padding snaps cause a visible jump mid-animation, so the layout is
    start-anchored with constant padding in both states and labels only
-   fade + shrink. */
+   fade + shrink.
+   PERF: keep the shared duration at 220ms or less. 350ms+ keeps the
+   backdrop-blur header and the grid layer repainting together for too
+   many frames, which reads as lag on desktop. All three parts (gap,
+   panel, inset) must share the exact duration/easing below. */
 
 :root {
-  --sidebar-transition-duration: 350ms;
+  --sidebar-transition-duration: 220ms;
   --sidebar-transition-timing: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -182,18 +191,20 @@
   transform: translateX(-100%);
 }
 
-/* Layer hints only — no visual effect. Without these the browser may
-   re-rasterize the panel and re-run layout on the spacer every frame. */
-@media (prefers-reduced-motion: no-preference) {
-  [data-slot="sidebar-container"] {
-    will-change: transform;
-  }
-  [data-slot="sidebar-gap"] {
-    will-change: width;
-  }
-}
+/* No permanent will-change hints here on purpose. The sliding panel is a
+   plain transform animation, which the compositor already promotes while
+   it runs. A standing will-change (especially will-change: width, which
+   is not compositable at all) pins extra layers/textures for the whole
+   page lifetime and makes the backdrop-blur header more expensive — that
+   was a measurable part of the desktop toggle lag. */
 
-/* Inline text labels inside menu buttons / header */
+/* Inline text labels inside menu buttons / header.
+   STAGED CHOREOGRAPHY (offcanvas): closing leads with the labels, opening
+   trails them. CSS takes transition params from the NEW state, so the
+   collapsed rule below (fast fade, no delay) governs closing, while the
+   base rule here (delayed fade) governs opening: on close labels vanish in
+   ~120ms before the 220ms slide/push finishes; on open the panel slides
+   and content shrinks first, labels fade in at 80–220ms. */
 .sidebar-collapse-label {
   overflow: hidden;
   white-space: nowrap;
@@ -202,7 +213,7 @@
   transition:
     max-width var(--sidebar-transition-duration)
       var(--sidebar-transition-timing),
-    opacity 150ms ease;
+    opacity 140ms ease 80ms;
 }
 
 .group[data-collapsible="icon"] .sidebar-collapse-label {
@@ -211,7 +222,40 @@
   pointer-events: none;
 }
 
-/* Badges, chevrons and other trailing affordances: fade + collapse */
+.group[data-collapsible="offcanvas"] .sidebar-collapse-label {
+  max-width: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    max-width var(--sidebar-transition-duration)
+      var(--sidebar-transition-timing),
+    opacity 120ms ease;
+}
+
+/* Menu-button icons (lucide svg): same lead/trail staging as labels.
+   Neutral in the base state (opacity 1, no size change), so icon-only
+   layouts are untouched — only offcanvas collapse fades them. */
+.sidebar-collapse-icon {
+  opacity: 1;
+  transform: scale(1);
+  transition:
+    opacity 140ms ease 80ms,
+    transform var(--sidebar-transition-duration)
+      var(--sidebar-transition-timing);
+}
+
+.group[data-collapsible="offcanvas"] .sidebar-collapse-icon {
+  opacity: 0;
+  transform: scale(0.75);
+  pointer-events: none;
+  transition:
+    opacity 120ms ease,
+    transform var(--sidebar-transition-duration)
+      var(--sidebar-transition-timing);
+}
+
+/* Badges, chevrons and other trailing affordances: fade + collapse.
+   Same lead/trail staging as labels (see above). */
 .sidebar-collapse-fade {
   overflow: hidden;
   max-width: 4rem;
@@ -220,9 +264,10 @@
   transition:
     max-width var(--sidebar-transition-duration)
       var(--sidebar-transition-timing),
-    opacity 150ms ease,
-    transform 250ms var(--sidebar-transition-timing),
-    rotate 250ms var(--sidebar-transition-timing),
+    opacity 140ms ease 80ms,
+    transform var(--sidebar-transition-duration)
+      var(--sidebar-transition-timing),
+    rotate var(--sidebar-transition-duration) var(--sidebar-transition-timing),
     margin-inline-start var(--sidebar-transition-duration)
       var(--sidebar-transition-timing);
 }
@@ -233,6 +278,23 @@
   opacity: 0;
   transform: scale(0.85);
   pointer-events: none;
+}
+
+.group[data-collapsible="offcanvas"] .sidebar-collapse-fade {
+  max-width: 0;
+  margin-inline-start: 0;
+  opacity: 0;
+  transform: scale(0.85);
+  pointer-events: none;
+  transition:
+    max-width var(--sidebar-transition-duration)
+      var(--sidebar-transition-timing),
+    opacity 120ms ease,
+    transform var(--sidebar-transition-duration)
+      var(--sidebar-transition-timing),
+    rotate var(--sidebar-transition-duration) var(--sidebar-transition-timing),
+    margin-inline-start var(--sidebar-transition-duration)
+      var(--sidebar-transition-timing);
 }
 
 /* Submenu open/close (grid-rows trick, no JS measurement needed).
@@ -253,7 +315,7 @@
     opacity 200ms ease,
     transform var(--sidebar-transition-duration)
       var(--sidebar-transition-timing),
-    visibility 0s linear 250ms;
+    visibility 0s linear var(--sidebar-transition-duration);
 }
 
 .sidebar-submenu-grid[data-open="true"] {
@@ -278,6 +340,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .sidebar-collapse-label,
+  .sidebar-collapse-icon,
   .sidebar-collapse-fade,
   .sidebar-submenu-grid {
     transition: none;
@@ -291,7 +354,7 @@
 }
 
 .dark {
-  --grid-line: rgba(255, 255, 255, 0.055);
+  --grid-line: rgba(255, 255, 255, 0.06);
 }
 
 .bg-grid-pattern {
@@ -302,8 +365,11 @@
 }
 
 /* Sidebar inset keeps a flat background by default: painting the grid on
-   every inset forces a repaint on each sidebar animation/scroll frame. Apply
-   .bg-grid-pattern explicitly where the pattern is wanted. */
+   the animating/scrolling inset itself forces a repaint on each sidebar
+   animation frame and each scroll frame. Apply .bg-grid-pattern only on a
+   dedicated, non-scrolling layer (see the dashboard layout's absolute
+   grid layer inside SidebarInset), never on the inset or the scroll
+   container. */
 [data-slot="sidebar-inset"]:not(.bg-grid-pattern) {
   background-image: none;
 }

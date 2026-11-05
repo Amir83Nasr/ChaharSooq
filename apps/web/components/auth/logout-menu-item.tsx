@@ -100,7 +100,7 @@ export function LogoutMenuItem() {
       tooltip="خروج"
       variant="destructive"
     >
-      <LogOut />
+      <LogOut className="sidebar-collapse-icon" />
       <span className="sidebar-collapse-label">خروج</span>
     </SidebarMenuButton>
   )

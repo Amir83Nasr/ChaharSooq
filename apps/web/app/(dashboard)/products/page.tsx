@@ -2,8 +2,8 @@
 
 // NOTE: metadata lives in ./layout.tsx (client page cannot export it).
 
-import { useRouter } from "next/navigation"
-import { useCallback, useEffect, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Suspense, useCallback, useEffect, useState } from "react"
 
 import { PageHeader } from "@workspace/ui/layout/page-header"
 import { useIsMobile } from "@workspace/ui/hooks/use-mobile"
@@ -29,8 +29,13 @@ import {
 
 const SEARCH_DEBOUNCE_MS = 400
 
-export default function ProductsPage() {
+function stockFromParam(value: string | null): StockFilter {
+  return value === "in" || value === "out" || value === "low" ? value : "all"
+}
+
+function ProductsPageContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const isMobile = useIsMobile()
   const [page, setPage] = useState<ProductPage | null>(null)
   const [categories, setCategories] = useState<CategoryOut[]>([])
@@ -43,7 +48,10 @@ export default function ProductsPage() {
   const [debouncedQ, setDebouncedQ] = useState("")
   const [topGroup, setTopGroup] = useState<string | null>(null)
   const [sort, setSort] = useState<ProductSort>("newest")
-  const [stock, setStock] = useState<StockFilter>("all")
+  // Deep-linkable from the dashboard KPI cards (?stock=low / ?stock=out).
+  const [stock, setStock] = useState<StockFilter>(() =>
+    stockFromParam(searchParams.get("stock"))
+  )
   const [minPrice, setMinPrice] = useState("")
   const [maxPrice, setMaxPrice] = useState("")
   const [threshold, setThreshold] = useState(DEFAULT_LOW_STOCK_THRESHOLD)
@@ -341,5 +349,14 @@ export default function ProductsPage() {
         onCompetitorChanged={refreshData}
       />
     </>
+  )
+}
+
+// useSearchParams needs a Suspense boundary for static prerendering.
+export default function ProductsPage() {
+  return (
+    <Suspense>
+      <ProductsPageContent />
+    </Suspense>
   )
 }

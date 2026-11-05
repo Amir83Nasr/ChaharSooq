@@ -1,20 +1,63 @@
-"""Dashboard service — overview, competitor gaps, and attention aggregates."""
+"""Dashboard service — overview, competitor gaps, and catalog breakdown."""
 
+import re
 from datetime import UTC, datetime, timedelta
+from typing import TypedDict
 
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.repositories import ProductRepository
 from app.schemas import (
-    AttentionItemOut,
-    AttentionOut,
+    CatalogBrandOut,
+    CatalogSectionOut,
     CompetitorGapOut,
     DashboardGroupOut,
     DashboardOverviewOut,
 )
 
 TOP_GROUPS_LIMIT = 6
+
+SECTION_ORDER = ("فرش", "مبلمان", "لوازم خانگی", "سایر")
+
+
+class _BrandBucket(TypedDict):
+    brand: str
+    count: int
+    stock_value: int
+
+
+def top_group_of(name: str | None) -> str | None:
+    """Mirror of the products table `topGroupOf` — section (بخش) per group."""
+    if not name:
+        return None
+    text = name.strip()
+    if not text:
+        return None
+    if text.startswith("فرش"):
+        return "فرش"
+    if text.startswith("مبلمان"):
+        return "مبلمان"
+    return "لوازم خانگی"
+
+
+def brand_of(name: str | None, top: str | None) -> str | None:
+    """Mirror of the products table `brandOf` — remainder after the prefix."""
+    if not name:
+        return None
+    text = name.strip()
+    if not text:
+        return None
+    if top == "فرش":
+        rest = text.removeprefix("فرش").strip()
+        return rest or None
+    if top == "مبلمان":
+        rest = text.removeprefix("مبلمان").strip()
+        return rest or None
+    if top == "لوازم خانگی":
+        rest = re.sub(r"^لوازم\s+خان[گک]ی\s*", "", text).strip()
+        return rest or text
+    return text
 
 
 class DashboardService:
@@ -38,6 +81,7 @@ class DashboardService:
             out=summary["out"],
             stock_value=summary["stock_value"],
             competitor_coverage=coverage,
+            appliance_total=self._products.appliance_total(),
             groups=groups,
         )
 
@@ -65,27 +109,47 @@ class DashboardService:
         ranked = sorted(best.values(), key=lambda g: abs(g.diff_percent), reverse=True)
         return ranked[: max(limit, 1)]
 
-    def attention(self, *, low_stock_threshold: int, limit: int) -> AttentionOut:
-        out_rows, low_rows = self._products.attention_items(
-            low_stock_threshold=low_stock_threshold, limit=limit
-        )
-        return AttentionOut(
-            out=[
-                AttentionItemOut(
-                    product_id=r.product_id,
-                    name=r.name,
-                    price=int(r.price),
-                    stock=r.stock,
+    def catalog_breakdown(self) -> list[CatalogSectionOut]:
+        """Per-section (بخش) brand stats — items, groups, brands, stock value.
+
+        Groups are raw `main_group_name` values; blank/`NULL` collapses to
+        "سایر" so ungrouped rows are never lost. Brands follow the products
+        table remainder rule, so counts match what the table shows.
+        """
+        buckets: dict[str, dict[str, _BrandBucket]] = {}
+        for raw_name, count, stock_value in self._products.catalog_breakdown():
+            top = top_group_of(raw_name) or "سایر"
+            display_group = (raw_name or "").strip() or "سایر"
+            brand = brand_of(raw_name, top if top != "سایر" else None) or "سایر"
+            section = buckets.setdefault(top, {})
+            entry = section.setdefault(
+                display_group, {"brand": brand, "count": 0, "stock_value": 0}
+            )
+            entry["count"] += count
+            entry["stock_value"] += stock_value
+        sections: list[CatalogSectionOut] = []
+        for top in SECTION_ORDER:
+            groups = buckets.get(top, {})
+            brands = sorted(
+                (
+                    CatalogBrandOut(
+                        group_name=group_name,
+                        brand=entry["brand"],
+                        count=entry["count"],
+                        stock_value=entry["stock_value"],
+                    )
+                    for group_name, entry in groups.items()
+                ),
+                key=lambda b: (-b.count, b.group_name),
+            )
+            sections.append(
+                CatalogSectionOut(
+                    top_group=top,
+                    items=sum(b.count for b in brands),
+                    group_count=len(brands),
+                    brand_count=len({b.brand for b in brands}),
+                    stock_value=sum(b.stock_value for b in brands),
+                    brands=brands,
                 )
-                for r in out_rows
-            ],
-            low=[
-                AttentionItemOut(
-                    product_id=r.product_id,
-                    name=r.name,
-                    price=int(r.price),
-                    stock=r.stock,
-                )
-                for r in low_rows
-            ],
-        )
+            )
+        return sections

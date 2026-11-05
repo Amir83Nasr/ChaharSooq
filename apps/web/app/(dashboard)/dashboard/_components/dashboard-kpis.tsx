@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { Package, PackageX, Percent, TriangleAlert, Wallet } from "lucide-react"
 
 import { Card, CardContent } from "@workspace/ui/primitives/card"
@@ -12,90 +13,128 @@ type DashboardKpisProps = {
   threshold: number
 }
 
+const LINK_CARD_CLASS =
+  "block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+
+function KpiCard({
+  className,
+  children,
+}: {
+  className?: string
+  children: React.ReactNode
+}) {
+  return (
+    <Card
+      className={cn(
+        "h-full transition-[border-color,box-shadow] hover:border-foreground/25 hover:shadow-sm",
+        className
+      )}
+    >
+      <CardContent className="flex h-full flex-col gap-1.5 px-5 py-4">
+        {children}
+      </CardContent>
+    </Card>
+  )
+}
+
+function KpiLabel({
+  icon,
+  children,
+}: {
+  icon: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+      {icon}
+      {children}
+    </p>
+  )
+}
+
 export function DashboardKpis({ overview, threshold }: DashboardKpisProps) {
   const coveragePercent =
-    overview.total > 0
-      ? Math.round((overview.competitor_coverage / overview.total) * 100)
+    overview.appliance_total > 0
+      ? Math.round(
+          (overview.competitor_coverage / overview.appliance_total) * 100
+        )
       : 0
   return (
-    <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
-      <Card>
-        <CardContent className="flex flex-col gap-2 p-5">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <span className="rounded-lg bg-primary/10 p-2 text-primary">
-              <Wallet className="size-4" />
-            </span>
-            <p className="text-sm">ارزش موجودی</p>
-          </div>
+    <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">
+      <div className="col-span-2">
+        <KpiCard>
+          <KpiLabel icon={<Wallet className="size-4" aria-hidden="true" />}>
+            ارزش موجودی
+          </KpiLabel>
           <Price value={overview.stock_value} className="text-2xl font-bold" />
           <p className="text-xs text-muted-foreground">مجموع قیمت × موجودی</p>
-        </CardContent>
-      </Card>
+        </KpiCard>
+      </div>
 
-      <Card>
-        <CardContent className="flex flex-col gap-2 p-5">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <span className="rounded-lg bg-muted p-2">
-              <Package className="size-4" />
-            </span>
-            <p className="text-sm">کل کالاها</p>
-          </div>
+      <Link
+        href="/products"
+        className={LINK_CARD_CLASS}
+        aria-label="مشاهده همه محصولات"
+      >
+        <KpiCard>
+          <KpiLabel icon={<Package className="size-4" aria-hidden="true" />}>
+            کل کالاها
+          </KpiLabel>
           <p className="text-2xl font-bold">
             <PersianNumber value={overview.total} />
           </p>
           <p className="text-xs text-muted-foreground">قلم کالای فعال</p>
-        </CardContent>
-      </Card>
+        </KpiCard>
+      </Link>
 
-      <Card className={cn(overview.low > 0 && "border-amber-500/30")}>
-        <CardContent className="flex flex-col gap-2 p-5">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <span className="rounded-lg bg-amber-500/10 p-2 text-amber-600 dark:text-amber-500">
-              <TriangleAlert className="size-4" />
-            </span>
-            <p className="text-sm">موجودی کم</p>
-          </div>
+      <Link
+        href="/products?stock=low"
+        className={LINK_CARD_CLASS}
+        aria-label="مشاهده محصولات با موجودی کم"
+      >
+        <KpiCard>
+          <KpiLabel
+            icon={<TriangleAlert className="size-4" aria-hidden="true" />}
+          >
+            موجودی کم
+          </KpiLabel>
           <p className="text-2xl font-bold">
             <PersianNumber value={overview.low} />
           </p>
           <p className="text-xs text-muted-foreground">
             آستانه: <PersianNumber value={threshold} /> قلم
           </p>
-        </CardContent>
-      </Card>
+        </KpiCard>
+      </Link>
 
-      <Card className={cn(overview.out > 0 && "border-rose-500/30")}>
-        <CardContent className="flex flex-col gap-2 p-5">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <span className="rounded-lg bg-rose-500/10 p-2 text-rose-600 dark:text-rose-500">
-              <PackageX className="size-4" />
-            </span>
-            <p className="text-sm">ناموجود</p>
-          </div>
+      <Link
+        href="/products?stock=out"
+        className={LINK_CARD_CLASS}
+        aria-label="مشاهده محصولات ناموجود"
+      >
+        <KpiCard>
+          <KpiLabel icon={<PackageX className="size-4" aria-hidden="true" />}>
+            ناموجود
+          </KpiLabel>
           <p className="text-2xl font-bold">
             <PersianNumber value={overview.out} />
           </p>
           <p className="text-xs text-muted-foreground">موجودی صفر</p>
-        </CardContent>
-      </Card>
+        </KpiCard>
+      </Link>
 
-      <Card>
-        <CardContent className="flex flex-col gap-2 p-5">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <span className="rounded-lg bg-sky-500/10 p-2 text-sky-600 dark:text-sky-500">
-              <Percent className="size-4" />
-            </span>
-            <p className="text-sm">پوشش قیمت رقیب</p>
-          </div>
-          <p className="text-2xl font-bold">
-            <PersianNumber value={coveragePercent} />٪
-          </p>
-          <p className="text-xs text-muted-foreground">
-            <PersianNumber value={overview.competitor_coverage} /> از{" "}
-            <PersianNumber value={overview.total} /> قلم
-          </p>
-        </CardContent>
-      </Card>
+      <KpiCard>
+        <KpiLabel icon={<Percent className="size-4" aria-hidden="true" />}>
+          پوشش قیمت رقیب
+        </KpiLabel>
+        <p className="text-2xl font-bold">
+          <PersianNumber value={coveragePercent} />٪
+        </p>
+        <p className="text-xs text-muted-foreground">
+          <PersianNumber value={overview.competitor_coverage} /> از{" "}
+          <PersianNumber value={overview.appliance_total} /> قلم لوازم خانگی
+        </p>
+      </KpiCard>
     </div>
   )
 }

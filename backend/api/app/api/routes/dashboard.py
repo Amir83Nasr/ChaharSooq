@@ -5,7 +5,11 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db, require_admin
 from app.models import Admin
-from app.schemas import AttentionOut, CompetitorGapOut, DashboardOverviewOut
+from app.schemas import (
+    CatalogSectionOut,
+    CompetitorGapOut,
+    DashboardOverviewOut,
+)
 from app.services import DashboardService
 
 router = APIRouter()
@@ -29,11 +33,9 @@ def dashboard_competitor_gaps(
     return DashboardService(session).competitor_gaps(limit=limit)
 
 
-@router.get("/dashboard/attention", response_model=AttentionOut)
-def dashboard_attention(
-    threshold: int = Query(default=10, ge=0),
-    limit: int = Query(default=5, ge=1, le=20),
+@router.get("/dashboard/catalog-breakdown", response_model=list[CatalogSectionOut])
+def dashboard_catalog_breakdown(
     _admin: Admin = Depends(require_admin),  # noqa: B008
     session: Session = Depends(get_db),  # noqa: B008
-) -> AttentionOut:
-    return DashboardService(session).attention(low_stock_threshold=threshold, limit=limit)
+) -> list[CatalogSectionOut]:
+    return DashboardService(session).catalog_breakdown()

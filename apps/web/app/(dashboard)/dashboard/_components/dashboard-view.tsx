@@ -14,26 +14,23 @@ import {
   api,
   ApiRequestError,
   GENERIC_ERROR_MESSAGE,
-  type Attention,
-  type CompetitorGap,
+  type CatalogSection,
   type CompetitorSyncStatus,
   type DashboardOverview,
   type SyncStatus,
 } from "@/lib/api"
 import { DEFAULT_LOW_STOCK_THRESHOLD } from "@/lib/inventory"
-import { AttentionCard } from "./dashboard-attention"
-import { CompetitorGaps } from "./dashboard-gaps"
+import { CatalogBreakdown } from "./dashboard-catalog"
 import { DashboardKpis } from "./dashboard-kpis"
-import { GroupBars, InventoryDonut } from "./dashboard-charts"
-import { SyncStrip } from "./dashboard-sync-strip"
+import { SyncStatusCards } from "./dashboard-sync-cards"
 
 function DashboardSkeleton() {
   return (
     <div className="flex flex-col gap-4">
       <Skeleton className="h-4 w-56" />
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">
         {Array.from({ length: 5 }, (_, i) => (
-          <Card key={i}>
+          <Card key={i} className={i === 0 ? "col-span-2" : undefined}>
             <CardContent className="flex flex-col gap-2 p-5">
               <Skeleton className="h-8 w-24" />
               <Skeleton className="h-8 w-20" />
@@ -42,14 +39,7 @@ function DashboardSkeleton() {
           </Card>
         ))}
       </div>
-      <div className="grid gap-4 lg:grid-cols-5">
-        <Skeleton className="h-80 lg:col-span-2" />
-        <Skeleton className="h-80 lg:col-span-3" />
-      </div>
-      <div className="grid gap-4 lg:grid-cols-5">
-        <Skeleton className="h-80 lg:col-span-3" />
-        <Skeleton className="h-80 lg:col-span-2" />
-      </div>
+      <Skeleton className="h-96" />
     </div>
   )
 }
@@ -57,8 +47,7 @@ function DashboardSkeleton() {
 export function DashboardView() {
   const router = useRouter()
   const [overview, setOverview] = useState<DashboardOverview | null>(null)
-  const [gaps, setGaps] = useState<CompetitorGap[]>([])
-  const [attention, setAttention] = useState<Attention | null>(null)
+  const [breakdown, setBreakdown] = useState<CatalogSection[] | null>(null)
   const [parsina, setParsina] = useState<SyncStatus | null>(null)
   const [competitor, setCompetitor] = useState<CompetitorSyncStatus | null>(
     null
@@ -99,18 +88,16 @@ export function DashboardView() {
         setOverview(data)
         // Sync health degrades gracefully — a failed status read hides
         // that source instead of failing the whole dashboard.
-        const [gapsData, attentionData, parsinaData, competitorData] =
+        const [breakdownData, parsinaData, competitorData] =
           data.total > 0
             ? await Promise.all([
-                api.dashboardGaps(),
-                api.dashboardAttention(next),
+                api.dashboardCatalogBreakdown().catch((): null => null),
                 api.parsinaStatus().catch(() => null),
                 api.competitorStatus().catch(() => null),
               ])
-            : [[], null, null, null]
+            : [null, null, null]
         if (cancelled) return
-        setGaps(gapsData)
-        setAttention(attentionData)
+        setBreakdown(breakdownData)
         setParsina(parsinaData)
         setCompetitor(competitorData)
       })
@@ -150,24 +137,11 @@ export function DashboardView() {
         />
       ) : (
         <div className="flex flex-col gap-4">
-          <SyncStrip parsina={parsina} competitor={competitor} />
+          <SyncStatusCards parsina={parsina} competitor={competitor} />
           <DashboardKpis overview={overview} threshold={threshold} />
-          <div className="grid gap-4 lg:grid-cols-5">
-            <div className="lg:col-span-2">
-              <InventoryDonut overview={overview} />
-            </div>
-            <div className="lg:col-span-3">
-              <CompetitorGaps gaps={gaps} />
-            </div>
-          </div>
-          <div className="grid gap-4 lg:grid-cols-5">
-            <div className="lg:col-span-3">
-              <GroupBars overview={overview} />
-            </div>
-            <div className="lg:col-span-2">
-              {attention ? <AttentionCard attention={attention} /> : null}
-            </div>
-          </div>
+          {breakdown && breakdown.some((s) => s.items > 0) ? (
+            <CatalogBreakdown sections={breakdown} />
+          ) : null}
         </div>
       )}
     </>

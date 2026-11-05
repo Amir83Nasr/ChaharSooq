@@ -16,19 +16,8 @@ class DashboardOverviewOut(BaseModel):
     out: int = Field(ge=0)
     stock_value: int = Field(ge=0)
     competitor_coverage: int = Field(ge=0)
+    appliance_total: int = Field(ge=0)
     groups: list[DashboardGroupOut] = Field(default_factory=list)
-
-
-class AttentionItemOut(BaseModel):
-    product_id: int
-    name: str
-    price: int = Field(ge=0)
-    stock: float = Field(ge=0)
-
-
-class AttentionOut(BaseModel):
-    out: list[AttentionItemOut] = Field(default_factory=list)
-    low: list[AttentionItemOut] = Field(default_factory=list)
 
 
 class CompetitorGapOut(BaseModel):
@@ -38,3 +27,25 @@ class CompetitorGapOut(BaseModel):
     competitor_price: int = Field(ge=0)
     competitor_store: str
     diff_percent: float
+
+
+class CatalogBrandOut(BaseModel):
+    """One raw Parsina group inside a section — `group_name` is the full
+    `main_group_name`, `brand` is the display remainder after the section
+    prefix (same rule as the products table)."""
+
+    group_name: str
+    brand: str
+    count: int = Field(ge=0)
+    stock_value: int = Field(ge=0)
+
+
+class CatalogSectionOut(BaseModel):
+    """Per-section (بخش) aggregate — فرش / مبلمان / لوازم خانگی / سایر."""
+
+    top_group: str
+    items: int = Field(ge=0)
+    group_count: int = Field(ge=0)
+    brand_count: int = Field(ge=0)
+    stock_value: int = Field(ge=0)
+    brands: list[CatalogBrandOut] = Field(default_factory=list)

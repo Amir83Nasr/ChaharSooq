@@ -13,8 +13,8 @@ from app.schemas.catalog import (
 )
 from app.schemas.common import ErrorBody, ErrorEnvelope
 from app.schemas.dashboard import (
-    AttentionItemOut,
-    AttentionOut,
+    CatalogBrandOut,
+    CatalogSectionOut,
     CompetitorGapOut,
     DashboardGroupOut,
     DashboardOverviewOut,
@@ -23,8 +23,8 @@ from app.schemas.settings import SettingsOut, SettingsUpdateIn
 from app.schemas.suggested_price import SuggestedPriceFormulaIn, SuggestedPriceFormulaOut
 
 __all__ = [
-    "AttentionItemOut",
-    "AttentionOut",
+    "CatalogBrandOut",
+    "CatalogSectionOut",
     "CategoryIn",
     "CategoryOut",
     "CompetitorGapOut",

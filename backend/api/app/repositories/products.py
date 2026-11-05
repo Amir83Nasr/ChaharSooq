@@ -22,13 +22,6 @@ class CompetitorGapRow(NamedTuple):
     competitor_price: float
 
 
-class AttentionRow(NamedTuple):
-    product_id: int
-    name: str
-    price: float
-    stock: float
-
-
 def effective_competitor_price(since: datetime) -> Case:
     """One fresh competitor price in toman, or NULL.
 
@@ -158,6 +151,24 @@ class ProductRepository:
         ).all()
         return [(str(name), int(count), int(value)) for name, count, value in rows]
 
+    def catalog_breakdown(self) -> list[tuple[str | None, int, int]]:
+        """One row per raw `main_group_name` — the service maps rows to
+        top groups (بخش) and brands. Only active products count."""
+        group_value = func.coalesce(func.sum(Product.stock * Product.price), 0)
+        rows = self._session.execute(
+            select(
+                Product.main_group_name,
+                func.count().label("item_count"),
+                group_value.label("stock_value"),
+            )
+            .where(Product.is_active.is_(True))
+            .group_by(Product.main_group_name)
+            .order_by(func.count().desc(), Product.main_group_name)
+        ).all()
+        return [
+            (str(name) if name else None, int(count), int(value)) for name, count, value in rows
+        ]
+
     def competitor_coverage(self, *, since: datetime) -> int:
         """Active products with at least one fresh competitor price."""
         price = effective_competitor_price(since)
@@ -203,34 +214,22 @@ class ProductRepository:
             for product_id, name, our_price, store, comp_price in rows
         ]
 
-    def attention_items(
-        self, *, low_stock_threshold: int, limit: int
-    ) -> tuple[list[AttentionRow], list[AttentionRow]]:
-        """Costliest attention items: priciest out-of-stock first, then
-        priciest low-stock. Only active products."""
-        threshold = max(low_stock_threshold, 0)
-        capped = max(limit, 1)
+    def appliance_total(self) -> int:
+        """Active لوازم خانگی items — denominator for competitor coverage.
 
-        def rows(stock_criteria: ColumnElement[bool]) -> list[AttentionRow]:
-            found = self._session.execute(
-                select(Product.id, Product.name, Product.price, Product.stock)
-                .where(Product.is_active.is_(True), stock_criteria)
-                .order_by(Product.price.desc())
-                .limit(capped)
-            ).all()
-            return [
-                AttentionRow(
-                    product_id=int(product_id),
-                    name=str(name),
-                    price=float(price),
-                    stock=float(stock),
-                )
-                for product_id, name, price, stock in found
-            ]
-
-        out = rows(Product.stock <= 0)
-        low = rows((Product.stock > 0) & (Product.stock <= threshold))
-        return out, low
+        Mirrors the product-list `top_group` filter: any non-NULL group
+        that is neither فرش nor مبلمان.
+        """
+        return self._session.execute(
+            select(func.count())
+            .select_from(Product)
+            .where(
+                Product.is_active.is_(True),
+                Product.main_group_name.is_not(None),
+                not_(Product.main_group_name.ilike("فرش%")),
+                not_(Product.main_group_name.ilike("مبلمان%")),
+            )
+        ).scalar_one()
 
     def list(
         self,

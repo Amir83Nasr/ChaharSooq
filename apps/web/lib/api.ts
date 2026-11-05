@@ -101,6 +101,8 @@ export interface DashboardGroup {
 
 export interface DashboardOverview extends InventorySummary {
   competitor_coverage: number
+  /** Active لوازم خانگی items — the coverage denominator. */
+  appliance_total: number
   groups: DashboardGroup[]
 }
 
@@ -113,16 +115,20 @@ export interface CompetitorGap {
   diff_percent: number
 }
 
-export interface AttentionItem {
-  product_id: number
-  name: string
-  price: number
-  stock: number
+export interface CatalogBrand {
+  group_name: string
+  brand: string
+  count: number
+  stock_value: number
 }
 
-export interface Attention {
-  out: AttentionItem[]
-  low: AttentionItem[]
+export interface CatalogSection {
+  top_group: string
+  items: number
+  group_count: number
+  brand_count: number
+  stock_value: number
+  brands: CatalogBrand[]
 }
 
 export interface SyncStatus {
@@ -433,10 +439,8 @@ export const api = {
       `/api/v1/dashboard/competitor-gaps?limit=${limit}`
     )
   },
-  dashboardAttention(threshold: number, limit = 5) {
-    return request<Attention>(
-      `/api/v1/dashboard/attention?threshold=${threshold}&limit=${limit}`
-    )
+  dashboardCatalogBreakdown() {
+    return request<CatalogSection[]>("/api/v1/dashboard/catalog-breakdown")
   },
   productGroups() {
     return request<string[]>("/api/v1/products/groups")

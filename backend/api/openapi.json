@@ -213,52 +213,21 @@
         }
       }
     },
-    "/api/v1/dashboard/attention": {
+    "/api/v1/dashboard/catalog-breakdown": {
       "get": {
-        "summary": "Dashboard Attention",
-        "operationId": "dashboard_attention_api_v1_dashboard_attention_get",
-        "parameters": [
-          {
-            "name": "threshold",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "default": 10,
-              "title": "Threshold"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 20,
-              "minimum": 1,
-              "default": 5,
-              "title": "Limit"
-            }
-          }
-        ],
+        "summary": "Dashboard Catalog Breakdown",
+        "operationId": "dashboard_catalog_breakdown_api_v1_dashboard_catalog_breakdown_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AttentionOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "items": {
+                    "$ref": "#/components/schemas/CatalogSectionOut"
+                  },
+                  "type": "array",
+                  "title": "Response Dashboard Catalog Breakdown Api V1 Dashboard Catalog Breakdown Get"
                 }
               }
             }
@@ -1103,55 +1072,81 @@
   },
   "components": {
     "schemas": {
-      "AttentionItemOut": {
+      "CatalogBrandOut": {
         "properties": {
-          "product_id": {
-            "type": "integer",
-            "title": "Product Id"
-          },
-          "name": {
+          "group_name": {
             "type": "string",
-            "title": "Name"
+            "title": "Group Name"
           },
-          "price": {
+          "brand": {
+            "type": "string",
+            "title": "Brand"
+          },
+          "count": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "Price"
+            "title": "Count"
           },
-          "stock": {
-            "type": "number",
+          "stock_value": {
+            "type": "integer",
             "minimum": 0.0,
-            "title": "Stock"
+            "title": "Stock Value"
           }
         },
         "type": "object",
         "required": [
-          "product_id",
-          "name",
-          "price",
-          "stock"
+          "group_name",
+          "brand",
+          "count",
+          "stock_value"
         ],
-        "title": "AttentionItemOut"
+        "title": "CatalogBrandOut",
+        "description": "One raw Parsina group inside a section — `group_name` is the full\n`main_group_name`, `brand` is the display remainder after the section\nprefix (same rule as the products table)."
       },
-      "AttentionOut": {
+      "CatalogSectionOut": {
         "properties": {
-          "out": {
-            "items": {
-              "$ref": "#/components/schemas/AttentionItemOut"
-            },
-            "type": "array",
-            "title": "Out"
+          "top_group": {
+            "type": "string",
+            "title": "Top Group"
           },
-          "low": {
+          "items": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Items"
+          },
+          "group_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Group Count"
+          },
+          "brand_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Brand Count"
+          },
+          "stock_value": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Stock Value"
+          },
+          "brands": {
             "items": {
-              "$ref": "#/components/schemas/AttentionItemOut"
+              "$ref": "#/components/schemas/CatalogBrandOut"
             },
             "type": "array",
-            "title": "Low"
+            "title": "Brands"
           }
         },
         "type": "object",
-        "title": "AttentionOut"
+        "required": [
+          "top_group",
+          "items",
+          "group_count",
+          "brand_count",
+          "stock_value"
+        ],
+        "title": "CatalogSectionOut",
+        "description": "Per-section (بخش) aggregate — فرش / مبلمان / لوازم خانگی / سایر."
       },
       "CategoryIn": {
         "properties": {
@@ -1850,6 +1845,11 @@
             "minimum": 0.0,
             "title": "Competitor Coverage"
           },
+          "appliance_total": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Appliance Total"
+          },
           "groups": {
             "items": {
               "$ref": "#/components/schemas/DashboardGroupOut"
@@ -1865,7 +1865,8 @@
           "low",
           "out",
           "stock_value",
-          "competitor_coverage"
+          "competitor_coverage",
+          "appliance_total"
         ],
         "title": "DashboardOverviewOut"
       },

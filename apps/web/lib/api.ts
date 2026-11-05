@@ -455,9 +455,10 @@ export const api = {
   },
   /** Cancellable status read — used by the sync poller's unmount cleanup. */
   parsinaStatusSignal(signal: AbortSignal) {
-    return request<SyncStatus>("/api/v1/integrations/parsina/status", {
-      signal,
-    })
+    return statusRequest<SyncStatus>(
+      "/api/v1/integrations/parsina/status",
+      signal
+    )
   },
   competitorStatus() {
     return request<CompetitorSyncStatus>(
@@ -471,11 +472,14 @@ export const api = {
   },
   /** Cancellable status read — used by the sync poller's unmount cleanup. */
   competitorStatusSignal(signal: AbortSignal) {
-    return request<CompetitorSyncStatus>(
+    return statusRequest<CompetitorSyncStatus>(
       "/api/v1/integrations/competitors/status",
-      {
-        signal,
-      }
+      signal
     )
   },
+}
+
+/** Shared cancellable GET — both sync pollers pass their unmount signal here. */
+function statusRequest<T>(path: string, signal: AbortSignal): Promise<T> {
+  return request<T>(path, { signal })
 }

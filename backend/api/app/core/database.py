@@ -45,9 +45,16 @@ def reset_engine() -> None:
 
 
 def get_session() -> Iterator[Session]:
-    engine = get_engine()
-    factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    session = factory()
+    """Yield a request-scoped session from the shared factory.
+
+    The factory is built once per engine (see ``get_engine``) and reused
+    across requests instead of re-creating a ``sessionmaker`` per call.
+    Commit/rollback semantics are unchanged.
+    """
+    get_engine()
+    if _SessionLocal is None:  # pragma: no cover — engine always initializes the factory
+        raise RuntimeError("database engine is not initialized")
+    session = _SessionLocal()
     try:
         yield session
         session.commit()

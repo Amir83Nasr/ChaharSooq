@@ -8,7 +8,6 @@ from urllib.parse import urlsplit
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.integrations.competitor_prices import PriceFetchError, fetch_competitor_price
 from app.models import CompetitorListing
 from app.repositories.competitor import CompetitorRepository
 from app.schemas.competitor import (
@@ -17,6 +16,7 @@ from app.schemas.competitor import (
     CompetitorListingUpdate,
     CompetitorPriceOut,
 )
+from app.services.competitor_check import apply_competitor_check
 
 STORE_HOSTS: dict[str, frozenset[str]] = {
     "digikala": frozenset({"digikala.com", "www.digikala.com"}),
@@ -288,19 +288,7 @@ class CompetitorService:
         return [self._out(row) for row in rows]
 
     def _apply_check(self, row: CompetitorListing, now: datetime) -> None:
-        row.last_checked_at = now
-        try:
-            result = fetch_competitor_price(row.store, row.url)
-        except PriceFetchError as exc:
-            row.status = exc.status
-            row.last_error = str(exc)[:500]
-        else:
-            row.fetched_price = result.amount
-            row.fetched_currency = result.currency
-            row.fetched_in_stock = result.in_stock
-            row.last_success_at = result.observed_at or now
-            row.status = "success"
-            row.last_error = None
+        apply_competitor_check(row, now)
 
 
 def _aware(value: datetime) -> datetime:

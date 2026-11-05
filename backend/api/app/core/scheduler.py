@@ -83,14 +83,14 @@ class SyncScheduler:
         while not self._stop.is_set():
             try:
                 # Re-read the intervals each tick so admin changes in Settings
-                # take effect without a process restart.
+                # take effect without a process restart. One session covers
+                # both reads so a tick costs a single checkout.
                 from app.services import SettingsService
 
                 with self._session_factory() as _s:
                     interval = SettingsService(_s).get_sync_interval()
-                run_scheduled_sync(session_factory=self._session_factory, interval_minutes=interval)
-                with self._session_factory() as _s:
                     competitor_interval = SettingsService(_s).get_competitor_sync_interval()
+                run_scheduled_sync(session_factory=self._session_factory, interval_minutes=interval)
                 run_scheduled_competitor_sync(
                     session_factory=self._session_factory,
                     interval_minutes=competitor_interval,

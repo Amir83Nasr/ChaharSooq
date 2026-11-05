@@ -105,27 +105,41 @@ class ProductRepository:
     def summary(self, *, low_stock_threshold: int) -> dict[str, int]:
         threshold = max(low_stock_threshold, 0)
         active = Product.is_active.is_(True)
-        total = self._session.execute(
-            select(func.count()).select_from(Product).where(active)
-        ).scalar_one()
-        out_of_stock = self._session.execute(
-            select(func.count()).select_from(Product).where(active, Product.stock <= 0)
-        ).scalar_one()
-        low = self._session.execute(
-            select(func.count())
-            .select_from(Product)
-            .where(active, Product.stock > 0, Product.stock <= threshold)
-        ).scalar_one()
+        # One aggregate round-trip instead of five count queries; CASE keeps
+        # the buckets consistent on PostgreSQL and SQLite alike.
+        row = self._session.execute(
+            select(
+                func.sum(case((active, 1), else_=0)).label("total"),
+                func.sum(case((and_(active, Product.stock <= 0), 1), else_=0)).label("out"),
+                func.sum(
+                    case(
+                        (
+                            and_(
+                                active,
+                                Product.stock > 0,
+                                Product.stock <= threshold,
+                            ),
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ).label("low"),
+                func.coalesce(
+                    func.sum(case((active, Product.stock * Product.price), else_=0)),
+                    0,
+                ).label("stock_value"),
+            )
+        ).one()
+        total = int(row.total or 0)
+        out_of_stock = int(row.out or 0)
+        low = int(row.low or 0)
         in_stock = total - out_of_stock - low
-        stock_value = self._session.execute(
-            select(func.coalesce(func.sum(Product.stock * Product.price), 0)).where(active)
-        ).scalar_one()
         return {
             "total": total,
             "in_stock": in_stock,
             "low": low,
             "out": out_of_stock,
-            "stock_value": int(stock_value),
+            "stock_value": int(row.stock_value or 0),
         }
 
     def stock_by_group(self, *, limit: int) -> list[tuple[str, int, int]]:

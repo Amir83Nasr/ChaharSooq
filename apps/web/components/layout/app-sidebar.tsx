@@ -30,7 +30,6 @@ import {
   useSidebar,
 } from "@workspace/ui/primitives/sidebar"
 import { Badge } from "@workspace/ui/primitives/badge"
-import { Skeleton } from "@workspace/ui/primitives/skeleton"
 import { cn } from "@workspace/ui/lib/utils"
 import { LogoutMenuItem } from "@/components/auth/logout-menu-item"
 
@@ -102,33 +101,6 @@ const NAV: NavGroup[] = [
   {
     group: "سیستم",
     items: [{ href: "/settings", label: "تنظیمات", icon: Settings }],
-  },
-]
-
-// آیتم‌های فازهای بعدی. روت ندارند و رندر نمی‌شوند؛ با ساخته شدن
-// روت هر کدام، از اینجا به NAV منتقل می‌شوند.
-export const FUTURE_NAV: {
-  group: string
-  items: { href: string; label: string; soon: true }[]
-}[] = [
-  {
-    group: "فروش",
-    items: [
-      { href: "/orders", label: "سفارش‌ها", soon: true },
-      { href: "/customers", label: "مشتریان", soon: true },
-      { href: "/discounts", label: "تخفیف‌ها", soon: true },
-    ],
-  },
-  {
-    group: "مدیریت",
-    items: [
-      { href: "/inventory", label: "موجودی انبار", soon: true },
-      { href: "/suppliers", label: "تأمین‌کنندگان", soon: true },
-    ],
-  },
-  {
-    group: "سیستم",
-    items: [{ href: "/users", label: "کاربران", soon: true }],
   },
 ]
 
@@ -285,20 +257,5 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         <LogoutMenuItem />
       </SidebarFooter>
     </Sidebar>
-  )
-}
-
-export function AppSidebarSkeleton() {
-  return (
-    <SidebarGroup>
-      <SidebarGroupLabel>منو</SidebarGroupLabel>
-      <SidebarMenu>
-        {Array.from({ length: 3 }).map((_, i) => (
-          <SidebarMenuItem key={i}>
-            <Skeleton className="h-8 w-full" />
-          </SidebarMenuItem>
-        ))}
-      </SidebarMenu>
-    </SidebarGroup>
   )
 }

@@ -1,5 +1,6 @@
 """App factory — secure defaults, predictable error envelope, no secret logging."""
 
+import json
 import logging
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
@@ -115,12 +116,10 @@ def create_app() -> FastAPI:
             try:
                 body = await request.body()
                 if body:
-                    import json as _json
-
-                    data = _json.loads(body)
+                    data = json.loads(body)
                     if isinstance(data, dict) and isinstance(data.get("username"), str):
                         username = data["username"]
-            except Exception:
+            except (ValueError, UnicodeDecodeError):
                 username = None
             if rate_limited(login_rate_key(ip, username)):
                 return JSONResponse(

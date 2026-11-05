@@ -15,10 +15,10 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
-from app.integrations.competitor_prices import PriceFetchError, fetch_competitor_price
-from app.models.competitor import CompetitorListing, CompetitorSyncState
+from app.models.competitor import CompetitorSyncState
 from app.repositories.competitor import CompetitorRepository
 from app.repositories.competitor_sync import CompetitorSyncStateRepository
+from app.services.competitor_check import apply_competitor_check as _apply_check
 
 log = logging.getLogger("charsooq.competitors")
 
@@ -100,24 +100,6 @@ class CompetitorSyncService:
         self._state.record_failure(attempted_at=now, error=message)
         self._state.release(success=False, error=message)
         log.warning("competitor bulk refresh failed: %s", message)
-
-
-def _apply_check(row: CompetitorListing, now: datetime) -> bool:
-    """Refresh one row in place; True when the fetch succeeded."""
-    row.last_checked_at = now
-    try:
-        result = fetch_competitor_price(row.store, row.url)
-    except PriceFetchError as exc:
-        row.status = exc.status
-        row.last_error = str(exc)[:500]
-        return False
-    row.fetched_price = result.amount
-    row.fetched_currency = result.currency
-    row.fetched_in_stock = result.in_stock
-    row.last_success_at = result.observed_at or now
-    row.status = "success"
-    row.last_error = None
-    return True
 
 
 def _due(session: Session, *, interval_minutes: int) -> bool:

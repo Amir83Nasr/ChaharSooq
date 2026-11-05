@@ -63,7 +63,7 @@ def test_manual_link_and_price_are_preserved_after_failed_check(
     def fail_fetch(_store: str, _url: str) -> FetchedPrice:
         raise PriceFetchError("blocked", "تست محدودیت")
 
-    monkeypatch.setattr("app.services.competitor.fetch_competitor_price", fail_fetch)
+    monkeypatch.setattr("app.services.competitor_check.fetch_competitor_price", fail_fetch)
     checked = client.post(f"/api/v1/competitors/{listing_id}/check")
     assert checked.status_code == 200, checked.text
     body = checked.json()
@@ -91,7 +91,7 @@ def test_bulk_check_refreshes_all_active_listings(
     def ok_fetch(_store: str, _url: str) -> FetchedPrice:
         return FetchedPrice(Decimal("27000000"), "IRR", True, datetime.now(UTC))
 
-    monkeypatch.setattr("app.services.competitor.fetch_competitor_price", ok_fetch)
+    monkeypatch.setattr("app.services.competitor_check.fetch_competitor_price", ok_fetch)
     bulk = client.post(f"/api/v1/products/{product_id}/competitors/check")
     assert bulk.status_code == 200, bulk.text
     body = bulk.json()
@@ -516,7 +516,7 @@ def test_global_sync_refreshes_every_active_link(
     def ok_fetch(_store: str, _url: str) -> FetchedPrice:
         return FetchedPrice(Decimal("27000000"), "IRR", True, datetime.now(UTC))
 
-    monkeypatch.setattr("app.services.competitor_sync.fetch_competitor_price", ok_fetch)
+    monkeypatch.setattr("app.services.competitor_check.fetch_competitor_price", ok_fetch)
     result = CompetitorSyncService(db_session).run()
     assert (result.checked, result.updated, result.failed, result.skipped) == (2, 2, 0, 0)
 
@@ -544,7 +544,7 @@ def test_global_sync_counts_failures_without_aborting(
             return FetchedPrice(Decimal("27000000"), "IRR", True, datetime.now(UTC))
         raise PriceFetchError("blocked", "تست محدودیت")
 
-    monkeypatch.setattr("app.services.competitor_sync.fetch_competitor_price", flaky_fetch)
+    monkeypatch.setattr("app.services.competitor_check.fetch_competitor_price", flaky_fetch)
     result = CompetitorSyncService(db_session).run()
     assert (result.checked, result.updated, result.failed) == (2, 1, 1)
 
@@ -561,7 +561,7 @@ def test_global_sync_skips_inactive_links(
     def ok_fetch(_store: str, _url: str) -> FetchedPrice:
         return FetchedPrice(Decimal("27000000"), "IRR", True, datetime.now(UTC))
 
-    monkeypatch.setattr("app.services.competitor_sync.fetch_competitor_price", ok_fetch)
+    monkeypatch.setattr("app.services.competitor_check.fetch_competitor_price", ok_fetch)
     result = CompetitorSyncService(db_session).run()
     assert (result.checked, result.updated, result.skipped) == (1, 1, 1)
 

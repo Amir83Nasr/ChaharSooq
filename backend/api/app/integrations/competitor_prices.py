@@ -161,6 +161,17 @@ def _is_blocked(rate_key: str) -> bool:
         return _host_blocked_until.get(rate_key, 0) > time.monotonic()
 
 
+def _mark_blocked(rate_key: str, *, hours: float = 6.0) -> None:
+    """Park a store after 403/429 so later checks fail fast without sleeping."""
+    with _lock:
+        _host_blocked_until[rate_key] = time.monotonic() + hours * 3600
+
+
+def _polite_sleep() -> None:
+    """Sleep one politeness interval before a single retry attempt."""
+    time.sleep(get_settings().competitor_request_interval_seconds)
+
+
 def _cache_get(key: str) -> FetchedPrice | None:
     with _lock:
         entry = _page_cache.get(key)
@@ -256,12 +267,11 @@ def _request(
             except httpx.HTTPError as exc:
                 if attempt == 0:
                     attempt = 1
-                    time.sleep(get_settings().competitor_request_interval_seconds)
+                    _polite_sleep()
                     continue
                 raise PriceFetchError("failed", "دریافت صفحه با خطای شبکه روبه‌رو شد") from exc
             if status_code in (403, 429):
-                with _lock:
-                    _host_blocked_until[rate_key] = time.monotonic() + 6 * 60 * 60
+                _mark_blocked(rate_key)
                 log.warning("competitor store rate-limited store=%s http=%s", rate_key, status_code)
                 raise PriceFetchError(
                     "blocked", f"فروشگاه درخواست را محدود کرد (HTTP {status_code})"
@@ -280,7 +290,7 @@ def _request(
             if status_code >= 500:
                 if attempt == 0:
                     attempt = 1
-                    time.sleep(get_settings().competitor_request_interval_seconds)
+                    _polite_sleep()
                     continue
                 raise PriceFetchError(
                     "unavailable", f"فروشگاه موقتاً پاسخ‌گو نیست (HTTP {status_code})"
@@ -451,15 +461,14 @@ def _fetch_digikala_api(product_id: str, client: httpx.Client | None = None) -> 
             except httpx.HTTPError as exc:
                 if attempt == 0:
                     attempt = 1
-                    time.sleep(get_settings().competitor_request_interval_seconds)
+                    _polite_sleep()
                     continue
                 raise PriceFetchError(
                     "failed", "دریافت قیمت دیجی‌کالا با خطای شبکه روبه‌رو شد"
                 ) from exc
             status_code = response.status_code
             if status_code in (403, 429):
-                with _lock:
-                    _host_blocked_until["digikala"] = time.monotonic() + 6 * 60 * 60
+                _mark_blocked("digikala")
                 log.warning("competitor store rate-limited store=digikala http=%s", status_code)
                 raise PriceFetchError(
                     "blocked", f"دیجی‌کالا درخواست را محدود کرد (HTTP {status_code})"
@@ -469,7 +478,7 @@ def _fetch_digikala_api(product_id: str, client: httpx.Client | None = None) -> 
             if status_code >= 500:
                 if attempt == 0:
                     attempt = 1
-                    time.sleep(get_settings().competitor_request_interval_seconds)
+                    _polite_sleep()
                     continue
                 raise PriceFetchError(
                     "unavailable", f"سرویس دیجی‌کالا موقتاً پاسخ‌گو نیست (HTTP {status_code})"

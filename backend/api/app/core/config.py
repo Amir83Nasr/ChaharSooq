@@ -3,7 +3,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 # Repository layout: backend/api/app/core/config.py → backend/api → repo root.
@@ -71,6 +71,15 @@ class Settings(BaseSettings):
                     return parsed
             return [o.strip() for o in raw.split(",") if o.strip()]
         return value
+
+    @model_validator(mode="after")
+    def _fail_fast_on_default_secret(self) -> "Settings":
+        if (
+            self.app_env == "production"
+            and self.session_secret == "dev-only-secret-change-me-min-32-chars"  # noqa: S105
+        ):
+            raise ValueError("SESSION_SECRET must be set explicitly in production")
+        return self
 
     @property
     def is_production(self) -> bool:

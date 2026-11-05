@@ -169,14 +169,18 @@ def test_source_selection_by_environment(tmp_path: Path) -> None:
     )
     assert isinstance(
         build_commodity_source(
-            app_settings=Settings(app_env="production"),
+            app_settings=Settings(app_env="production", session_secret="test-secret-123"),
             parsina_settings=ParsinaSettings(),
         ),
         ParsinaCommoditySource,
     )
     url = f"sqlite:///{tmp_path / 'dev.db'}"
     dev = build_commodity_source(
-        app_settings=Settings(app_env="production", dev_database_url=url),
+        app_settings=Settings(
+            app_env="production",
+            session_secret="test-secret-123",
+            dev_database_url=url,
+        ),
         parsina_settings=ParsinaSettings(),
     )
     assert isinstance(dev, DevDatabaseCommoditySource)

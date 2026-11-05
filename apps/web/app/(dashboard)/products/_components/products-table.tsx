@@ -26,6 +26,7 @@ import { CircleAlert, PackageSearch, RefreshCw } from "lucide-react"
 import { StockCell } from "@/components/data/products-stock-cell"
 import { toTomanAmount } from "@/lib/money"
 import type { ProductOut, ProductPage } from "@/lib/api"
+import { useWindowedRows, initialRowWindow } from "./use-windowed-rows"
 
 import { PAGE_SIZE_OPTIONS } from "@/components/settings/page-size-settings"
 
@@ -188,6 +189,19 @@ export function ProductTableSkeleton() {
   )
 }
 
+// Zero-height-tolerant spacer for windowed rows (see useWindowedRows).
+function SpacerRow({ height }: { height: number }) {
+  return (
+    <TableRow aria-hidden="true" className="border-0 hover:bg-transparent">
+      <TableCell
+        colSpan={COLUMN_COUNT}
+        className="h-auto p-0"
+        style={{ height, border: 0 }}
+      />
+    </TableRow>
+  )
+}
+
 export const ProductsTable = memo(function ProductsTable(props: TableProps) {
   const {
     page,
@@ -204,6 +218,13 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
   } = props
   const marketLabel =
     COMPETITOR_MARKETS.find((m) => m.store === market)?.label ?? "دیجی‌کالا"
+  // Windowed rendering (hooks before the early returns below): in "show all"
+  // mode the whole catalog would otherwise stay mounted and every sidebar
+  // toggle / theme flip would reflow thousands of rows.
+  const { bodyRef, observeRow, win } = useWindowedRows(
+    page?.items.length ?? 0,
+    (i) => page?.items[i]?.id ?? i
+  )
   if (!page) return <ProductTableSkeleton />
   if (page.items.length === 0) {
     return (
@@ -220,12 +241,27 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
       />
     )
   }
+  // The window lags one frame behind a fresh fetch (new count, old window):
+  // fall back to the deterministic initial window so the table never
+  // flashes blank. The mount/scroll effects correct it right after.
+  const count = page.items.length
+  const renderWin =
+    win.end > count || (win.end === 0 && count > 0)
+      ? initialRowWindow(count)
+      : win
   return (
     <div className="space-y-6">
-      <Table className="min-w-192 table-fixed">
+      <Table
+        className="min-w-192 table-fixed"
+        aria-rowcount={page.items.length}
+      >
         <ProductsTableHead market={market} />
-        <TableBody>
-          {page.items.map((item, i) => {
+        <TableBody ref={bodyRef}>
+          {renderWin.topPad > 0 ? (
+            <SpacerRow height={renderWin.topPad} />
+          ) : null}
+          {page.items.slice(renderWin.start, renderWin.end).map((item, k) => {
+            const i = renderWin.start + k
             const rowNumber =
               (page.page > 1
                 ? (page.page - 1) * (page.page_size || page.items.length)
@@ -251,6 +287,8 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
               <TableRow
                 key={item.id}
                 tabIndex={0}
+                aria-rowindex={i + 1}
+                ref={observeRow(i)}
                 className="cursor-pointer"
                 onClick={() => onSelect(item)}
                 onKeyDown={(e) => {
@@ -349,9 +387,7 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                   ) : (
                     <span
                       className={`block text-xs font-medium ${
-                        pct > 0
-                          ? "text-destructive"
-                          : "text-emerald-600 dark:text-emerald-400"
+                        pct > 0 ? "text-destructive" : "text-success"
                       }`}
                       title={`${marketLabel}: ${formatDiffPercent(pct)} ${pct > 0 ? "گران‌تر" : "ارزان‌تر"} از رقیب`}
                     >
@@ -366,6 +402,9 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
               </TableRow>
             )
           })}
+          {renderWin.bottomPad > 0 ? (
+            <SpacerRow height={renderWin.bottomPad} />
+          ) : null}
         </TableBody>
       </Table>
       <TablePagination

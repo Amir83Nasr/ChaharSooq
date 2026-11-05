@@ -98,10 +98,7 @@ export function PageSizeSettings() {
         </p>
       ) : null}
       {saved ? (
-        <p
-          role="status"
-          className="text-sm text-emerald-600 dark:text-emerald-400"
-        >
+        <p role="status" className="text-sm text-success">
           تعداد پیش‌فرض ذخیره شد.
         </p>
       ) : null}

@@ -14,7 +14,7 @@ type DashboardKpisProps = {
 }
 
 const LINK_CARD_CLASS =
-  "block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+  "block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
 
 function KpiCard({
   className,
@@ -30,7 +30,7 @@ function KpiCard({
         className
       )}
     >
-      <CardContent className="flex h-full flex-col gap-1.5 px-5 py-4">
+      <CardContent className="flex h-full flex-col gap-1.5 px-4 py-3.5 sm:px-5 sm:py-4">
         {children}
       </CardContent>
     </Card>
@@ -60,13 +60,16 @@ export function DashboardKpis({ overview, threshold }: DashboardKpisProps) {
         )
       : 0
   return (
-    <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">
+    <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-6">
       <div className="col-span-2">
         <KpiCard>
           <KpiLabel icon={<Wallet className="size-4" aria-hidden="true" />}>
             ارزش موجودی
           </KpiLabel>
-          <Price value={overview.stock_value} className="text-2xl font-bold" />
+          <Price
+            value={overview.stock_value}
+            className="text-xl font-bold sm:text-2xl"
+          />
           <p className="text-xs text-muted-foreground">مجموع قیمت × موجودی</p>
         </KpiCard>
       </div>
@@ -80,7 +83,7 @@ export function DashboardKpis({ overview, threshold }: DashboardKpisProps) {
           <KpiLabel icon={<Package className="size-4" aria-hidden="true" />}>
             کل کالاها
           </KpiLabel>
-          <p className="text-2xl font-bold">
+          <p className="text-xl font-bold sm:text-2xl">
             <PersianNumber value={overview.total} />
           </p>
           <p className="text-xs text-muted-foreground">قلم کالای فعال</p>
@@ -98,7 +101,7 @@ export function DashboardKpis({ overview, threshold }: DashboardKpisProps) {
           >
             موجودی کم
           </KpiLabel>
-          <p className="text-2xl font-bold">
+          <p className="text-xl font-bold sm:text-2xl">
             <PersianNumber value={overview.low} />
           </p>
           <p className="text-xs text-muted-foreground">
@@ -116,25 +119,27 @@ export function DashboardKpis({ overview, threshold }: DashboardKpisProps) {
           <KpiLabel icon={<PackageX className="size-4" aria-hidden="true" />}>
             ناموجود
           </KpiLabel>
-          <p className="text-2xl font-bold">
+          <p className="text-xl font-bold sm:text-2xl">
             <PersianNumber value={overview.out} />
           </p>
           <p className="text-xs text-muted-foreground">موجودی صفر</p>
         </KpiCard>
       </Link>
 
-      <KpiCard>
-        <KpiLabel icon={<Percent className="size-4" aria-hidden="true" />}>
-          پوشش قیمت رقیب
-        </KpiLabel>
-        <p className="text-2xl font-bold">
-          <PersianNumber value={coveragePercent} />٪
-        </p>
-        <p className="text-xs text-muted-foreground">
-          <PersianNumber value={overview.competitor_coverage} /> از{" "}
-          <PersianNumber value={overview.appliance_total} /> قلم لوازم خانگی
-        </p>
-      </KpiCard>
+      <div className="col-span-2 lg:col-span-1">
+        <KpiCard>
+          <KpiLabel icon={<Percent className="size-4" aria-hidden="true" />}>
+            پوشش قیمت رقیب
+          </KpiLabel>
+          <p className="text-xl font-bold sm:text-2xl">
+            <PersianNumber value={coveragePercent} />٪
+          </p>
+          <p className="text-xs text-muted-foreground">
+            <PersianNumber value={overview.competitor_coverage} /> از{" "}
+            <PersianNumber value={overview.appliance_total} /> قلم لوازم خانگی
+          </p>
+        </KpiCard>
+      </div>
     </div>
   )
 }

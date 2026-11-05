@@ -31,7 +31,7 @@ export default function RootError({
           hint="مشکلی در بارگذاری این صفحه پیش آمد. لطفاً دوباره تلاش کنید."
           action={
             <>
-              <Button onClick={reset}>
+              <Button onClick={reset} className="h-11 md:h-8">
                 <RefreshCw className="size-4" />
                 تلاش مجدد
               </Button>
@@ -39,6 +39,7 @@ export default function RootError({
                 variant="outline"
                 nativeButton={false}
                 render={<Link href="/products" />}
+                className="h-11 md:h-8"
               >
                 <Home className="size-4" />
                 بازگشت به خانه

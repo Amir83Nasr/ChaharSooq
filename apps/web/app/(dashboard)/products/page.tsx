@@ -20,6 +20,13 @@ import { DEFAULT_LOW_STOCK_THRESHOLD } from "@/lib/inventory"
 import { ParsinaSyncPanel } from "@/components/data/parsina-sync-panel"
 import { CompetitorSyncPanel } from "@/components/data/competitor-sync-panel"
 import { ProductDetailDialog } from "./_components/product-dialogs"
+import {
+  ProductsCards,
+  ProductsMobileEmpty,
+  ProductsMobilePagination,
+  ProductsMobileSkeleton,
+} from "./_components/products-cards"
+import { ProductsMobileFilters } from "./_components/products-mobile-filters"
 import { ProductsTable, ProductsTableError } from "./_components/products-table"
 import {
   ProductsToolbar,
@@ -251,6 +258,13 @@ function ProductsPageContent() {
     stock !== "all" ||
     minPrice.trim() !== "" ||
     maxPrice.trim() !== ""
+  const activeFilterCount =
+    (debouncedQ !== "" ? 1 : 0) +
+    (topGroup !== null ? 1 : 0) +
+    (sort !== "newest" ? 1 : 0) +
+    (stock !== "all" ? 1 : 0) +
+    (minPrice.trim() !== "" ? 1 : 0) +
+    (maxPrice.trim() !== "" ? 1 : 0)
 
   function clearFilters() {
     setQ("")
@@ -279,7 +293,7 @@ function ProductsPageContent() {
         }
       />
 
-      <ProductsToolbar
+      <ProductsMobileFilters
         q={q}
         topGroup={topGroup}
         sort={sort}
@@ -288,6 +302,7 @@ function ProductsPageContent() {
         minPrice={minPrice}
         maxPrice={maxPrice}
         hasFilters={hasFilters}
+        activeCount={activeFilterCount}
         onQ={(v) => {
           setQ(v)
           resetPage()
@@ -316,22 +331,86 @@ function ProductsPageContent() {
         onClear={clearFilters}
       />
 
+      <div className="hidden md:block">
+        <ProductsToolbar
+          q={q}
+          topGroup={topGroup}
+          sort={sort}
+          stock={stock}
+          market={market}
+          minPrice={minPrice}
+          maxPrice={maxPrice}
+          hasFilters={hasFilters}
+          onQ={(v) => {
+            setQ(v)
+            resetPage()
+          }}
+          onTopGroup={(v) => {
+            setTopGroup(v)
+            resetPage()
+          }}
+          onSort={(v) => {
+            setSort(v)
+            resetPage()
+          }}
+          onStock={(v) => {
+            setStock(v)
+            resetPage()
+          }}
+          onMarketChange={setMarket}
+          onMinPrice={(v) => {
+            setMinPrice(v)
+            resetPage()
+          }}
+          onMaxPrice={(v) => {
+            setMaxPrice(v)
+            resetPage()
+          }}
+          onClear={clearFilters}
+        />
+      </div>
+
       {error ? (
         <ProductsTableError message={error} onRetry={refreshData} />
       ) : (
-        <ProductsTable
-          page={page}
-          threshold={threshold}
-          pageNum={pageNum}
-          totalPages={totalPages}
-          pageSize={pageSize}
-          showPageSize
-          hasFilters={hasFilters}
-          market={market}
-          onSelect={setSelected}
-          onPageChange={changePage}
-          onPageSize={changePageSize}
-        />
+        <>
+          <div className="md:hidden">
+            {page === null ? (
+              <ProductsMobileSkeleton />
+            ) : page.items.length === 0 ? (
+              <ProductsMobileEmpty hasFilters={hasFilters} />
+            ) : (
+              <div className="space-y-4">
+                <ProductsCards
+                  items={page.items}
+                  market={market}
+                  threshold={threshold}
+                  onSelect={setSelected}
+                />
+                <ProductsMobilePagination
+                  pageNum={pageNum}
+                  totalPages={totalPages}
+                  onPageChange={changePage}
+                />
+              </div>
+            )}
+          </div>
+          <div className="hidden md:block">
+            <ProductsTable
+              page={page}
+              threshold={threshold}
+              pageNum={pageNum}
+              totalPages={totalPages}
+              pageSize={pageSize}
+              showPageSize
+              hasFilters={hasFilters}
+              market={market}
+              onSelect={setSelected}
+              onPageChange={changePage}
+              onPageSize={changePageSize}
+            />
+          </div>
+        </>
       )}
 
       <ProductDetailDialog

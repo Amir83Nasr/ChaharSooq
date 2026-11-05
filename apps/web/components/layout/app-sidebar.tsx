@@ -11,6 +11,7 @@ import {
   Settings,
   Sparkles,
   Store,
+  X,
   type LucideIcon,
 } from "lucide-react"
 
@@ -30,6 +31,7 @@ import {
   useSidebar,
 } from "@workspace/ui/primitives/sidebar"
 import { Badge } from "@workspace/ui/primitives/badge"
+import { Button } from "@workspace/ui/primitives/button"
 import { cn } from "@workspace/ui/lib/utils"
 import { LogoutMenuItem } from "@/components/auth/logout-menu-item"
 
@@ -131,16 +133,50 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar collapsible="offcanvas" side="right" {...props}>
       <SidebarHeader>
-        <div className="flex items-center gap-2 px-0 py-1 transition-[gap] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] group-data-[collapsible=icon]:gap-0 motion-reduce:transition-none">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary font-bold text-primary-foreground">
+        {/* Desktop: full brand lockup with subtitle. Hidden on mobile. */}
+        <div className="hidden items-center gap-2.5 px-0 py-1 transition-[gap] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] group-data-[collapsible=icon]:gap-0 motion-reduce:transition-none md:flex">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary via-primary to-primary/65 text-lg font-black text-primary-foreground shadow-sm ring-1 ring-foreground/10">
             چ
           </span>
-          <span className="sidebar-collapse-label flex min-w-0 flex-col">
-            <span className="text-sm font-bold">چهارسوق</span>
-            <span className="text-xs text-muted-foreground">
+          <span className="sidebar-collapse-label flex min-w-0 flex-col gap-0.5">
+            <span className="text-[15px] leading-5 font-extrabold tracking-tight">
+              چهارسوق
+            </span>
+            <span className="text-[11px] leading-4 text-muted-foreground">
               پنل مدیریت فروشگاه
             </span>
           </span>
+        </div>
+        {/* Mobile (ChatGPT-app style): flat single-line brand + explicit
+            close affordance. The sheet hides its default close button, so
+            this X is the only dismiss control besides the scrim. */}
+        <div className="flex items-center justify-between px-1 py-1 md:hidden">
+          <Link
+            href="/dashboard"
+            onClick={closeMobileSidebar}
+            aria-label="چهارسوق — رفتن به داشبورد"
+            className="flex min-w-0 items-center gap-2.5 rounded-full"
+          >
+            <span
+              aria-hidden="true"
+              className="flex size-8 shrink-0 items-center justify-center rounded-full bg-foreground text-sm font-bold text-background"
+            >
+              چ
+            </span>
+            <span className="truncate text-[15px] leading-5 font-semibold tracking-tight">
+              چهارسوق
+            </span>
+          </Link>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={closeMobileSidebar}
+            aria-label="بستن منو"
+            className="size-9 shrink-0 rounded-full"
+          >
+            <X className="size-5" aria-hidden="true" />
+            <span className="sr-only">بستن منو</span>
+          </Button>
         </div>
       </SidebarHeader>
       <SidebarContent>

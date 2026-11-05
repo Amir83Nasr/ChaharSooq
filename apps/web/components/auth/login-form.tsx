@@ -148,7 +148,7 @@ export function LoginForm() {
         <div className="flex w-full flex-col gap-2">
           <Button
             type="submit"
-            className="h-9 w-full md:h-9"
+            className="h-11 w-full md:h-9"
             disabled={!canSubmit}
           >
             {pending ? "در حال ورود…" : "ورود"}

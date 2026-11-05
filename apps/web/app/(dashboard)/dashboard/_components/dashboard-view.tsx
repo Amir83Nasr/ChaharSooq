@@ -115,7 +115,10 @@ export function DashboardView() {
           title="خطا در بارگذاری داشبورد"
           hint={error}
           action={
-            <Button onClick={() => setReloadKey((v) => v + 1)}>
+            <Button
+              onClick={() => setReloadKey((v) => v + 1)}
+              className="h-11 md:h-8"
+            >
               تلاش مجدد
             </Button>
           }
@@ -129,7 +132,10 @@ export function DashboardView() {
           action={
             <Link
               href="/products"
-              className={buttonVariants({ variant: "outline" })}
+              className={buttonVariants({
+                variant: "outline",
+                className: "h-11 md:h-8",
+              })}
             >
               مشاهده محصولات
             </Link>

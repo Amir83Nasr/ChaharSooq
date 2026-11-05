@@ -40,7 +40,7 @@ function useNow(intervalMs: number, alignToSecond: boolean) {
 
 function TimePillSkeleton() {
   return (
-    <div className="flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5">
+    <div className="flex h-8 items-center gap-1.5 rounded-2xl border border-border bg-background px-2.5">
       <span
         aria-hidden="true"
         className="inline-block h-4 min-w-[9ch] animate-pulse rounded-sm bg-muted"
@@ -55,7 +55,7 @@ function TimePillSkeleton() {
 
 function DatePillSkeleton() {
   return (
-    <div className="flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5">
+    <div className="flex h-8 items-center gap-1.5 rounded-2xl border border-border bg-background px-2.5">
       <span
         aria-hidden="true"
         className="inline-block h-4 w-28 animate-pulse rounded-sm bg-muted"
@@ -74,7 +74,7 @@ function HeaderClock() {
   if (!now) return <TimePillSkeleton />
 
   return (
-    <div className="flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-[13px] text-foreground shadow-xs">
+    <div className="flex h-8 items-center gap-1.5 rounded-2xl border border-border bg-background px-2.5 text-[13px] text-foreground shadow-xs">
       <time
         dateTime={now.toISOString()}
         suppressHydrationWarning
@@ -98,7 +98,7 @@ function HeaderDate() {
   if (!now) return <DatePillSkeleton />
 
   return (
-    <div className="flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-[13px] text-foreground shadow-xs">
+    <div className="flex h-8 items-center gap-1.5 rounded-2xl border border-border bg-background px-2.5 text-[13px] text-foreground shadow-xs">
       <time dateTime={now.toISOString()} className="leading-none">
         {formatPersianWeekday(now)} {formatPersianDate(now)}
       </time>

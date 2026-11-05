@@ -46,12 +46,14 @@ export default async function DashboardLayout({
             className="bg-grid-pattern pointer-events-none absolute inset-0 rounded-[inherit]"
           />
           <DashboardHeader />
-          {/* Pull content under the header so the glass blur stays visible.
+          {/* Mobile: the header is an absolute overlay (56px fade zone), so the
+              content starts below it with pt-14. Desktop pulls content under
+              the glass header (md:-mt-16/md:pt-20) so the blur stays visible.
               data-slot="dashboard-scroll" marks the vertical scroll root for
               windowed tables (see use-windowed-rows). */}
           <div
             data-slot="dashboard-scroll"
-            className="relative -mt-16 no-scrollbar flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-x-clip overflow-y-auto p-4 pt-20"
+            className="relative no-scrollbar flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-x-clip overflow-y-auto p-4 pt-16 md:-mt-16 md:pt-20"
           >
             {children}
           </div>

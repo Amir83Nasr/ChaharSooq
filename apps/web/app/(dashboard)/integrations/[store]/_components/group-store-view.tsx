@@ -38,6 +38,10 @@ import {
 } from "@/components/data/data-table-toolbar"
 import { StockCell } from "@/components/data/products-stock-cell"
 import { ProductDetailDialog } from "@/app/(dashboard)/products/_components/product-dialogs"
+import {
+  ProductsCards,
+  ProductsMobileEmpty,
+} from "@/app/(dashboard)/products/_components/products-cards"
 
 const SEARCH_DEBOUNCE_MS = 400
 
@@ -191,7 +195,11 @@ export function GroupStoreView({
         <ErrorState
           title="خطا در بارگذاری اتصال"
           hint={error}
-          action={<Button onClick={refreshData}>تلاش مجدد</Button>}
+          action={
+            <Button onClick={refreshData} className="h-11 md:h-8">
+              تلاش مجدد
+            </Button>
+          }
         />
       ) : page === null ? (
         <GroupStoreSkeleton />
@@ -202,7 +210,10 @@ export function GroupStoreView({
           action={
             <Link
               href="/products"
-              className={buttonVariants({ variant: "outline" })}
+              className={buttonVariants({
+                variant: "outline",
+                className: "h-11 md:h-8",
+              })}
             >
               مشاهده محصولات
               <ArrowUpRight aria-hidden="true" />
@@ -211,13 +222,13 @@ export function GroupStoreView({
         />
       ) : (
         <div className="flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-4 xl:grid-cols-3">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-3">
             <Card>
-              <CardContent className="flex flex-col gap-2 p-5">
+              <CardContent className="flex flex-col gap-2 p-4 sm:p-5">
                 <p className="text-sm text-muted-foreground">
                   کالاهای {topGroup}
                 </p>
-                <p className="text-2xl font-bold">
+                <p className="text-xl font-bold sm:text-2xl">
                   <PersianNumber value={total} />
                 </p>
                 <p className="text-xs text-muted-foreground">
@@ -226,7 +237,7 @@ export function GroupStoreView({
               </CardContent>
             </Card>
             <Card>
-              <CardContent className="flex flex-col gap-2 p-5">
+              <CardContent className="flex flex-col gap-2 p-4 sm:p-5">
                 <p className="text-sm text-muted-foreground">
                   ارزش موجودی گروه
                 </p>
@@ -234,7 +245,10 @@ export function GroupStoreView({
                   <Skeleton className="h-8 w-24" />
                 ) : (
                   <>
-                    <Price value={groupValue} className="text-2xl font-bold" />
+                    <Price
+                      value={groupValue}
+                      className="text-xl font-bold sm:text-2xl"
+                    />
                     <p className="text-xs text-muted-foreground">
                       مجموع قیمت × موجودی
                     </p>
@@ -243,7 +257,7 @@ export function GroupStoreView({
               </CardContent>
             </Card>
             <Card className="col-span-2 xl:col-span-1">
-              <CardContent className="flex flex-col gap-2 p-5">
+              <CardContent className="flex flex-col gap-2 p-4 sm:p-5">
                 <p className="text-sm text-muted-foreground">
                   فرمول قیمت پیشنهادی {topGroup}
                 </p>
@@ -286,7 +300,7 @@ export function GroupStoreView({
             </Card>
           </div>
 
-          <section className="space-y-1 rounded-lg border border-dashed border-border bg-muted/40 p-4">
+          <section className="space-y-1 rounded-2xl border border-dashed border-border bg-muted/40 p-4">
             <h2 className="font-semibold">مقایسه خودکار هنوز فعال نشده است</h2>
             <p className="text-sm leading-6 text-muted-foreground">
               استخراج خودکار قیمت فقط برای دیجی‌کالا و تکنولایف فعال است. برای{" "}
@@ -295,7 +309,7 @@ export function GroupStoreView({
             </p>
           </section>
 
-          <DataTableToolbar>
+          <DataTableToolbar className="md:hidden">
             <SearchInput
               value={q}
               onChange={(v) => {
@@ -304,88 +318,118 @@ export function GroupStoreView({
               }}
               placeholder="جست‌وجو در نام یا کد…"
               aria-label={`جست‌وجو در کالاهای ${topGroup}`}
+              className="h-11 rounded-2xl"
             />
           </DataTableToolbar>
+          <div className="hidden md:block">
+            <DataTableToolbar>
+              <SearchInput
+                value={q}
+                onChange={(v) => {
+                  setQ(v)
+                  setPageNum(1)
+                }}
+                placeholder="جست‌وجو در نام یا کد…"
+                aria-label={`جست‌وجو در کالاهای ${topGroup}`}
+              />
+            </DataTableToolbar>
+          </div>
 
-          <Table className="min-w-192 table-fixed">
-            <colgroup>
-              <col className="w-12" />
-              <col className="w-64" />
-              <col className="w-32" />
-              <col className="w-40" />
-              <col className="w-36" />
-              <col className="w-28" />
-            </colgroup>
-            <TableHeader>
-              <TableRow>
-                <TableHead scope="col" className="text-center">
-                  ردیف
-                </TableHead>
-                <TableHead scope="col">نام</TableHead>
-                <TableHead scope="col" className="text-center">
-                  کد
-                </TableHead>
-                <TableHead scope="col">برند</TableHead>
-                <TableHead scope="col" className="text-center">
-                  قیمت
-                </TableHead>
-                <TableHead scope="col" className="text-center">
-                  موجودی
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {page.items.map((item, i) => {
-                const rowNumber =
-                  (page.page > 1 ? (page.page - 1) * page.page_size : 0) + i + 1
-                return (
-                  <TableRow
-                    key={item.id}
-                    tabIndex={0}
-                    className="cursor-pointer"
-                    onClick={() => setSelected(item)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault()
-                        setSelected(item)
-                      }
-                    }}
-                  >
-                    <TableCell className="text-center text-sm text-muted-foreground">
-                      <PersianNumber value={rowNumber} />
-                    </TableCell>
-                    <TableCell className="wrap-break-word whitespace-normal">
-                      <span className="text-sm font-medium">{item.name}</span>
-                      {item.sub_group_name ? (
-                        <span className="block truncate text-xs text-muted-foreground">
-                          {item.sub_group_name}
+          <div className="md:hidden">
+            {page.items.length === 0 ? (
+              <ProductsMobileEmpty hasFilters={debouncedQ !== ""} />
+            ) : (
+              <ProductsCards
+                items={page.items}
+                market="digikala"
+                threshold={threshold}
+                onSelect={setSelected}
+              />
+            )}
+          </div>
+          <div className="hidden md:block">
+            <Table className="min-w-192 table-fixed">
+              <colgroup>
+                <col className="w-12" />
+                <col className="w-64" />
+                <col className="w-32" />
+                <col className="w-40" />
+                <col className="w-36" />
+                <col className="w-28" />
+              </colgroup>
+              <TableHeader>
+                <TableRow>
+                  <TableHead scope="col" className="text-center">
+                    ردیف
+                  </TableHead>
+                  <TableHead scope="col">نام</TableHead>
+                  <TableHead scope="col" className="text-center">
+                    کد
+                  </TableHead>
+                  <TableHead scope="col">برند</TableHead>
+                  <TableHead scope="col" className="text-center">
+                    قیمت
+                  </TableHead>
+                  <TableHead scope="col" className="text-center">
+                    موجودی
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {page.items.map((item, i) => {
+                  const rowNumber =
+                    (page.page > 1 ? (page.page - 1) * page.page_size : 0) +
+                    i +
+                    1
+                  return (
+                    <TableRow
+                      key={item.id}
+                      tabIndex={0}
+                      className="cursor-pointer"
+                      onClick={() => setSelected(item)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault()
+                          setSelected(item)
+                        }
+                      }}
+                    >
+                      <TableCell className="text-center text-sm text-muted-foreground">
+                        <PersianNumber value={rowNumber} />
+                      </TableCell>
+                      <TableCell className="wrap-break-word whitespace-normal">
+                        <span className="text-sm font-medium">{item.name}</span>
+                        {item.sub_group_name ? (
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {item.sub_group_name}
+                          </span>
+                        ) : null}
+                      </TableCell>
+                      <TableCell className="text-center text-sm text-muted-foreground">
+                        <span
+                          dir="ltr"
+                          className="inline-block max-w-full truncate align-middle"
+                        >
+                          {item.sku}
                         </span>
-                      ) : null}
-                    </TableCell>
-                    <TableCell className="text-center text-sm text-muted-foreground">
-                      <span
-                        dir="ltr"
-                        className="inline-block max-w-full truncate align-middle"
-                      >
-                        {item.sku}
-                      </span>
-                    </TableCell>
-                    <TableCell className="truncate text-sm">
-                      {topBrandOf(item.main_group_name, topGroup) ?? (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Price value={item.price} />
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <StockCell value={item.stock} threshold={threshold} />
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
+                      </TableCell>
+                      <TableCell className="truncate text-sm">
+                        {topBrandOf(item.main_group_name, topGroup) ?? (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Price value={item.price} />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <StockCell value={item.stock} threshold={threshold} />
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </div>
           <TablePagination
             page={pageNum}
             totalPages={totalPages}

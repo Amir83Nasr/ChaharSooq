@@ -18,7 +18,7 @@ const breadcrumbLabels: Record<string, string> = {
   products: "محصولات",
   reports: "گزارش‌ها",
   settings: "تنظیمات",
-  integrations: "یکپارچه‌سازی",
+  integrations: "اتصال فروشگاه‌ها",
   sofa: "سوفا",
   digifresh: "دیجی‌فرش",
   digikala: "دیجی‌کالا",

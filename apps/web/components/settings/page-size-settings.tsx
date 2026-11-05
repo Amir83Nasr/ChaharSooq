@@ -56,7 +56,7 @@ export function PageSizeSettings() {
   if (!loaded) {
     return (
       <div
-        className="h-10 animate-pulse rounded-md bg-muted"
+        className="h-10 animate-pulse rounded-2xl bg-muted"
         aria-label="در حال بارگذاری"
       />
     )
@@ -79,6 +79,7 @@ export function PageSizeSettings() {
               aria-checked={active}
               disabled={busy}
               onClick={() => save(n)}
+              className="h-11 md:h-9"
             >
               {n === 0 ? (
                 <span>همه</span>

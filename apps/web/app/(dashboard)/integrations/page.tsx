@@ -44,6 +44,7 @@ export default function IntegrationsPage() {
                   <Button
                     nativeButton={false}
                     variant="outline"
+                    className="h-11 w-full md:h-9 md:w-auto"
                     render={<Link href={`/integrations/${store.key}`} />}
                   >
                     مشاهده اتصال

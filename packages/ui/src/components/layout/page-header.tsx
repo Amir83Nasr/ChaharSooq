@@ -16,16 +16,20 @@ export function PageHeader({
   return (
     <div
       className={cn(
-        "flex flex-wrap items-start justify-between gap-4",
+        // Mobile is app-like: centered title clears the floating menu button
+        // on both sides; desktop keeps the start-aligned row layout.
+        "flex flex-col items-center gap-4 text-center md:flex-row md:items-start md:justify-between md:text-start",
         className
       )}
     >
       <div className="min-w-0">
         <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-        {subtitle ? <p className="text-muted-foreground">{subtitle}</p> : null}
+        {subtitle ? (
+          <p className="text-sm text-muted-foreground">{subtitle}</p>
+        ) : null}
       </div>
       {actions ? (
-        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+        <div className="flex w-full flex-wrap items-center justify-center gap-2 sm:w-auto">
           {actions}
         </div>
       ) : null}

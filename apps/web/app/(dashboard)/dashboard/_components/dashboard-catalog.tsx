@@ -27,7 +27,7 @@ const INITIAL_BRAND_ROWS = 6
 
 function SectionSummary({ section }: { section: CatalogSection }) {
   return (
-    <div className="rounded-lg border bg-muted/40 p-4">
+    <div className="rounded-2xl border bg-muted/40 p-4">
       <p className="text-sm font-semibold">{section.top_group}</p>
       <p className="mt-2 text-2xl font-bold">
         <PersianNumber value={section.items} />
@@ -72,7 +72,33 @@ function SectionBrands({ section }: { section: CatalogSection }) {
         </p>
       ) : (
         <>
-          <div className="overflow-x-auto">
+          <ul className="flex flex-col gap-2 md:hidden">
+            {visible.map((brand) => (
+              <li
+                key={brand.group_name}
+                className="flex items-center gap-3 rounded-2xl border border-border bg-card px-3 py-2.5"
+              >
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span className="truncate text-sm font-medium">
+                    {brand.brand}
+                  </span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    {brand.group_name}
+                  </span>
+                </span>
+                <span className="flex shrink-0 flex-col items-end gap-0.5">
+                  <span className="text-sm font-bold">
+                    <PersianNumber value={brand.count} />
+                  </span>
+                  <Price
+                    value={brand.stock_value}
+                    className="text-xs font-medium text-muted-foreground"
+                  />
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-x-auto md:block">
             <Table className="min-w-160">
               <TableHeader>
                 <TableRow>
@@ -110,6 +136,7 @@ function SectionBrands({ section }: { section: CatalogSection }) {
             <Button
               variant="outline"
               size="sm"
+              className="h-11 w-full rounded-2xl md:h-9 md:w-auto"
               onClick={() => setExpanded((v) => !v)}
             >
               {expanded ? "نمایش کمتر" : "نمایش همه برندها"}

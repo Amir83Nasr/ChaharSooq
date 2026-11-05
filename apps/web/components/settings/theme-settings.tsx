@@ -27,7 +27,7 @@ export function ThemeSettings() {
         {OPTIONS.map((opt) => (
           <div
             key={opt.value}
-            className="h-10 animate-pulse rounded-md bg-muted"
+            className="h-10 animate-pulse rounded-2xl bg-muted"
           />
         ))}
       </div>
@@ -45,7 +45,7 @@ export function ThemeSettings() {
             role="radio"
             aria-checked={active}
             onClick={() => setTheme(opt.value)}
-            className={cn("h-10")}
+            className={cn("h-11 md:h-9")}
           >
             <opt.icon />
             <span>{opt.label}</span>

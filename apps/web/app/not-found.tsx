@@ -20,7 +20,11 @@ export default function NotFound() {
           hint="نشانی وارد شده معتبر نیست. ممکن است صفحه جابه‌جا یا حذف شده باشد."
           action={
             <>
-              <Button nativeButton={false} render={<Link href="/products" />}>
+              <Button
+                nativeButton={false}
+                render={<Link href="/products" />}
+                className="h-11 md:h-8"
+              >
                 <Store className="size-4" />
                 بازگشت به محصولات
               </Button>
@@ -28,6 +32,7 @@ export default function NotFound() {
                 variant="outline"
                 nativeButton={false}
                 render={<Link href="/dashboard" />}
+                className="h-11 md:h-8"
               >
                 <LayoutDashboard className="size-4" />
                 رفتن به داشبورد

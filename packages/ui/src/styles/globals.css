@@ -347,6 +347,33 @@
   }
 }
 
+/* ── MOBILE MENU (ChatGPT-style) ────────────────────────
+   On mobile the sidebar renders inside a Sheet (data-mobile="true").
+   Unlike desktop, it reads as an app menu, not a dashboard sidebar:
+   no group labels, roomy rounded rows, larger text. Desktop is untouched
+   (this only targets the mobile sheet). */
+
+@media (max-width: 767px) {
+  [data-slot="sidebar"][data-mobile="true"] [data-slot="sidebar-group-label"] {
+    display: none;
+  }
+  [data-slot="sidebar"][data-mobile="true"] [data-slot="sidebar-group"] {
+    padding-inline: 0.75rem;
+  }
+  [data-slot="sidebar"][data-mobile="true"] [data-slot="sidebar-menu-button"] {
+    min-height: 3.25rem;
+    border-radius: 1rem;
+    font-size: 0.9375rem;
+    padding-inline: 0.875rem;
+  }
+  [data-slot="sidebar"][data-mobile="true"]
+    [data-slot="sidebar-menu-sub-button"] {
+    min-height: 2.75rem;
+    border-radius: 0.875rem;
+    font-size: 0.875rem;
+  }
+}
+
 /* ── GRID / SQUARE PATTERN ────────────────────────────── */
 
 :root {

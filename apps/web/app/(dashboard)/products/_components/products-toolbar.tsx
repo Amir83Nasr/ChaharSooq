@@ -80,6 +80,7 @@ export function ProductsToolbar(props: ToolbarProps) {
         onChange={onQ}
         placeholder="جست‌وجو در نام یا کد…"
         aria-label="جست‌وجو در محصولات"
+        className="max-md:h-11"
       />
       <Select
         value={topGroup === null ? "all" : topGroup}
@@ -169,7 +170,7 @@ export function ProductsToolbar(props: ToolbarProps) {
           placeholder="کمینه قیمت"
           aria-label="کمینه قیمت (تومان)"
           inputMode="numeric"
-          className="w-full pe-12"
+          className="w-full pe-12 max-md:h-11"
         />
         {minPrice !== "" ? (
           <span
@@ -187,7 +188,7 @@ export function ProductsToolbar(props: ToolbarProps) {
           placeholder="بیشینه قیمت"
           aria-label="بیشینه قیمت (تومان)"
           inputMode="numeric"
-          className="w-full pe-12"
+          className="w-full pe-12 max-md:h-11"
         />
         {maxPrice !== "" ? (
           <span
@@ -199,7 +200,12 @@ export function ProductsToolbar(props: ToolbarProps) {
         ) : null}
       </div>
       {hasFilters ? (
-        <Button variant="destructive" size="sm" onClick={onClear}>
+        <Button
+          variant="destructive"
+          size="sm"
+          onClick={onClear}
+          className="max-md:h-11 max-md:w-full"
+        >
           پاک‌سازی فیلترها
         </Button>
       ) : null}

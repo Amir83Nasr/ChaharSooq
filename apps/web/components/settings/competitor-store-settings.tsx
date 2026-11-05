@@ -58,7 +58,7 @@ export function CompetitorStoreSettings() {
   if (!loaded) {
     return (
       <div
-        className="h-10 animate-pulse rounded-md bg-muted"
+        className="h-10 animate-pulse rounded-2xl bg-muted"
         aria-label="در حال بارگذاری"
       />
     )
@@ -81,6 +81,7 @@ export function CompetitorStoreSettings() {
               aria-checked={active}
               disabled={busy}
               onClick={() => save(option.value)}
+              className="h-11 md:h-9"
             >
               {option.label}
             </Button>

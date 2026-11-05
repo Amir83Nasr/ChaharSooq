@@ -99,7 +99,7 @@ export function CompetitorSyncIntervalSettings() {
   if (!loaded) {
     return (
       <div
-        className="h-10 animate-pulse rounded-md bg-muted"
+        className="h-10 animate-pulse rounded-2xl bg-muted"
         aria-label="در حال بارگذاری"
       />
     )
@@ -118,9 +118,14 @@ export function CompetitorSyncIntervalSettings() {
           aria-label="فاصله به‌روزرسانی خودکار قیمت رقبا (ساعت)"
           inputMode="decimal"
           maxLength={6}
+          className="h-11 sm:h-8"
         />
         <span className="text-sm text-muted-foreground">ساعت</span>
-        <Button onClick={save} disabled={busy || value.trim() === ""}>
+        <Button
+          onClick={save}
+          disabled={busy || value.trim() === ""}
+          className="h-11 shrink-0 sm:h-8"
+        >
           ذخیره
         </Button>
       </div>

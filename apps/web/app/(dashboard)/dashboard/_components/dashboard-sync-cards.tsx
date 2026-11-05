@@ -86,9 +86,9 @@ function SyncCard({
   const tone = toneOf(status)
   return (
     <Card>
-      <CardContent className="flex items-center gap-4 px-5 py-4">
+      <CardContent className="flex items-center gap-3 px-4 py-3.5 sm:gap-4 sm:px-5 sm:py-4">
         <span className="relative shrink-0">
-          <span className={cn("block rounded-xl p-3", tileClass)}>{icon}</span>
+          <span className={cn("block rounded-2xl p-3", tileClass)}>{icon}</span>
           {status.running ? (
             <span
               aria-hidden="true"
@@ -151,7 +151,7 @@ export function SyncStatusCards({ parsina, competitor }: SyncStatusCardsProps) {
   }, [])
   if (parsina === null && competitor === null) return null
   return (
-    <div aria-live="polite" className="grid gap-4 sm:grid-cols-2">
+    <div aria-live="polite" className="grid gap-2.5 sm:gap-4 md:grid-cols-2">
       {parsina ? (
         <SyncCard
           title="پارسینا"

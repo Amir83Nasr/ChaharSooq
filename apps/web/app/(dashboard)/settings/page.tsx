@@ -30,7 +30,7 @@ export const metadata: Metadata = { title: "چهارسوق | تنظیمات" }
 
 export default function SettingsPage() {
   return (
-    <div className="flex flex-1 flex-col gap-6">
+    <div className="flex flex-1 flex-col gap-4 sm:gap-6">
       <PageHeader title="تنظیمات" subtitle="پیکربندی فروشگاه" />
       <Card>
         <CardHeader>

@@ -28,6 +28,11 @@ import {
   SearchInput,
 } from "@/components/data/data-table-toolbar"
 import { ProductDetailDialog } from "@/app/(dashboard)/products/_components/product-dialogs"
+import {
+  ProductsCards,
+  ProductsMobileEmpty,
+  ProductsMobilePagination,
+} from "@/app/(dashboard)/products/_components/products-cards"
 import { ProductsTable } from "@/app/(dashboard)/products/_components/products-table"
 import type { AutoStoreKey } from "../../_components/store-config"
 
@@ -199,7 +204,11 @@ export function AutoStoreView({
         <ErrorState
           title="خطا در بارگذاری اتصال"
           hint={error}
-          action={<Button onClick={refreshData}>تلاش مجدد</Button>}
+          action={
+            <Button onClick={refreshData} className="h-11 md:h-8">
+              تلاش مجدد
+            </Button>
+          }
         />
       ) : page === null ? (
         <AutoStoreSkeleton />
@@ -210,7 +219,10 @@ export function AutoStoreView({
           action={
             <Link
               href="/products"
-              className={buttonVariants({ variant: "outline" })}
+              className={buttonVariants({
+                variant: "outline",
+                className: "h-11 md:h-8",
+              })}
             >
               مشاهده محصولات
               <ArrowUpRight aria-hidden="true" />
@@ -219,13 +231,13 @@ export function AutoStoreView({
         />
       ) : (
         <div className="flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-4">
             <Card>
-              <CardContent className="flex flex-col gap-2 p-5">
+              <CardContent className="flex flex-col gap-2 p-4 sm:p-5">
                 <p className="text-sm text-muted-foreground">
                   کالاهای لوازم خانگی
                 </p>
-                <p className="text-2xl font-bold">
+                <p className="text-xl font-bold sm:text-2xl">
                   <PersianNumber value={total} />
                 </p>
                 <p className="text-xs text-muted-foreground">
@@ -234,9 +246,9 @@ export function AutoStoreView({
               </CardContent>
             </Card>
             <Card>
-              <CardContent className="flex flex-col gap-2 p-5">
+              <CardContent className="flex flex-col gap-2 p-4 sm:p-5">
                 <p className="text-sm text-muted-foreground">پوشش قیمت تازه</p>
-                <p className="text-2xl font-bold">
+                <p className="text-xl font-bold sm:text-2xl">
                   <PersianNumber value={coverage} />٪
                 </p>
                 <p className="text-xs text-muted-foreground">
@@ -246,11 +258,11 @@ export function AutoStoreView({
               </CardContent>
             </Card>
             <Card>
-              <CardContent className="flex flex-col gap-2 p-5">
+              <CardContent className="flex flex-col gap-2 p-4 sm:p-5">
                 <p className="text-sm text-muted-foreground">
                   نیازمند لینک/بررسی
                 </p>
-                <p className="text-2xl font-bold">
+                <p className="text-xl font-bold sm:text-2xl">
                   <PersianNumber value={missing} />
                 </p>
                 <p className="text-xs text-muted-foreground">
@@ -259,7 +271,7 @@ export function AutoStoreView({
               </CardContent>
             </Card>
             <Card>
-              <CardContent className="flex flex-col gap-2 p-5">
+              <CardContent className="flex flex-col gap-2 p-4 sm:p-5">
                 <p className="text-sm text-muted-foreground">
                   بزرگ‌ترین اختلاف
                 </p>
@@ -294,7 +306,7 @@ export function AutoStoreView({
             </Card>
           </div>
 
-          <DataTableToolbar>
+          <DataTableToolbar className="md:hidden">
             <SearchInput
               value={q}
               onChange={(v) => {
@@ -303,32 +315,80 @@ export function AutoStoreView({
               }}
               placeholder="جست‌وجو در نام یا کد…"
               aria-label="جست‌وجو در کالاهای لوازم خانگی"
+              className="h-11 rounded-2xl"
             />
             <Button
               variant={onlyMissing ? "default" : "outline"}
               size="sm"
               onClick={() => setOnlyMissing((v) => !v)}
               aria-pressed={onlyMissing}
+              className="h-11 flex-1 rounded-2xl"
             >
               فقط بدون قیمت تازه
             </Button>
           </DataTableToolbar>
+          <div className="hidden md:block">
+            <DataTableToolbar>
+              <SearchInput
+                value={q}
+                onChange={(v) => {
+                  setQ(v)
+                  setPageNum(1)
+                }}
+                placeholder="جست‌وجو در نام یا کد…"
+                aria-label="جست‌وجو در کالاهای لوازم خانگی"
+              />
+              <Button
+                variant={onlyMissing ? "default" : "outline"}
+                size="sm"
+                onClick={() => setOnlyMissing((v) => !v)}
+                aria-pressed={onlyMissing}
+              >
+                فقط بدون قیمت تازه
+              </Button>
+            </DataTableToolbar>
+          </div>
 
-          <ProductsTable
-            page={visiblePage}
-            threshold={threshold}
-            pageNum={pageNum}
-            totalPages={totalPages}
-            pageSize={pageSize}
-            showPageSize={false}
-            hasFilters={debouncedQ !== "" || onlyMissing}
-            market={store}
-            onSelect={setSelected}
-            onPageChange={(next) =>
-              setPageNum(Math.min(Math.max(1, next), totalPages))
-            }
-            onPageSize={() => undefined}
-          />
+          <div className="space-y-4 md:hidden">
+            {(visiblePage?.items.length ?? 0) === 0 ? (
+              <ProductsMobileEmpty
+                hasFilters={debouncedQ !== "" || onlyMissing}
+              />
+            ) : (
+              <>
+                <ProductsCards
+                  items={visiblePage?.items ?? []}
+                  market={store}
+                  threshold={threshold}
+                  onSelect={setSelected}
+                />
+                <ProductsMobilePagination
+                  pageNum={pageNum}
+                  totalPages={totalPages}
+                  onPageChange={(next) =>
+                    setPageNum(Math.min(Math.max(1, next), totalPages))
+                  }
+                />
+              </>
+            )}
+          </div>
+          <div className="hidden md:block">
+            <ProductsTable
+              page={visiblePage}
+              threshold={threshold}
+              pageNum={pageNum}
+              totalPages={totalPages}
+              pageSize={pageSize}
+              showPageSize={false}
+              hasFilters={debouncedQ !== "" || onlyMissing}
+              market={store}
+              onSelect={setSelected}
+              onPageChange={(next) =>
+                setPageNum(Math.min(Math.max(1, next), totalPages))
+              }
+              onPageSize={() => undefined}
+            />
+          </div>
           <p className="text-xs leading-5 text-muted-foreground">
             برای ثبت یا بررسی لینک {storeName}، روی ردیف کالا بزنید تا جزئیات
             باز شود. قیمت فقط تا ۲۴ ساعت تازه محسوب می‌شود.

@@ -21,7 +21,7 @@ export function SearchInput({
 }: SearchInputProps) {
   return (
     <div className="relative min-w-0 flex-1">
-      <Search className="absolute end-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      <Search className="absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
       <InputPrimitive
         placeholder={placeholder}
         value={value}
@@ -41,7 +41,7 @@ export function DataTableToolbar({
   className?: string
 }) {
   return (
-    <div className={cn("rounded-lg border bg-card p-3", className)}>
+    <div className={cn("rounded-2xl border bg-card p-3", className)}>
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
         {children}
       </div>

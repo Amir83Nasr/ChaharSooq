@@ -179,28 +179,28 @@ export function CompetitorSyncPanel({ onSynced, onUnauthorized }: Props) {
   const failed = status !== null && !running && lastRunFailed(status)
 
   return (
-    // Fixed width on sm+ so the status line wraps inside instead of
-    // stretching the panel and pushing the sibling panel around. Full-width
-    // stacked rows on mobile.
-    <div className="flex w-full flex-col gap-2 sm:w-56">
+    // Labeled buttons on every breakpoint (same look as all other buttons:
+    // h-11 touch target on mobile, h-9 on sm+, unified rounded-2xl). The two
+    // panels stack full-width on mobile so the Persian labels never clip.
+    <div className="flex w-full flex-col gap-2 sm:w-56 sm:shrink-0">
       <Button
         onClick={runSync}
         disabled={disabled}
         aria-busy={busy}
         variant="outline"
-        className="w-full justify-center gap-2"
+        className="h-11 w-full justify-center gap-2 rounded-2xl sm:h-9"
       >
         <RefreshCw
           data-icon="inline-start"
           className={busy ? "size-4 shrink-0 animate-spin" : "size-4 shrink-0"}
           aria-hidden="true"
         />
-        به‌روزرسانی قیمت رقبا
+        <span>به‌روزرسانی قیمت رقبا</span>
       </Button>
       {/* Two-line reserve: short/long status states swap without moving
           the content below. leading-4 locks the math (2 × 16px = min-h-8). */}
       <div
-        className="min-h-8 w-full text-start text-xs leading-4 text-muted-foreground"
+        className="hidden min-h-8 w-full text-start text-xs leading-4 text-muted-foreground sm:block"
         aria-live="polite"
       >
         {loading ? (

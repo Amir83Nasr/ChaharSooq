@@ -140,7 +140,7 @@ function FilledSlotCard({
   }
 
   return (
-    <article className="space-y-3 rounded-lg border border-border bg-background p-3 sm:p-4">
+    <article className="space-y-3 rounded-2xl border border-border bg-background p-3 sm:p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-1.5">
           <Badge variant="secondary">{listingStoreLabel(listing)}</Badge>
@@ -165,14 +165,17 @@ function FilledSlotCard({
           href={listing.url}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-border bg-background px-3 text-xs font-medium text-foreground shadow-xs transition-[color,background-color,border-color] hover:bg-muted active:scale-[0.98] sm:h-8"
         >
           مشاهده در فروشگاه
-          <ExternalLink className="size-3.5 shrink-0" aria-hidden="true" />
+          <ExternalLink
+            className="size-3.5 shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
         </a>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-md bg-muted/50 px-3 py-2">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-2xl bg-muted/50 px-3 py-2">
         <div>
           <p className="text-xs text-muted-foreground">قیمت مؤثر</p>
           {listing.effective_price !== null ? (
@@ -207,7 +210,7 @@ function FilledSlotCard({
                 : "ناموجود"}
           </p>
         </div>
-        <div>
+        <div className="hidden sm:block">
           <p className="text-xs text-muted-foreground">آخرین بررسی</p>
           <p className="text-sm">
             {listing.last_checked_at ? (
@@ -263,12 +266,13 @@ function FilledSlotCard({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
         <Button
           size="sm"
           variant="outline"
           disabled={!canPersist}
           onClick={persistLink}
+          className="h-11 rounded-2xl sm:h-9"
         >
           ذخیره لینک
         </Button>
@@ -277,11 +281,12 @@ function FilledSlotCard({
           variant="outline"
           disabled={busy || trimmedUrl === "" || urlMismatch}
           onClick={() => onCheck(url.trim())}
+          className="h-11 rounded-2xl sm:h-9"
         >
           {busy ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}
           بررسی لینک
         </Button>
-        <span className="ms-auto flex gap-1">
+        <span className="col-span-2 flex gap-1 sm:col-span-1 sm:ms-auto">
           <Button
             size="sm"
             variant="destructive"
@@ -293,6 +298,7 @@ function FilledSlotCard({
                 onDelete()
               }
             }}
+            className="h-11 w-full rounded-2xl sm:h-9 sm:w-auto"
           >
             <Trash2 /> حذف
           </Button>
@@ -324,7 +330,7 @@ function EmptySlotCard({
   }
 
   return (
-    <article className="space-y-3 rounded-lg border border-dashed border-border bg-background p-3 sm:p-4">
+    <article className="space-y-3 rounded-2xl border border-dashed border-border bg-background p-3 sm:p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-1.5">
           <Badge variant="secondary">{STORE_LABELS[store]}</Badge>
@@ -369,6 +375,7 @@ function EmptySlotCard({
             type="submit"
             size="sm"
             disabled={busy || trimmedUrl === "" || urlMismatch}
+            className="h-11 w-full rounded-2xl sm:h-9 sm:w-auto"
           >
             {busy ? <LoaderCircle className="animate-spin" /> : <Plus />}
             ثبت لینک
@@ -507,11 +514,14 @@ export function ProductCompetitorPrices({
   const otherListings = listings.filter((listing) => listing.store === "other")
 
   return (
-    <section className="space-y-4 rounded-lg border border-border bg-muted/30 p-4 text-start">
+    <section className="space-y-4 rounded-2xl border border-border bg-muted/30 p-4 text-start">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <h3 className="font-semibold">قیمت فروشگاه‌های دیگر</h3>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+          <p className="mt-1 text-xs leading-5 text-muted-foreground md:hidden">
+            لینک هر فروشگاه را وارد کنید تا قیمت به‌صورت خودکار بررسی شود.
+          </p>
+          <p className="mt-1 hidden text-xs leading-5 text-muted-foreground md:block">
             برای هر فروشگاه یک کارت وجود دارد. لینک را وارد کنید تا ذخیره و
             به‌صورت خودکار بررسی شود؛ با «بررسی لینک» می‌توانید بعداً قیمت را
             به‌روزرسانی کنید و با «حذف» لینک دستی پاک می‌شود. با «به‌روزرسانی
@@ -525,7 +535,7 @@ export function ProductCompetitorPrices({
           disabled={loading || anyBusy || listings.length === 0}
           onClick={() => void checkAllListings()}
           aria-busy={checkAllBusy}
-          className="justify-center gap-2 sm:min-w-48"
+          className="h-11 w-full justify-center gap-2 rounded-2xl sm:h-9 sm:w-auto sm:min-w-48"
         >
           <RefreshCw
             data-icon="inline-start"
@@ -548,7 +558,7 @@ export function ProductCompetitorPrices({
           {DIALOG_STORES.map((store) => (
             <div
               key={store}
-              className="space-y-2 rounded-lg border border-border bg-background p-3 sm:p-4"
+              className="space-y-2 rounded-2xl border border-border bg-background p-3 sm:p-4"
             >
               <Skeleton className="h-5 w-32" />
               <Skeleton className="h-10 w-full" />

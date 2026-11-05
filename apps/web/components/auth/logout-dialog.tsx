@@ -40,13 +40,18 @@ export function LogoutDialog({
             leak desktop layout into the mobile drawer (640–768px). */}
         <ResponsiveDialogFooter>
           <ResponsiveDialogClose
-            render={<Button variant="outline" className="w-full md:w-auto" />}
+            render={
+              <Button
+                variant="outline"
+                className="h-11 w-full md:h-9 md:w-auto"
+              />
+            }
           >
             انصراف
           </ResponsiveDialogClose>
           <Button
             variant="destructive"
-            className="w-full md:w-auto"
+            className="h-11 w-full md:h-9 md:w-auto"
             onClick={() => void onConfirm()}
             disabled={pending}
             autoFocus

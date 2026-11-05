@@ -77,7 +77,7 @@ export function SuggestedPriceSettings() {
   if (!loaded) {
     return (
       <div
-        className="h-10 animate-pulse rounded-md bg-muted"
+        className="h-10 animate-pulse rounded-2xl bg-muted"
         aria-label="در حال بارگذاری"
       />
     )
@@ -106,7 +106,11 @@ export function SuggestedPriceSettings() {
         </div>
       ))}
       <div>
-        <Button onClick={save} disabled={busy}>
+        <Button
+          onClick={save}
+          disabled={busy}
+          className="h-11 w-full sm:h-9 sm:w-auto"
+        >
           {busy ? "در حال ذخیره…" : "ذخیره فرمول‌ها"}
         </Button>
       </div>

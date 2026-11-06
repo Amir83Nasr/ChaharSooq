@@ -193,7 +193,8 @@ export type DefaultCompetitorStore = "digikala" | "technolife"
 
 export interface SuggestedPriceFormula {
   top_group: TopGroup
-  expression: string
+  /** Competitor share of the blend, from 0 (base only) to 1 (competitor only). */
+  weight: number
 }
 
 export interface SettingsUpdate {

@@ -42,6 +42,7 @@ _FIELD_LABELS: dict[str, str] = {
     "url": "لینک محصول",
     "store": "فروشگاه",
     "manual_price": "قیمت دستی",
+    "weight": "وزن",
 }
 
 

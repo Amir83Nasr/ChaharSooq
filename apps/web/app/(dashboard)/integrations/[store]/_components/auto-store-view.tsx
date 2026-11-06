@@ -22,6 +22,10 @@ import {
   type ProductPage,
 } from "@/lib/api"
 import { DEFAULT_LOW_STOCK_THRESHOLD } from "@/lib/inventory"
+import {
+  toSuggestedPriceWeights,
+  type SuggestedPriceWeights,
+} from "@/lib/suggested-price"
 import { CompetitorSyncPanel } from "@/components/data/competitor-sync-panel"
 import {
   DataTableToolbar,
@@ -72,6 +76,7 @@ export function AutoStoreView({
   const [freshTotal, setFreshTotal] = useState(0)
   const [gaps, setGaps] = useState<CompetitorGap[]>([])
   const [threshold, setThreshold] = useState(DEFAULT_LOW_STOCK_THRESHOLD)
+  const [weights, setWeights] = useState<SuggestedPriceWeights>({})
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<ProductOut | null>(null)
   const [q, setQ] = useState("")
@@ -102,6 +107,7 @@ export function AutoStoreView({
         if (Number.isFinite(data.low_stock_threshold)) {
           setThreshold(Math.max(0, Math.floor(data.low_stock_threshold)))
         }
+        setWeights(toSuggestedPriceWeights(data.suggested_price_formulas))
         setSettingsLoaded(true)
       })
       .catch(() => {
@@ -382,6 +388,7 @@ export function AutoStoreView({
               showPageSize={false}
               hasFilters={debouncedQ !== "" || onlyMissing}
               market={store}
+              weights={weights}
               onSelect={setSelected}
               onPageChange={(next) =>
                 setPageNum(Math.min(Math.max(1, next), totalPages))

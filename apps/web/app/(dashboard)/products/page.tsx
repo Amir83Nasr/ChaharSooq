@@ -17,6 +17,10 @@ import {
   type ProductSort,
 } from "@/lib/api"
 import { DEFAULT_LOW_STOCK_THRESHOLD } from "@/lib/inventory"
+import {
+  toSuggestedPriceWeights,
+  type SuggestedPriceWeights,
+} from "@/lib/suggested-price"
 import { ParsinaSyncPanel } from "@/components/data/parsina-sync-panel"
 import { CompetitorSyncPanel } from "@/components/data/competitor-sync-panel"
 import { ProductDetailDialog } from "./_components/product-dialogs"
@@ -61,6 +65,7 @@ function ProductsPageContent() {
   const [maxPrice, setMaxPrice] = useState("")
   const [threshold, setThreshold] = useState(DEFAULT_LOW_STOCK_THRESHOLD)
   const [market, setMarket] = useState<DefaultCompetitorStore>("digikala")
+  const [weights, setWeights] = useState<SuggestedPriceWeights>({})
   // Bumped after a sync lands — re-fetches table + stats in place, keeping
   // search/sort/paging state untouched.
   const [dataVersion, setDataVersion] = useState(0)
@@ -153,6 +158,7 @@ function ProductsPageContent() {
         ) {
           setMarket(data.default_competitor_store)
         }
+        setWeights(toSuggestedPriceWeights(data.suggested_price_formulas))
         if (Number.isFinite(data.sync_interval_minutes)) {
           const ms =
             Math.max(1, Math.floor(data.sync_interval_minutes)) * 60 * 1000
@@ -405,6 +411,7 @@ function ProductsPageContent() {
               showPageSize
               hasFilters={hasFilters}
               market={market}
+              weights={weights}
               onSelect={setSelected}
               onPageChange={changePage}
               onPageSize={changePageSize}

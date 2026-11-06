@@ -21,6 +21,7 @@ import { TablePagination } from "@workspace/ui/primitives/pagination"
 import { Skeleton } from "@workspace/ui/primitives/skeleton"
 import { PersianNumber } from "@workspace/ui/persian/persian-number"
 import { Price } from "@workspace/ui/persian/price"
+import { formatPersianNumber } from "@workspace/ui/lib/number"
 
 import {
   api,
@@ -44,6 +45,10 @@ import {
 } from "@/app/(dashboard)/products/_components/products-cards"
 
 const SEARCH_DEBOUNCE_MS = 400
+
+function formatWeight(value: number): string {
+  return formatPersianNumber(Math.round(value * 1000) / 1000)
+}
 
 function topBrandOf(name: string | null, top: TopGroup): string | null {
   if (!name) return null
@@ -87,7 +92,7 @@ export function GroupStoreView({
   const router = useRouter()
   const [page, setPage] = useState<ProductPage | null>(null)
   const [overview, setOverview] = useState<DashboardOverview | null>(null)
-  const [formula, setFormula] = useState<string>("")
+  const [weight, setWeight] = useState<number | null>(null)
   const [threshold, setThreshold] = useState(DEFAULT_LOW_STOCK_THRESHOLD)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<ProductOut | null>(null)
@@ -117,9 +122,11 @@ export function GroupStoreView({
         if (Number.isFinite(data.low_stock_threshold)) {
           setThreshold(Math.max(0, Math.floor(data.low_stock_threshold)))
         }
-        setFormula(
-          data.suggested_price_formulas.find((f) => f.top_group === topGroup)
-            ?.expression ?? ""
+        const formula = data.suggested_price_formulas.find(
+          (f) => f.top_group === topGroup
+        )
+        setWeight(
+          formula && Number.isFinite(formula.weight) ? formula.weight : null
         )
         setSettingsLoaded(true)
       })
@@ -261,7 +268,7 @@ export function GroupStoreView({
                 <p className="text-sm text-muted-foreground">
                   فرمول قیمت پیشنهادی {topGroup}
                 </p>
-                {formula.trim() === "" ? (
+                {weight === null ? (
                   <>
                     <p className="text-sm font-semibold">ثبت نشده است</p>
                     <Link
@@ -271,18 +278,15 @@ export function GroupStoreView({
                         size: "sm",
                       })}
                     >
-                      ثبت فرمول در تنظیمات
+                      ثبت وزن در تنظیمات
                       <ArrowUpRight aria-hidden="true" />
                     </Link>
                   </>
                 ) : (
                   <>
-                    <p
-                      dir="ltr"
-                      className="truncate text-left text-sm font-semibold"
-                      title={formula}
-                    >
-                      {formula}
+                    <p className="text-sm leading-6 font-semibold">
+                      {formatWeight(weight)} × قیمت رقیب +{" "}
+                      {formatWeight(1 - weight)} × قیمت پارسینا
                     </p>
                     <Link
                       href="/settings"

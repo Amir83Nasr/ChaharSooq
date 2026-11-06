@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Literal
 
 from sqlalchemy.orm import Session
 
 from app.models import SuggestedPriceFormula
 from app.repositories import SettingsRepository, SuggestedPriceFormulaRepository
+from app.schemas import SuggestedPriceFormulaIn
 
 LOW_STOCK_THRESHOLD_KEY = "low_stock_threshold"
 DEFAULT_LOW_STOCK_THRESHOLD = 5
@@ -49,25 +51,26 @@ class SettingsService:
             "suggested_price_formulas": self.get_suggested_price_formulas(),
         }
 
-    def get_suggested_price_formulas(self) -> list[dict[str, str]]:
+    def get_suggested_price_formulas(self) -> list[dict[str, object]]:
         rows = self._formulas.list_ordered()
-        return [{"top_group": row.top_group, "expression": row.expression} for row in rows]
+        return [{"top_group": row.top_group, "weight": float(row.weight)} for row in rows]
 
     def update_suggested_price_formulas(
-        self, formulas: list[dict[str, str]]
-    ) -> list[dict[str, str]]:
+        self, formulas: list[SuggestedPriceFormulaIn]
+    ) -> list[dict[str, object]]:
         existing = self._formulas.get_map()
-        submitted = {str(item["top_group"]): str(item["expression"]) for item in formulas}
+        submitted = {item.top_group: item.weight for item in formulas}
         for top_group, row in existing.items():
             if top_group not in submitted:
                 self._formulas.delete(row)
-        for top_group, expression in submitted.items():
+        for top_group, weight in submitted.items():
             row = existing.get(top_group)
+            decimal_weight = Decimal(str(weight))
             if row is None:
-                new_row = SuggestedPriceFormula(top_group=top_group, expression=expression)
+                new_row = SuggestedPriceFormula(top_group=top_group, weight=decimal_weight)
                 self._formulas.add(new_row)
             else:
-                self._formulas.update_expression(row, expression)
+                self._formulas.update_weight(row, decimal_weight)
         return self.get_suggested_price_formulas()
 
     def get_threshold(self) -> int:

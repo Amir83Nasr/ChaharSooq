@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -47,8 +49,8 @@ class SuggestedPriceFormulaRepository:
         self._session.flush()
         return row
 
-    def update_expression(self, row: SuggestedPriceFormula, expression: str) -> None:
-        row.expression = expression
+    def update_weight(self, row: SuggestedPriceFormula, weight: Decimal) -> None:
+        row.weight = weight
         self._session.flush()
 
     def delete(self, row: SuggestedPriceFormula) -> None:

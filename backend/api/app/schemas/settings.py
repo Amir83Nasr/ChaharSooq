@@ -35,5 +35,5 @@ class SettingsUpdateIn(BaseModel):
             return None
         top_groups = [formula.top_group for formula in formulas]
         if len(top_groups) != len(set(top_groups)):
-            raise ValueError("برای هر دسته‌بندی فقط یک فرمول می‌توان ثبت کرد")
+            raise ValueError("برای هر دسته‌بندی فقط یک وزن می‌توان ثبت کرد")
         return formulas

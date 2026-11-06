@@ -2433,17 +2433,17 @@
             ],
             "title": "Top Group"
           },
-          "expression": {
-            "type": "string",
-            "maxLength": 256,
-            "minLength": 1,
-            "title": "Expression"
+          "weight": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Weight"
           }
         },
         "type": "object",
         "required": [
           "top_group",
-          "expression"
+          "weight"
         ],
         "title": "SuggestedPriceFormulaIn"
       },
@@ -2458,17 +2458,17 @@
             ],
             "title": "Top Group"
           },
-          "expression": {
-            "type": "string",
-            "maxLength": 256,
-            "minLength": 1,
-            "title": "Expression"
+          "weight": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Weight"
           }
         },
         "type": "object",
         "required": [
           "top_group",
-          "expression"
+          "weight"
         ],
         "title": "SuggestedPriceFormulaOut"
       },

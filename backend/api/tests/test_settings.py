@@ -61,6 +61,49 @@ def test_settings_competitor_sync_interval_update_and_reject(client: TestClient)
     )
 
 
+def test_settings_suggested_price_weight_update_and_reject(client: TestClient) -> None:
+    login(client)
+    r = client.put(
+        "/api/v1/settings",
+        json={
+            "suggested_price_formulas": [
+                {"top_group": "لوازم خانگی", "weight": 0.6},
+                {"top_group": "مبلمان", "weight": 0.2},
+            ]
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert {
+        (item["top_group"], item["weight"]) for item in r.json()["suggested_price_formulas"]
+    } == {("لوازم خانگی", 0.6), ("مبلمان", 0.2)}
+    assert (
+        client.put(
+            "/api/v1/settings",
+            json={"suggested_price_formulas": [{"top_group": "فرش", "weight": 1.5}]},
+        ).status_code
+        == 422
+    )
+    assert (
+        client.put(
+            "/api/v1/settings",
+            json={"suggested_price_formulas": [{"top_group": "فرش", "weight": -0.1}]},
+        ).status_code
+        == 422
+    )
+    assert (
+        client.put(
+            "/api/v1/settings",
+            json={
+                "suggested_price_formulas": [
+                    {"top_group": "فرش", "weight": 0.1},
+                    {"top_group": "فرش", "weight": 0.3},
+                ]
+            },
+        ).status_code
+        == 422
+    )
+
+
 def test_settings_competitor_store_update_and_reject(client: TestClient) -> None:
     login(client)
     r = client.put("/api/v1/settings", json={"default_competitor_store": "technolife"})

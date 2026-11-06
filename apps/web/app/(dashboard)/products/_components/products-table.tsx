@@ -25,7 +25,11 @@ import { Skeleton } from "@workspace/ui/primitives/skeleton"
 import { CircleAlert, PackageSearch, RefreshCw } from "lucide-react"
 import { StockCell } from "@/components/data/products-stock-cell"
 import { toTomanAmount } from "@/lib/money"
-import type { ProductOut, ProductPage } from "@/lib/api"
+import type { ProductOut, ProductPage, TopGroup } from "@/lib/api"
+import {
+  suggestedPriceFor,
+  type SuggestedPriceWeights,
+} from "@/lib/suggested-price"
 import { useWindowedRows, initialRowWindow } from "./use-windowed-rows"
 
 import { PAGE_SIZE_OPTIONS } from "@/components/settings/page-size-settings"
@@ -39,15 +43,16 @@ interface TableProps {
   showPageSize: boolean
   hasFilters: boolean
   market: CompetitorMarket
+  weights: SuggestedPriceWeights
   onSelect: (item: ProductOut) => void
   onPageChange: (p: number) => void
   onPageSize: (n: number) => void
 }
 
-const COLUMN_COUNT = 10
+const COLUMN_COUNT = 11
 
 // Top-level groups for the catalog display: carpet, furniture, home appliances.
-function topGroupOf(name: string | null): string | null {
+function topGroupOf(name: string | null): TopGroup | null {
   if (!name) return null
   const n = name.trim()
   if (n.startsWith("فرش")) return "فرش"
@@ -124,6 +129,7 @@ function ProductsTableHead(props: { market?: CompetitorMarket }) {
         <col className="w-28" />
         <col className="w-36" />
         <col className="w-28" />
+        <col className="w-32" />
         <col className="w-24" />
       </colgroup>
       <TableHeader>
@@ -153,6 +159,9 @@ function ProductsTableHead(props: { market?: CompetitorMarket }) {
           </TableHead>
           <TableHead scope="col" className="text-center">
             اختلاف درصد
+          </TableHead>
+          <TableHead scope="col" className="text-center">
+            قیمت پیشنهادی
           </TableHead>
           <TableHead scope="col" className="text-center">
             موجودی
@@ -212,6 +221,7 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
     showPageSize,
     hasFilters,
     market,
+    weights,
     onSelect,
     onPageChange,
     onPageSize,
@@ -287,6 +297,11 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
             const pct =
               isAppliance && competitor?.is_fresh === true
                 ? diffPercent(item.price, amount)
+                : null
+            const weight = top === null ? null : (weights[top] ?? null)
+            const suggested =
+              competitor?.is_fresh === true
+                ? suggestedPriceFor(item.price, amount, weight)
                 : null
             return (
               <TableRow
@@ -399,6 +414,13 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                       {formatDiffPercent(pct)}{" "}
                       {pct > 0 ? "گران‌تر" : "ارزان‌تر"}
                     </span>
+                  )}
+                </TableCell>
+                <TableCell className="text-center">
+                  {suggested === null ? (
+                    <span className="text-muted-foreground">—</span>
+                  ) : (
+                    <Price value={suggested} />
                   )}
                 </TableCell>
                 <TableCell className="text-center">

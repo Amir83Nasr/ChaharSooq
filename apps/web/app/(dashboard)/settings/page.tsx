@@ -39,7 +39,7 @@ export default function SettingsPage() {
             قیمت پیشنهادی
           </CardTitle>
           <CardDescription>
-            تعریف دستی فرمول قیمت برای هر دسته‌بندی با متغیر x
+            وزن سهم قیمت رقیب برای هر دسته‌بندی (۰ تا ۱) با پیش‌نمایش زنده
           </CardDescription>
         </CardHeader>
         <CardContent>

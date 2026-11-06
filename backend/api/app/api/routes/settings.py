@@ -45,9 +45,7 @@ def update_settings(
     if payload.default_competitor_store is not None:
         competitor_store = svc.update_competitor_store(payload.default_competitor_store)
     if payload.suggested_price_formulas is not None:
-        formulas = svc.update_suggested_price_formulas(
-            [item.model_dump() for item in payload.suggested_price_formulas]
-        )
+        formulas = svc.update_suggested_price_formulas(payload.suggested_price_formulas)
     return SettingsOut.model_validate(
         {
             "low_stock_threshold": threshold,

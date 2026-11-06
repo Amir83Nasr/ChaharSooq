@@ -2284,6 +2284,22 @@
         ],
         "title": "ProductPage"
       },
+      "ProductTableColumn": {
+        "type": "string",
+        "enum": [
+          "row",
+          "name",
+          "sku",
+          "category",
+          "brand",
+          "unit",
+          "price",
+          "competitor_price",
+          "price_diff",
+          "suggested_price",
+          "stock"
+        ]
+      },
       "SettingsOut": {
         "properties": {
           "low_stock_threshold": {
@@ -2316,6 +2332,13 @@
             },
             "type": "array",
             "title": "Suggested Price Formulas"
+          },
+          "product_table_columns": {
+            "items": {
+              "$ref": "#/components/schemas/ProductTableColumn"
+            },
+            "type": "array",
+            "title": "Product Table Columns"
           }
         },
         "type": "object",
@@ -2325,7 +2348,8 @@
           "sync_interval_minutes",
           "competitor_sync_interval_minutes",
           "default_competitor_store",
-          "suggested_price_formulas"
+          "suggested_price_formulas",
+          "product_table_columns"
         ],
         "title": "SettingsOut"
       },
@@ -2417,6 +2441,20 @@
               }
             ],
             "title": "Suggested Price Formulas"
+          },
+          "product_table_columns": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ProductTableColumn"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Table Columns"
           }
         },
         "type": "object",

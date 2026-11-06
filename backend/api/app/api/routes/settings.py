@@ -32,6 +32,7 @@ def update_settings(
     competitor_interval = svc.get_competitor_sync_interval()
     competitor_store = svc.get_competitor_store()
     formulas = svc.get_suggested_price_formulas()
+    product_columns = svc.get_product_table_columns()
     if payload.low_stock_threshold is not None:
         threshold = svc.update_threshold(payload.low_stock_threshold)
     if payload.default_page_size is not None:
@@ -46,6 +47,8 @@ def update_settings(
         competitor_store = svc.update_competitor_store(payload.default_competitor_store)
     if payload.suggested_price_formulas is not None:
         formulas = svc.update_suggested_price_formulas(payload.suggested_price_formulas)
+    if payload.product_table_columns is not None:
+        product_columns = svc.update_product_table_columns(payload.product_table_columns)
     return SettingsOut.model_validate(
         {
             "low_stock_threshold": threshold,
@@ -54,5 +57,6 @@ def update_settings(
             "competitor_sync_interval_minutes": competitor_interval,
             "default_competitor_store": competitor_store,
             "suggested_price_formulas": formulas,
+            "product_table_columns": product_columns,
         }
     )

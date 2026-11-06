@@ -4,6 +4,20 @@ from fastapi.testclient import TestClient
 
 from tests.helpers import login
 
+DEFAULT_PRODUCT_TABLE_COLUMNS = [
+    "row",
+    "name",
+    "sku",
+    "category",
+    "brand",
+    "unit",
+    "price",
+    "competitor_price",
+    "price_diff",
+    "suggested_price",
+    "stock",
+]
+
 
 def test_settings_require_auth(client: TestClient) -> None:
     assert client.get("/api/v1/settings").status_code == 401
@@ -19,6 +33,7 @@ def test_settings_default_update_and_partial_keep(client: TestClient) -> None:
         "competitor_sync_interval_minutes": 1440,
         "default_competitor_store": "digikala",
         "suggested_price_formulas": [],
+        "product_table_columns": DEFAULT_PRODUCT_TABLE_COLUMNS,
     }
     r = client.put(
         "/api/v1/settings",
@@ -35,7 +50,40 @@ def test_settings_default_update_and_partial_keep(client: TestClient) -> None:
         "competitor_sync_interval_minutes": 1440,
         "default_competitor_store": "digikala",
         "suggested_price_formulas": [],
+        "product_table_columns": DEFAULT_PRODUCT_TABLE_COLUMNS,
     }
+
+
+def test_settings_product_table_columns_update_and_reject(client: TestClient) -> None:
+    login(client)
+    r = client.put(
+        "/api/v1/settings",
+        json={"product_table_columns": ["stock", "name", "price"]},
+    )
+    assert r.status_code == 200, r.text
+    # Stored in canonical table order, independent of the request order.
+    assert r.json()["product_table_columns"] == ["name", "price", "stock"]
+
+    # A partial update keeps the stored selection.
+    kept = client.put("/api/v1/settings", json={"low_stock_threshold": 2})
+    assert kept.status_code == 200, kept.text
+    assert kept.json()["product_table_columns"] == ["name", "price", "stock"]
+
+    assert client.put("/api/v1/settings", json={"product_table_columns": []}).status_code == 422
+    assert (
+        client.put(
+            "/api/v1/settings",
+            json={"product_table_columns": ["name", "name"]},
+        ).status_code
+        == 422
+    )
+    assert (
+        client.put(
+            "/api/v1/settings",
+            json={"product_table_columns": ["unknown"]},
+        ).status_code
+        == 422
+    )
 
 
 def test_settings_reject_invalid_values(client: TestClient) -> None:

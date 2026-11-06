@@ -25,7 +25,17 @@ import { Skeleton } from "@workspace/ui/primitives/skeleton"
 import { CircleAlert, PackageSearch, RefreshCw } from "lucide-react"
 import { StockCell } from "@/components/data/products-stock-cell"
 import { toTomanAmount } from "@/lib/money"
-import type { ProductOut, ProductPage, TopGroup } from "@/lib/api"
+import type {
+  ProductOut,
+  ProductPage,
+  ProductTableColumn,
+  TopGroup,
+} from "@/lib/api"
+import {
+  DEFAULT_PRODUCT_TABLE_COLUMNS,
+  PRODUCT_TABLE_COLUMNS,
+  productTableMinWidth,
+} from "@/lib/product-table-columns"
 import {
   suggestedPriceFor,
   type SuggestedPriceWeights,
@@ -44,12 +54,11 @@ interface TableProps {
   hasFilters: boolean
   market: CompetitorMarket
   weights: SuggestedPriceWeights
+  visibleColumns?: readonly ProductTableColumn[]
   onSelect: (item: ProductOut) => void
   onPageChange: (p: number) => void
   onPageSize: (n: number) => void
 }
-
-const COLUMN_COUNT = 11
 
 // Top-level groups for the catalog display: carpet, furniture, home appliances.
 function topGroupOf(name: string | null): TopGroup | null {
@@ -113,83 +122,110 @@ function formatDiffPercent(diff: number): string {
 // Shared by the data, skeleton and error rows so the column layout never shifts.
 // The competitor store is picked in the toolbar filters; the header only
 // labels which store the column currently shows.
-function ProductsTableHead(props: { market?: CompetitorMarket }) {
-  const { market = "digikala" } = props
+function ProductsTableHead(props: {
+  market?: CompetitorMarket
+  columns?: readonly ProductTableColumn[]
+}) {
+  const { market = "digikala", columns = DEFAULT_PRODUCT_TABLE_COLUMNS } = props
+  const shown = new Set(columns)
   const marketLabel =
     COMPETITOR_MARKETS.find((m) => m.store === market)?.label ?? "دیجی‌کالا"
   return (
     <>
       <colgroup>
-        <col className="w-12" />
-        <col className="w-56" />
-        <col className="w-32" />
-        <col className="w-24" />
-        <col className="w-40" />
-        <col className="w-20" />
-        <col className="w-28" />
-        <col className="w-36" />
-        <col className="w-28" />
-        <col className="w-32" />
-        <col className="w-24" />
+        {PRODUCT_TABLE_COLUMNS.filter((column) => shown.has(column.id)).map(
+          (column) => (
+            <col key={column.id} className={column.widthClass} />
+          )
+        )}
       </colgroup>
       <TableHeader>
         <TableRow>
-          <TableHead scope="col" className="text-center">
-            ردیف
-          </TableHead>
-          <TableHead scope="col">نام</TableHead>
-          <TableHead scope="col" className="text-center">
-            کد
-          </TableHead>
-          <TableHead scope="col">دسته‌بندی</TableHead>
-          <TableHead scope="col">برند</TableHead>
-          <TableHead scope="col" className="text-center">
-            واحد
-          </TableHead>
-          <TableHead scope="col" className="text-center">
-            قیمت
-          </TableHead>
-          <TableHead scope="col" className="text-center">
-            <span className="inline-flex flex-col items-center gap-0.5">
-              <span>قیمت رقبا</span>
-              <span className="text-[11px] font-normal text-muted-foreground">
-                {marketLabel}
+          {shown.has("row") ? (
+            <TableHead scope="col" className="text-center">
+              ردیف
+            </TableHead>
+          ) : null}
+          {shown.has("name") ? <TableHead scope="col">نام</TableHead> : null}
+          {shown.has("sku") ? (
+            <TableHead scope="col" className="text-center">
+              کد
+            </TableHead>
+          ) : null}
+          {shown.has("category") ? (
+            <TableHead scope="col">دسته‌بندی</TableHead>
+          ) : null}
+          {shown.has("brand") ? <TableHead scope="col">برند</TableHead> : null}
+          {shown.has("unit") ? (
+            <TableHead scope="col" className="text-center">
+              واحد
+            </TableHead>
+          ) : null}
+          {shown.has("price") ? (
+            <TableHead scope="col" className="text-center">
+              قیمت
+            </TableHead>
+          ) : null}
+          {shown.has("competitor_price") ? (
+            <TableHead scope="col" className="text-center">
+              <span className="inline-flex flex-col items-center gap-0.5">
+                <span>قیمت رقبا</span>
+                <span className="text-[11px] font-normal text-muted-foreground">
+                  {marketLabel}
+                </span>
               </span>
-            </span>
-          </TableHead>
-          <TableHead scope="col" className="text-center">
-            اختلاف درصد
-          </TableHead>
-          <TableHead scope="col" className="text-center">
-            قیمت پیشنهادی
-          </TableHead>
-          <TableHead scope="col" className="text-center">
-            موجودی
-          </TableHead>
+            </TableHead>
+          ) : null}
+          {shown.has("price_diff") ? (
+            <TableHead scope="col" className="text-center">
+              اختلاف درصد
+            </TableHead>
+          ) : null}
+          {shown.has("suggested_price") ? (
+            <TableHead scope="col" className="text-center">
+              قیمت پیشنهادی
+            </TableHead>
+          ) : null}
+          {shown.has("stock") ? (
+            <TableHead scope="col" className="text-center">
+              موجودی
+            </TableHead>
+          ) : null}
         </TableRow>
       </TableHeader>
     </>
   )
 }
 
-export function ProductTableSkeleton() {
+export function ProductTableSkeleton({
+  columns = DEFAULT_PRODUCT_TABLE_COLUMNS,
+}: {
+  columns?: readonly ProductTableColumn[]
+}) {
+  const shown = new Set(columns)
+  const visibleColumns = PRODUCT_TABLE_COLUMNS.filter((column) =>
+    shown.has(column.id)
+  )
   return (
     <div aria-label="در حال بارگذاری">
-      <Table className="min-w-192 table-fixed">
-        <ProductsTableHead />
+      <Table
+        className="table-fixed"
+        style={{ minWidth: productTableMinWidth(columns) }}
+      >
+        <ProductsTableHead columns={columns} />
         <TableBody>
           {Array.from({ length: 13 }).map((_, i) => (
             <TableRow key={i}>
-              {Array.from({ length: COLUMN_COUNT }).map((_, j) => {
-                const centered = j === 0 || j === 2 || j >= 5
-                return (
-                  <TableCell key={j} className={centered ? "text-center" : ""}>
-                    <Skeleton
-                      className={centered ? "mx-auto h-4 w-20" : "h-4 w-20"}
-                    />
-                  </TableCell>
-                )
-              })}
+              {visibleColumns.map((column) => (
+                <TableCell
+                  key={column.id}
+                  className={column.center ? "text-center" : ""}
+                >
+                  <Skeleton
+                    className={column.center ? "mx-auto h-4 w-20" : "h-4 w-20"}
+                  />
+                </TableCell>
+              ))}
             </TableRow>
           ))}
         </TableBody>
@@ -199,11 +235,11 @@ export function ProductTableSkeleton() {
 }
 
 // Zero-height-tolerant spacer for windowed rows (see useWindowedRows).
-function SpacerRow({ height }: { height: number }) {
+function SpacerRow({ height, colSpan }: { height: number; colSpan: number }) {
   return (
     <TableRow aria-hidden="true" className="border-0 hover:bg-transparent">
       <TableCell
-        colSpan={COLUMN_COUNT}
+        colSpan={colSpan}
         className="h-auto p-0"
         style={{ height, border: 0 }}
       />
@@ -222,10 +258,13 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
     hasFilters,
     market,
     weights,
+    visibleColumns = DEFAULT_PRODUCT_TABLE_COLUMNS,
     onSelect,
     onPageChange,
     onPageSize,
   } = props
+  const shown = new Set(visibleColumns)
+  const columnCount = visibleColumns.length
   const marketLabel =
     COMPETITOR_MARKETS.find((m) => m.store === market)?.label ?? "دیجی‌کالا"
   // Windowed rendering (hooks before the early returns below): in "show all"
@@ -235,7 +274,7 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
     page?.items.length ?? 0,
     (i) => page?.items[i]?.id ?? i
   )
-  if (!page) return <ProductTableSkeleton />
+  if (!page) return <ProductTableSkeleton columns={visibleColumns} />
   if (page.items.length === 0) {
     return (
       <EmptyState
@@ -267,13 +306,14 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
         </p>
       ) : null}
       <Table
-        className="min-w-192 table-fixed"
+        className="table-fixed"
+        style={{ minWidth: productTableMinWidth(visibleColumns) }}
         aria-rowcount={page.items.length}
       >
-        <ProductsTableHead market={market} />
+        <ProductsTableHead market={market} columns={visibleColumns} />
         <TableBody ref={bodyRef}>
           {renderWin.topPad > 0 ? (
-            <SpacerRow height={renderWin.topPad} />
+            <SpacerRow height={renderWin.topPad} colSpan={columnCount} />
           ) : null}
           {page.items.slice(renderWin.start, renderWin.end).map((item, k) => {
             const i = renderWin.start + k
@@ -318,119 +358,141 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                   }
                 }}
               >
-                <TableCell className="text-center text-sm text-muted-foreground">
-                  <PersianNumber value={rowNumber} />
-                </TableCell>
-                <TableCell className="wrap-break-word whitespace-normal">
-                  <span className="text-sm font-medium">{item.name}</span>
-                </TableCell>
-                <TableCell className="text-center text-sm text-muted-foreground">
-                  <span
-                    dir="ltr"
-                    className="inline-block max-w-full truncate align-middle"
-                  >
-                    {item.sku}
-                  </span>
-                </TableCell>
-                <TableCell className="text-center text-sm font-medium">
-                  {top ?? <span className="text-muted-foreground">—</span>}
-                </TableCell>
-                <TableCell className="whitespace-normal">
-                  {brandOf(item.main_group_name, top) ? (
-                    <>
-                      <span className="block truncate text-sm">
-                        {brandOf(item.main_group_name, top)}
+                {shown.has("row") ? (
+                  <TableCell className="text-center text-sm text-muted-foreground">
+                    <PersianNumber value={rowNumber} />
+                  </TableCell>
+                ) : null}
+                {shown.has("name") ? (
+                  <TableCell className="wrap-break-word whitespace-normal">
+                    <span className="text-sm font-medium">{item.name}</span>
+                  </TableCell>
+                ) : null}
+                {shown.has("sku") ? (
+                  <TableCell className="text-center text-sm text-muted-foreground">
+                    <span
+                      dir="ltr"
+                      className="inline-block max-w-full truncate align-middle"
+                    >
+                      {item.sku}
+                    </span>
+                  </TableCell>
+                ) : null}
+                {shown.has("category") ? (
+                  <TableCell className="text-center text-sm font-medium">
+                    {top ?? <span className="text-muted-foreground">—</span>}
+                  </TableCell>
+                ) : null}
+                {shown.has("brand") ? (
+                  <TableCell className="whitespace-normal">
+                    {brandOf(item.main_group_name, top) ? (
+                      <>
+                        <span className="block truncate text-sm">
+                          {brandOf(item.main_group_name, top)}
+                        </span>
+                        {item.sub_group_name ? (
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {item.sub_group_name}
+                          </span>
+                        ) : null}
+                      </>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                ) : null}
+                {shown.has("unit") ? (
+                  <TableCell className="truncate text-center text-sm">
+                    {item.unit_name ?? (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                ) : null}
+                {shown.has("price") ? (
+                  <TableCell className="text-center">
+                    <Price value={item.price} />
+                  </TableCell>
+                ) : null}
+                {shown.has("competitor_price") ? (
+                  <TableCell className="text-center">
+                    {!isAppliance ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : competitor?.price !== null &&
+                      competitor?.price !== undefined &&
+                      amount !== null &&
+                      amount !== undefined ? (
+                      <span className="inline-flex flex-col items-center gap-0.5">
+                        <Price value={amount} />
+                        {!competitor.is_fresh ? (
+                          <span
+                            className="text-[11px] text-muted-foreground"
+                            title={
+                              competitor.last_checked_at
+                                ? `آخرین بررسی: ${competitor.last_checked_at}`
+                                : "قیمت تازه دریافت نشده"
+                            }
+                          >
+                            {competitor.last_checked_at
+                              ? (formatPersianRelativeTime(
+                                  competitor.last_checked_at
+                                ) ?? "قیمت قدیمی")
+                              : "قیمت قدیمی"}
+                          </span>
+                        ) : null}
                       </span>
-                      {item.sub_group_name ? (
-                        <span className="block truncate text-xs text-muted-foreground">
-                          {item.sub_group_name}
-                        </span>
-                      ) : null}
-                    </>
-                  ) : (
-                    <span className="text-muted-foreground">—</span>
-                  )}
-                </TableCell>
-                <TableCell className="truncate text-center text-sm">
-                  {item.unit_name ?? (
-                    <span className="text-muted-foreground">—</span>
-                  )}
-                </TableCell>
-                <TableCell className="text-center">
-                  <Price value={item.price} />
-                </TableCell>
-                <TableCell className="text-center">
-                  {!isAppliance ? (
-                    <span className="text-muted-foreground">—</span>
-                  ) : competitor?.price !== null &&
-                    competitor?.price !== undefined &&
-                    amount !== null &&
-                    amount !== undefined ? (
-                    <span className="inline-flex flex-col items-center gap-0.5">
-                      <Price value={amount} />
-                      {!competitor.is_fresh ? (
-                        <span
-                          className="text-[11px] text-muted-foreground"
-                          title={
-                            competitor.last_checked_at
-                              ? `آخرین بررسی: ${competitor.last_checked_at}`
-                              : "قیمت تازه دریافت نشده"
-                          }
-                        >
-                          {competitor.last_checked_at
-                            ? (formatPersianRelativeTime(
-                                competitor.last_checked_at
-                              ) ?? "قیمت قدیمی")
-                            : "قیمت قدیمی"}
-                        </span>
-                      ) : null}
-                    </span>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">
-                      {competitor
-                        ? (COMPETITOR_STATUS_LABELS[competitor.status] ??
-                          "نیازمند بررسی")
-                        : "لینک ثبت نشده"}
-                    </span>
-                  )}
-                </TableCell>
-                <TableCell className="text-center">
-                  {!isAppliance || pct === null ? (
-                    <span className="text-muted-foreground">—</span>
-                  ) : Object.is(Math.round(pct * 10) / 10, 0) || pct === 0 ? (
-                    <span
-                      className="block text-xs text-muted-foreground"
-                      title={`${marketLabel}: بدون اختلاف`}
-                    >
-                      بدون اختلاف
-                    </span>
-                  ) : (
-                    <span
-                      className={`block text-xs font-medium ${
-                        pct > 0 ? "text-destructive" : "text-success"
-                      }`}
-                      title={`${marketLabel}: ${formatDiffPercent(pct)} ${pct > 0 ? "گران‌تر" : "ارزان‌تر"} از رقیب`}
-                    >
-                      {formatDiffPercent(pct)}{" "}
-                      {pct > 0 ? "گران‌تر" : "ارزان‌تر"}
-                    </span>
-                  )}
-                </TableCell>
-                <TableCell className="text-center">
-                  {suggested === null ? (
-                    <span className="text-muted-foreground">—</span>
-                  ) : (
-                    <Price value={suggested} />
-                  )}
-                </TableCell>
-                <TableCell className="text-center">
-                  <StockCell value={item.stock} threshold={threshold} />
-                </TableCell>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
+                        {competitor
+                          ? (COMPETITOR_STATUS_LABELS[competitor.status] ??
+                            "نیازمند بررسی")
+                          : "لینک ثبت نشده"}
+                      </span>
+                    )}
+                  </TableCell>
+                ) : null}
+                {shown.has("price_diff") ? (
+                  <TableCell className="text-center">
+                    {!isAppliance || pct === null ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : Object.is(Math.round(pct * 10) / 10, 0) || pct === 0 ? (
+                      <span
+                        className="block text-xs text-muted-foreground"
+                        title={`${marketLabel}: بدون اختلاف`}
+                      >
+                        بدون اختلاف
+                      </span>
+                    ) : (
+                      <span
+                        className={`block text-xs font-medium ${
+                          pct > 0 ? "text-destructive" : "text-success"
+                        }`}
+                        title={`${marketLabel}: ${formatDiffPercent(pct)} ${pct > 0 ? "گران‌تر" : "ارزان‌تر"} از رقیب`}
+                      >
+                        {formatDiffPercent(pct)}{" "}
+                        {pct > 0 ? "گران‌تر" : "ارزان‌تر"}
+                      </span>
+                    )}
+                  </TableCell>
+                ) : null}
+                {shown.has("suggested_price") ? (
+                  <TableCell className="text-center">
+                    {suggested === null ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : (
+                      <Price value={suggested} />
+                    )}
+                  </TableCell>
+                ) : null}
+                {shown.has("stock") ? (
+                  <TableCell className="text-center">
+                    <StockCell value={item.stock} threshold={threshold} />
+                  </TableCell>
+                ) : null}
               </TableRow>
             )
           })}
           {renderWin.bottomPad > 0 ? (
-            <SpacerRow height={renderWin.bottomPad} />
+            <SpacerRow height={renderWin.bottomPad} colSpan={columnCount} />
           ) : null}
         </TableBody>
       </Table>
@@ -484,19 +546,30 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
 interface TableErrorProps {
   message: string
   onRetry: () => void
+  visibleColumns?: readonly ProductTableColumn[]
 }
 
 // Error state drawn inside the table itself, so it reads as "this table
 // failed to load" instead of a detached card. Content is start-aligned on
 // mobile: the table scrolls horizontally there and the start edge is the
 // only part guaranteed to be on screen.
-export function ProductsTableError({ message, onRetry }: TableErrorProps) {
+export function ProductsTableError({
+  message,
+  onRetry,
+  visibleColumns = DEFAULT_PRODUCT_TABLE_COLUMNS,
+}: TableErrorProps) {
   return (
-    <Table className="min-w-192 table-fixed">
-      <ProductsTableHead />
+    <Table
+      className="table-fixed"
+      style={{ minWidth: productTableMinWidth(visibleColumns) }}
+    >
+      <ProductsTableHead columns={visibleColumns} />
       <TableBody>
         <TableRow className="hover:bg-transparent">
-          <TableCell colSpan={COLUMN_COUNT} className="whitespace-normal">
+          <TableCell
+            colSpan={visibleColumns.length}
+            className="whitespace-normal"
+          >
             <div
               role="alert"
               className="flex max-w-sm flex-col items-start gap-3 py-8 md:mx-auto md:items-center md:text-center"

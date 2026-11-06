@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 
 import {
   Clock,
+  Columns3,
   MoonStar,
   PackageMinus,
   Rows3,
@@ -24,6 +25,7 @@ import { CompetitorSyncIntervalSettings } from "@/components/settings/competitor
 import { PageSizeSettings } from "@/components/settings/page-size-settings"
 import { SyncIntervalSettings } from "@/components/settings/sync-interval-settings"
 import { SuggestedPriceSettings } from "@/components/settings/suggested-price-settings"
+import { TableColumnsSettings } from "@/components/settings/table-columns-settings"
 import { ThemeSettings } from "@/components/settings/theme-settings"
 
 export const metadata: Metadata = { title: "چهارسوق | تنظیمات" }
@@ -86,6 +88,22 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent>
           <PageSizeSettings />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Columns3 className="size-4" />
+            ستون‌های جدول محصولات
+          </CardTitle>
+          <CardDescription>
+            ستون‌هایی که در جدول محصولات (نمای دسکتاپ) نمایش داده می‌شوند را
+            انتخاب کنید؛ پنهان‌کردن ستون‌های کم‌کاربرد فضای بیشتری برای بقیه
+            ستون‌ها باز می‌کند
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <TableColumnsSettings />
         </CardContent>
       </Card>
       <Card>

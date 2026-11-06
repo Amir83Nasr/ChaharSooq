@@ -15,8 +15,13 @@ import {
   type ProductOut,
   type ProductPage,
   type ProductSort,
+  type ProductTableColumn,
 } from "@/lib/api"
 import { DEFAULT_LOW_STOCK_THRESHOLD } from "@/lib/inventory"
+import {
+  DEFAULT_PRODUCT_TABLE_COLUMNS,
+  normalizeProductTableColumns,
+} from "@/lib/product-table-columns"
 import {
   toSuggestedPriceWeights,
   type SuggestedPriceWeights,
@@ -66,6 +71,11 @@ function ProductsPageContent() {
   const [threshold, setThreshold] = useState(DEFAULT_LOW_STOCK_THRESHOLD)
   const [market, setMarket] = useState<DefaultCompetitorStore>("digikala")
   const [weights, setWeights] = useState<SuggestedPriceWeights>({})
+  // Visible product-table columns come from the admin settings; hidden
+  // columns are skipped so the remaining ones keep their width.
+  const [visibleColumns, setVisibleColumns] = useState<ProductTableColumn[]>([
+    ...DEFAULT_PRODUCT_TABLE_COLUMNS,
+  ])
   // Bumped after a sync lands — re-fetches table + stats in place, keeping
   // search/sort/paging state untouched.
   const [dataVersion, setDataVersion] = useState(0)
@@ -159,6 +169,9 @@ function ProductsPageContent() {
           setMarket(data.default_competitor_store)
         }
         setWeights(toSuggestedPriceWeights(data.suggested_price_formulas))
+        setVisibleColumns(
+          normalizeProductTableColumns(data.product_table_columns)
+        )
         if (Number.isFinite(data.sync_interval_minutes)) {
           const ms =
             Math.max(1, Math.floor(data.sync_interval_minutes)) * 60 * 1000
@@ -377,7 +390,11 @@ function ProductsPageContent() {
       </div>
 
       {error ? (
-        <ProductsTableError message={error} onRetry={refreshData} />
+        <ProductsTableError
+          message={error}
+          onRetry={refreshData}
+          visibleColumns={visibleColumns}
+        />
       ) : (
         <>
           <div className="md:hidden">
@@ -412,6 +429,7 @@ function ProductsPageContent() {
               hasFilters={hasFilters}
               market={market}
               weights={weights}
+              visibleColumns={visibleColumns}
               onSelect={setSelected}
               onPageChange={changePage}
               onPageSize={changePageSize}

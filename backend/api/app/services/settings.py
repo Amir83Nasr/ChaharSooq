@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.models import SuggestedPriceFormula
 from app.repositories import SettingsRepository, SuggestedPriceFormulaRepository
 from app.schemas import SuggestedPriceFormulaIn
+from app.schemas.settings import ProductTableColumn
 
 LOW_STOCK_THRESHOLD_KEY = "low_stock_threshold"
 DEFAULT_LOW_STOCK_THRESHOLD = 5
@@ -35,6 +36,23 @@ ALLOWED_COMPETITOR_STORES: tuple[Literal["digikala", "technolife"], ...] = (
     "technolife",
 )
 
+PRODUCT_TABLE_COLUMNS_KEY = "product_table_columns"
+# Canonical table order; also the default when nothing is stored yet.
+PRODUCT_TABLE_COLUMNS: tuple[ProductTableColumn, ...] = (
+    "row",
+    "name",
+    "sku",
+    "category",
+    "brand",
+    "unit",
+    "price",
+    "competitor_price",
+    "price_diff",
+    "suggested_price",
+    "stock",
+)
+DEFAULT_PRODUCT_TABLE_COLUMNS: tuple[ProductTableColumn, ...] = PRODUCT_TABLE_COLUMNS
+
 
 class SettingsService:
     def __init__(self, session: Session) -> None:
@@ -49,6 +67,7 @@ class SettingsService:
             "competitor_sync_interval_minutes": self.get_competitor_sync_interval(),
             "default_competitor_store": self.get_competitor_store(),
             "suggested_price_formulas": self.get_suggested_price_formulas(),
+            "product_table_columns": self.get_product_table_columns(),
         }
 
     def get_suggested_price_formulas(self) -> list[dict[str, object]]:
@@ -146,3 +165,28 @@ class SettingsService:
     ) -> Literal["digikala", "technolife"]:
         self._settings.upsert(DEFAULT_COMPETITOR_STORE_KEY, store)
         return store
+
+    def get_product_table_columns(self) -> list[ProductTableColumn]:
+        row = self._settings.get(PRODUCT_TABLE_COLUMNS_KEY)
+        if row is None:
+            return list(DEFAULT_PRODUCT_TABLE_COLUMNS)
+        stored = {part.strip() for part in row.value.split(",") if part.strip()}
+        visible: list[ProductTableColumn] = [
+            column for column in PRODUCT_TABLE_COLUMNS if column in stored
+        ]
+        # An empty or fully unknown value would hide the whole table.
+        if not visible:
+            return list(DEFAULT_PRODUCT_TABLE_COLUMNS)
+        return visible
+
+    def update_product_table_columns(
+        self, columns: list[ProductTableColumn]
+    ) -> list[ProductTableColumn]:
+        requested = set(columns)
+        visible: list[ProductTableColumn] = [
+            column for column in PRODUCT_TABLE_COLUMNS if column in requested
+        ]
+        if not visible:
+            visible = list(DEFAULT_PRODUCT_TABLE_COLUMNS)
+        self._settings.upsert(PRODUCT_TABLE_COLUMNS_KEY, ",".join(visible))
+        return visible

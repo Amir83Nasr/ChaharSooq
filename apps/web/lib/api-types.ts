@@ -178,6 +178,19 @@ export interface ApiError {
   }
 }
 
+export type ProductTableColumn =
+  | "row"
+  | "name"
+  | "sku"
+  | "category"
+  | "brand"
+  | "unit"
+  | "price"
+  | "competitor_price"
+  | "price_diff"
+  | "suggested_price"
+  | "stock"
+
 export interface SettingsOut {
   low_stock_threshold: number
   default_page_size: number
@@ -185,6 +198,7 @@ export interface SettingsOut {
   competitor_sync_interval_minutes: number
   default_competitor_store: DefaultCompetitorStore
   suggested_price_formulas: SuggestedPriceFormula[]
+  product_table_columns: ProductTableColumn[]
 }
 
 export type TopGroup = "فرش" | "مبلمان" | "لوازم خانگی"
@@ -204,6 +218,7 @@ export interface SettingsUpdate {
   competitor_sync_interval_minutes?: number
   default_competitor_store?: DefaultCompetitorStore
   suggested_price_formulas?: SuggestedPriceFormula[]
+  product_table_columns?: ProductTableColumn[]
 }
 
 export interface ProductFilters {

@@ -272,7 +272,7 @@ export function GroupStoreView({
                   <>
                     <p className="text-sm font-semibold">ثبت نشده است</p>
                     <Link
-                      href="/settings"
+                      href="/settings/pricing"
                       className={buttonVariants({
                         variant: "outline",
                         size: "sm",
@@ -289,7 +289,7 @@ export function GroupStoreView({
                       {formatWeight(1 - weight)} × قیمت پارسینا
                     </p>
                     <Link
-                      href="/settings"
+                      href="/settings/pricing"
                       className={buttonVariants({
                         variant: "outline",
                         size: "sm",

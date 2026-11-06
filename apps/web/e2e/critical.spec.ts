@@ -6,7 +6,16 @@ import { expect, test } from "@playwright/test"
 test("unauthenticated routes land on the Persian RTL login page", async ({
   page,
 }) => {
-  for (const path of ["/", "/products", "/dashboard", "/settings"]) {
+  for (const path of [
+    "/",
+    "/products",
+    "/dashboard",
+    "/settings",
+    "/settings/pricing",
+    "/settings/sync",
+    "/settings/inventory",
+    "/settings/appearance",
+  ]) {
     await page.goto(path)
     await expect(page).toHaveURL(/\/login$/)
   }

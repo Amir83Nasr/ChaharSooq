@@ -221,15 +221,7 @@ export function ParsinaSyncPanel({ onSynced, onUnauthorized }: Props) {
                 : "اتصال پارسینا تنظیم نشده است."}
           </span>
         ) : running ? (
-          <span>
-            همگام‌سازی در حال اجراست
-            {status?.running_since ? (
-              <>
-                {" — آغاز "}
-                <PersianDateTime value={status.running_since} />
-              </>
-            ) : null}
-          </span>
+          <span>همگام‌سازی در حال اجراست</span>
         ) : failed && status?.last_error ? (
           <span className="text-destructive">
             آخرین تلاش ناموفق بود

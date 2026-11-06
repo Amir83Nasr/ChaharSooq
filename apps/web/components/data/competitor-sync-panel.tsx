@@ -212,15 +212,7 @@ export function CompetitorSyncPanel({ onSynced, onUnauthorized }: Props) {
             <span className="sr-only">در حال بارگذاری وضعیت…</span>
           </span>
         ) : running ? (
-          <span>
-            به‌روزرسانی قیمت رقبا در حال اجراست
-            {status?.running_since ? (
-              <>
-                {" — آغاز "}
-                <PersianDateTime value={status.running_since} />
-              </>
-            ) : null}
-          </span>
+          <span>به‌روزرسانی قیمت رقبا در حال اجراست</span>
         ) : failed && status?.last_error ? (
           <span className="text-destructive">
             آخرین تلاش ناموفق بود

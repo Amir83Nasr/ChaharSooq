@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Eye, EyeOff, RotateCcw, Save } from "lucide-react"
+import { Eye, EyeOff, RotateCcw } from "lucide-react"
 
 import { BusyLabel } from "@workspace/ui/primitives/busy-label"
 import { Button } from "@workspace/ui/primitives/button"
@@ -198,13 +198,8 @@ export function TableColumnsSettings() {
         >
           <BusyLabel
             busy={busy}
-            idle={
-              <span className="inline-flex items-center gap-1">
-                <Save aria-hidden="true" />
-                ذخیره ستون‌ها
-              </span>
-            }
-            busyLabel="در حال ذخیره…"
+            idle="ذخیره"
+            busyLabel={<span className="sr-only">در حال ذخیره…</span>}
             spinner
           />
         </Button>

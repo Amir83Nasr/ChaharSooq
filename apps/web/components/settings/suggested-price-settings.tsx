@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Info, Minus, Plus, RefreshCw, Save, X } from "lucide-react"
+import { Info, Minus, Plus, RefreshCw, X } from "lucide-react"
 
 import { formatPersianNumber } from "@workspace/ui/lib/number"
 import { Badge } from "@workspace/ui/primitives/badge"
@@ -484,13 +484,8 @@ export function SuggestedPriceSettings() {
         >
           <BusyLabel
             busy={busy}
-            idle={
-              <span className="inline-flex items-center gap-1">
-                <Save className="size-4" aria-hidden="true" />
-                ذخیره وزن‌ها
-              </span>
-            }
-            busyLabel="در حال ذخیره…"
+            idle="ذخیره"
+            busyLabel={<span className="sr-only">در حال ذخیره…</span>}
             spinner
           />
         </Button>

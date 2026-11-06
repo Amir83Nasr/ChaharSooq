@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 
+import { BusyLabel } from "@workspace/ui/primitives/busy-label"
 import { Button } from "@workspace/ui/primitives/button"
 import { PersianNumber } from "@workspace/ui/persian/persian-number"
 
@@ -13,6 +14,7 @@ export function PageSizeSettings() {
   const [value, setValue] = useState<number | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [savingValue, setSavingValue] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
 
@@ -40,6 +42,7 @@ export function PageSizeSettings() {
   async function save(next: number) {
     if (busy || next === value) return
     setBusy(true)
+    setSavingValue(next)
     setError(null)
     setSaved(false)
     try {
@@ -50,6 +53,7 @@ export function PageSizeSettings() {
       setError(err instanceof Error ? err.message : "خطایی رخ داد.")
     } finally {
       setBusy(false)
+      setSavingValue(null)
     }
   }
 
@@ -78,17 +82,25 @@ export function PageSizeSettings() {
               role="radio"
               aria-checked={active}
               disabled={busy}
+              aria-busy={savingValue === n}
               onClick={() => save(n)}
               className="h-11 md:h-9"
             >
-              {n === 0 ? (
-                <span>همه</span>
-              ) : (
-                <>
-                  <PersianNumber value={n} />
-                  <span>ردیف</span>
-                </>
-              )}
+              <BusyLabel
+                busy={savingValue === n}
+                idle={
+                  n === 0 ? (
+                    "همه"
+                  ) : (
+                    <span className="inline-flex items-center gap-1">
+                      <PersianNumber value={n} />
+                      <span>ردیف</span>
+                    </span>
+                  )
+                }
+                busyLabel={<span className="sr-only">در حال ذخیره…</span>}
+                spinner
+              />
             </Button>
           )
         })}

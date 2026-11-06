@@ -1,9 +1,9 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { RefreshCw } from "lucide-react"
 
 import { Button } from "@workspace/ui/primitives/button"
+import { BusyRefreshIcon } from "@workspace/ui/primitives/busy-refresh-icon"
 import { PersianDateTime } from "@workspace/ui/persian/persian-date"
 import { formatPersianDateTime } from "@workspace/ui/lib/date"
 import { toPersianDigits } from "@workspace/ui/lib/number"
@@ -50,6 +50,10 @@ export function ParsinaSyncPanel({ onSynced, onUnauthorized }: Props) {
   // Bumped after every manual press so the poll loop restarts at once and
   // the running state shows without waiting for the next idle tick.
   const [pollBump, setPollBump] = useState(0)
+  // True after a manual press until the first status round-trip for that press
+  // settles. Keeps the button busy instead of flickering idle → running while
+  // the request and the poller race.
+  const [settling, setSettling] = useState(false)
   // Refreshes relative timestamps ("۵ دقیقه پیش") without a status fetch.
   const [now, setNow] = useState(() => Date.now())
 
@@ -116,7 +120,10 @@ export function ParsinaSyncPanel({ onSynced, onUnauthorized }: Props) {
         }
       } finally {
         pollingRef.current = false
-        if (!cancelled) setPrimed(true)
+        if (!cancelled) {
+          setPrimed(true)
+          setSettling(false)
+        }
         if (pollsRef.current > MAX_RUNNING_POLLS) {
           pollsRef.current = 0
           delay = IDLE_POLL_MS
@@ -162,6 +169,7 @@ export function ParsinaSyncPanel({ onSynced, onUnauthorized }: Props) {
       setTriggering(false)
       // Restart the poll loop at once: the running state (and, moments
       // later, the new success timestamp) shows without idle delay.
+      setSettling(true)
       setPollBump((b) => b + 1)
     }
   }
@@ -171,7 +179,7 @@ export function ParsinaSyncPanel({ onSynced, onUnauthorized }: Props) {
   // The button stays disabled with a spinning icon until the first status
   // round-trip completes, so it reads as loading instead of active-but-stale.
   const loading = status === null && !primed
-  const running = triggering || status?.running === true
+  const running = triggering || settling || status?.running === true
   const notConfigured = status !== null && !status.configured
   // Unified button animation: spinning icon during the initial load and while
   // a run is active — identical in both sync panels.
@@ -191,11 +199,7 @@ export function ParsinaSyncPanel({ onSynced, onUnauthorized }: Props) {
         aria-busy={busy}
         className="h-11 w-full justify-center gap-2 rounded-2xl sm:h-9"
       >
-        <RefreshCw
-          data-icon="inline-start"
-          className={busy ? "size-4 shrink-0 animate-spin" : "size-4 shrink-0"}
-          aria-hidden="true"
-        />
+        <BusyRefreshIcon busy={busy} />
         <span>به‌روزرسانی از پارسینا</span>
       </Button>
       {/* Two-line reserve: short/long status states swap without moving

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 
+import { BusyLabel } from "@workspace/ui/primitives/busy-label"
 import { Button } from "@workspace/ui/primitives/button"
 
 import { api, type DefaultCompetitorStore } from "@/lib/api"
@@ -15,6 +16,9 @@ export function CompetitorStoreSettings() {
   const [value, setValue] = useState<DefaultCompetitorStore | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [savingValue, setSavingValue] = useState<DefaultCompetitorStore | null>(
+    null
+  )
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
 
@@ -42,6 +46,7 @@ export function CompetitorStoreSettings() {
   async function save(next: DefaultCompetitorStore) {
     if (busy || next === value) return
     setBusy(true)
+    setSavingValue(next)
     setError(null)
     setSaved(false)
     try {
@@ -52,6 +57,7 @@ export function CompetitorStoreSettings() {
       setError(err instanceof Error ? err.message : "خطایی رخ داد.")
     } finally {
       setBusy(false)
+      setSavingValue(null)
     }
   }
 
@@ -80,10 +86,16 @@ export function CompetitorStoreSettings() {
               role="radio"
               aria-checked={active}
               disabled={busy}
+              aria-busy={savingValue === option.value}
               onClick={() => save(option.value)}
               className="h-11 md:h-9"
             >
-              {option.label}
+              <BusyLabel
+                busy={savingValue === option.value}
+                idle={option.label}
+                busyLabel={<span className="sr-only">در حال ذخیره…</span>}
+                spinner
+              />
             </Button>
           )
         })}

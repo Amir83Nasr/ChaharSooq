@@ -1,15 +1,11 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import {
-  ExternalLink,
-  LoaderCircle,
-  Plus,
-  RefreshCw,
-  Trash2,
-} from "lucide-react"
+import { ExternalLink, LoaderCircle, Plus, Trash2 } from "lucide-react"
 
 import { Badge } from "@workspace/ui/primitives/badge"
+import { BusyLabel } from "@workspace/ui/primitives/busy-label"
+import { BusyRefreshIcon } from "@workspace/ui/primitives/busy-refresh-icon"
 import { Button } from "@workspace/ui/primitives/button"
 import { Input } from "@workspace/ui/primitives/input"
 import { Skeleton } from "@workspace/ui/primitives/skeleton"
@@ -283,7 +279,7 @@ function FilledSlotCard({
           onClick={() => onCheck(url.trim())}
           className="h-11 rounded-2xl sm:h-9"
         >
-          {busy ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}
+          <BusyRefreshIcon busy={busy} />
           بررسی لینک
         </Button>
         <span className="col-span-2 flex gap-1 sm:col-span-1 sm:ms-auto">
@@ -375,10 +371,20 @@ function EmptySlotCard({
             type="submit"
             size="sm"
             disabled={busy || trimmedUrl === "" || urlMismatch}
+            aria-busy={busy}
             className="h-11 w-full rounded-2xl sm:h-9 sm:w-auto"
           >
-            {busy ? <LoaderCircle className="animate-spin" /> : <Plus />}
-            ثبت لینک
+            <BusyLabel
+              busy={busy}
+              idle={
+                <span className="inline-flex items-center gap-1">
+                  <Plus className="size-4" aria-hidden="true" />
+                  ثبت لینک
+                </span>
+              }
+              busyLabel="ثبت لینک"
+              spinner
+            />
           </Button>
           {busy ? (
             <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
@@ -537,13 +543,7 @@ export function ProductCompetitorPrices({
           aria-busy={checkAllBusy}
           className="h-11 w-full justify-center gap-2 rounded-2xl sm:h-9 sm:w-auto sm:min-w-48"
         >
-          <RefreshCw
-            data-icon="inline-start"
-            className={
-              checkAllBusy ? "size-4 shrink-0 animate-spin" : "size-4 shrink-0"
-            }
-            aria-hidden="true"
-          />
+          <BusyRefreshIcon busy={checkAllBusy} />
           به‌روزرسانی همه قیمت‌ها
         </Button>
       </div>

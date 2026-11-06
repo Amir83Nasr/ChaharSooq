@@ -1,5 +1,6 @@
 "use client"
 
+import { BusyLabel } from "@workspace/ui/primitives/busy-label"
 import { Button } from "@workspace/ui/primitives/button"
 import {
   ResponsiveDialog,
@@ -54,9 +55,15 @@ export function LogoutDialog({
             className="h-11 w-full md:h-9 md:w-auto"
             onClick={() => void onConfirm()}
             disabled={pending}
+            aria-busy={pending}
             autoFocus
           >
-            {pending ? "در حال خروج…" : "خروج از حساب"}
+            <BusyLabel
+              busy={pending}
+              idle="خروج از حساب"
+              busyLabel="در حال خروج…"
+              spinner
+            />
           </Button>
         </ResponsiveDialogFooter>
       </ResponsiveDialogContent>

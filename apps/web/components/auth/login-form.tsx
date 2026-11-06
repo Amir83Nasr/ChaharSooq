@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Lock, User } from "lucide-react"
 
+import { BusyLabel } from "@workspace/ui/primitives/busy-label"
 import { Button } from "@workspace/ui/primitives/button"
 import { Input } from "@workspace/ui/primitives/input"
 import { api, ApiRequestError } from "@/lib/api"
@@ -150,8 +151,14 @@ export function LoginForm() {
             type="submit"
             className="h-11 w-full md:h-9"
             disabled={!canSubmit}
+            aria-busy={pending}
           >
-            {pending ? "در حال ورود…" : "ورود"}
+            <BusyLabel
+              busy={pending}
+              idle="ورود"
+              busyLabel="در حال ورود…"
+              spinner
+            />
           </Button>
         </div>
       </form>

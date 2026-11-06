@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 
+import { BusyLabel } from "@workspace/ui/primitives/busy-label"
 import { Button } from "@workspace/ui/primitives/button"
 import { Input } from "@workspace/ui/primitives/input"
 import {
@@ -94,9 +95,15 @@ export function InventoryThresholdSettings() {
         <Button
           onClick={save}
           disabled={busy || value.trim() === ""}
+          aria-busy={busy}
           className="h-11 shrink-0 sm:h-8"
         >
-          ذخیره
+          <BusyLabel
+            busy={busy}
+            idle="ذخیره"
+            busyLabel={<span className="sr-only">در حال ذخیره…</span>}
+            spinner
+          />
         </Button>
       </div>
       {error ? (

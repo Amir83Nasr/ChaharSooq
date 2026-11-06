@@ -5,6 +5,7 @@ import { Info, Minus, Plus, RefreshCw, Save, X } from "lucide-react"
 
 import { formatPersianNumber } from "@workspace/ui/lib/number"
 import { Badge } from "@workspace/ui/primitives/badge"
+import { BusyLabel } from "@workspace/ui/primitives/busy-label"
 import { Button } from "@workspace/ui/primitives/button"
 import { Input } from "@workspace/ui/primitives/input"
 
@@ -478,10 +479,20 @@ export function SuggestedPriceSettings() {
         <Button
           type="submit"
           disabled={busy || !isDirty}
+          aria-busy={busy}
           className="h-11 w-full sm:w-auto"
         >
-          <Save aria-hidden="true" />
-          {busy ? "در حال ذخیره…" : "ذخیره وزن‌ها"}
+          <BusyLabel
+            busy={busy}
+            idle={
+              <span className="inline-flex items-center gap-1">
+                <Save className="size-4" aria-hidden="true" />
+                ذخیره وزن‌ها
+              </span>
+            }
+            busyLabel="در حال ذخیره…"
+            spinner
+          />
         </Button>
       </div>
     </form>

@@ -1,7 +1,6 @@
 "use client"
 
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
 import { ArrowUpRight } from "lucide-react"
 
@@ -21,6 +20,7 @@ import {
   type ProductOut,
   type ProductPage,
 } from "@/lib/api"
+import { leaveToLogin } from "@/lib/auth-navigation"
 import { DEFAULT_LOW_STOCK_THRESHOLD } from "@/lib/inventory"
 import {
   toSuggestedPriceWeights,
@@ -71,7 +71,6 @@ export function AutoStoreView({
   storeName: string
   description: string
 }) {
-  const router = useRouter()
   const [page, setPage] = useState<ProductPage | null>(null)
   const [freshTotal, setFreshTotal] = useState(0)
   const [gaps, setGaps] = useState<CompetitorGap[]>([])
@@ -89,9 +88,8 @@ export function AutoStoreView({
 
   const refreshData = useCallback(() => setDataVersion((v) => v + 1), [])
   const goLogin = useCallback(() => {
-    router.replace("/login")
-    router.refresh()
-  }, [router])
+    leaveToLogin()
+  }, [])
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q.trim()), SEARCH_DEBOUNCE_MS)

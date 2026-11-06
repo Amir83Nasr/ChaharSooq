@@ -2,7 +2,7 @@
 
 // NOTE: metadata lives in ./layout.tsx (client page cannot export it).
 
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { Suspense, useCallback, useEffect, useState } from "react"
 
 import { PageHeader } from "@workspace/ui/layout/page-header"
@@ -17,6 +17,7 @@ import {
   type ProductSort,
   type ProductTableColumn,
 } from "@/lib/api"
+import { leaveToLogin } from "@/lib/auth-navigation"
 import { DEFAULT_LOW_STOCK_THRESHOLD } from "@/lib/inventory"
 import {
   DEFAULT_PRODUCT_TABLE_COLUMNS,
@@ -49,7 +50,6 @@ function stockFromParam(value: string | null): StockFilter {
 }
 
 function ProductsPageContent() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const [page, setPage] = useState<ProductPage | null>(null)
   const [categories, setCategories] = useState<CategoryOut[]>([])
@@ -113,9 +113,8 @@ function ProductsPageContent() {
   }, [autoRefreshMs])
 
   const goLogin = useCallback(() => {
-    router.replace("/login")
-    router.refresh()
-  }, [router])
+    leaveToLogin()
+  }, [])
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q.trim()), SEARCH_DEBOUNCE_MS)

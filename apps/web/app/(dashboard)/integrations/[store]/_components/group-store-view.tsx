@@ -1,7 +1,6 @@
 "use client"
 
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
 import { ArrowUpRight } from "lucide-react"
 
@@ -32,6 +31,7 @@ import {
   type ProductPage,
   type TopGroup,
 } from "@/lib/api"
+import { leaveToLogin } from "@/lib/auth-navigation"
 import { DEFAULT_LOW_STOCK_THRESHOLD } from "@/lib/inventory"
 import {
   DataTableToolbar,
@@ -89,7 +89,6 @@ export function GroupStoreView({
   storeName: string
   description: string
 }) {
-  const router = useRouter()
   const [page, setPage] = useState<ProductPage | null>(null)
   const [overview, setOverview] = useState<DashboardOverview | null>(null)
   const [weight, setWeight] = useState<number | null>(null)
@@ -104,9 +103,8 @@ export function GroupStoreView({
 
   const refreshData = useCallback(() => setDataVersion((v) => v + 1), [])
   const goLogin = useCallback(() => {
-    router.replace("/login")
-    router.refresh()
-  }, [router])
+    leaveToLogin()
+  }, [])
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q.trim()), SEARCH_DEBOUNCE_MS)

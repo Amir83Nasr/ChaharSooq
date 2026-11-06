@@ -10,11 +10,11 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import { useRouter } from "next/navigation"
 import { LogOut } from "lucide-react"
 
 import { SidebarMenuButton, useSidebar } from "@workspace/ui/primitives/sidebar"
 import { api } from "@/lib/api"
+import { leaveToLogin } from "@/lib/auth-navigation"
 import { LogoutDialog } from "@/components/auth/logout-dialog"
 
 type LogoutContextValue = {
@@ -34,7 +34,6 @@ function useLogout() {
 // State lives above the mobile sidebar sheet: closing the sheet unmounts
 // its children, which used to kill the pending dialog open timer.
 export function LogoutProvider({ children }: { children: ReactNode }) {
-  const router = useRouter()
   const { isMobile, setOpenMobile } = useSidebar()
   const [open, setOpen] = useState(false)
   const [pending, setPending] = useState(false)
@@ -72,8 +71,7 @@ export function LogoutProvider({ children }: { children: ReactNode }) {
       setPending(false)
     }
     setOpen(false)
-    router.push("/login")
-    router.refresh()
+    leaveToLogin("assign")
   }
 
   const value = useMemo(() => ({ requestLogout }), [requestLogout])

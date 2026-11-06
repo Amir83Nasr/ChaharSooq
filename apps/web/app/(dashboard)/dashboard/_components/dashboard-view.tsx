@@ -1,7 +1,6 @@
 "use client"
 
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
 
 import { PageHeader } from "@workspace/ui/layout/page-header"
@@ -19,6 +18,7 @@ import {
   type DashboardOverview,
   type SyncStatus,
 } from "@/lib/api"
+import { leaveToLogin } from "@/lib/auth-navigation"
 import { DEFAULT_LOW_STOCK_THRESHOLD } from "@/lib/inventory"
 import { CatalogBreakdown } from "./dashboard-catalog"
 import { DashboardKpis } from "./dashboard-kpis"
@@ -45,7 +45,6 @@ function DashboardSkeleton() {
 }
 
 export function DashboardView() {
-  const router = useRouter()
   const [overview, setOverview] = useState<DashboardOverview | null>(null)
   const [breakdown, setBreakdown] = useState<CatalogSection[] | null>(null)
   const [parsina, setParsina] = useState<SyncStatus | null>(null)
@@ -57,9 +56,8 @@ export function DashboardView() {
   const [reloadKey, setReloadKey] = useState(0)
 
   const goLogin = useCallback(() => {
-    router.replace("/login")
-    router.refresh()
-  }, [router])
+    leaveToLogin()
+  }, [])
 
   useEffect(() => {
     let cancelled = false

@@ -23,7 +23,7 @@ pre-push:
     frontend:
       run: pnpm lint && pnpm format:check && pnpm typecheck && pnpm test
     backend:
-      run: uv run --no-sync --project backend/api ruff check . && uv run --no-sync --project backend/api ruff format --check . && uv run --no-sync --project backend/api pyright && uv run --no-sync --project backend/api pytest -q
+      run: uv run --no-sync --project backend/api ruff check . && uv run --no-sync --project backend/api ruff format --check . && uv run --no-sync --project backend/api pyright && cd backend/api && uv run --no-sync pytest -q
     # No database needed: single-head check + offline SQL render of every migration.
     migrations:
       run: cd backend/api && uv run --no-sync alembic heads && uv run alembic upgrade head --sql > /dev/null

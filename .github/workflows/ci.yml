@@ -55,7 +55,7 @@ jobs:
       - run: uv run --project backend/api ruff check .
       - run: uv run --project backend/api ruff format --check .
       - run: uv run --project backend/api pyright
-      - run: uv run --project backend/api pytest -q
+      - run: cd backend/api && uv run pytest -q
       - name: Check OpenAPI snapshot is fresh
         run: uv run --project backend/api python backend/api/scripts/check_openapi_fresh.py
 

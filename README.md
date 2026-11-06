@@ -52,6 +52,8 @@ make typecheck  # frontend tsc + backend pyright
 make test       # ui vitest + backend pytest
 make check      # lint + typecheck + test
 make build      # production build (web)
+make clean-cache # remove regenerable tool caches (.turbo, .ruff_cache, …)
+make clean-build # remove build output and test artifacts (.next, …)
 ```
 
 Without make:
@@ -67,8 +69,13 @@ pnpm --filter web build            # production build
 uv run --project backend/api ruff check .          # backend lint
 uv run --project backend/api ruff format --check . # backend format check
 uv run --project backend/api pyright               # backend typecheck
-uv run --project backend/api pytest -q             # backend tests
+cd backend/api && uv run --no-sync pytest -q       # backend tests (reads pyproject)
 ```
+
+Caches are regenerable and gitignored. Ruff and pytest place their cache next to the
+directory you run them from, so running the backend commands from the repository root
+also leaves a `.ruff_cache` / `.pytest_cache` there. `make clean-cache` removes every
+cache copy; `make clean-build` removes `.next` and Playwright artifacts.
 
 ## Environment variables
 

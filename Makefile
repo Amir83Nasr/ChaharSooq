@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-.PHONY: build check db-clear-products db-migrate db-migrate-prod db-seed db-seed-parsina db-seed-prod db-sync-dev-to-prod sync-dev-to-prod sync-prod dev-to-prod db-up db-validate db-wait deploy-api dev-all dev-api dev-web docker-build docker-down docker-logs docker-up doctor help install lint openapi-check test test-e2e typecheck
+.PHONY: build check clean-build clean-cache db-clear-products db-migrate db-migrate-prod db-seed db-seed-parsina db-seed-prod db-sync-dev-to-prod sync-dev-to-prod sync-prod dev-to-prod db-up db-validate db-wait deploy-api dev-all dev-api dev-web docker-build docker-down docker-logs docker-up doctor help install lint openapi-check test test-e2e typecheck
 
 # ─── HELP ─────────────────────────────────────────────────
 help: ## Show this help message
@@ -29,6 +29,14 @@ install: ## Install frontend and backend dependencies and git hooks
 	pnpm install --frozen-lockfile
 	uv sync --locked
 	pnpm exec lefthook install
+
+# Caches are always regenerable and gitignored: removing them never loses source.
+clean-cache: ## Remove regenerable tool caches (turbo, ruff, pytest, __pycache__)
+	rm -rf .turbo apps/web/.turbo .ruff_cache backend/api/.ruff_cache .pytest_cache backend/api/.pytest_cache
+	find backend -type d -name __pycache__ -prune -exec rm -rf {} +
+
+clean-build: ## Remove build output and test artifacts (.next, playwright)
+	rm -rf apps/web/.next apps/web/test-results apps/web/playwright-report
 
 # ─── DEV / RUN ────────────────────────────────────────────
 dev-web: ## Start frontend dev server (turbo)
@@ -138,7 +146,8 @@ typecheck: ## Run frontend typecheck and backend pyright
 
 test: ## Run frontend and backend tests
 	pnpm test
-	uv run --no-sync --project backend/api pytest -q
+	# Run from backend/api so pytest reads its pyproject (testpaths, coverage gate).
+	cd backend/api && uv run --no-sync pytest -q
 
 test-e2e: build ## Run Playwright e2e against the production build
 	pnpm --filter web test:e2e

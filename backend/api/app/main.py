@@ -73,9 +73,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
         # HSTS is only meaningful behind TLS; only send in production so
-        # local HTTP dev never caches a sticky HTTPS upgrade.
+        # local HTTP dev never caches a sticky HTTPS upgrade. max-age stays
+        # at the recommended one year (31536000).
         if get_settings().is_production:
-            response.headers["Strict-Transport-Security"] = "max-age=3153600; includeSubDomains"
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         return response
 
 

@@ -192,20 +192,6 @@ class ProductRepository:
             (str(name) if name else None, int(count), int(value)) for name, count, value in rows
         ]
 
-    def competitor_coverage(self, *, since: datetime) -> int:
-        """Active products with at least one fresh competitor price."""
-        price = effective_competitor_price(since)
-        return self._session.execute(
-            select(func.count(func.distinct(Product.id)))
-            .select_from(Product)
-            .join(CompetitorListing, CompetitorListing.product_id == Product.id)
-            .where(
-                Product.is_active.is_(True),
-                CompetitorListing.is_active.is_(True),
-                price.is_not(None),
-            )
-        ).scalar_one()
-
     def competitor_gap_rows(self, *, since: datetime) -> list[CompetitorGapRow]:
         """One row per fresh (product, listing) pair — the service picks
         the best price per product and ranks the gaps."""
@@ -237,28 +223,13 @@ class ProductRepository:
             for product_id, name, our_price, store, comp_price in rows
         ]
 
-    def appliance_total(self) -> int:
-        """Active لوازم خانگی items — denominator for competitor coverage.
-
-        Mirrors the product-list `top_group` filter: any non-NULL group
-        that is neither فرش nor مبلمان.
-        """
-        return self._session.execute(
-            select(func.count())
-            .select_from(Product)
-            .where(
-                Product.is_active.is_(True),
-                Product.main_group_name.is_not(None),
-                not_(Product.main_group_name.ilike("فرش%")),
-                not_(Product.main_group_name.ilike("مبلمان%")),
-            )
-        ).scalar_one()
-
     def coverage_and_appliance_total(self, *, since: datetime) -> tuple[int, int]:
         """Competitor coverage + لوازم خانگی denominator in ONE round-trip.
 
-        Two scalar subqueries instead of two separate COUNT queries so the
-        dashboard overview costs 3 round-trips (summary, groups, this) not 4.
+        Replaces the two former single-purpose COUNT helpers
+        (`competitor_coverage`, `appliance_total`): two scalar subqueries
+        instead of two round-trips, so the dashboard overview costs 3
+        (summary, groups, this) not 4.
         """
         price = effective_competitor_price(since)
         coverage_sq = (

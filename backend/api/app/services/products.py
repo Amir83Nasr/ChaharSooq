@@ -13,9 +13,8 @@ from app.schemas import ProductIn
 
 INVALID_CATEGORY_ERROR = "دسته‌بندی نامعتبر است"
 
-# Safety cap for the "show all" path (page_size=0): never return an unbounded
-# result set — the UI windows the rows but the API still serializes them all.
-SHOW_ALL_MAX = 2000
+# NOTE: the "show all" cap (`SHOW_ALL_MAX`) lives in
+# `app.repositories.products`, next to the query that applies it.
 
 
 class InvalidCategoryError(ValueError):

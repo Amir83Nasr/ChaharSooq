@@ -143,12 +143,11 @@ export function SuggestedPriceSettings() {
     updateWeight(topGroup, stepWeight(weights[topGroup] ?? "", delta))
   }
 
-  function clearWeight(topGroup: TopGroup, id: string) {
+  function clearWeight(topGroup: TopGroup) {
     setWeights((current) => ({ ...current, [topGroup]: "" }))
     setFieldErrors((current) => ({ ...current, [topGroup]: undefined }))
     setSaveError(null)
     setSaved(false)
-    document.getElementById(`weight-${id}`)?.focus()
   }
 
   async function save() {
@@ -389,7 +388,7 @@ export function SuggestedPriceSettings() {
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    onClick={() => clearWeight(config.group, config.id)}
+                    onClick={() => clearWeight(config.group)}
                     aria-label={`پاک کردن وزن ${config.group}`}
                     className="shrink-0 text-muted-foreground hover:text-foreground"
                   >

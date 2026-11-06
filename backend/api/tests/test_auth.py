@@ -51,6 +51,26 @@ def test_login_me_logout_cycle(client: TestClient) -> None:
     assert client.get("/api/v1/auth/me").status_code == 401
 
 
+def test_fresh_login_rotates_previous_session(client: TestClient) -> None:
+    """Single-session enforcement — a new login invalidates the old cookie."""
+    from fastapi.testclient import TestClient as FreshClient
+
+    first = client.post("/api/v1/auth/login", json={"username": "admin", "password": "secret123"})
+    assert first.status_code == 200
+    old_token = first.headers["set-cookie"].split("charsooq_session=")[1].split(";")[0]
+    assert old_token
+
+    second = client.post("/api/v1/auth/login", json={"username": "admin", "password": "secret123"})
+    assert second.status_code == 200
+    new_token = second.headers["set-cookie"].split("charsooq_session=")[1].split(";")[0]
+    assert new_token and new_token != old_token
+    assert client.get("/api/v1/auth/me").status_code == 200
+
+    stale = FreshClient(client.app)
+    stale.cookies.set("charsooq_session", old_token)
+    assert stale.get("/api/v1/auth/me").status_code == 401
+
+
 def test_login_with_corrupt_hash_is_401_not_500(client: TestClient) -> None:
     with Session(get_engine()) as s:
         admin = s.query(Admin).filter_by(username="admin").one()

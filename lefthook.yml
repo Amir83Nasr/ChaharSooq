@@ -12,10 +12,10 @@ pre-commit:
       run: pnpm exec eslint --no-warn-ignored {staged_files}
     ruff-check:
       glob: "backend/**/*.py"
-      run: uv run --project backend/api ruff check {staged_files}
+      run: uv run --no-sync --project backend/api ruff check {staged_files}
     ruff-format:
       glob: "backend/**/*.py"
-      run: uv run --project backend/api ruff format {staged_files}
+      run: uv run --no-sync --project backend/api ruff format {staged_files}
       stage_fixed: true
 
 pre-push:
@@ -23,10 +23,10 @@ pre-push:
     frontend:
       run: pnpm lint && pnpm format:check && pnpm typecheck && pnpm test
     backend:
-      run: uv run --project backend/api ruff check . && uv run --project backend/api ruff format --check . && uv run --project backend/api pyright && uv run --project backend/api pytest -q
+      run: uv run --no-sync --project backend/api ruff check . && uv run --no-sync --project backend/api ruff format --check . && uv run --no-sync --project backend/api pyright && uv run --no-sync --project backend/api pytest -q
     # No database needed: single-head check + offline SQL render of every migration.
     migrations:
-      run: cd backend/api && uv run alembic heads && uv run alembic upgrade head --sql > /dev/null
+      run: cd backend/api && uv run --no-sync alembic heads && uv run alembic upgrade head --sql > /dev/null
     # Read-only: fails if backend/api/openapi.json is stale, without touching the tree.
     openapi:
-      run: uv run --project backend/api python backend/api/scripts/check_openapi_fresh.py
+      run: uv run --no-sync --project backend/api python backend/api/scripts/check_openapi_fresh.py

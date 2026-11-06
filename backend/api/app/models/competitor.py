@@ -45,6 +45,11 @@ class CompetitorListing(Base):
             name="uq_competitor_listings_product_store",
         ),
         Index("ix_competitor_listings_last_success", "last_success_at"),
+        Index(
+            "ix_competitor_listings_product_active",
+            "product_id",
+            "is_active",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

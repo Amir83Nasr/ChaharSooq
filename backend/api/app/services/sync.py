@@ -311,17 +311,14 @@ def run_scheduled_sync(
     # Resolve the source mode first; the due-check + run below is identical
     # for all three modes so a timing change touches one place only.
     explicit_settings: ParsinaSettings | None = None
-    if app_settings.app_env == "development":
-        pass
-    elif app_settings.is_production and app_settings.dev_database_url.strip():
-        pass
-    elif app_settings.is_production:
+    mode = app_settings.source_mode
+    if mode == "off":
+        return None
+    if mode == "parsina":
         settings = get_parsina_settings()
         if not settings.is_configured or not settings.parsina_sync_enabled:
             return None
         explicit_settings = settings
-    else:
-        return None
     with session_factory() as session:
         if not _due(session, interval_minutes=interval_minutes):
             return None

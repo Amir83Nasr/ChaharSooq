@@ -18,6 +18,7 @@ from app.schemas.dashboard import (
     CompetitorGapOut,
     DashboardGroupOut,
     DashboardOverviewOut,
+    DashboardSummaryOut,
 )
 from app.schemas.settings import SettingsOut, SettingsUpdateIn
 from app.schemas.suggested_price import SuggestedPriceFormulaIn, SuggestedPriceFormulaOut
@@ -30,6 +31,7 @@ __all__ = [
     "CompetitorGapOut",
     "DashboardGroupOut",
     "DashboardOverviewOut",
+    "DashboardSummaryOut",
     "ErrorBody",
     "ErrorEnvelope",
     "InventorySummaryOut",

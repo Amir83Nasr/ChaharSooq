@@ -1,11 +1,13 @@
 """Category handlers — list/create/delete with in-use guard."""
 
+import hashlib
+
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_db, require_admin
+from app.api.dependencies import get_db, get_db_readonly, require_admin
 from app.models import Admin
 from app.schemas import CategoryIn, CategoryOut
 from app.services import CategoryService
@@ -15,10 +17,15 @@ router = APIRouter()
 
 @router.get("/categories", response_model=list[CategoryOut])
 def list_categories(
+    response: Response,
     _admin: Admin = Depends(require_admin),  # noqa: B008
-    session: Session = Depends(get_db),  # noqa: B008
+    session: Session = Depends(get_db_readonly),  # noqa: B008
 ) -> list[CategoryOut]:
-    return [CategoryOut.model_validate(c) for c in CategoryService(session).list()]
+    rows = [CategoryOut.model_validate(c) for c in CategoryService(session).list()]
+    etag = hashlib.sha256("|".join(f"{c.id}:{c.name}" for c in rows).encode()).hexdigest()[:32]
+    response.headers["Cache-Control"] = "private, max-age=60"
+    response.headers["ETag"] = f'"{etag}"'
+    return rows
 
 
 @router.post("/categories", response_model=CategoryOut, status_code=status.HTTP_201_CREATED)

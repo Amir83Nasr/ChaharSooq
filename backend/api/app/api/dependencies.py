@@ -5,6 +5,7 @@ from collections.abc import Iterator
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from app.core.database import get_readonly_session as _get_readonly_session
 from app.core.database import get_session as _get_session
 from app.core.errors import LOGIN_REQUIRED
 from app.models import Admin
@@ -15,6 +16,11 @@ def get_db() -> Iterator[Session]:
     yield from _get_session()
 
 
+def get_db_readonly() -> Iterator[Session]:
+    """Read-only session for GET handlers — never commits."""
+    yield from _get_readonly_session()
+
+
 def _token_from_request(request: Request) -> str | None:
     from app.core.config import get_settings
 
@@ -23,14 +29,14 @@ def _token_from_request(request: Request) -> str | None:
 
 def get_current_admin(
     request: Request,
-    session: Session = Depends(get_db),  # noqa: B008
+    session: Session = Depends(get_db_readonly),  # noqa: B008
 ) -> Admin | None:
     return AuthService(session).current_admin(_token_from_request(request))
 
 
 def require_admin(
     request: Request,
-    session: Session = Depends(get_db),  # noqa: B008
+    session: Session = Depends(get_db_readonly),  # noqa: B008
 ) -> Admin:
     admin = AuthService(session).current_admin(_token_from_request(request))
     if admin is None:

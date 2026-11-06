@@ -3,15 +3,22 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal, NamedTuple
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast
 
-from sqlalchemy import ColumnElement, and_, case, delete, exists, func, not_, or_, select
+from sqlalchemy import ColumnElement, and_, case, delete, exists, func, not_, or_, select, update
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.sql.elements import Case
 
 from app.models import CompetitorListing, Product
 
+if TYPE_CHECKING:
+    from sqlalchemy.engine import CursorResult
+
 ProductSort = Literal["newest", "cheapest", "most_expensive"]
+
+# Safety cap for the "show all" path (page_size=0): never serialize an
+# unbounded result set — the UI windows rows but the API still builds them.
+SHOW_ALL_MAX = 2000
 
 
 class CompetitorGapRow(NamedTuple):
@@ -86,21 +93,23 @@ class ProductRepository:
         Parsina in production): manual rows (`external_id IS NULL`) are also
         deactivated when they are not in the listing, otherwise the table
         can never shrink back to the source.
+
+        Bulk UPDATE (no ORM object load) — one round-trip even for 10k rows.
         """
-        stmt = select(Product).where(Product.is_active.is_(True))
+        criteria: list[ColumnElement[bool]] = [Product.is_active.is_(True)]
         if keep_external_ids:
             # NULL never matches NOT IN (three-valued logic), so manual rows
             # need an explicit IS NULL branch — otherwise they survive forever.
-            stmt = stmt.where(
+            criteria.append(
                 or_(
                     Product.external_id.is_(None),
                     Product.external_id.not_in(keep_external_ids),
                 )
             )
-        stale = list(self._session.execute(stmt).scalars())
-        for product in stale:
-            product.is_active = False
-        return len(stale)
+        result = self._session.execute(update(Product).where(*criteria).values(is_active=False))
+        # UPDATE rowcount is reliable on PostgreSQL and SQLite (unlike SELECT,
+        # which reports -1 on SQLite) — same cast pattern as SyncStateRepository.
+        return cast("CursorResult[Any]", result).rowcount or 0
 
     def summary(self, *, low_stock_threshold: int) -> dict[str, int]:
         threshold = max(low_stock_threshold, 0)
@@ -245,6 +254,38 @@ class ProductRepository:
             )
         ).scalar_one()
 
+    def coverage_and_appliance_total(self, *, since: datetime) -> tuple[int, int]:
+        """Competitor coverage + لوازم خانگی denominator in ONE round-trip.
+
+        Two scalar subqueries instead of two separate COUNT queries so the
+        dashboard overview costs 3 round-trips (summary, groups, this) not 4.
+        """
+        price = effective_competitor_price(since)
+        coverage_sq = (
+            select(func.count(func.distinct(Product.id)))
+            .select_from(Product)
+            .join(CompetitorListing, CompetitorListing.product_id == Product.id)
+            .where(
+                Product.is_active.is_(True),
+                CompetitorListing.is_active.is_(True),
+                price.is_not(None),
+            )
+            .scalar_subquery()
+        )
+        appliance_sq = (
+            select(func.count())
+            .select_from(Product)
+            .where(
+                Product.is_active.is_(True),
+                Product.main_group_name.is_not(None),
+                not_(Product.main_group_name.ilike("فرش%")),
+                not_(Product.main_group_name.ilike("مبلمان%")),
+            )
+            .scalar_subquery()
+        )
+        row = self._session.execute(select(coverage_sq, appliance_sq)).one()
+        return int(row[0] or 0), int(row[1] or 0)
+
     def list(
         self,
         *,
@@ -326,13 +367,13 @@ class ProductRepository:
             "cheapest": Product.price.asc(),
             "most_expensive": Product.price.desc(),
         }[sort]
-        # `page_size=0` means "show all": return every matching row without a
-        # limit or offset so the table truly shows the whole filtered list.
+        # `page_size=0` means "show all": capped (never unbounded) with no
+        # offset so the table truly shows the whole filtered list up to the cap.
         if page_size and page_size > 0:
             start = (page - 1) * page_size
             stmt = base.order_by(order).offset(start).limit(page_size)
         else:
-            stmt = base.order_by(order)
+            stmt = base.order_by(order).limit(SHOW_ALL_MAX)
         rows = self._session.execute(stmt).unique().scalars().all()
         return list(rows), total
 

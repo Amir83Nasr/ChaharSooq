@@ -14,6 +14,7 @@ from app.schemas import (
     CompetitorGapOut,
     DashboardGroupOut,
     DashboardOverviewOut,
+    DashboardSummaryOut,
 )
 
 TOP_GROUPS_LIMIT = 6
@@ -73,7 +74,9 @@ class DashboardService:
             DashboardGroupOut(name=name, count=count, stock_value=stock_value)
             for name, count, stock_value in self._products.stock_by_group(limit=TOP_GROUPS_LIMIT)
         ]
-        coverage = self._products.competitor_coverage(since=self._price_since())
+        coverage, appliance_total = self._products.coverage_and_appliance_total(
+            since=self._price_since()
+        )
         return DashboardOverviewOut(
             total=summary["total"],
             in_stock=summary["in_stock"],
@@ -81,8 +84,20 @@ class DashboardService:
             out=summary["out"],
             stock_value=summary["stock_value"],
             competitor_coverage=coverage,
-            appliance_total=self._products.appliance_total(),
+            appliance_total=appliance_total,
             groups=groups,
+        )
+
+    def summary(self, *, low_stock_threshold: int, gap_limit: int) -> DashboardSummaryOut:
+        """One-call dashboard payload — 4 round-trips instead of 3×N fetches."""
+        overview = self.overview(low_stock_threshold=low_stock_threshold)
+        if overview.total == 0:
+            # Empty catalog: skip the gap/catalog scans entirely.
+            return DashboardSummaryOut(overview=overview, gaps=[], catalog=[])
+        return DashboardSummaryOut(
+            overview=overview,
+            gaps=self.competitor_gaps(limit=gap_limit),
+            catalog=self.catalog_breakdown(),
         )
 
     def competitor_gaps(self, *, limit: int) -> list[CompetitorGapOut]:

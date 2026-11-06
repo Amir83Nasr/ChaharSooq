@@ -35,34 +35,34 @@ class SyncScheduler:
 
     def start(self) -> None:
         app_settings = get_settings()
-        if app_settings.app_env == "development":
+        mode = app_settings.source_mode
+        if mode == "off":
+            log.info("scheduler off: sync loop runs only in development and production")
+            return
+        if mode == "csv":
             # Dev mirrors prod timing from the CSV fixture (same interval,
             # same lock, same status reporting) — no Parsina credentials needed.
             if not CsvCommoditySource(Path(app_settings.products_csv_path)).is_configured:
                 log.info("scheduler off: product CSV fixture not configured")
                 return
-        elif app_settings.is_production:
+        elif mode in ("parsina", "dev"):
             settings = get_parsina_settings()
-            dev_simulation = bool(app_settings.dev_database_url.strip())
-            if not dev_simulation and (
+            if mode == "parsina" and (
                 not settings.is_configured or not settings.parsina_sync_enabled
             ):
                 log.info("scheduler off: parsina not configured")
                 return
-        else:
-            log.info("scheduler off: sync loop runs only in development and production")
-            return
         if self._thread is not None and self._thread.is_alive():
             return
         self._stop.clear()
         self._thread = threading.Thread(target=self._loop, name="parsina-sync", daemon=True)
         self._thread.start()
-        if app_settings.app_env == "development":
+        if mode == "csv":
             log.info(
                 "scheduler on (development CSV): every %d min",
                 get_parsina_settings().parsina_sync_interval_minutes,
             )
-        elif app_settings.dev_database_url.strip():
+        elif mode == "dev":
             log.info(
                 "scheduler on (dev-db simulation): every %d min",
                 get_parsina_settings().parsina_sync_interval_minutes,

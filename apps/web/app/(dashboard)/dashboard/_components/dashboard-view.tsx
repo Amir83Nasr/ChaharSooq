@@ -83,21 +83,19 @@ export function DashboardView() {
             ? Math.max(0, Math.floor(settings.low_stock_threshold))
             : DEFAULT_LOW_STOCK_THRESHOLD
         if (!cancelled) setThreshold(next)
-        const data = await api.dashboardOverview(next)
+        // One aggregated fetch (overview + catalog) plus the two sync
+        // statuses in parallel — the summary short-circuits gaps/catalog
+        // work when the catalog is empty.
+        const [summary, parsinaData, competitorData] = await Promise.all([
+          api.dashboardSummary(next),
+          api.parsinaStatus().catch(() => null),
+          api.competitorStatus().catch(() => null),
+        ])
         if (cancelled) return
-        setOverview(data)
+        setOverview(summary.overview)
         // Sync health degrades gracefully — a failed status read hides
         // that source instead of failing the whole dashboard.
-        const [breakdownData, parsinaData, competitorData] =
-          data.total > 0
-            ? await Promise.all([
-                api.dashboardCatalogBreakdown().catch((): null => null),
-                api.parsinaStatus().catch(() => null),
-                api.competitorStatus().catch(() => null),
-              ])
-            : [null, null, null]
-        if (cancelled) return
-        setBreakdown(breakdownData)
+        setBreakdown(summary.overview.total > 0 ? summary.catalog : null)
         setParsina(parsinaData)
         setCompetitor(competitorData)
       })

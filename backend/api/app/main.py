@@ -16,7 +16,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 from app.api import router
-from app.api.dependencies import get_db
+from app.api.dependencies import get_db_readonly
 from app.core.config import get_settings
 from app.core.rate_limit import login_rate_key, rate_limited
 
@@ -71,8 +71,11 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "same-origin"
         # Never allow this admin panel to be framed elsewhere.
         response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
-        # HSTS is only meaningful behind TLS; harmless on plain HTTP.
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        # HSTS is only meaningful behind TLS; only send in production so
+        # local HTTP dev never caches a sticky HTTPS upgrade.
+        if get_settings().is_production:
+            response.headers["Strict-Transport-Security"] = "max-age=3153600; includeSubDomains"
         return response
 
 
@@ -209,7 +212,7 @@ def create_app() -> FastAPI:
         return {"status": "ok"}
 
     @app.get("/ready", include_in_schema=False)
-    def root_ready(session: Session = Depends(get_db)) -> dict[str, str]:  # noqa: B008
+    def root_ready(session: Session = Depends(get_db_readonly)) -> dict[str, str]:  # noqa: B008
         session.execute(text("SELECT 1"))
         return {"status": "ready"}
 

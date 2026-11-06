@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_db, require_admin
+from app.api.dependencies import get_db, get_db_readonly, require_admin
 from app.models import Admin
 from app.schemas import SettingsOut, SettingsUpdateIn
 from app.services import SettingsService
@@ -14,7 +14,7 @@ router = APIRouter()
 @router.get("/settings", response_model=SettingsOut)
 def get_settings_view(
     _admin: Admin = Depends(require_admin),  # noqa: B008
-    session: Session = Depends(get_db),  # noqa: B008
+    session: Session = Depends(get_db_readonly),  # noqa: B008
 ) -> SettingsOut:
     return SettingsOut.model_validate(SettingsService(session).get_all())
 

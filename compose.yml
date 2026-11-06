@@ -3,7 +3,8 @@
 x-api-env: &api-env
   APP_ENV: production
   DATABASE_URL: postgresql+psycopg://charsooq:charsooq@postgres:5432/charsooq
-  SESSION_SECRET: change-me-min-32-chars
+  SESSION_SECRET: ${SESSION_SECRET:-local-dev-placeholder-secret-min-32B}
+  REDIS_URL: ${REDIS_URL:-}
 
 x-api-image: &api-image
   image: charsooq-api:local
@@ -28,6 +29,11 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
 
   # One-shot schema upgrade. `api` starts only after this exits successfully,
   # so a fresh volume never serves an empty database. Belt and suspenders:
@@ -53,6 +59,11 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
     healthcheck:
       test:
         [
@@ -81,6 +92,11 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
     healthcheck:
       test:
         [

@@ -1,41 +1,12 @@
 import type { NextConfig } from "next"
-import fs from "node:fs"
-import path from "node:path"
+
+import { loadSharedEnv } from "./scripts/load-env.mjs"
 
 // ─── Shared env loading (dev / mobile) ──────────────────────────────────
-// Next.js only reads .env* from the app directory (apps/web). A single root
-// .env.local is convenient for LAN/mobile dev (one place to whitelist IPs),
-// so we also load the repository-root env files here, without overriding
-// values already present in the process environment.
-function loadEnvFile(filePath: string) {
-  if (!fs.existsSync(filePath)) return
-  const content = fs.readFileSync(filePath, "utf8")
-  for (const rawLine of content.split(/\r?\n/)) {
-    let line = rawLine.trim()
-    if (!line || line.startsWith("#")) continue
-    // Support `export KEY=value` like dotenv does.
-    if (line.startsWith("export ")) line = line.slice("export ".length).trim()
-    const eq = line.indexOf("=")
-    if (eq === -1) continue
-    const key = line.slice(0, eq).trim()
-    if (!key || process.env[key] !== undefined) continue
-    let value = line.slice(eq + 1).trim()
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1)
-    }
-    process.env[key] = value
-  }
-}
-
-const _appDir = process.cwd()
-const _repoRoot = path.resolve(_appDir, "../..")
-loadEnvFile(path.join(_repoRoot, ".env.local"))
-loadEnvFile(path.join(_repoRoot, ".env"))
-loadEnvFile(path.join(_appDir, ".env.local"))
-loadEnvFile(path.join(_appDir, ".env"))
+// Next.js only reads .env* from the app directory (apps/web); the repo-root
+// files are loaded via scripts/load-env.mjs (single place for LAN/mobile IP
+// whitelisting) without overriding values already in the environment.
+loadSharedEnv(process.cwd())
 
 // Same-origin API proxy: browser talks only to the Next host (/api/*),
 // Next rewrites to the FastAPI origin. Session cookie stays first-party,
@@ -64,6 +35,15 @@ const nextConfig: NextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "same-origin" },
           { key: "X-Frame-Options", value: "DENY" },
+          // Mirrors the API's frame policy so the panel can never be framed.
+          {
+            key: "Content-Security-Policy",
+            value: "frame-ancestors 'none'",
+          },
+          {
+            key: "Permissions-Policy",
+            value: "camera=(), microphone=(), geolocation=()",
+          },
         ],
       },
     ]

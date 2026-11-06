@@ -239,3 +239,18 @@ def test_dashboard_catalog_breakdown_groups_by_section(
         "stock_value": 500,
     }
     assert by_section["سایر"]["items"] == 0
+
+
+def test_dashboard_summary_requires_auth(client: TestClient) -> None:
+    assert client.get("/api/v1/dashboard/summary").status_code == 401
+
+
+def test_dashboard_summary_matches_individual_endpoints(client: TestClient) -> None:
+    seed(client)
+    summary = client.get("/api/v1/dashboard/summary", params={"threshold": 5}).json()
+    overview = client.get("/api/v1/dashboard/overview", params={"threshold": 5}).json()
+    gaps = client.get("/api/v1/dashboard/competitor-gaps").json()
+    catalog = client.get("/api/v1/dashboard/catalog-breakdown").json()
+    assert summary["overview"] == overview
+    assert summary["gaps"] == gaps
+    assert summary["catalog"] == catalog

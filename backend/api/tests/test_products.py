@@ -81,3 +81,29 @@ def test_products_summary_counts(client: TestClient) -> None:
     body = client.get("/api/v1/products/summary", params={"threshold": 5}).json()
     # seed: TEA-1 (5×100), CHE-1 (0×300), COF-1 (2×200) → value 500+0+400
     assert body == {"total": 3, "in_stock": 0, "low": 2, "out": 1, "stock_value": 900}
+
+
+def test_products_show_all_reports_real_page_size(client: TestClient) -> None:
+    """page_size=0 returns the whole list and echoes its length (never 1)."""
+    seed(client)
+    body = client.get("/api/v1/products", params={"page_size": 0}).json()
+    assert body["total"] == 3
+    assert body["page"] == 1
+    assert body["page_size"] == 3
+    assert len(body["items"]) == 3
+
+
+def test_product_groups_cache_headers(client: TestClient) -> None:
+    seed(client)
+    r = client.get("/api/v1/products/groups")
+    assert r.status_code == 200
+    assert r.headers["Cache-Control"] == "private, max-age=60"
+    assert r.headers["ETag"].startswith('"') and r.headers["ETag"].endswith('"')
+
+
+def test_categories_list_cache_headers(client: TestClient) -> None:
+    seed(client)
+    r = client.get("/api/v1/categories")
+    assert r.status_code == 200
+    assert r.headers["Cache-Control"] == "private, max-age=60"
+    assert "ETag" in r.headers

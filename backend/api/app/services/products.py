@@ -13,6 +13,10 @@ from app.schemas import ProductIn
 
 INVALID_CATEGORY_ERROR = "دسته‌بندی نامعتبر است"
 
+# Safety cap for the "show all" path (page_size=0): never return an unbounded
+# result set — the UI windows the rows but the API still serializes them all.
+SHOW_ALL_MAX = 2000
+
 
 class InvalidCategoryError(ValueError):
     pass
@@ -43,7 +47,7 @@ class ProductService:
         page_size: int,
     ) -> tuple[list[Product], int]:
         page = max(page, 1)
-        # `page_size=0` is the "show all" path: no limit, no offset.
+        # `page_size=0` is the "show all" path: capped, no offset.
         # Any explicit size is paginated and clamped to 1..500.
         if page_size <= 0:
             page_size = 0

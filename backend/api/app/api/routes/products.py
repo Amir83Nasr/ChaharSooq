@@ -1,11 +1,12 @@
 """Product handlers — paginated list + create + inventory summary."""
 
+import hashlib
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_db, require_admin
+from app.api.dependencies import get_db, get_db_readonly, require_admin
 from app.models import Admin
 from app.schemas import (
     InventorySummaryOut,
@@ -43,7 +44,7 @@ def list_products(
     # and clamped to 500 in the service.
     page_size: int = Query(default=0, ge=0, le=500),
     _admin: Admin = Depends(require_admin),  # noqa: B008
-    session: Session = Depends(get_db),  # noqa: B008
+    session: Session = Depends(get_db_readonly),  # noqa: B008
 ) -> ProductPage:
     items, total = ProductService(session).list(
         query=q,
@@ -62,7 +63,7 @@ def list_products(
         page=page,
         page_size=page_size,
     )
-    response_page_size = page_size if page_size > 0 else (len(items) if items else 1)
+    response_page_size = page_size if page_size > 0 else len(items)
     # "Show all" ignores the requested page offset, so always report page 1
     # to keep row numbers and totalPages consistent on the client.
     response_page = page if page_size > 0 else 1
@@ -100,7 +101,7 @@ def create_product(
 def products_summary(
     threshold: int = Query(default=10, ge=0),
     _admin: Admin = Depends(require_admin),  # noqa: B008
-    session: Session = Depends(get_db),  # noqa: B008
+    session: Session = Depends(get_db_readonly),  # noqa: B008
 ) -> InventorySummaryOut:
     summary = ProductService(session).summary(low_stock_threshold=threshold)
     return InventorySummaryOut(**summary)
@@ -108,7 +109,12 @@ def products_summary(
 
 @router.get("/products/groups", response_model=list[str])
 def product_groups(
+    response: Response,
     _admin: Admin = Depends(require_admin),  # noqa: B008
-    session: Session = Depends(get_db),  # noqa: B008
+    session: Session = Depends(get_db_readonly),  # noqa: B008
 ) -> list[str]:
-    return ProductService(session).groups()
+    groups = ProductService(session).groups()
+    etag = hashlib.sha256("|".join(groups).encode()).hexdigest()[:32]
+    response.headers["Cache-Control"] = "private, max-age=60"
+    response.headers["ETag"] = f'"{etag}"'
+    return groups

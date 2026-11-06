@@ -251,6 +251,11 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
       : win
   return (
     <div className="space-y-6">
+      {pageSize === 0 && page.total > page.items.length ? (
+        <p className="text-sm text-muted-foreground" role="status">
+          {`از ${formatPersianNumber(page.total)} کالا، ${formatPersianNumber(page.items.length)} ردیف اول نمایش داده شد. برای دیدن بقیه از صفحه‌بندی یا فیلتر استفاده کنید.`}
+        </p>
+      ) : null}
       <Table
         className="min-w-192 table-fixed"
         aria-rowcount={page.items.length}

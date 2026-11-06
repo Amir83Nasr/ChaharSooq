@@ -63,3 +63,20 @@ def get_session() -> Iterator[Session]:
         raise
     finally:
         session.close()
+
+
+def get_readonly_session() -> Iterator[Session]:
+    """Yield a read-only request session — never commits.
+
+    GET handlers must use this so a stray attribute change can never be
+    flushed to the database by the shared commit in ``get_session``.
+    """
+    get_engine()
+    if _SessionLocal is None:  # pragma: no cover — engine always initializes the factory
+        raise RuntimeError("database engine is not initialized")
+    session = _SessionLocal()
+    try:
+        yield session
+        session.rollback()
+    finally:
+        session.close()

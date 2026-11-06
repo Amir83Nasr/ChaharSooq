@@ -17,6 +17,8 @@ export async function getSessionAdmin(): Promise<SessionAdmin | null> {
     res = await fetch(`${API}/api/v1/auth/me`, {
       headers: { cookie: cookieHeader },
       cache: "no-store",
+      // Never hang a page render on a sick API — fail closed to login.
+      signal: AbortSignal.timeout(5000),
     })
   } catch {
     // API unreachable from the web server → check API_URL_INTERNAL on the host.

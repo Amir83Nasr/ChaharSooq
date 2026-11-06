@@ -20,4 +20,8 @@ ENV PATH="/srv/api/.venv/bin:${PATH}"
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready')"
-CMD ["uvicorn", "app.main:app", "--app-dir", "backend/api", "--host", "0.0.0.0", "--port", "8000"]
+# Multi-worker uvicorn behind the compose network: --proxy-headers trusts the
+# platform proxy for client IPs (rate limiting), --no-server-header hides the
+# version banner. Workers are capped at 2 — the sync lock is DB-backed so
+# workers never double-run, and memory stays small on a single host.
+CMD ["uvicorn", "app.main:app", "--app-dir", "backend/api", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--proxy-headers", "--no-server-header"]

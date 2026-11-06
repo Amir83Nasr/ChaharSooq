@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_db, require_admin
+from app.api.dependencies import get_db, get_db_readonly, require_admin
 from app.models import Admin
 from app.schemas.competitor import (
     CompetitorListingCreate,
@@ -24,7 +24,7 @@ router = APIRouter()
 def list_competitor_listings(
     product_id: int,
     _admin: Admin = Depends(require_admin),  # noqa: B008
-    session: Session = Depends(get_db),  # noqa: B008
+    session: Session = Depends(get_db_readonly),  # noqa: B008
 ) -> list[CompetitorListingOut]:
     try:
         return CompetitorService(session).list_product_listings(product_id)

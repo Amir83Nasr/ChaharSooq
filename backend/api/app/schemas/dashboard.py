@@ -29,6 +29,18 @@ class CompetitorGapOut(BaseModel):
     diff_percent: float
 
 
+class DashboardSummaryOut(BaseModel):
+    """Single-call dashboard payload — overview + gaps + catalog breakdown.
+
+    Replaces three sequential client fetches with one round-trip; the
+    individual endpoints stay for backwards compatibility.
+    """
+
+    overview: DashboardOverviewOut
+    gaps: list[CompetitorGapOut] = Field(default_factory=list)
+    catalog: list["CatalogSectionOut"] = Field(default_factory=list)
+
+
 class CatalogBrandOut(BaseModel):
     """One raw Parsina group inside a section — `group_name` is the full
     `main_group_name`, `brand` is the display remainder after the section

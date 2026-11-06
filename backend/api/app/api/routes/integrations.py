@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.api.dependencies import get_db, require_admin
+from app.api.dependencies import get_db, get_db_readonly, require_admin
 from app.core.database import get_engine
 from app.models import Admin, ParsinaSyncState
 from app.models.competitor import CompetitorSyncState
@@ -98,7 +98,7 @@ def _run_competitor_manual() -> None:
 @router.get("/integrations/parsina/status", response_model=SyncStatusOut)
 def parsina_status(
     _admin: Admin = Depends(require_admin),  # noqa: B008
-    session: Session = Depends(get_db),  # noqa: B008
+    session: Session = Depends(get_db_readonly),  # noqa: B008
 ) -> SyncStatusOut:
     return _status(session)
 
@@ -134,7 +134,7 @@ def parsina_sync(
 @router.get("/integrations/competitors/status", response_model=CompetitorSyncStatusOut)
 def competitors_status(
     _admin: Admin = Depends(require_admin),  # noqa: B008
-    session: Session = Depends(get_db),  # noqa: B008
+    session: Session = Depends(get_db_readonly),  # noqa: B008
 ) -> CompetitorSyncStatusOut:
     return _competitor_status(session)
 

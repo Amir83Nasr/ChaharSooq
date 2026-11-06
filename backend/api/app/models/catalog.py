@@ -45,6 +45,34 @@ class Product(Base):
         Index("ix_products_is_active", "is_active"),
         Index("ix_products_price", "price"),
         Index("ix_products_stock", "stock"),
+        # Matches 0012_search_indexes: composite active-first paths for the
+        # product list filter/sort (top_group, category, price, stock).
+        Index("ix_products_active_main_group", "is_active", "main_group_name"),
+        Index("ix_products_active_category", "is_active", "category_id"),
+        Index("ix_products_active_price_id", "is_active", "price", "id"),
+        Index("ix_products_active_stock", "is_active", "stock"),
+        # Matches 0012_search_indexes: trigram GIN for %q% Persian search.
+        # `postgresql_*` kwargs only render on PostgreSQL; SQLite (tests)
+        # gets plain indexes with the same names — same schema truth,
+        # so `alembic check` stays green in CI.
+        Index(
+            "ix_products_name_trgm",
+            "name",
+            postgresql_using="gin",
+            postgresql_ops={"name": "gin_trgm_ops"},
+        ),
+        Index(
+            "ix_products_sku_trgm",
+            "sku",
+            postgresql_using="gin",
+            postgresql_ops={"sku": "gin_trgm_ops"},
+        ),
+        Index(
+            "ix_products_main_group_trgm",
+            "main_group_name",
+            postgresql_using="gin",
+            postgresql_ops={"main_group_name": "gin_trgm_ops"},
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

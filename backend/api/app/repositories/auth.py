@@ -44,5 +44,9 @@ class AdminSessionRepository:
     def delete_by_token_hash(self, token_hash: str) -> None:
         self._session.execute(delete(AdminSession).where(AdminSession.token_hash == token_hash))
 
+    def delete_for_admin(self, admin_id: int) -> None:
+        """Single-session enforcement — invalidate older logins on new login."""
+        self._session.execute(delete(AdminSession).where(AdminSession.admin_id == admin_id))
+
     def delete_expired(self, now: datetime) -> None:
         self._session.execute(delete(AdminSession).where(AdminSession.expires_at <= now))

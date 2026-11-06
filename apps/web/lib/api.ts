@@ -4,175 +4,38 @@
 
 import { toPersianDigits } from "@workspace/ui/lib/number"
 
-export interface CategoryOut {
-  id: number
-  name: string
-  created_at: string
-}
+import { createTtlCache } from "./api-cache"
+import { buildProductParams } from "./api-params"
+import type {
+  ApiError,
+  CatalogSection,
+  CategoryOut,
+  CompetitorGap,
+  CompetitorListing,
+  CompetitorStore,
+  CompetitorSyncStatus,
+  DashboardOverview,
+  DashboardSummary,
+  DefaultCompetitorStore,
+  InventorySummary,
+  ProductFilters,
+  ProductPage,
+  SettingsOut,
+  SettingsUpdate,
+  SyncRun,
+  SyncStatus,
+} from "./api-types"
 
-export type ProductSort = "newest" | "cheapest" | "most_expensive"
+export type * from "./api-types"
 
-export interface ProductOut {
-  id: number
-  external_id: number | null
-  name: string
-  sku: string
-  price: number
-  stock: number
-  main_group_name: string | null
-  sub_group_name: string | null
-  unit_name: string | null
-  is_active: boolean
-  category: CategoryOut | null
-  synced_at: string | null
-  competitor_prices: CompetitorPrice[]
-  created_at: string
-}
+// ── Safety cap (mirrors backend SHOW_ALL_MAX): "show all" never asks for
+// more than this; the table windows the rows but the API still serializes
+// them all.
+export const SHOW_ALL_MAX = 2000
 
-export interface ProductPage {
-  items: ProductOut[]
-  total: number
-  page: number
-  page_size: number
-}
-
-export type CompetitorStore = "digikala" | "technolife" | "other"
-export type CompetitorCurrency = "IRR" | "IRT"
-export type CompetitorStatus =
-  | "pending"
-  | "success"
-  | "not_found"
-  | "unavailable"
-  | "blocked"
-  | "failed"
-  | "manual"
-
-export interface CompetitorListing {
-  id: number
-  product_id: number
-  store: CompetitorStore
-  url: string
-  is_active: boolean
-  status: CompetitorStatus
-  fetched_price: number | null
-  fetched_currency: CompetitorCurrency | null
-  fetched_in_stock: boolean | null
-  manual_price: number | null
-  manual_currency: CompetitorCurrency | null
-  manual_in_stock: boolean | null
-  effective_price: number | null
-  effective_currency: CompetitorCurrency | null
-  effective_in_stock: boolean | null
-  price_is_fresh: boolean
-  last_checked_at: string | null
-  last_success_at: string | null
-  manual_updated_at: string | null
-  last_error: string | null
-  created_at: string
-  updated_at: string
-}
-
-export interface CompetitorPrice {
-  id: number
-  store: CompetitorStore
-  url: string
-  status: CompetitorStatus
-  price: number | null
-  currency: CompetitorCurrency | null
-  in_stock: boolean | null
-  is_fresh: boolean
-  is_manual: boolean
-  last_checked_at: string | null
-}
-
-export interface InventorySummary {
-  total: number
-  in_stock: number
-  low: number
-  out: number
-  stock_value: number
-}
-
-export interface DashboardGroup {
-  name: string
-  count: number
-  stock_value: number
-}
-
-export interface DashboardOverview extends InventorySummary {
-  competitor_coverage: number
-  /** Active لوازم خانگی items — the coverage denominator. */
-  appliance_total: number
-  groups: DashboardGroup[]
-}
-
-export interface CompetitorGap {
-  product_id: number
-  name: string
-  our_price: number
-  competitor_price: number
-  competitor_store: CompetitorStore
-  diff_percent: number
-}
-
-export interface CatalogBrand {
-  group_name: string
-  brand: string
-  count: number
-  stock_value: number
-}
-
-export interface CatalogSection {
-  top_group: string
-  items: number
-  group_count: number
-  brand_count: number
-  stock_value: number
-  brands: CatalogBrand[]
-}
-
-export interface SyncStatus {
-  configured: boolean
-  /** Live Parsina API, dev-database simulation, or local CSV fixture. */
-  source: "parsina" | "csv" | "dev"
-  running: boolean
-  running_since: string | null
-  last_attempt_at: string | null
-  last_success_at: string | null
-  last_error: string | null
-  last_processed: number
-  last_created: number
-  last_updated: number
-  last_deactivated: number
-  last_skipped: number
-  interval_minutes: number
-}
-
-/** Accepted trigger; counters arrive through SyncStatus polling. */
-export interface SyncRun {
-  status: "running"
-  message: string | null
-}
-
-export interface CompetitorSyncStatus {
-  running: boolean
-  running_since: string | null
-  last_attempt_at: string | null
-  last_success_at: string | null
-  last_error: string | null
-  last_checked: number
-  last_updated: number
-  last_failed: number
-  last_skipped: number
-}
-
-export interface ApiError {
-  error: {
-    code: string
-    message: string
-    details?: Record<string, string[]>
-  }
-}
+// Default request timeout so a hung API never leaves a page spinning forever.
+// Callers with their own AbortSignal (poller cleanup) still win on abort.
+const REQUEST_TIMEOUT_MS = 15_000
 
 export class ApiRequestError extends Error {
   status: number
@@ -193,14 +56,26 @@ export class ApiRequestError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+  const signal = init?.signal
+    ? AbortSignal.any([init.signal, timeout])
+    : timeout
   let res: Response
   try {
     res = await fetch(path, {
       credentials: "include",
       headers: { "Content-Type": "application/json" },
       ...init,
+      signal,
     })
-  } catch {
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "TimeoutError") {
+      throw new ApiRequestError(
+        0,
+        "پاسخ سرور طول کشید. لطفاً دوباره تلاش کنید."
+      )
+    }
+    if (err instanceof DOMException && err.name === "AbortError") throw err
     throw new ApiRequestError(
       0,
       "اتصال به سرور برقرار نشد. اتصال اینترنت را بررسی کنید."
@@ -212,51 +87,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (res.status === 204) return undefined as T
   return (await res.json()) as T
-}
-
-export interface SettingsOut {
-  low_stock_threshold: number
-  default_page_size: number
-  sync_interval_minutes: number
-  competitor_sync_interval_minutes: number
-  default_competitor_store: DefaultCompetitorStore
-  suggested_price_formulas: SuggestedPriceFormula[]
-}
-
-export type TopGroup = "فرش" | "مبلمان" | "لوازم خانگی"
-
-export type DefaultCompetitorStore = "digikala" | "technolife"
-
-export interface SuggestedPriceFormula {
-  top_group: TopGroup
-  expression: string
-}
-
-export interface SettingsUpdate {
-  low_stock_threshold?: number
-  default_page_size?: number
-  sync_interval_minutes?: number
-  competitor_sync_interval_minutes?: number
-  default_competitor_store?: DefaultCompetitorStore
-  suggested_price_formulas?: SuggestedPriceFormula[]
-}
-
-export interface ProductFilters {
-  q?: string
-  category_id?: number
-  top_group?: string
-  main_group?: string
-  min_price?: number
-  max_price?: number
-  competitor_store?: CompetitorStore
-  min_competitor_price?: number
-  max_competitor_price?: number
-  min_stock?: number
-  max_stock?: number
-  in_stock?: boolean
-  sort?: ProductSort
-  page?: number
-  page_size?: number
 }
 
 // ── Persian error mapping (never surface raw fetch/HTML/English errors) ──
@@ -292,8 +122,7 @@ function toApiError(status: number, body: ApiError | null): ApiRequestError {
 // and reuses the result briefly across navigations. Errors are never
 // cached; saves refresh the entry below.
 const SETTINGS_TTL_MS = 15_000
-let settingsCache: { data: SettingsOut; expires: number } | null = null
-let settingsInflight: Promise<SettingsOut> | null = null
+const settingsCache = createTtlCache<SettingsOut>(SETTINGS_TTL_MS)
 
 export const api = {
   login(username: string, password: string) {
@@ -303,28 +132,14 @@ export const api = {
     })
   },
   settings() {
-    const cached = settingsCache
-    if (cached && cached.expires > Date.now()) {
-      return Promise.resolve(cached.data)
-    }
-    if (!settingsInflight) {
-      settingsInflight = request<SettingsOut>("/api/v1/settings")
-        .then((data) => {
-          settingsCache = { data, expires: Date.now() + SETTINGS_TTL_MS }
-          return data
-        })
-        .finally(() => {
-          settingsInflight = null
-        })
-    }
-    return settingsInflight
+    return settingsCache.get(() => request<SettingsOut>("/api/v1/settings"))
   },
   updateSettings(patch: SettingsUpdate) {
     return request<SettingsOut>("/api/v1/settings", {
       method: "PUT",
       body: JSON.stringify(patch),
     }).then((data) => {
-      settingsCache = { data, expires: Date.now() + SETTINGS_TTL_MS }
+      settingsCache.set(data)
       return data
     })
   },
@@ -335,34 +150,10 @@ export const api = {
     return request<undefined>("/api/v1/auth/logout", { method: "POST" })
   },
   products(params: ProductFilters = {}) {
-    const search = new URLSearchParams()
-    if (params.q) search.set("q", params.q)
-    if (params.category_id)
-      search.set("category_id", String(params.category_id))
-    if (params.top_group) search.set("top_group", params.top_group)
-    if (params.main_group) search.set("main_group", params.main_group)
-    if (params.min_price !== undefined)
-      search.set("min_price", String(params.min_price))
-    if (params.max_price !== undefined)
-      search.set("max_price", String(params.max_price))
-    if (params.competitor_store)
-      search.set("competitor_store", params.competitor_store)
-    if (params.min_competitor_price !== undefined)
-      search.set("min_competitor_price", String(params.min_competitor_price))
-    if (params.max_competitor_price !== undefined)
-      search.set("max_competitor_price", String(params.max_competitor_price))
-    if (params.min_stock !== undefined)
-      search.set("min_stock", String(params.min_stock))
-    if (params.max_stock !== undefined)
-      search.set("max_stock", String(params.max_stock))
-    if (params.in_stock !== undefined)
-      search.set("in_stock", String(params.in_stock))
-    if (params.sort) search.set("sort", params.sort)
-    if (params.page) search.set("page", String(params.page))
-    if (params.page_size !== undefined)
-      search.set("page_size", String(params.page_size))
-    const suffix = search.size ? `?${search}` : ""
-    return request<ProductPage>(`/api/v1/products${suffix}`)
+    // `page_size=0` is the canonical "show all" — the backend caps it at
+    // SHOW_ALL_MAX. Never rewrite it client-side: the route rejects explicit
+    // sizes above 500, so sending 2000 would 422 and empty the table.
+    return request<ProductPage>(`/api/v1/products${buildProductParams(params)}`)
   },
   competitorListings(productId: number) {
     return request<CompetitorListing[]>(
@@ -432,6 +223,12 @@ export const api = {
   dashboardOverview(threshold: number) {
     return request<DashboardOverview>(
       `/api/v1/dashboard/overview?threshold=${threshold}`
+    )
+  },
+  /** Single-call dashboard payload — overview + gaps + catalog. */
+  dashboardSummary(threshold: number, gapLimit = 8) {
+    return request<DashboardSummary>(
+      `/api/v1/dashboard/summary?threshold=${threshold}&gap_limit=${gapLimit}`
     )
   },
   dashboardGaps(limit = 8) {

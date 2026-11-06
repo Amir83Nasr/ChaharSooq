@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     session_cookie_name: str = Field(default="charsooq_session")
     session_ttl_hours: int = Field(default=12)
     session_samesite: Literal["lax", "none"] = Field(default="lax")
+    # Optional Redis URL for cross-worker rate limiting (e.g. redis://localhost:6379/0).
+    # Empty means single-process in-memory limiting (dev / single replica).
+    # Requires the optional `redis` library wherever set (see pyproject note).
+    redis_url: str = Field(default="")
     cors_origins: Annotated[list[str], NoDecode] = Field(
         default=[
             "http://localhost:3000",
@@ -74,16 +78,25 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _fail_fast_on_default_secret(self) -> "Settings":
-        if (
-            self.app_env == "production"
-            and self.session_secret == "dev-only-secret-change-me-min-32-chars"  # noqa: S105
-        ):
-            raise ValueError("SESSION_SECRET must be set explicitly in production")
+        if self.app_env == "production":
+            if self.session_secret == "dev-only-secret-change-me-min-32-chars":  # noqa: S105
+                raise ValueError("SESSION_SECRET must be set explicitly in production")
+            if len(self.session_secret.encode()) < 32:
+                raise ValueError("SESSION_SECRET must be at least 32 bytes in production")
         return self
 
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"
+
+    @property
+    def source_mode(self) -> Literal["csv", "dev", "parsina", "off"]:
+        """Product source mode — single place for the scheduler/sync branch."""
+        if self.app_env == "development":
+            return "csv"
+        if self.is_production:
+            return "dev" if self.dev_database_url.strip() else "parsina"
+        return "off"
 
 
 class ParsinaSettings(BaseSettings):

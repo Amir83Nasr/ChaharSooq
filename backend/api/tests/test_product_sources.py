@@ -169,7 +169,9 @@ def test_source_selection_by_environment(tmp_path: Path) -> None:
     )
     assert isinstance(
         build_commodity_source(
-            app_settings=Settings(app_env="production", session_secret="test-secret-123"),
+            app_settings=Settings(
+                app_env="production", session_secret="test-secret-12345678901234567890"
+            ),
             parsina_settings=ParsinaSettings(),
         ),
         ParsinaCommoditySource,
@@ -178,7 +180,7 @@ def test_source_selection_by_environment(tmp_path: Path) -> None:
     dev = build_commodity_source(
         app_settings=Settings(
             app_env="production",
-            session_secret="test-secret-123",
+            session_secret="test-secret-12345678901234567890",
             dev_database_url=url,
         ),
         parsina_settings=ParsinaSettings(),

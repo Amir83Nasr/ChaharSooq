@@ -26,6 +26,9 @@ class AuthService:
             return None
         now = datetime.now(UTC)
         self._sessions.delete_expired(now)
+        # Session rotation: a fresh login invalidates older sessions so a
+        # leaked cookie stops working as soon as the admin logs in again.
+        self._sessions.delete_for_admin(admin.id)
         token = new_session_token()
         ttl = timedelta(hours=get_settings().session_ttl_hours)
         self._sessions.add(

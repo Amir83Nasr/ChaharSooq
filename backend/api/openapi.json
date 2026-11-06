@@ -235,6 +235,60 @@
         }
       }
     },
+    "/api/v1/dashboard/summary": {
+      "get": {
+        "summary": "Dashboard Summary",
+        "description": "Aggregated dashboard payload — one fetch instead of three.",
+        "operationId": "dashboard_summary_api_v1_dashboard_summary_get",
+        "parameters": [
+          {
+            "name": "threshold",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 10,
+              "title": "Threshold"
+            }
+          },
+          {
+            "name": "gap_limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 8,
+              "title": "Gap Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardSummaryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/products": {
       "get": {
         "summary": "List Products",
@@ -1869,6 +1923,33 @@
           "appliance_total"
         ],
         "title": "DashboardOverviewOut"
+      },
+      "DashboardSummaryOut": {
+        "properties": {
+          "overview": {
+            "$ref": "#/components/schemas/DashboardOverviewOut"
+          },
+          "gaps": {
+            "items": {
+              "$ref": "#/components/schemas/CompetitorGapOut"
+            },
+            "type": "array",
+            "title": "Gaps"
+          },
+          "catalog": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogSectionOut"
+            },
+            "type": "array",
+            "title": "Catalog"
+          }
+        },
+        "type": "object",
+        "required": [
+          "overview"
+        ],
+        "title": "DashboardSummaryOut",
+        "description": "Single-call dashboard payload — overview + gaps + catalog breakdown.\n\nReplaces three sequential client fetches with one round-trip; the\nindividual endpoints stay for backwards compatibility."
       },
       "ErrorBody": {
         "properties": {

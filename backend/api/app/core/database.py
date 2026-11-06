@@ -1,8 +1,9 @@
 """Database engine / session wiring. SQLAlchemy 2.x style only."""
 
 from collections.abc import Iterator
+from typing import Any
 
-from sqlalchemy import create_engine
+from sqlalchemy import Connection, MetaData, create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -10,6 +11,21 @@ from sqlalchemy.pool import StaticPool
 
 class Base(DeclarativeBase):
     pass
+
+
+@event.listens_for(Base.metadata, "before_create")
+def _ensure_pg_extensions(_target: MetaData, connection: Connection, **_kw: Any) -> None:
+    """Install PostgreSQL extensions the schema needs before `create_all`.
+
+    `Base.metadata.create_all` (tests, `scripts/seed_admin.py`) never runs
+    Alembic, so `0012_search_indexes` has no chance to create `pg_trgm` and
+    the trigram GIN indexes on `products` fail with
+    `operator class "gin_trgm_ops" does not exist`. Idempotent and a no-op
+    on SQLite/other dialects.
+    """
+    if connection.dialect.name != "postgresql":
+        return
+    connection.exec_driver_sql("CREATE EXTENSION IF NOT EXISTS pg_trgm")
 
 
 def _build_engine() -> Engine:

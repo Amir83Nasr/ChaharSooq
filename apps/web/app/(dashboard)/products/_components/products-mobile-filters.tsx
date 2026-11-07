@@ -19,8 +19,8 @@ import {
 import { SearchInput } from "@/components/data/data-table-toolbar"
 import { ProductsToolbar } from "./products-toolbar"
 import type { ProductSort } from "@/lib/api"
+import type { StockFilter } from "@/lib/products-store"
 import type { CompetitorMarket } from "./products-table"
-import type { StockFilter } from "./products-toolbar"
 
 interface Props {
   q: string

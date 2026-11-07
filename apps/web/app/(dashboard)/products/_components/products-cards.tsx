@@ -16,6 +16,12 @@ import { toTomanAmount } from "@/lib/money"
 import type { ProductOut } from "@/lib/api"
 import type { CompetitorMarket } from "./products-table"
 import { COMPETITOR_MARKETS } from "./products-table"
+import { initialRowWindow, useWindowedRows } from "./use-windowed-rows"
+
+// Mobile cards are taller than table rows; a small first window keeps the
+// initial commit cheap while the real heights are measured.
+const CARD_EST_HEIGHT = 168
+const CARD_INITIAL_ROWS = 8
 
 function topGroupOf(name: string | null): string | null {
   if (!name) return null
@@ -58,83 +64,81 @@ export function ProductMobileCard({
       : null
 
   return (
-    <li>
-      <button
-        type="button"
-        onClick={() => onSelect(item)}
-        aria-label={`مشاهده جزئیات ${item.name}`}
-        className="flex min-h-11 w-full items-start gap-3 rounded-2xl border border-border bg-card p-3 text-start shadow-none transition-[border-color,box-shadow] active:scale-[0.995] active:border-foreground/25 sm:p-4"
-      >
-        <span className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <span className="flex items-start justify-between gap-2">
-            <span className="line-clamp-2 min-w-0 flex-1 text-sm leading-6 font-semibold wrap-break-word">
-              {item.name}
-            </span>
-            <ChevronLeft
-              className="mt-1 size-4 shrink-0 text-muted-foreground"
-              aria-hidden="true"
-            />
+    <button
+      type="button"
+      onClick={() => onSelect(item)}
+      aria-label={`مشاهده جزئیات ${item.name}`}
+      className="flex min-h-11 w-full items-start gap-3 rounded-2xl border border-border bg-card p-3 text-start shadow-none transition-[border-color,box-shadow] active:scale-[0.995] active:border-foreground/25 sm:p-4"
+    >
+      <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <span className="flex items-start justify-between gap-2">
+          <span className="line-clamp-2 min-w-0 flex-1 text-sm leading-6 font-semibold wrap-break-word">
+            {item.name}
           </span>
-          {/* Single quiet meta line: category context + SKU only. Row number
+          <ChevronLeft
+            className="mt-1 size-4 shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
+        </span>
+        {/* Single quiet meta line: category context + SKU only. Row number
               is a list artifact and the brand repeats the product name, so
               both are dropped on mobile to keep the card scannable. */}
-          {top || item.sku ? (
-            <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-              {top ? <span className="shrink-0">{top}</span> : null}
-              {top && item.sku ? (
-                <span aria-hidden="true" className="shrink-0">
-                  ·
+        {top || item.sku ? (
+          <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+            {top ? <span className="shrink-0">{top}</span> : null}
+            {top && item.sku ? (
+              <span aria-hidden="true" className="shrink-0">
+                ·
+              </span>
+            ) : null}
+            {item.sku ? (
+              <span dir="ltr" className="min-w-0 flex-1 truncate text-right">
+                {item.sku}
+              </span>
+            ) : null}
+          </span>
+        ) : null}
+        <span className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1.5 pt-0.5">
+          <span className="flex flex-col gap-0.5">
+            <span className="text-[11px] text-muted-foreground">قیمت ما</span>
+            <Price value={item.price} className="text-base font-bold" />
+          </span>
+          {isAppliance ? (
+            <span className="flex flex-col items-end gap-0.5">
+              <span className="text-[11px] text-muted-foreground">
+                {marketLabel}
+              </span>
+              {competitor?.price !== null &&
+              competitor?.price !== undefined &&
+              amount !== null &&
+              amount !== undefined ? (
+                <Price
+                  value={amount}
+                  className="text-sm font-semibold text-muted-foreground"
+                />
+              ) : (
+                <span className="text-xs text-muted-foreground">
+                  لینک ثبت نشده
                 </span>
-              ) : null}
-              {item.sku ? (
-                <span dir="ltr" className="min-w-0 flex-1 truncate text-right">
-                  {item.sku}
-                </span>
-              ) : null}
+              )}
             </span>
           ) : null}
-          <span className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1.5 pt-0.5">
-            <span className="flex flex-col gap-0.5">
-              <span className="text-[11px] text-muted-foreground">قیمت ما</span>
-              <Price value={item.price} className="text-base font-bold" />
-            </span>
-            {isAppliance ? (
-              <span className="flex flex-col items-end gap-0.5">
-                <span className="text-[11px] text-muted-foreground">
-                  {marketLabel}
-                </span>
-                {competitor?.price !== null &&
-                competitor?.price !== undefined &&
-                amount !== null &&
-                amount !== undefined ? (
-                  <Price
-                    value={amount}
-                    className="text-sm font-semibold text-muted-foreground"
-                  />
-                ) : (
-                  <span className="text-xs text-muted-foreground">
-                    لینک ثبت نشده
-                  </span>
-                )}
-              </span>
-            ) : null}
-          </span>
-          <span className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
-            <StockCell value={item.stock} threshold={threshold} />
-            {pct !== null && !Object.is(Math.round(pct * 10) / 10, 0) ? (
-              <span
-                className={cn(
-                  "text-xs font-medium",
-                  pct > 0 ? "text-destructive" : "text-success"
-                )}
-              >
-                {formatDiffCompact(pct)} {pct > 0 ? "گران‌تر" : "ارزان‌تر"}
-              </span>
-            ) : null}
-          </span>
         </span>
-      </button>
-    </li>
+        <span className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+          <StockCell value={item.stock} threshold={threshold} />
+          {pct !== null && !Object.is(Math.round(pct * 10) / 10, 0) ? (
+            <span
+              className={cn(
+                "text-xs font-medium",
+                pct > 0 ? "text-destructive" : "text-success"
+              )}
+            >
+              {formatDiffCompact(pct)} {pct > 0 ? "گران‌تر" : "ارزان‌تر"}
+            </span>
+          ) : null}
+        </span>
+      </span>
+    </button>
   )
 }
 
@@ -156,17 +160,44 @@ export const ProductsCards = memo(function ProductsCards({
   threshold: number
   onSelect: (item: ProductOut) => void
 }) {
+  // "Show all" can return the whole catalog; render only the viewport slice.
+  // Spacing lives on each <li> so measured heights include the gap.
+  const options = {
+    estimatedRowHeight: CARD_EST_HEIGHT,
+    initialRows: CARD_INITIAL_ROWS,
+  }
+  const { bodyRef, observeRow, win } = useWindowedRows<HTMLUListElement>(
+    items.length,
+    (i) => items[i]?.id ?? i,
+    options
+  )
+  const count = items.length
+  const renderWin =
+    win.end > count || (win.end === 0 && count > 0)
+      ? initialRowWindow(count, options)
+      : win
+
   return (
-    <ul className="flex flex-col gap-2.5">
-      {items.map((item) => (
-        <ProductMobileCard
-          key={item.id}
-          item={item}
-          market={market}
-          threshold={threshold}
-          onSelect={onSelect}
-        />
-      ))}
+    <ul ref={bodyRef} className="flex flex-col">
+      {renderWin.topPad > 0 ? (
+        <li aria-hidden="true" style={{ height: renderWin.topPad }} />
+      ) : null}
+      {items.slice(renderWin.start, renderWin.end).map((item, k) => {
+        const i = renderWin.start + k
+        return (
+          <li key={item.id} ref={observeRow(i)} className="pb-2.5">
+            <ProductMobileCard
+              item={item}
+              market={market}
+              threshold={threshold}
+              onSelect={onSelect}
+            />
+          </li>
+        )
+      })}
+      {renderWin.bottomPad > 0 ? (
+        <li aria-hidden="true" style={{ height: renderWin.bottomPad }} />
+      ) : null}
     </ul>
   )
 })

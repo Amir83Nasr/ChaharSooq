@@ -18,9 +18,8 @@ import {
   SearchInput,
 } from "@/components/data/data-table-toolbar"
 import type { ProductSort } from "@/lib/api"
+import type { StockFilter } from "@/lib/products-store"
 import { COMPETITOR_MARKETS, type CompetitorMarket } from "./products-table"
-
-export type StockFilter = "all" | "in" | "out" | "low"
 
 export const SORT_LABELS: Record<ProductSort, string> = {
   newest: "جدیدترین",

@@ -17,10 +17,27 @@ export type RowWindow = {
   bottomPad: number
 }
 
+export interface WindowedRowsOptions {
+  /** Fallback height before a row has been measured. */
+  estimatedRowHeight?: number
+  /** Rows rendered on the first paint, before measurement kicks in. */
+  initialRows?: number
+}
+
 /** Deterministic first-paint window (also used for SSR). */
-export function initialRowWindow(count: number): RowWindow {
-  const end = Math.min(count, INITIAL_ROWS)
-  return { start: 0, end, topPad: 0, bottomPad: (count - end) * EST_ROW_HEIGHT }
+export function initialRowWindow(
+  count: number,
+  options: WindowedRowsOptions = {}
+): RowWindow {
+  const estimatedRowHeight = options.estimatedRowHeight ?? EST_ROW_HEIGHT
+  const initialRows = options.initialRows ?? INITIAL_ROWS
+  const end = Math.min(count, initialRows)
+  return {
+    start: 0,
+    end,
+    topPad: 0,
+    bottomPad: (count - end) * estimatedRowHeight,
+  }
 }
 
 /**
@@ -36,16 +53,20 @@ export function initialRowWindow(count: number): RowWindow {
  * (`[data-slot="dashboard-scroll"]` in the dashboard layout); the table
  * itself only scrolls horizontally.
  */
-export function useWindowedRows(
+export function useWindowedRows<
+  C extends HTMLElement = HTMLTableSectionElement,
+>(
   count: number,
-  keyAt: (index: number) => string | number
+  keyAt: (index: number) => string | number,
+  options: WindowedRowsOptions = {}
 ): {
-  bodyRef: React.RefObject<HTMLTableSectionElement | null>
-  observeRow: (index: number) => (el: HTMLTableRowElement | null) => void
+  bodyRef: React.RefObject<C | null>
+  observeRow: (index: number) => (el: HTMLElement | null) => void
   win: RowWindow
 } {
-  const bodyRef = React.useRef<HTMLTableSectionElement | null>(null)
-  const rowEls = React.useRef(new Map<number, HTMLTableRowElement>())
+  const estimatedRowHeight = options.estimatedRowHeight ?? EST_ROW_HEIGHT
+  const bodyRef = React.useRef<C | null>(null)
+  const rowEls = React.useRef(new Map<number, HTMLElement>())
   const heights = React.useRef(new Map<string | number, number>())
   const roRef = React.useRef<ResizeObserver | null>(null)
   const rafRef = React.useRef(0)
@@ -54,7 +75,9 @@ export function useWindowedRows(
   const countRef = React.useRef(count)
   countRef.current = count
 
-  const [win, setWin] = React.useState<RowWindow>(() => initialRowWindow(count))
+  const [win, setWin] = React.useState<RowWindow>(() =>
+    initialRowWindow(count, options)
+  )
 
   const recompute = React.useCallback(() => {
     rafRef.current = 0
@@ -81,9 +104,9 @@ export function useWindowedRows(
     const tbodyOffset = container.scrollTop + (bodyRect.top - containerRect.top)
     // How far the container scrolled past the tbody top (negative above it).
     const scrolled = container.scrollTop - tbodyOffset
-    const viewTop = Math.max(0, scrolled - OVERSCAN_ROWS * EST_ROW_HEIGHT)
+    const viewTop = Math.max(0, scrolled - OVERSCAN_ROWS * estimatedRowHeight)
     const viewBottom =
-      scrolled + containerRect.height + OVERSCAN_ROWS * EST_ROW_HEIGHT
+      scrolled + containerRect.height + OVERSCAN_ROWS * estimatedRowHeight
 
     let acc = 0
     let start = 0
@@ -115,9 +138,9 @@ export function useWindowedRows(
     )
 
     function heightAtRefValue(index: number): number {
-      return heights.current.get(keyAtRef.current(index)) ?? EST_ROW_HEIGHT
+      return heights.current.get(keyAtRef.current(index)) ?? estimatedRowHeight
     }
-  }, [])
+  }, [estimatedRowHeight])
 
   const schedule = React.useCallback(() => {
     if (rafRef.current) return
@@ -174,12 +197,12 @@ export function useWindowedRows(
   // Stable per-index callbacks: a fresh closure every render would make
   // React detach/reattach every row ref on each scroll render.
   const cbCache = React.useRef(
-    new Map<number, (el: HTMLTableRowElement | null) => void>()
+    new Map<number, (el: HTMLElement | null) => void>()
   )
   const observeRow = React.useCallback((index: number) => {
     let cb = cbCache.current.get(index)
     if (!cb) {
-      cb = (el: HTMLTableRowElement | null) => {
+      cb = (el: HTMLElement | null) => {
         const prev = rowEls.current.get(index)
         if (prev && prev !== el) {
           roRef.current?.unobserve(prev)

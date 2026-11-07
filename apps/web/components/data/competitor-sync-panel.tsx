@@ -17,6 +17,14 @@ const IDLE_POLL_MS = 45_000
 const MAX_RUNNING_POLLS = 600
 
 interface Props {
+  /**
+   * Last successful sync the table already reflects. Seeding the poller with
+   * this (instead of null) lets the first tick notice a run that finished
+   * while the products route was unmounted.
+   */
+  initialLastSuccess?: string | null
+  /** Keeps the shared baseline current so the next mount can compare again. */
+  onStatus?: (lastSuccessAt: string | null) => void
   /** Bumped once per new successful sync — table re-fetches in place. */
   onSynced: () => void
   onUnauthorized: () => void
@@ -39,7 +47,12 @@ function RelativeMoment({ value, now }: { value: string; now: number }) {
   return <span title={formatPersianDateTime(value)}>{relative}</span>
 }
 
-export function CompetitorSyncPanel({ onSynced, onUnauthorized }: Props) {
+export function CompetitorSyncPanel({
+  initialLastSuccess = null,
+  onStatus,
+  onSynced,
+  onUnauthorized,
+}: Props) {
   const [status, setStatus] = useState<CompetitorSyncStatus | null>(null)
   const [triggering, setTriggering] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -57,7 +70,7 @@ export function CompetitorSyncPanel({ onSynced, onUnauthorized }: Props) {
   // Refreshes relative timestamps ("۵ دقیقه پیش") without a status fetch.
   const [now, setNow] = useState(() => Date.now())
 
-  const lastSuccess = useRef<string | null>(null)
+  const lastSuccess = useRef<string | null>(initialLastSuccess)
   const triggeringRef = useRef(false)
   const pollingRef = useRef(false)
   const pollsRef = useRef(0)
@@ -65,8 +78,10 @@ export function CompetitorSyncPanel({ onSynced, onUnauthorized }: Props) {
   const abortRef = useRef<AbortController | null>(null)
   const onSyncedRef = useRef(onSynced)
   const onUnauthorizedRef = useRef(onUnauthorized)
+  const onStatusRef = useRef(onStatus)
   onSyncedRef.current = onSynced
   onUnauthorizedRef.current = onUnauthorized
+  onStatusRef.current = onStatus
 
   const handle = useCallback((err: unknown) => {
     if (err instanceof ApiRequestError && err.status === 401) {
@@ -103,6 +118,7 @@ export function CompetitorSyncPanel({ onSynced, onUnauthorized }: Props) {
         pollsRef.current = data.running ? pollsRef.current + 1 : 0
         delay = data.running ? RUNNING_POLL_MS : IDLE_POLL_MS
         setStatus(data)
+        onStatusRef.current?.(data.last_success_at)
         // Re-fetch the catalog whenever a run finishes (success or failure)
         // so bulk price updates land without a full page reload.
         if (

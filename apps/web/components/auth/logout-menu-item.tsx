@@ -15,6 +15,7 @@ import { LogOut } from "lucide-react"
 import { SidebarMenuButton, useSidebar } from "@workspace/ui/primitives/sidebar"
 import { api } from "@/lib/api"
 import { leaveToLogin } from "@/lib/auth-navigation"
+import { resetProductsStore } from "@/lib/products-store"
 import { LogoutDialog } from "@/components/auth/logout-dialog"
 
 type LogoutContextValue = {
@@ -70,6 +71,9 @@ export function LogoutProvider({ children }: { children: ReactNode }) {
     } finally {
       setPending(false)
     }
+    // A full navigation drops the store anyway; reset explicitly so the
+    // previous session's catalog can never be painted in between.
+    resetProductsStore()
     setOpen(false)
     leaveToLogin("assign")
   }

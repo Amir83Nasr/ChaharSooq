@@ -34,6 +34,7 @@ import { Badge } from "@workspace/ui/primitives/badge"
 import { Button } from "@workspace/ui/primitives/button"
 import { cn } from "@workspace/ui/lib/utils"
 import { LogoutMenuItem } from "@/components/auth/logout-menu-item"
+import { prefetchProducts } from "@/lib/products-store"
 
 type NavChild = {
   href: string
@@ -128,6 +129,12 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
 
   const closeMobileSidebar = () => {
     if (isMobile) setOpenMobile(false)
+  }
+
+  // Warm the catalog on intent so the first visit is not a cold skeleton.
+  // No-op once the store already holds a page.
+  const warmProducts = () => {
+    void prefetchProducts()
   }
 
   return (
@@ -272,7 +279,19 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton
                       render={
-                        <Link href={item.href} onClick={closeMobileSidebar}>
+                        <Link
+                          href={item.href}
+                          prefetch={
+                            item.href === "/products" ? true : undefined
+                          }
+                          onPointerEnter={
+                            item.href === "/products" ? warmProducts : undefined
+                          }
+                          onFocus={
+                            item.href === "/products" ? warmProducts : undefined
+                          }
+                          onClick={closeMobileSidebar}
+                        >
                           <item.icon className="sidebar-collapse-icon" />
                           <span className="sidebar-collapse-label">
                             {item.label}

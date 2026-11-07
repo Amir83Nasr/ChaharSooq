@@ -118,10 +118,11 @@ function toApiError(status: number, body: ApiError | null): ApiRequestError {
 }
 
 // Coalesces concurrent settings reads (the settings page mounts six cards
-// at once; the products page fires categories+settings+products on reload)
-// and reuses the result briefly across navigations. Errors are never
-// cached; saves refresh the entry below.
-const SETTINGS_TTL_MS = 15_000
+// at once) and reuses the result across navigations. Errors are never cached;
+// saves refresh the entry below. Settings change rarely and every save
+// refreshes this entry, so a longer TTL keeps route mounts from issuing a
+// background read on every visit.
+const SETTINGS_TTL_MS = 5 * 60_000
 const settingsCache = createTtlCache<SettingsOut>(SETTINGS_TTL_MS)
 
 export const api = {

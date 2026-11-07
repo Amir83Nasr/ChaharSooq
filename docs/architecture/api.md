@@ -119,8 +119,8 @@ leaves the last successful data untouched.
   `weight × competitor + (1 − weight) × Parsina`; `weight` is the competitor share (0–1).
 - `suggested_price_formulas` replaces the saved list; each `top_group` may appear once.
 - `product_table_columns` replaces the visible column list (`row`, `name`, `sku`, `category`,
-  `brand`, `unit`, `price`, `competitor_price`, `price_diff`, `suggested_price`, `stock`); at least
-  one column, no duplicates.
+  `brand`, `unit`, `price`, `competitor_price`, `price_diff`, `suggested_price`,
+  `suggested_price_change`, `stock`); at least one column, no duplicates.
 
 ## Error envelope
 

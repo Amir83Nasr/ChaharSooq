@@ -49,6 +49,7 @@ PRODUCT_TABLE_COLUMNS: tuple[ProductTableColumn, ...] = (
     "competitor_price",
     "price_diff",
     "suggested_price",
+    "suggested_price_change",
     "stock",
 )
 DEFAULT_PRODUCT_TABLE_COLUMNS: tuple[ProductTableColumn, ...] = PRODUCT_TABLE_COLUMNS

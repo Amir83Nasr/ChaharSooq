@@ -95,6 +95,14 @@ export const PRODUCT_TABLE_COLUMNS: readonly ProductTableColumnMeta[] = [
     center: true,
   },
   {
+    id: "suggested_price_change",
+    label: "درصد تغییر",
+    hint: "درصد تغییر قیمت پیشنهادی نسبت به قیمت پایه",
+    widthClass: "w-28",
+    minWidthPx: 112,
+    center: true,
+  },
+  {
     id: "stock",
     label: "موجودی",
     hint: "موجودی انبار و وضعیت کمبود",

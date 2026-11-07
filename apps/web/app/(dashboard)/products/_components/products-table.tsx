@@ -112,8 +112,14 @@ function diffPercent(ours: number, theirs: number | null): number | null {
   return ((ours - theirs) / theirs) * 100
 }
 
-function formatDiffPercent(diff: number): string {
-  const rounded = Math.round(diff * 10) / 10
+// درصد تغییر قیمت پیشنهادی نسبت به قیمت پایه: مثبت یعنی افزایش.
+function changePercent(base: number, value: number | null): number | null {
+  if (value === null || base <= 0) return null
+  return ((value - base) / base) * 100
+}
+
+function formatPercentMagnitude(percent: number): string {
+  const rounded = Math.round(percent * 10) / 10
   const clean = Object.is(rounded, -0) ? 0 : rounded
   const absStr = Math.abs(clean).toFixed(1).replace(/\.0$/, "")
   return `${formatPersianNumber(absStr)}٪`
@@ -184,6 +190,11 @@ function ProductsTableHead(props: {
           {shown.has("suggested_price") ? (
             <TableHead scope="col" className="text-center">
               قیمت پیشنهادی
+            </TableHead>
+          ) : null}
+          {shown.has("suggested_price_change") ? (
+            <TableHead scope="col" className="text-center">
+              درصد تغییر
             </TableHead>
           ) : null}
           {shown.has("stock") ? (
@@ -343,6 +354,7 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
               competitor?.is_fresh === true
                 ? suggestedPriceFor(item.price, amount, weight)
                 : null
+            const suggestedChange = changePercent(item.price, suggested)
             return (
               <TableRow
                 key={item.id}
@@ -466,9 +478,9 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                         className={`block text-xs font-medium ${
                           pct > 0 ? "text-destructive" : "text-success"
                         }`}
-                        title={`${marketLabel}: ${formatDiffPercent(pct)} ${pct > 0 ? "گران‌تر" : "ارزان‌تر"} از رقیب`}
+                        title={`${marketLabel}: ${formatPercentMagnitude(pct)} ${pct > 0 ? "گران‌تر" : "ارزان‌تر"} از رقیب`}
                       >
-                        {formatDiffPercent(pct)}{" "}
+                        {formatPercentMagnitude(pct)}{" "}
                         {pct > 0 ? "گران‌تر" : "ارزان‌تر"}
                       </span>
                     )}
@@ -480,6 +492,29 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                       <span className="text-muted-foreground">—</span>
                     ) : (
                       <Price value={suggested} />
+                    )}
+                  </TableCell>
+                ) : null}
+                {shown.has("suggested_price_change") ? (
+                  <TableCell className="text-center">
+                    {suggestedChange === null ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : Object.is(Math.round(suggestedChange * 10) / 10, 0) ? (
+                      <span className="block text-xs text-muted-foreground">
+                        بدون تغییر
+                      </span>
+                    ) : (
+                      <span
+                        className={`block text-xs font-medium ${
+                          suggestedChange > 0
+                            ? "text-destructive"
+                            : "text-success"
+                        }`}
+                        title={`قیمت پیشنهادی ${formatPercentMagnitude(suggestedChange)} ${suggestedChange > 0 ? "بیشتر" : "کمتر"} از قیمت فعلی است`}
+                      >
+                        {formatPercentMagnitude(suggestedChange)}{" "}
+                        {suggestedChange > 0 ? "بیشتر" : "کمتر"}
+                      </span>
                     )}
                   </TableCell>
                 ) : null}

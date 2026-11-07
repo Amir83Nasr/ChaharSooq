@@ -189,6 +189,7 @@ export type ProductTableColumn =
   | "competitor_price"
   | "price_diff"
   | "suggested_price"
+  | "suggested_price_change"
   | "stock"
 
 export interface SettingsOut {

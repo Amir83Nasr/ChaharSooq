@@ -19,7 +19,9 @@ import type {
   DefaultCompetitorStore,
   InventorySummary,
   ProductFilters,
+  ProductOut,
   ProductPage,
+  ProductPriceBoundsUpdate,
   SettingsOut,
   SettingsUpdate,
   SyncRun,
@@ -155,6 +157,12 @@ export const api = {
     // SHOW_ALL_MAX. Never rewrite it client-side: the route rejects explicit
     // sizes above 500, so sending 2000 would 422 and empty the table.
     return request<ProductPage>(`/api/v1/products${buildProductParams(params)}`)
+  },
+  updateProductPriceBounds(id: number, payload: ProductPriceBoundsUpdate) {
+    return request<ProductOut>(`/api/v1/products/${id}/price-bounds`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    })
   },
   competitorListings(productId: number) {
     return request<CompetitorListing[]>(

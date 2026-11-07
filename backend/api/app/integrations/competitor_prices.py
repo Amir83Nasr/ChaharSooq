@@ -29,6 +29,8 @@ STORE_HOSTS: dict[str, frozenset[str]] = {
     "technolife": frozenset(
         {"technolife.ir", "www.technolife.ir", "technolife.com", "www.technolife.com"}
     ),
+    "sofa": frozenset({"sofamobl.com", "www.sofamobl.com"}),
+    "digifresh": frozenset({"digifarsh.com", "www.digifarsh.com"}),
 }
 _lock = threading.Lock()
 _robot_cache: dict[str, tuple[float, RobotFileParser]] = {}
@@ -359,7 +361,12 @@ def _as_object(value: object) -> list[dict[str, object]]:
 
 
 def _iter_offers(value: object) -> Iterator[dict[str, object]]:
-    """Yield offer dicts, descending into nested AggregateOffer.offers."""
+    """Yield offer dicts, descending into nested AggregateOffer.offers.
+
+    Some stores only publish an ``AggregateOffer`` with ``lowPrice``/``highPrice``
+    and no nested offers (DigiFresh does this for multi-size carpets); the
+    starting price is that aggregate's ``lowPrice``.
+    """
     if isinstance(value, list):
         for item in value:
             yield from _iter_offers(item)
@@ -369,6 +376,8 @@ def _iter_offers(value: object) -> Iterator[dict[str, object]]:
         nested = value.get("offers")
         if nested is not None:
             yield from _iter_offers(nested)
+        if value.get("price") is None and value.get("lowPrice") is not None:
+            yield {**value, "price": value["lowPrice"]}
 
 
 def _price_from_json_ld(html: str) -> FetchedPrice | None:
@@ -421,15 +430,31 @@ def _parse_technolife(html: str) -> FetchedPrice | None:
     for «۱۱۲٬۹۰۰٬۰۰۰ تومان»). Dividing such values by 10 (IRR→toman) drops
     one zero, so normalise them to IRT at the source.
     """
+    return _parse_toman_labelled_irr(html)
+
+
+def _parse_toman_labelled_irr(html: str) -> FetchedPrice | None:
     result = _price_from_json_ld(html)
     if result is not None and result.currency == "IRR":
         return replace(result, currency="IRT")
     return result
 
 
+def _parse_sofa(html: str) -> FetchedPrice | None:
+    """Sofa Mobl publishes Toman values under an ``IRR`` label."""
+    return _parse_toman_labelled_irr(html)
+
+
+def _parse_digifresh(html: str) -> FetchedPrice | None:
+    """DigiFresh publishes the starting Toman price under ``IRR`` too."""
+    return _parse_toman_labelled_irr(html)
+
+
 STORE_PARSERS = {
     "digikala": _parse_digikala,
     "technolife": _parse_technolife,
+    "sofa": _parse_sofa,
+    "digifresh": _parse_digifresh,
 }
 
 

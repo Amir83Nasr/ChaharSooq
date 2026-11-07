@@ -17,9 +17,9 @@ import {
   DataTableToolbar,
   SearchInput,
 } from "@/components/data/data-table-toolbar"
-import type { ProductSort } from "@/lib/api"
+import type { DefaultCompetitorStore, ProductSort } from "@/lib/api"
 import type { StockFilter } from "@/lib/products-store"
-import { COMPETITOR_MARKETS, type CompetitorMarket } from "./products-table"
+import { COMPETITOR_MARKETS } from "./products-table"
 
 export const SORT_LABELS: Record<ProductSort, string> = {
   newest: "جدیدترین",
@@ -39,7 +39,7 @@ interface ToolbarProps {
   topGroup: string | null
   sort: ProductSort
   stock: StockFilter
-  market: CompetitorMarket
+  market: DefaultCompetitorStore
   minPrice: string
   maxPrice: string
   hasFilters: boolean
@@ -47,7 +47,7 @@ interface ToolbarProps {
   onTopGroup: (v: string | null) => void
   onSort: (v: ProductSort) => void
   onStock: (v: StockFilter) => void
-  onMarketChange: (v: CompetitorMarket) => void
+  onMarketChange: (v: DefaultCompetitorStore) => void
   onMinPrice: (v: string) => void
   onMaxPrice: (v: string) => void
   onClear: () => void
@@ -139,11 +139,11 @@ export function ProductsToolbar(props: ToolbarProps) {
       </Select>
       <Select
         value={market}
-        onValueChange={(v) => onMarketChange(v as CompetitorMarket)}
+        onValueChange={(v) => onMarketChange(v as DefaultCompetitorStore)}
       >
         <SelectTrigger className="w-full sm:w-44" aria-label="فروشگاه رقیب">
           <SelectValue>
-            {(value: CompetitorMarket | null) =>
+            {(value: DefaultCompetitorStore | null) =>
               value
                 ? (COMPETITOR_MARKETS.find((m) => m.store === value)?.label ??
                   "فروشگاه رقیب")

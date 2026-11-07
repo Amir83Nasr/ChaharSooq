@@ -15,7 +15,7 @@ import { StockCell } from "@/components/data/products-stock-cell"
 import { toTomanAmount } from "@/lib/money"
 import type { ProductOut } from "@/lib/api"
 import type { CompetitorMarket } from "./products-table"
-import { COMPETITOR_MARKETS } from "./products-table"
+import { STORE_MARKET_LABELS } from "./products-table"
 import { initialRowWindow, useWindowedRows } from "./use-windowed-rows"
 
 // Mobile cards are taller than table rows; a small first window keeps the
@@ -47,12 +47,21 @@ export function ProductMobileCard({
   threshold: number
   onSelect: (item: ProductOut) => void
 }) {
-  const marketLabel =
-    COMPETITOR_MARKETS.find((m) => m.store === market)?.label ?? "دیجی‌کالا"
+  const marketLabel = STORE_MARKET_LABELS[market]
   const top = topGroupOf(item.main_group_name)
   const isAppliance = top === "لوازم خانگی"
-  const competitor = isAppliance
-    ? (item.competitor_prices.find((price) => price.store === market) ?? null)
+  const trackedStore =
+    isAppliance || top === null
+      ? market
+      : top === "مبلمان"
+        ? "sofa"
+        : "digifresh"
+  const showCompetitor = isAppliance
+    ? market === "digikala" || market === "technolife"
+    : market === trackedStore
+  const competitor = showCompetitor
+    ? (item.competitor_prices.find((price) => price.store === trackedStore) ??
+      null)
     : null
   const amount = toTomanAmount(
     competitor?.price ?? null,
@@ -103,7 +112,7 @@ export function ProductMobileCard({
             <span className="text-[11px] text-muted-foreground">قیمت ما</span>
             <Price value={item.price} className="text-base font-bold" />
           </span>
-          {isAppliance ? (
+          {showCompetitor ? (
             <span className="flex flex-col items-end gap-0.5">
               <span className="text-[11px] text-muted-foreground">
                 {marketLabel}
@@ -134,6 +143,19 @@ export function ProductMobileCard({
               )}
             >
               {formatDiffCompact(pct)} {pct > 0 ? "گران‌تر" : "ارزان‌تر"}
+            </span>
+          ) : !isAppliance && competitor?.price_change_percent != null ? (
+            <span
+              className={cn(
+                "text-xs font-medium",
+                competitor.price_change_percent > 0
+                  ? "text-destructive"
+                  : competitor.price_change_percent < 0
+                    ? "text-success"
+                    : "text-muted-foreground"
+              )}
+            >
+              تغییر روزانه {formatDiffCompact(competitor.price_change_percent)}
             </span>
           ) : null}
         </span>

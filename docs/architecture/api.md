@@ -84,9 +84,16 @@ create returns `422`.
 `effective_price`, `effective_currency`, and `effective_in_stock` prefer a manual override and
 otherwise use a fetched value that is still within the TTL. `status` reports the last fetch
 result (`success`, `not_found`, `unavailable`, `blocked`, `failed`, `pending`, `manual`).
-Automatic extraction only supports Digikala and Technolife public product pages; `other` links are
-manual-only. Links are limited to لوازم خانگی products, at most one per store. Unknown or stale
-prices are excluded from tables and competitor-price filters.
+Automatic extraction supports Digikala + Technolife (لوازم خانگی), Sofa Mobl (مبلمان), and
+DigiFresh (فرش). Sofa/DigiFresh links are tracking-only: the price is never entered manually, and
+`price_change_percent` compares the current observation with the previous UTC day's observation.
+Links are limited to the stores valid for each top group (`digikala`/`technolife`/`other` for
+appliances, `sofa` for مبلمان, `digifresh` for فرش), at most one per store. Unknown or stale prices
+are excluded from tables and competitor-price filters.
+
+`PATCH /products/{product_id}/price-bounds` stores two percentages per product:
+`allowed_decrease_percent` (m) and `allowed_increase_percent` (n). The displayed suggested price
+is clamped to `[Pb × (1 − m/100), Pb × (1 + n/100)]`; null disables that side.
 
 ## Integrations
 
@@ -115,8 +122,10 @@ leaves the last successful data untouched.
 `competitor_sync_interval_minutes`, `default_competitor_store`, `suggested_price_formulas`, and
 `product_table_columns`.
 
-- Each formula is `{top_group, weight}` and drives
-  `weight × competitor + (1 − weight) × Parsina`; `weight` is the competitor share (0–1).
+- Each formula is `{top_group, weight}`. لوازم خانگی uses
+  `weight × competitor + (1 − weight) × Parsina`; مبلمان/فرش use
+  `Parsina × (1 + weight × daily_change_percent)` because their Sofa/DigiFresh link is a daily
+  price tracker, not a direct competitor price. `weight` is 0–1.
 - `suggested_price_formulas` replaces the saved list; each `top_group` may appear once.
 - `product_table_columns` replaces the visible column list (`row`, `name`, `sku`, `category`,
   `brand`, `unit`, `price`, `competitor_price`, `price_diff`, `suggested_price`,

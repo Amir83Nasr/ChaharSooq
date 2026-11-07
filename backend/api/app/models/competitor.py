@@ -22,7 +22,7 @@ from app.models.base import utcnow
 if TYPE_CHECKING:
     from app.models.catalog import Product
 
-CompetitorStore = Literal["digikala", "technolife"]
+CompetitorStore = Literal["digikala", "technolife", "sofa", "digifresh"]
 CompetitorStatus = Literal[
     "pending", "success", "not_found", "unavailable", "blocked", "failed", "manual"
 ]
@@ -80,6 +80,43 @@ class CompetitorListing(Base):
     )
 
     product: Mapped["Product"] = relationship(back_populates="competitor_listings")
+    price_observations: Mapped[list["CompetitorPriceObservation"]] = relationship(
+        back_populates="listing",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="CompetitorPriceObservation.observed_at",
+    )
+
+
+class CompetitorPriceObservation(Base):
+    """One successful fetched price — the daily-change baseline lives here.
+
+    Listings keep the *latest* price for display; this keep every observation
+    so the UI can compare today's price with the last one recorded before the
+    daily window. Observations are deleted with their listing.
+    """
+
+    __tablename__ = "competitor_price_observations"
+    __table_args__ = (
+        Index(
+            "ix_competitor_price_observations_listing_time",
+            "listing_id",
+            "observed_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    listing_id: Mapped[int] = mapped_column(
+        ForeignKey("competitor_listings.id", ondelete="CASCADE"), nullable=False
+    )
+    price: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    in_stock: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    observed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow
+    )
+
+    listing: Mapped["CompetitorListing"] = relationship(back_populates="price_observations")
 
 
 class CompetitorSyncState(Base):

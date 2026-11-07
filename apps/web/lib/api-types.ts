@@ -23,6 +23,8 @@ export interface ProductOut {
   category: CategoryOut | null
   synced_at: string | null
   competitor_prices: CompetitorPrice[]
+  allowed_decrease_percent: number | null
+  allowed_increase_percent: number | null
   created_at: string
 }
 
@@ -33,7 +35,8 @@ export interface ProductPage {
   page_size: number
 }
 
-export type CompetitorStore = "digikala" | "technolife" | "other"
+export type CompetitorStore =
+  "digikala" | "technolife" | "sofa" | "digifresh" | "other"
 export type CompetitorCurrency = "IRR" | "IRT"
 export type CompetitorStatus =
   | "pending"
@@ -65,6 +68,10 @@ export interface CompetitorListing {
   last_success_at: string | null
   manual_updated_at: string | null
   last_error: string | null
+  price_change_percent: number | null
+  previous_price: number | null
+  previous_currency: CompetitorCurrency | null
+  previous_observed_at: string | null
   created_at: string
   updated_at: string
 }
@@ -80,6 +87,10 @@ export interface CompetitorPrice {
   is_fresh: boolean
   is_manual: boolean
   last_checked_at: string | null
+  price_change_percent: number | null
+  previous_price: number | null
+  previous_currency: CompetitorCurrency | null
+  previous_observed_at: string | null
 }
 
 export interface InventorySummary {
@@ -208,7 +219,10 @@ export type DefaultCompetitorStore = "digikala" | "technolife"
 
 export interface SuggestedPriceFormula {
   top_group: TopGroup
-  /** Competitor share of the blend, from 0 (base only) to 1 (competitor only). */
+  /**
+   * Share applied to the source: competitor price for لوازم خانگی, daily
+   * price change for مبلمان/فرش. Always 0–1.
+   */
   weight: number
 }
 
@@ -238,4 +252,10 @@ export interface ProductFilters {
   sort?: ProductSort
   page?: number
   page_size?: number
+}
+
+/** `null` disables that side of the suggested-price clamp. */
+export interface ProductPriceBoundsUpdate {
+  allowed_decrease_percent: number | null
+  allowed_increase_percent: number | null
 }

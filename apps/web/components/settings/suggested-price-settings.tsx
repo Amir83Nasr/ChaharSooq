@@ -28,13 +28,13 @@ const GROUPS: GroupConfig[] = [
     group: "فرش",
     id: "carpet",
     range: "۰٫۱ تا ۰٫۳",
-    hint: "کالا یکتاست و مقایسه مستقیم با رقیب سخت‌تر است.",
+    hint: "وزن اعمال تغییر روزانه قیمت محصول دیجی‌فرش روی قیمت پایه.",
   },
   {
     group: "مبلمان",
     id: "furniture",
     range: "۰٫۱ تا ۰٫۳",
-    hint: "کالا یکتاست و مقایسه مستقیم با رقیب سخت‌تر است.",
+    hint: "وزن اعمال تغییر روزانه قیمت محصول سوفا روی قیمت پایه.",
   },
   {
     group: "لوازم خانگی",
@@ -43,6 +43,11 @@ const GROUPS: GroupConfig[] = [
     hint: "کالا قابل‌مقایسه‌تر است؛ وزن بالاتر منطقی است.",
   },
 ]
+
+/** Furniture/carpet follow the linked product's daily change, not Pc. */
+function isTrackingGroup(group: TopGroup): boolean {
+  return group !== "لوازم خانگی"
+}
 
 interface ParsedWeight {
   value: number | null
@@ -252,36 +257,44 @@ export function SuggestedPriceSettings() {
             </h3>
             <p className="text-sm leading-6 text-muted-foreground">
               <span className="hidden sm:inline">
-                ترکیب وزنی قیمت پایه پارسینا و قیمت رقیب. وزن را برای هر دسته
-                جداگانه تعیین کنید؛ وزن ۰ یعنی فقط قیمت پارسینا و وزن ۱ یعنی فقط
-                قیمت رقیب. اگر وزن یک دسته خالی بماند، برای آن دسته قیمت
-                پیشنهادی نمایش داده نمی‌شود.
+                لوازم خانگی از ترکیب وزنی قیمت پایه پارسینا و قیمت رقیب ساخته
+                می‌شود. مبلمان و فرش قیمت رقیب مستقیم ندارند؛ تغییر روزانه قیمت
+                محصول لینک‌شده (سوفا یا دیجی‌فرش) با همان وزن روی قیمت پایه
+                اعمال می‌شود. وزن خالی یعنی برای آن دسته قیمت پیشنهادی نمایش
+                داده نمی‌شود.
               </span>
               <span className="sm:hidden">
-                وزن ۰ یعنی فقط پارسینا و وزن ۱ یعنی فقط رقیب؛ وزن خالی یعنی بدون
-                قیمت پیشنهادی.
+                لوازم خانگی: وزن رقیب؛ مبلمان/فرش: وزن تغییر روزانه. وزن خالی
+                یعنی بدون قیمت پیشنهادی.
               </span>
             </p>
           </div>
         </div>
         <div
           dir="ltr"
-          className="mt-4 rounded-xl border border-border/70 bg-background px-4 py-3 text-center font-mono text-sm font-medium"
+          className="mt-4 space-y-1 rounded-xl border border-border/70 bg-background px-4 py-3 text-center font-mono text-sm font-medium"
         >
-          P = w × Pc + (1 − w) × Pb
+          <p>لوازم خانگی: P = w × Pc + (1 − w) × Pb</p>
+          <p>مبلمان/فرش: P = Pb × (1 + w × Δ)</p>
         </div>
-        <dl className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
+        <dl className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-4">
           <div className="flex items-center gap-2">
             <dt className="rounded-md bg-background px-1.5 py-0.5 font-mono text-[11px] text-foreground">
               w
             </dt>
-            <dd>وزن رقیب (۰ تا ۱)</dd>
+            <dd>وزن رقیب یا تغییر روزانه (۰ تا ۱)</dd>
           </div>
           <div className="flex items-center gap-2">
             <dt className="rounded-md bg-background px-1.5 py-0.5 font-mono text-[11px] text-foreground">
               Pc
             </dt>
             <dd>قیمت رقیب</dd>
+          </div>
+          <div className="flex items-center gap-2">
+            <dt className="rounded-md bg-background px-1.5 py-0.5 font-mono text-[11px] text-foreground">
+              Δ
+            </dt>
+            <dd>درصد تغییر روزانه محصول لینک‌شده</dd>
           </div>
           <div className="flex items-center gap-2">
             <dt className="rounded-md bg-background px-1.5 py-0.5 font-mono text-[11px] text-foreground">
@@ -301,6 +314,7 @@ export function SuggestedPriceSettings() {
           const errorId = `weight-${config.id}-error`
           const competitorShare =
             weight === null ? 0 : Math.min(Math.max(weight, 0), 1)
+          const tracking = isTrackingGroup(config.group)
           return (
             <div
               key={config.group}
@@ -324,7 +338,7 @@ export function SuggestedPriceSettings() {
                 >
                   {weight === null
                     ? "تنظیم نشده"
-                    : `${formatPercent(weight)} رقیب`}
+                    : `${formatPercent(weight)} ${tracking ? "تغییر" : "رقیب"}`}
                 </Badge>
               </div>
 
@@ -354,7 +368,11 @@ export function SuggestedPriceSettings() {
                       }
                     }}
                     placeholder="0.6"
-                    aria-label={`وزن قیمت رقیب برای ${config.group}`}
+                    aria-label={
+                      tracking
+                        ? `وزن تغییر روزانه برای ${config.group}`
+                        : `وزن قیمت رقیب برای ${config.group}`
+                    }
                     aria-invalid={fieldError ? true : undefined}
                     aria-describedby={
                       fieldError ? `${helpId} ${errorId}` : helpId
@@ -417,7 +435,7 @@ export function SuggestedPriceSettings() {
                 </div>
                 <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                   <span>
-                    رقیب:{" "}
+                    {tracking ? "تغییر روزانه" : "رقیب"}:{" "}
                     {weight === null ? "—" : formatPercent(competitorShare)}
                   </span>
                   <span>
@@ -433,8 +451,9 @@ export function SuggestedPriceSettings() {
                 </p>
                 {weight !== null ? (
                   <p className="text-[11px] leading-5 text-muted-foreground">
-                    فرمول: {formatWeight(weight)} × قیمت رقیب +{" "}
-                    {formatWeight(1 - weight)} × قیمت پارسینا
+                    {tracking
+                      ? `فرمول: قیمت پایه × (۱ + ${formatWeight(weight)} × درصد تغییر روزانه)`
+                      : `فرمول: ${formatWeight(weight)} × قیمت رقیب + ${formatWeight(1 - weight)} × قیمت پارسینا`}
                   </p>
                 ) : null}
                 {fieldError ? (

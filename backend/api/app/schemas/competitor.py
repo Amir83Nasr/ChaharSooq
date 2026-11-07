@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-CompetitorStore = Literal["digikala", "technolife", "other"]
+CompetitorStore = Literal["digikala", "technolife", "sofa", "digifresh", "other"]
 CompetitorStatus = Literal[
     "pending", "success", "not_found", "unavailable", "blocked", "failed", "manual"
 ]
@@ -81,6 +81,20 @@ class CompetitorListingOut(BaseModel):
     last_error: str | None = Field(
         default=None, description="Persian error from the last failed fetch."
     )
+    price_change_percent: float | None = Field(
+        default=None,
+        description=(
+            "Change between the latest observation and the last one at least "
+            "24 hours older, in percent. Null until two daily observations exist."
+        ),
+    )
+    previous_price: float | None = Field(
+        default=None, description="Price from the previous daily observation."
+    )
+    previous_currency: Currency | None = None
+    previous_observed_at: datetime | None = Field(
+        default=None, description="UTC timestamp of the previous daily observation."
+    )
     created_at: datetime
     updated_at: datetime
 
@@ -100,6 +114,13 @@ class CompetitorPriceOut(BaseModel):
     is_fresh: bool = Field(description="Price is within the configured TTL.")
     is_manual: bool = Field(description="The effective price comes from a manual override.")
     last_checked_at: datetime | None = None
+    price_change_percent: float | None = Field(
+        default=None,
+        description="Daily price change of the linked product, in percent.",
+    )
+    previous_price: float | None = None
+    previous_currency: Currency | None = None
+    previous_observed_at: datetime | None = None
 
 
 class CompetitorSyncRunOut(BaseModel):

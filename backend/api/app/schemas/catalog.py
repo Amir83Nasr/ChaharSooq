@@ -64,9 +64,40 @@ class ProductOut(BaseModel):
         default=None, description="Last successful source sync (UTC)."
     )
     competitor_prices: list[CompetitorPriceOut] = Field(default_factory=list)
+    allowed_decrease_percent: float | None = Field(
+        default=None,
+        description=(
+            "Maximum allowed decrease below the base price (m in the floor "
+            "formula); null leaves the suggested price unclamped on this side."
+        ),
+    )
+    allowed_increase_percent: float | None = Field(
+        default=None,
+        description=(
+            "Maximum allowed increase above the base price (n in the ceiling "
+            "formula); null leaves the suggested price unclamped on this side."
+        ),
+    )
     created_at: datetime = Field(description="UTC creation timestamp.")
 
     model_config = {"from_attributes": True}
+
+
+class ProductPriceBoundsUpdate(BaseModel):
+    """Per-product suggested-price clamp: m% below and n% above the base."""
+
+    allowed_decrease_percent: float | None = Field(
+        default=None,
+        ge=0,
+        le=100,
+        description="Maximum allowed decrease below the base price, in percent.",
+    )
+    allowed_increase_percent: float | None = Field(
+        default=None,
+        ge=0,
+        le=100,
+        description="Maximum allowed increase above the base price, in percent.",
+    )
 
 
 class ProductPage(BaseModel):

@@ -1,7 +1,8 @@
 """Suggested price boundary schemas.
 
-The suggested price is a weighted blend of the Parsina base price and a
-competitor price; only the competitor weight is configurable per top group.
+Appliances blend the Parsina base with a competitor price. Furniture/carpet
+have no direct competitor price; the same weight scales the linked product's
+daily price change instead.
 """
 
 from typing import Literal
@@ -16,7 +17,10 @@ class SuggestedPriceFormulaIn(BaseModel):
     weight: float = Field(
         ge=0,
         le=1,
-        description="Competitor share: `weight × competitor + (1 − weight) × Parsina`.",
+        description=(
+            "Source share (0–1): competitor price for لوازم خانگی, daily price "
+            "change for مبلمان/فرش."
+        ),
     )
 
 

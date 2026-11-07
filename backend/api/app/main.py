@@ -45,6 +45,8 @@ _FIELD_LABELS: dict[str, str] = {
     "store": "فروشگاه",
     "manual_price": "قیمت دستی",
     "weight": "وزن",
+    "allowed_decrease_percent": "حداکثر کاهش",
+    "allowed_increase_percent": "حداکثر افزایش",
 }
 
 

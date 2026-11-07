@@ -8,6 +8,7 @@ from app.schemas.catalog import (
     ProductIn,
     ProductOut,
     ProductPage,
+    ProductPriceBoundsUpdate,
     SyncRunOut,
     SyncStatusOut,
 )
@@ -41,6 +42,7 @@ __all__ = [
     "ProductIn",
     "ProductOut",
     "ProductPage",
+    "ProductPriceBoundsUpdate",
     "SettingsOut",
     "SettingsUpdateIn",
     "SuggestedPriceFormulaIn",

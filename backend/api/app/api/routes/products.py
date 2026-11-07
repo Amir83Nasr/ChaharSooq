@@ -7,17 +7,19 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db, get_db_readonly, require_admin
-from app.api.openapi import UNAUTHORIZED, VALIDATION_ERROR
+from app.api.openapi import NOT_FOUND, UNAUTHORIZED, VALIDATION_ERROR
 from app.models import Admin
 from app.schemas import (
     InventorySummaryOut,
     ProductIn,
     ProductOut,
     ProductPage,
+    ProductPriceBoundsUpdate,
 )
 from app.services import (
     INVALID_CATEGORY_ERROR,
     InvalidCategoryError,
+    ProductNotFoundError,
     ProductService,
 )
 from app.services.competitor import CompetitorService
@@ -49,9 +51,8 @@ def list_products(
     ),
     min_price: int | None = Query(default=None, ge=0, description="Minimum unit price, Toman."),
     max_price: int | None = Query(default=None, ge=0, description="Maximum unit price, Toman."),
-    competitor_store: Literal["digikala", "technolife", "other"] | None = Query(
-        default=None, description="Only products with a fresh price from this store."
-    ),
+    competitor_store: Literal["digikala", "technolife", "sofa", "digifresh", "other"]
+    | None = Query(default=None, description="Only products with a fresh price from this store."),
     min_competitor_price: int | None = Query(
         default=None, ge=0, description="Minimum fresh competitor price."
     ),
@@ -133,6 +134,33 @@ def create_product(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=INVALID_CATEGORY_ERROR,
+        ) from None
+    return ProductOut.model_validate(product)
+
+
+@router.patch(
+    "/products/{product_id}/price-bounds",
+    response_model=ProductOut,
+    summary="Update product price bounds",
+    description=(
+        "Sets the per-product clamp for the suggested price: m% below and n% "
+        "above the Parsina base price. A null value disables that side. The "
+        "suggested price never leaves `[Pb × (1 − m), Pb × (1 + n)]`."
+    ),
+    responses={404: NOT_FOUND, 422: VALIDATION_ERROR},
+)
+def update_product_price_bounds(
+    product_id: int,
+    payload: ProductPriceBoundsUpdate,
+    _admin: Admin = Depends(require_admin),  # noqa: B008
+    session: Session = Depends(get_db),  # noqa: B008
+) -> ProductOut:
+    try:
+        product = ProductService(session).update_price_bounds(product_id, payload)
+    except ProductNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="کالا پیدا نشد",
         ) from None
     return ProductOut.model_validate(product)
 

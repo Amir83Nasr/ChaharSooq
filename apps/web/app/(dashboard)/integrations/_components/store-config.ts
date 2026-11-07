@@ -18,14 +18,16 @@ export const STORES: Record<StoreKey, StoreConfig> = {
     key: "sofa",
     name: "سوفا",
     topGroup: "مبلمان",
-    description: "قیمت محصولات مبلمان در سوفا با قیمت فروشگاه مقایسه می‌شود.",
+    description:
+      "لینک محصولات مبلمان در سوفا ثبت می‌شود و تغییر روزانه قیمت مبنای پیشنهاد است.",
     auto: false,
   },
   digifresh: {
     key: "digifresh",
     name: "دیجی‌فرش",
     topGroup: "فرش",
-    description: "قیمت محصولات فرش در دیجی‌فرش با قیمت فروشگاه مقایسه می‌شود.",
+    description:
+      "لینک محصولات فرش در دیجی‌فرش ثبت می‌شود و تغییر روزانه قیمت مبنای پیشنهاد است.",
     auto: false,
   },
   digikala: {

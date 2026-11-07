@@ -95,11 +95,14 @@ loads the dev fixture and `make db-clear-products` empties it (development only)
 
 ## Competitor prices
 
-Links and observations are stored separately from the Parsina catalog. Digikala and Technolife
-product pages are fetched through JSON-LD offers; `other` stores are manual-only. Fetched prices
-expire after `COMPETITOR_PRICE_TTL_HOURS` (default 24), and `COMPETITOR_REQUEST_INTERVAL_SECONDS`
-(default 5) throttles requests. The fetcher checks `robots.txt`, validates redirects and public DNS,
-and pauses the store for six hours after `403`/`429`.
+Links and observations are stored separately from the Parsina catalog. Digikala, Technolife,
+Sofa Mobl, and DigiFresh product pages are fetched through JSON-LD offers; `other` stores are
+manual-only. Sofa/DigiFresh are daily trackers: one observation per UTC day feeds
+`price_change_percent`, which replaces the competitor price in the furniture/carpet suggested
+formula. Fetched prices expire after `COMPETITOR_PRICE_TTL_HOURS` (default 24), and
+`COMPETITOR_REQUEST_INTERVAL_SECONDS` (default 5) throttles requests. The fetcher checks
+`robots.txt`, validates redirects and public DNS, and pauses the store for six hours after
+`403`/`429`.
 
 Admins can run one link, every link of a product, or a bulk refresh. Bulk runs use the same lock
 model as the product sync and are also scheduled from Settings. Manual overrides take precedence

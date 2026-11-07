@@ -11,26 +11,41 @@ import { Input } from "@workspace/ui/primitives/input"
 import { Skeleton } from "@workspace/ui/primitives/skeleton"
 import { Price } from "@workspace/ui/persian/price"
 import { PersianDateTime } from "@workspace/ui/persian/persian-date"
+import { formatPersianNumber } from "@workspace/ui/lib/number"
 import { toTomanAmount } from "@/lib/money"
 import {
   ApiRequestError,
   api,
   type CompetitorListing,
   type CompetitorStore,
+  type TopGroup,
 } from "@/lib/api"
 
-/** دو کارت ثابت دیالوگ محصول (فقط لوازم خانگی). */
-const DIALOG_STORES: CompetitorStore[] = ["digikala", "technolife"]
+/** Links a product group can track in the detail dialog. */
+export const DIALOG_STORES: Record<TopGroup, CompetitorStore[]> = {
+  "لوازم خانگی": ["digikala", "technolife"],
+  مبلمان: ["sofa"],
+  فرش: ["digifresh"],
+}
+
+export const TRACKING_STORES: ReadonlySet<CompetitorStore> = new Set([
+  "sofa",
+  "digifresh",
+])
 
 const STORE_LABELS: Record<CompetitorStore, string> = {
   digikala: "دیجی‌کالا",
   technolife: "تکنولایف",
+  sofa: "سوفا",
+  digifresh: "دیجی‌فرش",
   other: "سایر فروشگاه‌ها",
 }
 
 const STORE_URL_PLACEHOLDERS: Record<CompetitorStore, string> = {
   digikala: "مثلاً https://www.digikala.com/product/…",
   technolife: "مثلاً https://www.technolife.ir/product/…",
+  sofa: "مثلاً https://sofamobl.com/product/…",
+  digifresh: "مثلاً https://digifarsh.com/product/…",
   other: "مثلاً https://example.com/product/…",
 }
 
@@ -48,10 +63,21 @@ function isUrlMatchingStore(url: string, store: CompetitorStore): boolean {
         hostname === "technolife.com" ||
         hostname === "www.technolife.com"
       )
+    if (store === "sofa")
+      return hostname === "sofamobl.com" || hostname === "www.sofamobl.com"
+    if (store === "digifresh")
+      return hostname === "digifarsh.com" || hostname === "www.digifarsh.com"
     return true
   } catch {
     return true
   }
+}
+
+function formatSignedPercent(value: number): string {
+  const rounded = Math.round(value * 10) / 10
+  const clean = Object.is(rounded, -0) ? 0 : rounded
+  const abs = Math.abs(clean).toFixed(1).replace(/\.0$/, "")
+  return `${clean > 0 ? "+" : clean < 0 ? "−" : ""}${formatPersianNumber(abs)}٪`
 }
 
 function listingStoreLabel(listing: CompetitorListing): string {
@@ -99,12 +125,14 @@ function toPersianError(error: unknown): string {
 function FilledSlotCard({
   listing,
   busy,
+  canEdit,
   onLinkUpdate,
   onCheck,
   onDelete,
 }: {
   listing: CompetitorListing
   busy: boolean
+  canEdit: boolean
   onLinkUpdate: (url: string) => void
   onCheck: (url: string) => void
   onDelete: () => void
@@ -173,7 +201,9 @@ function FilledSlotCard({
 
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-2xl bg-muted/50 px-3 py-2">
         <div>
-          <p className="text-xs text-muted-foreground">قیمت مؤثر</p>
+          <p className="text-xs text-muted-foreground">
+            {TRACKING_STORES.has(listing.store) ? "قیمت ثبت‌شده" : "قیمت مؤثر"}
+          </p>
           {listing.effective_price !== null ? (
             <p className="text-base font-semibold">
               <Price
@@ -193,6 +223,41 @@ function FilledSlotCard({
           ) : (
             <p className="text-sm text-muted-foreground">
               قیمت تازه دریافت نشده
+            </p>
+          )}
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">تغییر قیمت روزانه</p>
+          {listing.price_change_percent !== null ? (
+            <p
+              className={`text-sm font-semibold ${
+                listing.price_change_percent > 0
+                  ? "text-destructive"
+                  : listing.price_change_percent < 0
+                    ? "text-success"
+                    : "text-muted-foreground"
+              }`}
+            >
+              {formatSignedPercent(listing.price_change_percent)}
+              {listing.previous_price !== null &&
+              listing.previous_observed_at !== null ? (
+                <span className="ms-2 text-[11px] font-normal text-muted-foreground">
+                  قبلی:{" "}
+                  <Price
+                    value={
+                      toTomanAmount(
+                        listing.previous_price,
+                        listing.previous_currency
+                      ) ?? listing.previous_price
+                    }
+                  />{" "}
+                  · <PersianDateTime value={listing.previous_observed_at} />
+                </span>
+              ) : null}
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              داده دو روز لازم است
             </p>
           )}
         </div>
@@ -224,82 +289,97 @@ function FilledSlotCard({
         </p>
       ) : null}
 
-      <div className="space-y-1.5">
-        <p className="text-xs font-medium text-muted-foreground">
-          لینک صفحهٔ محصول
-        </p>
-        <div className="min-w-0 space-y-1">
-          <Input
-            type="url"
-            value={url}
-            onChange={(event) => setUrl(event.target.value)}
-            onBlur={handleUrlBlur}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault()
-                ;(event.target as HTMLInputElement).blur()
-              }
-            }}
-            placeholder={STORE_URL_PLACEHOLDERS[listing.store]}
-            aria-label={`لینک صفحه محصول ${listingStoreLabel(listing)}`}
-            aria-invalid={urlMismatch || undefined}
-            title={trimmedUrl || undefined}
-            dir="ltr"
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck={false}
-            inputMode="url"
-            className="h-10 w-full min-w-0 text-left text-sm text-ellipsis placeholder:font-normal placeholder:text-muted-foreground/40"
-            required
-            disabled={busy}
-          />
-          {urlMismatch ? (
-            <p role="alert" className="text-[11px] leading-4 text-destructive">
-              دامنهٔ لینک با فروشگاه انتخاب‌شده هم‌خوانی ندارد.
-            </p>
-          ) : null}
+      {canEdit ? (
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-muted-foreground">
+            لینک صفحهٔ محصول
+          </p>
+          <div className="min-w-0 space-y-1">
+            <Input
+              type="url"
+              value={url}
+              onChange={(event) => setUrl(event.target.value)}
+              onBlur={handleUrlBlur}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault()
+                  ;(event.target as HTMLInputElement).blur()
+                }
+              }}
+              placeholder={STORE_URL_PLACEHOLDERS[listing.store]}
+              aria-label={`لینک صفحه محصول ${listingStoreLabel(listing)}`}
+              aria-invalid={urlMismatch || undefined}
+              title={trimmedUrl || undefined}
+              dir="ltr"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              inputMode="url"
+              className="h-10 w-full min-w-0 text-left text-sm text-ellipsis placeholder:font-normal placeholder:text-muted-foreground/40"
+              required
+              disabled={busy}
+            />
+            {urlMismatch ? (
+              <p
+                role="alert"
+                className="text-[11px] leading-4 text-destructive"
+              >
+                دامنهٔ لینک با فروشگاه انتخاب‌شده هم‌خوانی ندارد.
+              </p>
+            ) : null}
+          </div>
         </div>
-      </div>
+      ) : (
+        <p
+          className="truncate text-xs text-muted-foreground"
+          dir="ltr"
+          title={listing.url}
+        >
+          {listing.url}
+        </p>
+      )}
 
-      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={!canPersist}
-          onClick={persistLink}
-          className="h-11 rounded-2xl sm:h-9"
-        >
-          ذخیره لینک
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={busy || trimmedUrl === "" || urlMismatch}
-          onClick={() => onCheck(url.trim())}
-          className="h-11 rounded-2xl sm:h-9"
-        >
-          <BusyRefreshIcon busy={busy} />
-          بررسی لینک
-        </Button>
-        <span className="col-span-2 flex gap-1 sm:col-span-1 sm:ms-auto">
+      {canEdit ? (
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
           <Button
             size="sm"
-            variant="destructive"
-            disabled={busy}
-            onClick={() => {
-              if (
-                window.confirm("این لینک حذف شود؟ این عمل قابل بازگشت نیست.")
-              ) {
-                onDelete()
-              }
-            }}
-            className="h-11 w-full rounded-2xl sm:h-9 sm:w-auto"
+            variant="outline"
+            disabled={!canPersist}
+            onClick={persistLink}
+            className="h-11 rounded-2xl sm:h-9"
           >
-            <Trash2 /> حذف
+            ذخیره لینک
           </Button>
-        </span>
-      </div>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy || trimmedUrl === "" || urlMismatch}
+            onClick={() => onCheck(url.trim())}
+            className="h-11 rounded-2xl sm:h-9"
+          >
+            <BusyRefreshIcon busy={busy} />
+            بررسی لینک
+          </Button>
+          <span className="col-span-2 flex gap-1 sm:col-span-1 sm:ms-auto">
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={busy}
+              onClick={() => {
+                if (
+                  window.confirm("این لینک حذف شود؟ این عمل قابل بازگشت نیست.")
+                ) {
+                  onDelete()
+                }
+              }}
+              className="h-11 w-full rounded-2xl sm:h-9 sm:w-auto"
+            >
+              <Trash2 /> حذف
+            </Button>
+          </span>
+        </div>
+      ) : null}
     </article>
   )
 }
@@ -403,11 +483,21 @@ function EmptySlotCard({
 
 export function ProductCompetitorPrices({
   productId,
+  stores,
   onChanged,
+  onListingsChanged,
+  canEdit = true,
 }: {
   productId: number
+  /** Stores valid for this product's top group. */
+  stores: CompetitorStore[]
   onChanged?: () => void
+  /** Latest listings, so the parent can recompute the suggested price. */
+  onListingsChanged?: (listings: CompetitorListing[]) => void
+  /** `false` renders the stored prices without any edit controls. */
+  canEdit?: boolean
 }) {
+  const trackingOnly = stores.every((store) => TRACKING_STORES.has(store))
   const [listings, setListings] = useState<CompetitorListing[]>([])
   const [loading, setLoading] = useState(true)
   const [busyKey, setBusyKey] = useState<number | string | null>(null)
@@ -429,6 +519,10 @@ export function ProductCompetitorPrices({
   useEffect(() => {
     void refresh()
   }, [refresh])
+
+  useEffect(() => {
+    if (!loading) onListingsChanged?.(listings)
+  }, [listings, loading, onListingsChanged])
 
   async function mutate(id: number, action: () => Promise<CompetitorListing>) {
     setBusyKey(id)
@@ -517,35 +611,49 @@ export function ProductCompetitorPrices({
   const anyBusy = busyKey !== null || checkAllBusy
 
   const byStore = new Map(listings.map((listing) => [listing.store, listing]))
-  const otherListings = listings.filter((listing) => listing.store === "other")
+  const otherListings = trackingOnly
+    ? []
+    : listings.filter((listing) => listing.store === "other")
 
   return (
     <section className="space-y-4 rounded-2xl border border-border bg-muted/30 p-4 text-start">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <h3 className="font-semibold">قیمت فروشگاه‌های دیگر</h3>
+          <h3 className="font-semibold">
+            {trackingOnly ? "تغییرات قیمت روزانه" : "قیمت فروشگاه‌های دیگر"}
+          </h3>
           <p className="mt-1 text-xs leading-5 text-muted-foreground md:hidden">
-            لینک هر فروشگاه را وارد کنید تا قیمت به‌صورت خودکار بررسی شود.
+            {trackingOnly
+              ? canEdit
+                ? "لینک محصول را وارد کنید تا قیمت و تغییر روزانهٔ آن ثبت شود."
+                : "قیمت و تغییر روزانهٔ ثبت‌شده را می‌بینید."
+              : canEdit
+                ? "لینک هر فروشگاه را وارد کنید تا قیمت به‌صورت خودکار بررسی شود."
+                : "قیمت‌ها و وضعیت ثبت‌شدهٔ فروشگاه‌ها را می‌بینید."}
           </p>
           <p className="mt-1 hidden text-xs leading-5 text-muted-foreground md:block">
-            برای هر فروشگاه یک کارت وجود دارد. لینک را وارد کنید تا ذخیره و
-            به‌صورت خودکار بررسی شود؛ با «بررسی لینک» می‌توانید بعداً قیمت را
-            به‌روزرسانی کنید و با «حذف» لینک دستی پاک می‌شود. با «به‌روزرسانی
-            همه قیمت‌ها» همه لینک‌های فعال یکجا بررسی می‌شوند. قیمت فقط تا ۲۴
-            ساعت تازه محسوب می‌شود.
+            {trackingOnly
+              ? canEdit
+                ? "لینک محصول را وارد کنید؛ قیمت مستقیماً وارد نمی‌شود. هر روز یک مشاهده ثبت می‌شود و درصد تغییر قیمت نسبت به روز قبل مبنای فرمول قیمت پیشنهادی این گروه است."
+                : "قیمت و درصد تغییر روزانهٔ ثبت‌شده برای این محصول نمایش داده می‌شود."
+              : canEdit
+                ? "برای هر فروشگاه یک کارت وجود دارد. لینک را وارد کنید تا ذخیره و به‌صورت خودکار بررسی شود؛ با «بررسی لینک» می‌توانید بعداً قیمت را به‌روزرسانی کنید و با «حذف» لینک دستی پاک می‌شود. با «به‌روزرسانی همه قیمت‌ها» همه لینک‌های فعال یکجا بررسی می‌شوند. قیمت فقط تا ۲۴ ساعت تازه محسوب می‌شود."
+                : "برای هر فروشگاه یک کارت وجود دارد؛ قیمت مؤثر، وضعیت بررسی و آخرین زمان بررسی را می‌بینید. قیمت فقط تا ۲۴ ساعت تازه محسوب می‌شود."}
           </p>
         </div>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={loading || anyBusy || listings.length === 0}
-          onClick={() => void checkAllListings()}
-          aria-busy={checkAllBusy}
-          className="h-11 w-full justify-center gap-2 rounded-2xl sm:h-9 sm:w-auto sm:min-w-48"
-        >
-          <BusyRefreshIcon busy={checkAllBusy} />
-          به‌روزرسانی همه قیمت‌ها
-        </Button>
+        {canEdit ? (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={loading || anyBusy || listings.length === 0}
+            onClick={() => void checkAllListings()}
+            aria-busy={checkAllBusy}
+            className="h-11 w-full justify-center gap-2 rounded-2xl sm:h-9 sm:w-auto sm:min-w-48"
+          >
+            <BusyRefreshIcon busy={checkAllBusy} />
+            به‌روزرسانی همه قیمت‌ها
+          </Button>
+        ) : null}
       </div>
 
       {error ? (
@@ -555,7 +663,7 @@ export function ProductCompetitorPrices({
       ) : null}
       {loading ? (
         <div className="space-y-3" aria-label="در حال بارگذاری منابع قیمت">
-          {DIALOG_STORES.map((store) => (
+          {stores.map((store) => (
             <div
               key={store}
               className="space-y-2 rounded-2xl border border-border bg-background p-3 sm:p-4"
@@ -568,16 +676,26 @@ export function ProductCompetitorPrices({
         </div>
       ) : (
         <div className="space-y-3">
-          {DIALOG_STORES.map((store) => {
+          {stores.map((store) => {
             const listing = byStore.get(store)
             if (!listing) {
-              return (
+              return canEdit ? (
                 <EmptySlotCard
                   key={store}
                   store={store}
                   busy={busyKey === `create-${store}` || checkAllBusy}
                   onCreate={(url) => void createListing(store, url)}
                 />
+              ) : (
+                <article
+                  key={store}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-dashed border-border bg-background p-3 sm:p-4"
+                >
+                  <Badge variant="secondary">{STORE_LABELS[store]}</Badge>
+                  <span className="text-[11px] text-muted-foreground">
+                    لینکی ثبت نشده است
+                  </span>
+                </article>
               )
             }
             return (
@@ -585,6 +703,7 @@ export function ProductCompetitorPrices({
                 key={listing.id}
                 listing={listing}
                 busy={busyKey === listing.id || checkAllBusy}
+                canEdit={canEdit}
                 onLinkUpdate={(url) =>
                   void mutate(listing.id, () =>
                     api.updateCompetitorListing(listing.id, {
@@ -615,6 +734,7 @@ export function ProductCompetitorPrices({
               key={listing.id}
               listing={listing}
               busy={busyKey === listing.id || checkAllBusy}
+              canEdit={canEdit}
               onLinkUpdate={(url) =>
                 void mutate(listing.id, () =>
                   api.updateCompetitorListing(listing.id, {

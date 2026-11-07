@@ -6,6 +6,7 @@ from app.services.dashboard import DashboardService
 from app.services.products import (
     INVALID_CATEGORY_ERROR,
     InvalidCategoryError,
+    ProductNotFoundError,
     ProductService,
 )
 from app.services.settings import (
@@ -41,6 +42,7 @@ __all__ = [
     "DashboardService",
     "InvalidCategoryError",
     "ProductService",
+    "ProductNotFoundError",
     "SettingsService",
     "SYNC_INTERVAL_KEY",
 ]

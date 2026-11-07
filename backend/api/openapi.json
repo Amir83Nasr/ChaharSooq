@@ -553,6 +553,8 @@
                   "enum": [
                     "digikala",
                     "technolife",
+                    "sofa",
+                    "digifresh",
                     "other"
                   ],
                   "type": "string"
@@ -773,6 +775,84 @@
           },
           "401": {
             "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/products/{product_id}/price-bounds": {
+      "patch": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Update product price bounds",
+        "description": "Sets the per-product clamp for the suggested price: m% below and n% above the Parsina base price. A null value disables that side. The suggested price never leaves `[Pb × (1 − m), Pb × (1 + n)]`.",
+        "operationId": "update_product_price_bounds",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Product Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductPriceBoundsUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource does not exist (`not_found`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -1960,6 +2040,8 @@
             "enum": [
               "digikala",
               "technolife",
+              "sofa",
+              "digifresh",
               "other"
             ],
             "title": "Store",
@@ -2001,6 +2083,8 @@
             "enum": [
               "digikala",
               "technolife",
+              "sofa",
+              "digifresh",
               "other"
             ],
             "title": "Store"
@@ -2198,6 +2282,58 @@
             "title": "Last Error",
             "description": "Persian error from the last failed fetch."
           },
+          "price_change_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Change Percent",
+            "description": "Change between the latest observation and the last one at least 24 hours older, in percent. Null until two daily observations exist."
+          },
+          "previous_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Price",
+            "description": "Price from the previous daily observation."
+          },
+          "previous_currency": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "IRR",
+                  "IRT"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Currency"
+          },
+          "previous_observed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Observed At",
+            "description": "UTC timestamp of the previous daily observation."
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -2232,6 +2368,8 @@
                 "enum": [
                   "digikala",
                   "technolife",
+                  "sofa",
+                  "digifresh",
                   "other"
                 ]
               },
@@ -2323,6 +2461,8 @@
             "enum": [
               "digikala",
               "technolife",
+              "sofa",
+              "digifresh",
               "other"
             ],
             "title": "Store"
@@ -2403,6 +2543,56 @@
               }
             ],
             "title": "Last Checked At"
+          },
+          "price_change_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Change Percent",
+            "description": "Daily price change of the linked product, in percent."
+          },
+          "previous_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Price"
+          },
+          "previous_currency": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "IRR",
+                  "IRT"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Currency"
+          },
+          "previous_observed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Observed At"
           }
         },
         "type": "object",
@@ -2980,6 +3170,30 @@
             "type": "array",
             "title": "Competitor Prices"
           },
+          "allowed_decrease_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed Decrease Percent",
+            "description": "Maximum allowed decrease below the base price (m in the floor formula); null leaves the suggested price unclamped on this side."
+          },
+          "allowed_increase_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed Increase Percent",
+            "description": "Maximum allowed increase above the base price (n in the ceiling formula); null leaves the suggested price unclamped on this side."
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -3032,6 +3246,41 @@
           "page_size"
         ],
         "title": "ProductPage"
+      },
+      "ProductPriceBoundsUpdate": {
+        "properties": {
+          "allowed_decrease_percent": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed Decrease Percent",
+            "description": "Maximum allowed decrease below the base price, in percent."
+          },
+          "allowed_increase_percent": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed Increase Percent",
+            "description": "Maximum allowed increase above the base price, in percent."
+          }
+        },
+        "type": "object",
+        "title": "ProductPriceBoundsUpdate",
+        "description": "Per-product suggested-price clamp: m% below and n% above the base."
       },
       "ProductTableColumn": {
         "type": "string",
@@ -3261,7 +3510,7 @@
             "maximum": 1.0,
             "minimum": 0.0,
             "title": "Weight",
-            "description": "Competitor share: `weight × competitor + (1 − weight) × Parsina`."
+            "description": "Source share (0–1): competitor price for لوازم خانگی, daily price change for مبلمان/فرش."
           }
         },
         "type": "object",
@@ -3288,7 +3537,7 @@
             "maximum": 1.0,
             "minimum": 0.0,
             "title": "Weight",
-            "description": "Competitor share: `weight × competitor + (1 − weight) × Parsina`."
+            "description": "Source share (0–1): competitor price for لوازم خانگی, daily price change for مبلمان/فرش."
           }
         },
         "type": "object",

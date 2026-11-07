@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast
 
 from sqlalchemy import ColumnElement, and_, case, exists, func, not_, or_, select, update
@@ -346,6 +347,20 @@ class ProductRepository:
         self._session.add(product)
         self._session.flush()
         return product
+
+    def get(self, product_id: int) -> Product | None:
+        return self._session.get(Product, product_id)
+
+    def update_price_bounds(
+        self,
+        product: Product,
+        *,
+        allowed_decrease_percent: Decimal | None,
+        allowed_increase_percent: Decimal | None,
+    ) -> None:
+        product.allowed_decrease_percent = allowed_decrease_percent
+        product.allowed_increase_percent = allowed_increase_percent
+        self._session.flush()
 
     def stage(self, product: Product) -> Product:
         """Attach a new row without flushing — caller flushes in bulk."""

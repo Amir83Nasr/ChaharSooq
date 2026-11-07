@@ -8,15 +8,6 @@ import { PageHeader } from "@workspace/ui/layout/page-header"
 import { EmptyState, ErrorState } from "@workspace/ui/feedback/state"
 import { Button, buttonVariants } from "@workspace/ui/primitives/button"
 import { Card, CardContent } from "@workspace/ui/primitives/card"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@workspace/ui/primitives/table"
-import { TablePagination } from "@workspace/ui/primitives/pagination"
 import { Skeleton } from "@workspace/ui/primitives/skeleton"
 import { PersianNumber } from "@workspace/ui/persian/persian-number"
 import { Price } from "@workspace/ui/persian/price"
@@ -29,6 +20,7 @@ import {
   type DashboardOverview,
   type ProductOut,
   type ProductPage,
+  type ProductTableColumn,
   type TopGroup,
 } from "@/lib/api"
 import { leaveToLogin } from "@/lib/auth-navigation"
@@ -37,28 +29,28 @@ import {
   DataTableToolbar,
   SearchInput,
 } from "@/components/data/data-table-toolbar"
-import { StockCell } from "@/components/data/products-stock-cell"
 import { ProductDetailDialog } from "@/app/(dashboard)/products/_components/product-dialogs"
 import {
   ProductsCards,
   ProductsMobileEmpty,
 } from "@/app/(dashboard)/products/_components/products-cards"
+import { ProductsTable } from "@/app/(dashboard)/products/_components/products-table"
 
 const SEARCH_DEBOUNCE_MS = 400
 
+const GROUP_TABLE_COLUMNS: ProductTableColumn[] = [
+  "row",
+  "name",
+  "brand",
+  "price",
+  "competitor_price",
+  "suggested_price",
+  "suggested_price_change",
+  "stock",
+]
+
 function formatWeight(value: number): string {
   return formatPersianNumber(Math.round(value * 1000) / 1000)
-}
-
-function topBrandOf(name: string | null, top: TopGroup): string | null {
-  if (!name) return null
-  const n = name.trim()
-  if (top === "فرش") {
-    const rest = n.replace(/^فرش\s*/, "").trim()
-    return rest || null
-  }
-  const rest = n.replace(/^مبلمان\s*/, "").trim()
-  return rest || null
 }
 
 function GroupStoreSkeleton() {
@@ -184,6 +176,8 @@ export function GroupStoreView({
     settingsLoaded,
   ])
 
+  const market = topGroup === "فرش" ? "digifresh" : "sofa"
+  const tableWeights = weight === null ? {} : { [topGroup]: weight }
   const total = page?.total ?? 0
   const groupValue = (overview?.groups ?? [])
     .filter((g) => g.name.trim().startsWith(topGroup))
@@ -283,8 +277,8 @@ export function GroupStoreView({
                 ) : (
                   <>
                     <p className="text-sm leading-6 font-semibold">
-                      {formatWeight(weight)} × قیمت رقیب +{" "}
-                      {formatWeight(1 - weight)} × قیمت پارسینا
+                      قیمت پایه × (۱ + {formatWeight(weight)} × درصد تغییر
+                      روزانه)
                     </p>
                     <Link
                       href="/settings/pricing"
@@ -303,11 +297,11 @@ export function GroupStoreView({
           </div>
 
           <section className="space-y-1 rounded-2xl border border-dashed border-border bg-muted/40 p-4">
-            <h2 className="font-semibold">مقایسه خودکار هنوز فعال نشده است</h2>
+            <h2 className="font-semibold">بررسی خودکار قیمت فعال است</h2>
             <p className="text-sm leading-6 text-muted-foreground">
-              استخراج خودکار قیمت فقط برای دیجی‌کالا و تکنولایف فعال است. برای{" "}
-              {storeName} فعلا فهرست کالاهای {topGroup} را در همین صفحه ببینید و
-              قیمت‌گذاری را با فرمول پیشنهادی تنظیمات پیش ببرید.
+              روی هر کالا بزنید و لینک صفحهٔ محصول در {storeName} را ثبت کنید.
+              قیمت هر روز یک‌بار ثبت می‌شود و درصد تغییر آن نسبت به روز قبل، در
+              فرمول قیمت پیشنهادی {topGroup} جای قیمت رقیب می‌نشیند.
             </p>
           </section>
 
@@ -323,6 +317,18 @@ export function GroupStoreView({
               className="h-11 rounded-2xl"
             />
           </DataTableToolbar>
+          <div className="md:hidden">
+            {page.items.length === 0 ? (
+              <ProductsMobileEmpty hasFilters={debouncedQ !== ""} />
+            ) : (
+              <ProductsCards
+                items={page.items}
+                market={market}
+                threshold={threshold}
+                onSelect={setSelected}
+              />
+            )}
+          </div>
           <div className="hidden md:block">
             <DataTableToolbar>
               <SearchInput
@@ -336,109 +342,25 @@ export function GroupStoreView({
               />
             </DataTableToolbar>
           </div>
-
-          <div className="md:hidden">
-            {page.items.length === 0 ? (
-              <ProductsMobileEmpty hasFilters={debouncedQ !== ""} />
-            ) : (
-              <ProductsCards
-                items={page.items}
-                market="digikala"
-                threshold={threshold}
-                onSelect={setSelected}
-              />
-            )}
-          </div>
           <div className="hidden md:block">
-            <Table className="min-w-192 table-fixed">
-              <colgroup>
-                <col className="w-12" />
-                <col className="w-64" />
-                <col className="w-32" />
-                <col className="w-40" />
-                <col className="w-36" />
-                <col className="w-28" />
-              </colgroup>
-              <TableHeader>
-                <TableRow>
-                  <TableHead scope="col" className="text-center">
-                    ردیف
-                  </TableHead>
-                  <TableHead scope="col">نام</TableHead>
-                  <TableHead scope="col" className="text-center">
-                    کد
-                  </TableHead>
-                  <TableHead scope="col">برند</TableHead>
-                  <TableHead scope="col" className="text-center">
-                    قیمت
-                  </TableHead>
-                  <TableHead scope="col" className="text-center">
-                    موجودی
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {page.items.map((item, i) => {
-                  const rowNumber =
-                    (page.page > 1 ? (page.page - 1) * page.page_size : 0) +
-                    i +
-                    1
-                  return (
-                    <TableRow
-                      key={item.id}
-                      tabIndex={0}
-                      className="cursor-pointer"
-                      onClick={() => setSelected(item)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault()
-                          setSelected(item)
-                        }
-                      }}
-                    >
-                      <TableCell className="text-center text-sm text-muted-foreground">
-                        <PersianNumber value={rowNumber} />
-                      </TableCell>
-                      <TableCell className="wrap-break-word whitespace-normal">
-                        <span className="text-sm font-medium">{item.name}</span>
-                        {item.sub_group_name ? (
-                          <span className="block truncate text-xs text-muted-foreground">
-                            {item.sub_group_name}
-                          </span>
-                        ) : null}
-                      </TableCell>
-                      <TableCell className="text-center text-sm text-muted-foreground">
-                        <span
-                          dir="ltr"
-                          className="inline-block max-w-full truncate align-middle"
-                        >
-                          {item.sku}
-                        </span>
-                      </TableCell>
-                      <TableCell className="truncate text-sm">
-                        {topBrandOf(item.main_group_name, topGroup) ?? (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Price value={item.price} />
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <StockCell value={item.stock} threshold={threshold} />
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
+            <ProductsTable
+              page={page}
+              threshold={threshold}
+              pageNum={pageNum}
+              totalPages={totalPages}
+              pageSize={page.page_size}
+              showPageSize={false}
+              hasFilters={debouncedQ !== ""}
+              market={market}
+              weights={tableWeights}
+              visibleColumns={GROUP_TABLE_COLUMNS}
+              onSelect={setSelected}
+              onPageChange={(next) =>
+                setPageNum(Math.min(Math.max(1, next), totalPages))
+              }
+              onPageSize={() => undefined}
+            />
           </div>
-          <TablePagination
-            page={pageNum}
-            totalPages={totalPages}
-            onPageChange={(next) =>
-              setPageNum(Math.min(Math.max(1, next), totalPages))
-            }
-          />
         </div>
       )}
 

@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.models import Product
 from app.repositories import CategoryRepository, ProductRepository, ProductSort
-from app.schemas import ProductIn
+from app.schemas import ProductIn, ProductPriceBoundsUpdate
 
 INVALID_CATEGORY_ERROR = "دسته‌بندی نامعتبر است"
 
@@ -18,6 +19,10 @@ INVALID_CATEGORY_ERROR = "دسته‌بندی نامعتبر است"
 
 
 class InvalidCategoryError(ValueError):
+    pass
+
+
+class ProductNotFoundError(LookupError):
     pass
 
 
@@ -78,6 +83,20 @@ class ProductService:
         if payload.category_id is not None and self._categories.get(payload.category_id) is None:
             raise InvalidCategoryError
         return self._repos.add(Product(**payload.model_dump()))
+
+    def update_price_bounds(self, product_id: int, payload: ProductPriceBoundsUpdate) -> Product:
+        product = self._repos.get(product_id)
+        if product is None:
+            raise ProductNotFoundError
+        values = payload.model_dump(exclude_unset=True)
+        decrease = values.get("allowed_decrease_percent", product.allowed_decrease_percent)
+        increase = values.get("allowed_increase_percent", product.allowed_increase_percent)
+        self._repos.update_price_bounds(
+            product,
+            allowed_decrease_percent=(Decimal(str(decrease)) if decrease is not None else None),
+            allowed_increase_percent=(Decimal(str(increase)) if increase is not None else None),
+        )
+        return product
 
     def summary(self, *, low_stock_threshold: int) -> dict[str, int]:
         return self._repos.summary(low_stock_threshold=low_stock_threshold)

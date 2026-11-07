@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.models import CompetitorListing
-from app.repositories.competitor import CompetitorRepository
+from app.repositories.competitor import CompetitorRepository, DailyPriceChange
 from app.schemas.competitor import (
     CompetitorListingCreate,
     CompetitorListingOut,
@@ -23,6 +23,21 @@ STORE_HOSTS: dict[str, frozenset[str]] = {
     "technolife": frozenset(
         {"technolife.ir", "www.technolife.ir", "technolife.com", "www.technolife.com"}
     ),
+    "sofa": frozenset({"sofamobl.com", "www.sofamobl.com"}),
+    "digifresh": frozenset({"digifarsh.com", "www.digifarsh.com"}),
+}
+
+GROUP_STORES: dict[str, frozenset[str]] = {
+    "مبلمان": frozenset({"sofa"}),
+    "فرش": frozenset({"digifresh"}),
+}
+APPLIANCE_STORES = frozenset({"digikala", "technolife", "other"})
+STORE_LABELS = {
+    "sofa": "سوفا",
+    "digifresh": "دیجی‌فرش",
+    "digikala": "دیجی‌کالا",
+    "technolife": "تکنولایف",
+    "other": "سایر فروشگاه‌ها",
 }
 
 
@@ -76,6 +91,19 @@ def validate_url(url: str, store: str) -> str:
     return raw
 
 
+def _allowed_stores(main_group_name: str | None) -> frozenset[str]:
+    name = (main_group_name or "").strip()
+    for prefix, stores in GROUP_STORES.items():
+        if name.startswith(prefix):
+            return stores
+    return APPLIANCE_STORES
+
+
+def _store_error(stores: frozenset[str]) -> str:
+    labels = " یا ".join(STORE_LABELS[store] for store in sorted(stores))
+    return f"برای این دسته‌بندی فقط لینک {labels} مجاز است"
+
+
 def _is_appliance(main_group_name: str | None) -> bool:
     if main_group_name is None:
         return True
@@ -87,9 +115,17 @@ class CompetitorService:
     def __init__(self, session: Session) -> None:
         self._repo = CompetitorRepository(session)
 
-    def _out(self, row: CompetitorListing) -> CompetitorListingOut:
+    def _changes(self, listing_ids: set[int]) -> dict[int, DailyPriceChange]:
+        return self._repo.daily_price_changes(listing_ids)
+
+    def _out(
+        self,
+        row: CompetitorListing,
+        change: DailyPriceChange | None = None,
+    ) -> CompetitorListingOut:
         now = datetime.now(UTC)
         ttl = timedelta(hours=get_settings().competitor_price_ttl_hours)
+        change = change or self._changes({row.id}).get(row.id)
         # Manual values always win over fetched ones (and over the future
         # automatic name-based search): a fresh manual price/in-stock is effective.
         manual_fresh = (
@@ -131,6 +167,14 @@ class CompetitorService:
             last_success_at=row.last_success_at,
             manual_updated_at=row.manual_updated_at,
             last_error=row.last_error,
+            price_change_percent=change.price_change_percent if change else None,
+            previous_price=(
+                float(change.previous_price)
+                if change and change.previous_price is not None
+                else None
+            ),
+            previous_currency=(change.previous_currency if change else None),  # type: ignore[arg-type]
+            previous_observed_at=change.previous_observed_at if change else None,
             created_at=row.created_at,
             updated_at=row.updated_at,
         )
@@ -138,13 +182,17 @@ class CompetitorService:
     def list_product_listings(self, product_id: int) -> list[CompetitorListingOut]:
         if self._repo.product(product_id) is None:
             raise CompetitorNotFoundError
-        return [self._out(row) for row in self._repo.list_for_product(product_id)]
+        rows = self._repo.list_for_product(product_id)
+        changes = self._changes({row.id for row in rows})
+        return [self._out(row, changes.get(row.id)) for row in rows]
 
     def prices_for_products(self, product_ids: set[int]) -> dict[int, list[CompetitorPriceOut]]:
         rows = self._repo.list_for_products(product_ids)
+        changes = self._changes({row.id for row in rows})
         output: dict[int, list[CompetitorPriceOut]] = {}
         for row in rows:
-            detail = self._out(row)
+            change = changes.get(row.id)
+            detail = self._out(row, change)
             output.setdefault(row.product_id, []).append(
                 CompetitorPriceOut(
                     id=row.id,
@@ -162,6 +210,10 @@ class CompetitorService:
                         and detail.effective_price == float(row.manual_price)
                     ),
                     last_checked_at=row.last_checked_at,
+                    price_change_percent=detail.price_change_percent,
+                    previous_price=detail.previous_price,
+                    previous_currency=detail.previous_currency,
+                    previous_observed_at=detail.previous_observed_at,
                 )
             )
         return output
@@ -170,14 +222,11 @@ class CompetitorService:
         product = self._repo.product(product_id)
         if product is None:
             raise CompetitorNotFoundError
-        if not _is_appliance(product.main_group_name):
-            raise InvalidCompetitorProductError("این فاز فقط برای کالاهای لوازم خانگی است")
-        # Manual links (digikala / technolife) take priority over the future
-        # automatic name-based search: at most one manual link per store.
-        if (
-            payload.store in ("digikala", "technolife")
-            and self._repo.get_by_product_store(product_id, payload.store) is not None
-        ):
+        allowed = _allowed_stores(product.main_group_name)
+        if payload.store not in allowed:
+            raise InvalidCompetitorProductError(_store_error(allowed))
+        # At most one manual link per store for every group.
+        if self._repo.get_by_product_store(product_id, payload.store) is not None:
             raise InvalidCompetitorProductError("برای این فروشگاه قبلاً یک لینک ثبت شده است")
         try:
             url = validate_url(payload.url, payload.store)
@@ -202,13 +251,17 @@ class CompetitorService:
         target_store = values.get("store") or row.store
         target_url = values.get("url") or row.url
         if "store" in values or "url" in values:
+            product = self._repo.product(row.product_id)
+            allowed = _allowed_stores(product.main_group_name if product else None)
+            if target_store not in allowed:
+                raise InvalidCompetitorProductError(_store_error(allowed))
             try:
                 target_url = validate_url(target_url, target_store)
             except ValueError as exc:
                 raise InvalidCompetitorProductError(str(exc)) from exc
             link_changed = target_store != row.store or target_url != row.url
             if link_changed:
-                if target_store in ("digikala", "technolife") and (
+                if (
                     self._repo.get_by_product_store(row.product_id, target_store, exclude_id=row.id)
                     is not None
                 ):
@@ -221,11 +274,18 @@ class CompetitorService:
                 row.fetched_in_stock = None
                 row.last_success_at = None
                 row.manual_updated_at = None
-        if "is_active" in values and values["is_active"] is not None:
-            row.is_active = values["is_active"]
+                # Observations describe the old product; never mix them into
+                # the new link's daily change.
+                row.price_observations.clear()
         manual_fields_changed = any(
             key in values for key in ("manual_price", "manual_currency", "manual_in_stock")
         )
+        if manual_fields_changed:
+            product = self._repo.product(row.product_id)
+            if not _is_appliance(product.main_group_name if product else None):
+                raise InvalidCompetitorProductError("برای این دسته‌بندی ثبت قیمت دستی مجاز نیست")
+        if "is_active" in values and values["is_active"] is not None:
+            row.is_active = values["is_active"]
         if "manual_price" in values:
             row.manual_price = (
                 Decimal(str(values["manual_price"])) if values["manual_price"] is not None else None
@@ -268,7 +328,7 @@ class CompetitorService:
             )
         self._apply_check(row, now)
         self._repo.flush()
-        return self._out(row)
+        return self._out(row, self._changes({row.id}).get(row.id))
 
     def check_all(self, product_id: int) -> list[CompetitorListingOut]:
         """Re-check every active link of a product and return the fresh list.
@@ -285,7 +345,8 @@ class CompetitorService:
                 continue
             self._apply_check(row, datetime.now(UTC))
         self._repo.flush()
-        return [self._out(row) for row in rows]
+        changes = self._changes({row.id for row in rows})
+        return [self._out(row, changes.get(row.id)) for row in rows]
 
     def _apply_check(self, row: CompetitorListing, now: datetime) -> None:
         apply_competitor_check(row, now)

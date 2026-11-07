@@ -37,7 +37,9 @@ import {
   productTableMinWidth,
 } from "@/lib/product-table-columns"
 import {
+  applyPriceBounds,
   suggestedPriceFor,
+  suggestedPriceFromDailyChange,
   type SuggestedPriceWeights,
 } from "@/lib/suggested-price"
 import { useWindowedRows, initialRowWindow } from "./use-windowed-rows"
@@ -88,8 +90,16 @@ function brandOf(name: string | null, top: string | null): string | null {
   return n
 }
 
-export type CompetitorMarket = "digikala" | "technolife"
+export type CompetitorMarket = "digikala" | "technolife" | "sofa" | "digifresh"
 
+export const STORE_MARKET_LABELS: Record<CompetitorMarket, string> = {
+  digikala: "دیجی‌کالا",
+  technolife: "تکنولایف",
+  sofa: "سوفا",
+  digifresh: "دیجی‌فرش",
+}
+
+/** Stores offered by the product toolbar filter (appliances only). */
 export const COMPETITOR_MARKETS: { store: CompetitorMarket; label: string }[] =
   [
     { store: "digikala", label: "دیجی‌کالا" },
@@ -134,8 +144,7 @@ function ProductsTableHead(props: {
 }) {
   const { market = "digikala", columns = DEFAULT_PRODUCT_TABLE_COLUMNS } = props
   const shown = new Set(columns)
-  const marketLabel =
-    COMPETITOR_MARKETS.find((m) => m.store === market)?.label ?? "دیجی‌کالا"
+  const marketLabel = STORE_MARKET_LABELS[market]
   return (
     <>
       <colgroup>
@@ -276,8 +285,7 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
   } = props
   const shown = new Set(visibleColumns)
   const columnCount = visibleColumns.length
-  const marketLabel =
-    COMPETITOR_MARKETS.find((m) => m.store === market)?.label ?? "دیجی‌کالا"
+  const marketLabel = STORE_MARKET_LABELS[market]
   // Windowed rendering (hooks before the early returns below): in "show all"
   // mode the whole catalog would otherwise stay mounted and every sidebar
   // toggle / theme flip would reflow thousands of rows.
@@ -336,11 +344,23 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
               1
             const top = topGroupOf(item.main_group_name)
             const isAppliance = top === "لوازم خانگی"
-            const competitor = isAppliance
+            const trackedStore: CompetitorMarket | null = isAppliance
+              ? market
+              : top === "مبلمان"
+                ? "sofa"
+                : top === "فرش"
+                  ? "digifresh"
+                  : null
+            const competitor = trackedStore
               ? (item.competitor_prices.find(
-                  (price) => price.store === market
+                  (price) => price.store === trackedStore
                 ) ?? null)
               : null
+            const showCompetitorCell =
+              trackedStore !== null &&
+              (isAppliance
+                ? market === "digikala" || market === "technolife"
+                : market === trackedStore)
             const amount = toTomanAmount(
               competitor?.price ?? null,
               competitor?.currency ?? null
@@ -350,10 +370,22 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                 ? diffPercent(item.price, amount)
                 : null
             const weight = top === null ? null : (weights[top] ?? null)
-            const suggested =
+            const rawSuggested =
               competitor?.is_fresh === true
-                ? suggestedPriceFor(item.price, amount, weight)
+                ? isAppliance
+                  ? suggestedPriceFor(item.price, amount, weight)
+                  : suggestedPriceFromDailyChange(
+                      item.price,
+                      competitor?.price_change_percent,
+                      weight
+                    )
                 : null
+            const suggested = applyPriceBounds(
+              item.price,
+              rawSuggested,
+              item.allowed_decrease_percent,
+              item.allowed_increase_percent
+            )
             const suggestedChange = changePercent(item.price, suggested)
             return (
               <TableRow
@@ -427,7 +459,7 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                 ) : null}
                 {shown.has("competitor_price") ? (
                   <TableCell className="text-center">
-                    {!isAppliance ? (
+                    {!showCompetitorCell ? (
                       <span className="text-muted-foreground">—</span>
                     ) : competitor?.price !== null &&
                       competitor?.price !== undefined &&
@@ -435,7 +467,24 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                       amount !== undefined ? (
                       <span className="inline-flex flex-col items-center gap-0.5">
                         <Price value={amount} />
-                        {!competitor.is_fresh ? (
+                        {!isAppliance &&
+                        competitor.price_change_percent !== null ? (
+                          <span
+                            className={`text-[11px] ${
+                              competitor.price_change_percent > 0
+                                ? "text-destructive"
+                                : competitor.price_change_percent < 0
+                                  ? "text-success"
+                                  : "text-muted-foreground"
+                            }`}
+                            title="تغییر قیمت نسبت به مشاهدهٔ روز قبل"
+                          >
+                            تغییر روزانه{" "}
+                            {formatPercentMagnitude(
+                              competitor.price_change_percent
+                            )}
+                          </span>
+                        ) : !competitor.is_fresh ? (
                           <span
                             className="text-[11px] text-muted-foreground"
                             title={

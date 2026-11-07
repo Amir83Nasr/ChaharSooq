@@ -2,13 +2,22 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Charsooq Admin API",
+    "summary": "Catalog, pricing, and competitor administration for چهارسوق.",
+    "description": "Administrative API for **چهارسوق (Charsooq)** — a Persian, RTL-first catalog and pricing panel.\n\n- **Base path**: `/api/v1`\n- **Authentication**: `POST /api/v1/auth/login` sets an HttpOnly session cookie.\n  Send it with every protected request (`credentials: \"include\"` in the browser).\n- **Errors**: failures use one envelope, `{\"error\": {\"code\", \"message\", \"details?\"}}`.\n  `message` and `details` are user-facing Persian text.\n- **Machine values**: Toman amounts, UTC timestamps, ISO dates. The UI applies\n  Persian digits, grouping, and the Jalali calendar at render time.\n\nThe committed contract is `backend/api/openapi.json`; CI fails when it is stale.\n",
+    "license": {
+      "name": "MIT"
+    },
     "version": "0.1.0"
   },
   "paths": {
     "/api/v1/health": {
       "get": {
-        "summary": "Health",
-        "operationId": "health_api_v1_health_get",
+        "tags": [
+          "Health"
+        ],
+        "summary": "Liveness probe",
+        "description": "Returns `ok` while the process is running. It does not touch the database.",
+        "operationId": "health",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -19,7 +28,7 @@
                     "type": "string"
                   },
                   "type": "object",
-                  "title": "Response Health Api V1 Health Get"
+                  "title": "Response Health"
                 }
               }
             }
@@ -29,8 +38,12 @@
     },
     "/api/v1/ready": {
       "get": {
-        "summary": "Ready",
-        "operationId": "ready_api_v1_ready_get",
+        "tags": [
+          "Health"
+        ],
+        "summary": "Readiness probe",
+        "description": "Runs `SELECT 1` and returns `ready` only when the database answers.",
+        "operationId": "ready",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -41,7 +54,7 @@
                     "type": "string"
                   },
                   "type": "object",
-                  "title": "Response Ready Api V1 Ready Get"
+                  "title": "Response Ready"
                 }
               }
             }
@@ -51,8 +64,12 @@
     },
     "/api/v1/auth/login": {
       "post": {
-        "summary": "Login",
-        "operationId": "login_api_v1_auth_login_post",
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Log in",
+        "description": "Validates the admin credentials and rotates the server-side session, returning an HttpOnly cookie. Rate-limited to 10 attempts per minute per IP and username.",
+        "operationId": "login",
         "requestBody": {
           "content": {
             "application/json": {
@@ -75,7 +92,7 @@
             }
           },
           "401": {
-            "description": "Unauthorized",
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -85,7 +102,17 @@
             }
           },
           "422": {
-            "description": "Unprocessable Entity",
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many attempts; retry later (`rate_limited`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -99,19 +126,27 @@
     },
     "/api/v1/auth/logout": {
       "post": {
-        "summary": "Logout",
-        "operationId": "logout_api_v1_auth_logout_post",
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Log out",
+        "description": "Deletes the server-side session and clears the session cookie.",
+        "operationId": "logout",
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Session cookie cleared."
           }
         }
       }
     },
     "/api/v1/auth/me": {
       "get": {
-        "summary": "Me",
-        "operationId": "me_api_v1_auth_me_get",
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Current admin",
+        "description": "Returns the username behind the current session cookie.",
+        "operationId": "me",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -122,14 +157,38 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
           }
-        }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
       }
     },
     "/api/v1/dashboard/overview": {
       "get": {
-        "summary": "Dashboard Overview",
-        "operationId": "dashboard_overview_api_v1_dashboard_overview_get",
+        "tags": [
+          "Dashboard"
+        ],
+        "summary": "Catalog overview",
+        "description": "Totals, stock buckets, stock value, competitor coverage, and the top groups by stock value.",
+        "operationId": "dashboard_overview",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
         "parameters": [
           {
             "name": "threshold",
@@ -138,9 +197,11 @@
             "schema": {
               "type": "integer",
               "minimum": 0,
+              "description": "Low-stock cutoff.",
               "default": 10,
               "title": "Threshold"
-            }
+            },
+            "description": "Low-stock cutoff."
           }
         ],
         "responses": {
@@ -154,12 +215,22 @@
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             }
@@ -169,8 +240,17 @@
     },
     "/api/v1/dashboard/competitor-gaps": {
       "get": {
-        "summary": "Dashboard Competitor Gaps",
-        "operationId": "dashboard_competitor_gaps_api_v1_dashboard_competitor_gaps_get",
+        "tags": [
+          "Dashboard"
+        ],
+        "summary": "Largest competitor price gaps",
+        "description": "Products ranked by absolute price difference against their cheapest fresh competitor listing. Positive `diff_percent` means we are pricier.",
+        "operationId": "dashboard_competitor_gaps",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
         "parameters": [
           {
             "name": "limit",
@@ -180,9 +260,11 @@
               "type": "integer",
               "maximum": 50,
               "minimum": 1,
+              "description": "Number of gaps to return.",
               "default": 8,
               "title": "Limit"
-            }
+            },
+            "description": "Number of gaps to return."
           }
         ],
         "responses": {
@@ -195,17 +277,27 @@
                   "items": {
                     "$ref": "#/components/schemas/CompetitorGapOut"
                   },
-                  "title": "Response Dashboard Competitor Gaps Api V1 Dashboard Competitor Gaps Get"
+                  "title": "Response Dashboard Competitor Gaps"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             }
@@ -215,8 +307,12 @@
     },
     "/api/v1/dashboard/catalog-breakdown": {
       "get": {
-        "summary": "Dashboard Catalog Breakdown",
-        "operationId": "dashboard_catalog_breakdown_api_v1_dashboard_catalog_breakdown_get",
+        "tags": [
+          "Dashboard"
+        ],
+        "summary": "Catalog breakdown by section",
+        "description": "Per-section (فرش / مبلمان / لوازم خانگی / سایر) totals: items, groups, brands, and stock value.",
+        "operationId": "dashboard_catalog_breakdown",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -227,19 +323,42 @@
                     "$ref": "#/components/schemas/CatalogSectionOut"
                   },
                   "type": "array",
-                  "title": "Response Dashboard Catalog Breakdown Api V1 Dashboard Catalog Breakdown Get"
+                  "title": "Response Dashboard Catalog Breakdown"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
       }
     },
     "/api/v1/dashboard/summary": {
       "get": {
-        "summary": "Dashboard Summary",
-        "description": "Aggregated dashboard payload — one fetch instead of three.",
-        "operationId": "dashboard_summary_api_v1_dashboard_summary_get",
+        "tags": [
+          "Dashboard"
+        ],
+        "summary": "Dashboard payload",
+        "description": "One-call dashboard payload combining overview, competitor gaps, and the catalog breakdown. The individual endpoints remain for compatibility.",
+        "operationId": "dashboard_summary",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
         "parameters": [
           {
             "name": "threshold",
@@ -248,9 +367,11 @@
             "schema": {
               "type": "integer",
               "minimum": 0,
+              "description": "Low-stock cutoff.",
               "default": 10,
               "title": "Threshold"
-            }
+            },
+            "description": "Low-stock cutoff."
           },
           {
             "name": "gap_limit",
@@ -260,9 +381,11 @@
               "type": "integer",
               "maximum": 50,
               "minimum": 1,
+              "description": "Number of gaps to return.",
               "default": 8,
               "title": "Gap Limit"
-            }
+            },
+            "description": "Number of gaps to return."
           }
         ],
         "responses": {
@@ -276,12 +399,22 @@
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             }
@@ -291,8 +424,17 @@
     },
     "/api/v1/products": {
       "get": {
-        "summary": "List Products",
-        "operationId": "list_products_api_v1_products_get",
+        "tags": [
+          "Products"
+        ],
+        "summary": "List products",
+        "description": "Server-side search, filtering, sorting, and pagination over the local catalog mirror. `page_size=0` returns every match without an offset; an explicit size is capped at 500.",
+        "operationId": "list_products",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
         "parameters": [
           {
             "name": "q",
@@ -300,9 +442,11 @@
             "required": false,
             "schema": {
               "type": "string",
+              "description": "Case-insensitive match on name, SKU, and group names.",
               "default": "",
               "title": "Q"
-            }
+            },
+            "description": "Case-insensitive match on name, SKU, and group names."
           },
           {
             "name": "category_id",
@@ -318,8 +462,10 @@
                   "type": "null"
                 }
               ],
+              "description": "Exact category id.",
               "title": "Category Id"
-            }
+            },
+            "description": "Exact category id."
           },
           {
             "name": "top_group",
@@ -335,8 +481,10 @@
                   "type": "null"
                 }
               ],
+              "description": "Section filter: فرش، مبلمان، or لوازم خانگی.",
               "title": "Top Group"
-            }
+            },
+            "description": "Section filter: فرش، مبلمان، or لوازم خانگی."
           },
           {
             "name": "main_group",
@@ -352,8 +500,10 @@
                   "type": "null"
                 }
               ],
+              "description": "Exact raw group name.",
               "title": "Main Group"
-            }
+            },
+            "description": "Exact raw group name."
           },
           {
             "name": "min_price",
@@ -369,8 +519,10 @@
                   "type": "null"
                 }
               ],
+              "description": "Minimum unit price, Toman.",
               "title": "Min Price"
-            }
+            },
+            "description": "Minimum unit price, Toman."
           },
           {
             "name": "max_price",
@@ -386,8 +538,10 @@
                   "type": "null"
                 }
               ],
+              "description": "Maximum unit price, Toman.",
               "title": "Max Price"
-            }
+            },
+            "description": "Maximum unit price, Toman."
           },
           {
             "name": "competitor_store",
@@ -407,8 +561,10 @@
                   "type": "null"
                 }
               ],
+              "description": "Only products with a fresh price from this store.",
               "title": "Competitor Store"
-            }
+            },
+            "description": "Only products with a fresh price from this store."
           },
           {
             "name": "min_competitor_price",
@@ -424,8 +580,10 @@
                   "type": "null"
                 }
               ],
+              "description": "Minimum fresh competitor price.",
               "title": "Min Competitor Price"
-            }
+            },
+            "description": "Minimum fresh competitor price."
           },
           {
             "name": "max_competitor_price",
@@ -441,8 +599,10 @@
                   "type": "null"
                 }
               ],
+              "description": "Maximum fresh competitor price.",
               "title": "Max Competitor Price"
-            }
+            },
+            "description": "Maximum fresh competitor price."
           },
           {
             "name": "min_stock",
@@ -458,8 +618,10 @@
                   "type": "null"
                 }
               ],
+              "description": "Minimum stock.",
               "title": "Min Stock"
-            }
+            },
+            "description": "Minimum stock."
           },
           {
             "name": "max_stock",
@@ -475,8 +637,10 @@
                   "type": "null"
                 }
               ],
+              "description": "Maximum stock.",
               "title": "Max Stock"
-            }
+            },
+            "description": "Maximum stock."
           },
           {
             "name": "in_stock",
@@ -491,8 +655,10 @@
                   "type": "null"
                 }
               ],
+              "description": "`true` for stock > 0, `false` for zero stock.",
               "title": "In Stock"
-            }
+            },
+            "description": "`true` for stock > 0, `false` for zero stock."
           },
           {
             "name": "sort",
@@ -505,9 +671,11 @@
                 "most_expensive"
               ],
               "type": "string",
+              "description": "`newest` by id, or unit-price order.",
               "default": "newest",
               "title": "Sort"
-            }
+            },
+            "description": "`newest` by id, or unit-price order."
           },
           {
             "name": "page",
@@ -516,9 +684,11 @@
             "schema": {
               "type": "integer",
               "minimum": 1,
+              "description": "1-based page number.",
               "default": 1,
               "title": "Page"
-            }
+            },
+            "description": "1-based page number."
           },
           {
             "name": "page_size",
@@ -528,9 +698,11 @@
               "type": "integer",
               "maximum": 500,
               "minimum": 0,
+              "description": "0 returns all matches; explicit sizes are capped at 500.",
               "default": 0,
               "title": "Page Size"
-            }
+            },
+            "description": "0 returns all matches; explicit sizes are capped at 500."
           }
         ],
         "responses": {
@@ -544,12 +716,22 @@
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             }
@@ -557,8 +739,17 @@
         }
       },
       "post": {
-        "summary": "Create Product",
-        "operationId": "create_product_api_v1_products_post",
+        "tags": [
+          "Products"
+        ],
+        "summary": "Create product",
+        "description": "Creates a manual catalog row. Prices are integer Toman; an unknown `category_id` is rejected with `422`.",
+        "operationId": "create_product",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -580,12 +771,22 @@
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             }
@@ -595,8 +796,17 @@
     },
     "/api/v1/products/summary": {
       "get": {
-        "summary": "Products Summary",
-        "operationId": "products_summary_api_v1_products_summary_get",
+        "tags": [
+          "Products"
+        ],
+        "summary": "Inventory summary",
+        "description": "Catalog totals computed server-side: total, in stock, low stock (below `threshold`), out of stock, and stock value in Toman.",
+        "operationId": "products_summary",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
         "parameters": [
           {
             "name": "threshold",
@@ -605,9 +815,11 @@
             "schema": {
               "type": "integer",
               "minimum": 0,
+              "description": "Low-stock cutoff.",
               "default": 10,
               "title": "Threshold"
-            }
+            },
+            "description": "Low-stock cutoff."
           }
         ],
         "responses": {
@@ -621,12 +833,22 @@
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             }
@@ -636,8 +858,12 @@
     },
     "/api/v1/products/groups": {
       "get": {
-        "summary": "Product Groups",
-        "operationId": "product_groups_api_v1_products_groups_get",
+        "tags": [
+          "Products"
+        ],
+        "summary": "List product groups",
+        "description": "Distinct raw Parsina `main_group_name` values used by the catalog filters. The response carries a weak `ETag` and a 60-second private cache hint.",
+        "operationId": "product_groups",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -648,18 +874,42 @@
                     "type": "string"
                   },
                   "type": "array",
-                  "title": "Response Product Groups Api V1 Products Groups Get"
+                  "title": "Response Product Groups"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
       }
     },
     "/api/v1/products/{product_id}/competitors": {
       "get": {
-        "summary": "List Competitor Listings",
-        "operationId": "list_competitor_listings_api_v1_products__product_id__competitors_get",
+        "tags": [
+          "Competitors"
+        ],
+        "summary": "List competitor links",
+        "description": "Every competitor link saved for one product, including fetched and manual price overrides. `effective_*` fields apply the precedence rules.",
+        "operationId": "list_competitor_listings",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
         "parameters": [
           {
             "name": "product_id",
@@ -681,17 +931,37 @@
                   "items": {
                     "$ref": "#/components/schemas/CompetitorListingOut"
                   },
-                  "title": "Response List Competitor Listings Api V1 Products  Product Id  Competitors Get"
+                  "title": "Response List Competitor Listings"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource does not exist (`not_found`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             }
@@ -699,8 +969,17 @@
         }
       },
       "post": {
-        "summary": "Create Competitor Listing",
-        "operationId": "create_competitor_listing_api_v1_products__product_id__competitors_post",
+        "tags": [
+          "Competitors"
+        ],
+        "summary": "Add competitor link",
+        "description": "Saves a public product URL for one product. Only لوازم خانگی products accept links, with at most one link per store. Digikala and Technolife URLs are checked automatically; `other` stores remain manual-only.",
+        "operationId": "create_competitor_listing",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
         "parameters": [
           {
             "name": "product_id",
@@ -733,12 +1012,32 @@
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource does not exist (`not_found`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             }
@@ -748,8 +1047,17 @@
     },
     "/api/v1/competitors/{listing_id}": {
       "patch": {
-        "summary": "Update Competitor Listing",
-        "operationId": "update_competitor_listing_api_v1_competitors__listing_id__patch",
+        "tags": [
+          "Competitors"
+        ],
+        "summary": "Update competitor link",
+        "description": "Partial update: URL, active flag, or a manual price/currency/stock override. Omitted fields keep their current values.",
+        "operationId": "update_competitor_listing",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
         "parameters": [
           {
             "name": "listing_id",
@@ -782,12 +1090,32 @@
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource does not exist (`not_found`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             }
@@ -795,8 +1123,17 @@
         }
       },
       "delete": {
-        "summary": "Delete Competitor Listing",
-        "operationId": "delete_competitor_listing_api_v1_competitors__listing_id__delete",
+        "tags": [
+          "Competitors"
+        ],
+        "summary": "Delete competitor link",
+        "description": "Removes one competitor link and its stored observations.",
+        "operationId": "delete_competitor_listing",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
         "parameters": [
           {
             "name": "listing_id",
@@ -810,14 +1147,34 @@
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Listing deleted."
           },
-          "422": {
-            "description": "Validation Error",
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource does not exist (`not_found`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             }
@@ -827,8 +1184,17 @@
     },
     "/api/v1/products/{product_id}/competitors/check": {
       "post": {
-        "summary": "Check All Competitor Listings",
-        "operationId": "check_all_competitor_listings_api_v1_products__product_id__competitors_check_post",
+        "tags": [
+          "Competitors"
+        ],
+        "summary": "Check all links of a product",
+        "description": "Synchronously re-checks every active competitor link of one product and returns the refreshed listings.",
+        "operationId": "check_all_competitor_listings",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
         "parameters": [
           {
             "name": "product_id",
@@ -850,17 +1216,37 @@
                   "items": {
                     "$ref": "#/components/schemas/CompetitorListingOut"
                   },
-                  "title": "Response Check All Competitor Listings Api V1 Products  Product Id  Competitors Check Post"
+                  "title": "Response Check All Competitor Listings"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource does not exist (`not_found`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             }
@@ -870,8 +1256,17 @@
     },
     "/api/v1/competitors/{listing_id}/check": {
       "post": {
-        "summary": "Check Competitor Listing",
-        "operationId": "check_competitor_listing_api_v1_competitors__listing_id__check_post",
+        "tags": [
+          "Competitors"
+        ],
+        "summary": "Check one competitor link",
+        "description": "Synchronously fetches the current price and stock for one listing. Returns `429` when the link is checked again before its politeness interval elapses.",
+        "operationId": "check_competitor_listing",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
         "parameters": [
           {
             "name": "listing_id",
@@ -894,12 +1289,42 @@
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource does not exist (`not_found`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many attempts; retry later (`rate_limited`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             }
@@ -909,8 +1334,12 @@
     },
     "/api/v1/categories": {
       "get": {
-        "summary": "List Categories",
-        "operationId": "list_categories_api_v1_categories_get",
+        "tags": [
+          "Categories"
+        ],
+        "summary": "List categories",
+        "description": "All categories ordered by name. The response carries a weak `ETag` and a 60-second private cache hint.",
+        "operationId": "list_categories",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -921,16 +1350,35 @@
                     "$ref": "#/components/schemas/CategoryOut"
                   },
                   "type": "array",
-                  "title": "Response List Categories Api V1 Categories Get"
+                  "title": "Response List Categories"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
       },
       "post": {
-        "summary": "Create Category",
-        "operationId": "create_category_api_v1_categories_post",
+        "tags": [
+          "Categories"
+        ],
+        "summary": "Create category",
+        "description": "Creates a category; duplicate names return `409`.",
+        "operationId": "create_category",
         "requestBody": {
           "content": {
             "application/json": {
@@ -952,23 +1400,57 @@
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The request conflicts with the current state (`conflict`, or `category_in_use` for categories).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
       }
     },
     "/api/v1/categories/{category_id}": {
       "delete": {
-        "summary": "Delete Category",
-        "operationId": "delete_category_api_v1_categories__category_id__delete",
+        "tags": [
+          "Categories"
+        ],
+        "summary": "Delete category",
+        "description": "Deletes an empty category. A category that still has products returns `409 category_in_use`; an unknown id returns `404`.",
+        "operationId": "delete_category",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
         "parameters": [
           {
             "name": "category_id",
@@ -982,14 +1464,44 @@
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Category deleted."
           },
-          "422": {
-            "description": "Validation Error",
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource does not exist (`not_found`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The request conflicts with the current state (`conflict`, or `category_in_use` for categories).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             }
@@ -999,8 +1511,12 @@
     },
     "/api/v1/integrations/parsina/status": {
       "get": {
-        "summary": "Parsina Status",
-        "operationId": "parsina_status_api_v1_integrations_parsina_status_get",
+        "tags": [
+          "Integrations"
+        ],
+        "summary": "Parsina sync status",
+        "description": "Current product-sync state: configured source, running flag, last attempt/success, last error, counters from the last run, and the configured interval in minutes.",
+        "operationId": "parsina_status",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1011,14 +1527,33 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
           }
-        }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
       }
     },
     "/api/v1/integrations/parsina/sync": {
       "post": {
-        "summary": "Parsina Sync",
-        "operationId": "parsina_sync_api_v1_integrations_parsina_sync_post",
+        "tags": [
+          "Integrations"
+        ],
+        "summary": "Start product sync",
+        "description": "Starts a background catalog sync and returns immediately. Poll the status endpoint for progress. A run already holding the lock returns `409`; an unconfigured source returns `503`.",
+        "operationId": "parsina_sync",
         "responses": {
           "202": {
             "description": "Successful Response",
@@ -1029,14 +1564,53 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The request conflicts with the current state (`conflict`, or `category_in_use` for categories).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The product source is not configured or temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
           }
-        }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
       }
     },
     "/api/v1/integrations/competitors/status": {
       "get": {
-        "summary": "Competitors Status",
-        "operationId": "competitors_status_api_v1_integrations_competitors_status_get",
+        "tags": [
+          "Integrations"
+        ],
+        "summary": "Competitor sync status",
+        "description": "Current bulk-refresh state: running flag, last attempt/success, last error, and counters from the last run.",
+        "operationId": "competitors_status",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1047,14 +1621,33 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
           }
-        }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
       }
     },
     "/api/v1/integrations/competitors/sync": {
       "post": {
-        "summary": "Competitors Sync",
-        "operationId": "competitors_sync_api_v1_integrations_competitors_sync_post",
+        "tags": [
+          "Integrations"
+        ],
+        "summary": "Start competitor refresh",
+        "description": "Refreshes every active competitor link in the background and returns immediately. Poll the status endpoint for progress; `409` while another bulk run holds the lock.",
+        "operationId": "competitors_sync",
         "responses": {
           "202": {
             "description": "Successful Response",
@@ -1065,14 +1658,43 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The request conflicts with the current state (`conflict`, or `category_in_use` for categories).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
           }
-        }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
       }
     },
     "/api/v1/settings": {
       "get": {
-        "summary": "Get Settings View",
-        "operationId": "get_settings_view_api_v1_settings_get",
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Read settings",
+        "description": "Admin preferences: low-stock threshold, default page size, sync intervals, default competitor store, suggested-price weights, and the visible product-table columns.",
+        "operationId": "get_settings_view",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1083,12 +1705,31 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
           }
-        }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
       },
       "put": {
-        "summary": "Update Settings",
-        "operationId": "update_settings_api_v1_settings_put",
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Update settings",
+        "description": "Partial update: only supplied fields change. `suggested_price_formulas` and `product_table_columns` replace their full lists.",
+        "operationId": "update_settings",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1110,17 +1751,32 @@
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
       }
     }
   },
@@ -1144,7 +1800,8 @@
           "stock_value": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "Stock Value"
+            "title": "Stock Value",
+            "description": "Sum of price × stock, in Toman."
           }
         },
         "type": "object",
@@ -1161,27 +1818,32 @@
         "properties": {
           "top_group": {
             "type": "string",
-            "title": "Top Group"
+            "title": "Top Group",
+            "description": "Section name."
           },
           "items": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "Items"
+            "title": "Items",
+            "description": "Active products in the section."
           },
           "group_count": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "Group Count"
+            "title": "Group Count",
+            "description": "Raw groups in the section."
           },
           "brand_count": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "Brand Count"
+            "title": "Brand Count",
+            "description": "Distinct display brands in the section."
           },
           "stock_value": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "Stock Value"
+            "title": "Stock Value",
+            "description": "Sum of price × stock, in Toman."
           },
           "brands": {
             "items": {
@@ -1208,14 +1870,20 @@
             "type": "string",
             "maxLength": 120,
             "minLength": 1,
-            "title": "Name"
+            "title": "Name",
+            "description": "Unique category name."
           }
         },
         "type": "object",
         "required": [
           "name"
         ],
-        "title": "CategoryIn"
+        "title": "CategoryIn",
+        "examples": [
+          {
+            "name": "فرش"
+          }
+        ]
       },
       "CategoryOut": {
         "properties": {
@@ -1230,7 +1898,8 @@
           "created_at": {
             "type": "string",
             "format": "date-time",
-            "title": "Created At"
+            "title": "Created At",
+            "description": "UTC creation timestamp."
           }
         },
         "type": "object",
@@ -1254,12 +1923,14 @@
           "our_price": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "Our Price"
+            "title": "Our Price",
+            "description": "Our unit price in Toman."
           },
           "competitor_price": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "Competitor Price"
+            "title": "Competitor Price",
+            "description": "Cheapest fresh competitor price in Toman."
           },
           "competitor_store": {
             "type": "string",
@@ -1267,7 +1938,8 @@
           },
           "diff_percent": {
             "type": "number",
-            "title": "Diff Percent"
+            "title": "Diff Percent",
+            "description": "(our_price − competitor_price) / competitor_price × 100, one decimal."
           }
         },
         "type": "object",
@@ -1290,13 +1962,15 @@
               "technolife",
               "other"
             ],
-            "title": "Store"
+            "title": "Store",
+            "description": "`digikala` and `technolife` are fetched automatically; `other` is manual-only."
           },
           "url": {
             "type": "string",
             "maxLength": 2048,
             "minLength": 12,
-            "title": "Url"
+            "title": "Url",
+            "description": "Public product page URL."
           }
         },
         "type": "object",
@@ -1304,7 +1978,13 @@
           "store",
           "url"
         ],
-        "title": "CompetitorListingCreate"
+        "title": "CompetitorListingCreate",
+        "examples": [
+          {
+            "store": "digikala",
+            "url": "https://www.digikala.com/product/dkp-123456/"
+          }
+        ]
       },
       "CompetitorListingOut": {
         "properties": {
@@ -1331,7 +2011,8 @@
           },
           "is_active": {
             "type": "boolean",
-            "title": "Is Active"
+            "title": "Is Active",
+            "description": "Inactive links are skipped by checks and bulk refresh."
           },
           "status": {
             "type": "string",
@@ -1344,7 +2025,8 @@
               "failed",
               "manual"
             ],
-            "title": "Status"
+            "title": "Status",
+            "description": "Last fetch result: `success`, `not_found`, `unavailable`, `blocked`, `failed`, `pending`, or `manual`."
           },
           "fetched_price": {
             "anyOf": [
@@ -1355,7 +2037,8 @@
                 "type": "null"
               }
             ],
-            "title": "Fetched Price"
+            "title": "Fetched Price",
+            "description": "Last automatic price."
           },
           "fetched_currency": {
             "anyOf": [
@@ -1392,7 +2075,8 @@
                 "type": "null"
               }
             ],
-            "title": "Manual Price"
+            "title": "Manual Price",
+            "description": "Admin override, if set."
           },
           "manual_currency": {
             "anyOf": [
@@ -1429,7 +2113,8 @@
                 "type": "null"
               }
             ],
-            "title": "Effective Price"
+            "title": "Effective Price",
+            "description": "Fresh manual override, otherwise a fresh fetched price; null for inactive links or stale data."
           },
           "effective_currency": {
             "anyOf": [
@@ -1459,7 +2144,8 @@
           },
           "price_is_fresh": {
             "type": "boolean",
-            "title": "Price Is Fresh"
+            "title": "Price Is Fresh",
+            "description": "The effective price is fresh and the link is active."
           },
           "last_checked_at": {
             "anyOf": [
@@ -1471,7 +2157,8 @@
                 "type": "null"
               }
             ],
-            "title": "Last Checked At"
+            "title": "Last Checked At",
+            "description": "Last fetch attempt (UTC)."
           },
           "last_success_at": {
             "anyOf": [
@@ -1483,7 +2170,8 @@
                 "type": "null"
               }
             ],
-            "title": "Last Success At"
+            "title": "Last Success At",
+            "description": "Last successful fetch (UTC)."
           },
           "manual_updated_at": {
             "anyOf": [
@@ -1495,7 +2183,8 @@
                 "type": "null"
               }
             ],
-            "title": "Manual Updated At"
+            "title": "Manual Updated At",
+            "description": "Last override update (UTC)."
           },
           "last_error": {
             "anyOf": [
@@ -1506,7 +2195,8 @@
                 "type": "null"
               }
             ],
-            "title": "Last Error"
+            "title": "Last Error",
+            "description": "Persian error from the last failed fetch."
           },
           "created_at": {
             "type": "string",
@@ -1527,20 +2217,7 @@
           "url",
           "is_active",
           "status",
-          "fetched_price",
-          "fetched_currency",
-          "fetched_in_stock",
-          "manual_price",
-          "manual_currency",
-          "manual_in_stock",
-          "effective_price",
-          "effective_currency",
-          "effective_in_stock",
           "price_is_fresh",
-          "last_checked_at",
-          "last_success_at",
-          "manual_updated_at",
-          "last_error",
           "created_at",
           "updated_at"
         ],
@@ -1586,7 +2263,8 @@
                 "type": "null"
               }
             ],
-            "title": "Is Active"
+            "title": "Is Active",
+            "description": "Pause auto-checks without deleting."
           },
           "manual_price": {
             "anyOf": [
@@ -1599,7 +2277,8 @@
                 "type": "null"
               }
             ],
-            "title": "Manual Price"
+            "title": "Manual Price",
+            "description": "Manual override in `manual_currency`."
           },
           "manual_currency": {
             "anyOf": [
@@ -1614,7 +2293,8 @@
                 "type": "null"
               }
             ],
-            "title": "Manual Currency"
+            "title": "Manual Currency",
+            "description": "`IRT` = Toman, `IRR` = Rial. Defaults to the store's currency."
           },
           "manual_in_stock": {
             "anyOf": [
@@ -1625,7 +2305,8 @@
                 "type": "null"
               }
             ],
-            "title": "Manual In Stock"
+            "title": "Manual In Stock",
+            "description": "Manual stock override."
           }
         },
         "type": "object",
@@ -1672,7 +2353,8 @@
                 "type": "null"
               }
             ],
-            "title": "Price"
+            "title": "Price",
+            "description": "Effective price (manual wins)."
           },
           "currency": {
             "anyOf": [
@@ -1702,11 +2384,13 @@
           },
           "is_fresh": {
             "type": "boolean",
-            "title": "Is Fresh"
+            "title": "Is Fresh",
+            "description": "Price is within the configured TTL."
           },
           "is_manual": {
             "type": "boolean",
-            "title": "Is Manual"
+            "title": "Is Manual",
+            "description": "The effective price comes from a manual override."
           },
           "last_checked_at": {
             "anyOf": [
@@ -1727,12 +2411,8 @@
           "store",
           "url",
           "status",
-          "price",
-          "currency",
-          "in_stock",
           "is_fresh",
-          "is_manual",
-          "last_checked_at"
+          "is_manual"
         ],
         "title": "CompetitorPriceOut"
       },
@@ -1741,7 +2421,8 @@
           "status": {
             "type": "string",
             "const": "running",
-            "title": "Status"
+            "title": "Status",
+            "description": "The job was accepted and is running."
           },
           "message": {
             "anyOf": [
@@ -1752,7 +2433,8 @@
                 "type": "null"
               }
             ],
-            "title": "Message"
+            "title": "Message",
+            "description": "Persian status message."
           }
         },
         "type": "object",
@@ -1766,7 +2448,8 @@
         "properties": {
           "running": {
             "type": "boolean",
-            "title": "Running"
+            "title": "Running",
+            "description": "A bulk refresh currently holds the lock."
           },
           "running_since": {
             "anyOf": [
@@ -1778,7 +2461,8 @@
                 "type": "null"
               }
             ],
-            "title": "Running Since"
+            "title": "Running Since",
+            "description": "UTC start of the current run."
           },
           "last_attempt_at": {
             "anyOf": [
@@ -1790,7 +2474,8 @@
                 "type": "null"
               }
             ],
-            "title": "Last Attempt At"
+            "title": "Last Attempt At",
+            "description": "UTC start of the last run."
           },
           "last_success_at": {
             "anyOf": [
@@ -1802,7 +2487,8 @@
                 "type": "null"
               }
             ],
-            "title": "Last Success At"
+            "title": "Last Success At",
+            "description": "UTC end of the last fully applied run."
           },
           "last_error": {
             "anyOf": [
@@ -1813,26 +2499,31 @@
                 "type": "null"
               }
             ],
-            "title": "Last Error"
+            "title": "Last Error",
+            "description": "Persian error from the last failed run."
           },
           "last_checked": {
             "type": "integer",
             "title": "Last Checked",
+            "description": "Links checked in the last run.",
             "default": 0
           },
           "last_updated": {
             "type": "integer",
             "title": "Last Updated",
+            "description": "Listings updated in the last run.",
             "default": 0
           },
           "last_failed": {
             "type": "integer",
             "title": "Last Failed",
+            "description": "Links that failed in the last run.",
             "default": 0
           },
           "last_skipped": {
             "type": "integer",
             "title": "Last Skipped",
+            "description": "Inactive links skipped in the last run.",
             "default": 0
           }
         },
@@ -1846,17 +2537,20 @@
         "properties": {
           "name": {
             "type": "string",
-            "title": "Name"
+            "title": "Name",
+            "description": "Raw Parsina `main_group_name`."
           },
           "count": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "Count"
+            "title": "Count",
+            "description": "Product count in the group."
           },
           "stock_value": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "Stock Value"
+            "title": "Stock Value",
+            "description": "Sum of price × stock, in Toman."
           }
         },
         "type": "object",
@@ -1872,44 +2566,52 @@
           "total": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "Total"
+            "title": "Total",
+            "description": "All active catalog rows."
           },
           "in_stock": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "In Stock"
+            "title": "In Stock",
+            "description": "Rows above the low-stock threshold."
           },
           "low": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "Low"
+            "title": "Low",
+            "description": "Rows in stock but at or below the threshold."
           },
           "out": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "Out"
+            "title": "Out",
+            "description": "Rows with zero stock."
           },
           "stock_value": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "Stock Value"
+            "title": "Stock Value",
+            "description": "Sum of price × stock, in Toman."
           },
           "competitor_coverage": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "Competitor Coverage"
+            "title": "Competitor Coverage",
+            "description": "Active products with at least one fresh competitor price."
           },
           "appliance_total": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "Appliance Total"
+            "title": "Appliance Total",
+            "description": "Active non-فرش/مبلمان products (the coverage denominator)."
           },
           "groups": {
             "items": {
               "$ref": "#/components/schemas/DashboardGroupOut"
             },
             "type": "array",
-            "title": "Groups"
+            "title": "Groups",
+            "description": "Top groups by stock value."
           }
         },
         "type": "object",
@@ -1955,11 +2657,19 @@
         "properties": {
           "code": {
             "type": "string",
-            "title": "Code"
+            "title": "Code",
+            "description": "Stable machine-readable code, e.g. `unauthorized`, `not_found`.",
+            "examples": [
+              "validation_error"
+            ]
           },
           "message": {
             "type": "string",
-            "title": "Message"
+            "title": "Message",
+            "description": "User-facing Persian message, ready to display.",
+            "examples": [
+              "خطای اعتبارسنجی"
+            ]
           },
           "details": {
             "anyOf": [
@@ -1976,7 +2686,8 @@
                 "type": "null"
               }
             ],
-            "title": "Details"
+            "title": "Details",
+            "description": "Field path → Persian validation messages. Present on `validation_error`."
           }
         },
         "type": "object",
@@ -1984,7 +2695,18 @@
           "code",
           "message"
         ],
-        "title": "ErrorBody"
+        "title": "ErrorBody",
+        "examples": [
+          {
+            "code": "validation_error",
+            "details": {
+              "price": [
+                "قیمت کمتر از حد مجاز است"
+              ]
+            },
+            "message": "خطای اعتبارسنجی"
+          }
+        ]
       },
       "ErrorEnvelope": {
         "properties": {
@@ -1996,42 +2718,35 @@
         "required": [
           "error"
         ],
-        "title": "ErrorEnvelope"
-      },
-      "HTTPValidationError": {
-        "properties": {
-          "detail": {
-            "items": {
-              "$ref": "#/components/schemas/ValidationError"
-            },
-            "type": "array",
-            "title": "Detail"
-          }
-        },
-        "type": "object",
-        "title": "HTTPValidationError"
+        "title": "ErrorEnvelope",
+        "description": "Single error shape for every non-2xx response."
       },
       "InventorySummaryOut": {
         "properties": {
           "total": {
             "type": "integer",
-            "title": "Total"
+            "title": "Total",
+            "description": "All catalog rows."
           },
           "in_stock": {
             "type": "integer",
-            "title": "In Stock"
+            "title": "In Stock",
+            "description": "Rows with stock above the low-stock threshold."
           },
           "low": {
             "type": "integer",
-            "title": "Low"
+            "title": "Low",
+            "description": "Rows in stock but at or below the threshold."
           },
           "out": {
             "type": "integer",
-            "title": "Out"
+            "title": "Out",
+            "description": "Rows with zero stock."
           },
           "stock_value": {
             "type": "integer",
-            "title": "Stock Value"
+            "title": "Stock Value",
+            "description": "Sum of price × stock, in Toman."
           }
         },
         "type": "object",
@@ -2050,13 +2765,15 @@
             "type": "string",
             "maxLength": 64,
             "minLength": 1,
-            "title": "Username"
+            "title": "Username",
+            "description": "Admin username."
           },
           "password": {
             "type": "string",
             "maxLength": 128,
             "minLength": 1,
-            "title": "Password"
+            "title": "Password",
+            "description": "Plain password; never logged or stored. Use HTTPS in production."
           }
         },
         "type": "object",
@@ -2064,13 +2781,20 @@
           "username",
           "password"
         ],
-        "title": "LoginIn"
+        "title": "LoginIn",
+        "examples": [
+          {
+            "password": "••••••••",
+            "username": "admin"
+          }
+        ]
       },
       "LoginOut": {
         "properties": {
           "ok": {
             "type": "boolean",
             "title": "Ok",
+            "description": "Always `true`; failures return an error envelope.",
             "default": true
           }
         },
@@ -2081,7 +2805,8 @@
         "properties": {
           "username": {
             "type": "string",
-            "title": "Username"
+            "title": "Username",
+            "description": "Username behind the current session."
           }
         },
         "type": "object",
@@ -2096,23 +2821,27 @@
             "type": "string",
             "maxLength": 200,
             "minLength": 1,
-            "title": "Name"
+            "title": "Name",
+            "description": "Display name."
           },
           "sku": {
             "type": "string",
             "maxLength": 64,
             "minLength": 1,
-            "title": "Sku"
+            "title": "Sku",
+            "description": "Internal SKU (unique per row)."
           },
           "price": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "Price"
+            "title": "Price",
+            "description": "Unit price in Toman."
           },
           "stock": {
             "type": "integer",
             "minimum": 0.0,
             "title": "Stock",
+            "description": "Available quantity.",
             "default": 0
           },
           "category_id": {
@@ -2124,7 +2853,8 @@
                 "type": "null"
               }
             ],
-            "title": "Category Id"
+            "title": "Category Id",
+            "description": "Existing category id, if any."
           }
         },
         "type": "object",
@@ -2133,7 +2863,16 @@
           "sku",
           "price"
         ],
-        "title": "ProductIn"
+        "title": "ProductIn",
+        "examples": [
+          {
+            "category_id": 1,
+            "name": "فرش دستباف ۱۲ متری",
+            "price": 18500000,
+            "sku": "FR-1200",
+            "stock": 4
+          }
+        ]
       },
       "ProductOut": {
         "properties": {
@@ -2150,7 +2889,8 @@
                 "type": "null"
               }
             ],
-            "title": "External Id"
+            "title": "External Id",
+            "description": "Parsina `goodId`; null for manual rows."
           },
           "name": {
             "type": "string",
@@ -2162,11 +2902,13 @@
           },
           "price": {
             "type": "number",
-            "title": "Price"
+            "title": "Price",
+            "description": "Unit price in Toman."
           },
           "stock": {
             "type": "number",
-            "title": "Stock"
+            "title": "Stock",
+            "description": "Available quantity."
           },
           "main_group_name": {
             "anyOf": [
@@ -2177,7 +2919,8 @@
                 "type": "null"
               }
             ],
-            "title": "Main Group Name"
+            "title": "Main Group Name",
+            "description": "Raw Parsina group name."
           },
           "sub_group_name": {
             "anyOf": [
@@ -2204,6 +2947,7 @@
           "is_active": {
             "type": "boolean",
             "title": "Is Active",
+            "description": "False once the source drops the row.",
             "default": true
           },
           "category": {
@@ -2226,7 +2970,8 @@
                 "type": "null"
               }
             ],
-            "title": "Synced At"
+            "title": "Synced At",
+            "description": "Last successful source sync (UTC)."
           },
           "competitor_prices": {
             "items": {
@@ -2238,7 +2983,8 @@
           "created_at": {
             "type": "string",
             "format": "date-time",
-            "title": "Created At"
+            "title": "Created At",
+            "description": "UTC creation timestamp."
           }
         },
         "type": "object",
@@ -2264,15 +3010,18 @@
           },
           "total": {
             "type": "integer",
-            "title": "Total"
+            "title": "Total",
+            "description": "Total matches across all pages."
           },
           "page": {
             "type": "integer",
-            "title": "Page"
+            "title": "Page",
+            "description": "1-based page number; always 1 for a show-all request."
           },
           "page_size": {
             "type": "integer",
-            "title": "Page Size"
+            "title": "Page Size",
+            "description": "Items per page; equals the item count for a show-all request."
           }
         },
         "type": "object",
@@ -2304,19 +3053,23 @@
         "properties": {
           "low_stock_threshold": {
             "type": "integer",
-            "title": "Low Stock Threshold"
+            "title": "Low Stock Threshold",
+            "description": "Stock at or below this value counts as low."
           },
           "default_page_size": {
             "type": "integer",
-            "title": "Default Page Size"
+            "title": "Default Page Size",
+            "description": "Products per page; 0 means show all."
           },
           "sync_interval_minutes": {
             "type": "integer",
-            "title": "Sync Interval Minutes"
+            "title": "Sync Interval Minutes",
+            "description": "Product sync interval."
           },
           "competitor_sync_interval_minutes": {
             "type": "integer",
-            "title": "Competitor Sync Interval Minutes"
+            "title": "Competitor Sync Interval Minutes",
+            "description": "Bulk competitor refresh interval."
           },
           "default_competitor_store": {
             "type": "string",
@@ -2324,21 +3077,24 @@
               "digikala",
               "technolife"
             ],
-            "title": "Default Competitor Store"
+            "title": "Default Competitor Store",
+            "description": "Store pre-selected when adding a competitor link."
           },
           "suggested_price_formulas": {
             "items": {
               "$ref": "#/components/schemas/SuggestedPriceFormulaOut"
             },
             "type": "array",
-            "title": "Suggested Price Formulas"
+            "title": "Suggested Price Formulas",
+            "description": "Per-group competitor weight for the suggested price."
           },
           "product_table_columns": {
             "items": {
               "$ref": "#/components/schemas/ProductTableColumn"
             },
             "type": "array",
-            "title": "Product Table Columns"
+            "title": "Product Table Columns",
+            "description": "Visible product-table columns, in canonical order."
           }
         },
         "type": "object",
@@ -2366,7 +3122,8 @@
                 "type": "null"
               }
             ],
-            "title": "Low Stock Threshold"
+            "title": "Low Stock Threshold",
+            "description": "Stock at or below this value is low."
           },
           "default_page_size": {
             "anyOf": [
@@ -2385,7 +3142,8 @@
                 "type": "null"
               }
             ],
-            "title": "Default Page Size"
+            "title": "Default Page Size",
+            "description": "0 means show all products."
           },
           "sync_interval_minutes": {
             "anyOf": [
@@ -2398,7 +3156,8 @@
                 "type": "null"
               }
             ],
-            "title": "Sync Interval Minutes"
+            "title": "Sync Interval Minutes",
+            "description": "Product sync interval, in minutes."
           },
           "competitor_sync_interval_minutes": {
             "anyOf": [
@@ -2411,7 +3170,8 @@
                 "type": "null"
               }
             ],
-            "title": "Competitor Sync Interval Minutes"
+            "title": "Competitor Sync Interval Minutes",
+            "description": "Bulk competitor refresh interval, in minutes."
           },
           "default_competitor_store": {
             "anyOf": [
@@ -2426,7 +3186,8 @@
                 "type": "null"
               }
             ],
-            "title": "Default Competitor Store"
+            "title": "Default Competitor Store",
+            "description": "Store pre-selected when adding a competitor link."
           },
           "suggested_price_formulas": {
             "anyOf": [
@@ -2440,7 +3201,8 @@
                 "type": "null"
               }
             ],
-            "title": "Suggested Price Formulas"
+            "title": "Suggested Price Formulas",
+            "description": "Replaces the saved list; omit to keep the current weights."
           },
           "product_table_columns": {
             "anyOf": [
@@ -2454,11 +3216,32 @@
                 "type": "null"
               }
             ],
-            "title": "Product Table Columns"
+            "title": "Product Table Columns",
+            "description": "Replaces the visible list (at least one column, no duplicates)."
           }
         },
         "type": "object",
-        "title": "SettingsUpdateIn"
+        "title": "SettingsUpdateIn",
+        "examples": [
+          {
+            "competitor_sync_interval_minutes": 1440,
+            "default_competitor_store": "digikala",
+            "default_page_size": 20,
+            "low_stock_threshold": 10,
+            "product_table_columns": [
+              "name",
+              "price",
+              "stock"
+            ],
+            "suggested_price_formulas": [
+              {
+                "top_group": "فرش",
+                "weight": 0.4
+              }
+            ],
+            "sync_interval_minutes": 720
+          }
+        ]
       },
       "SuggestedPriceFormulaIn": {
         "properties": {
@@ -2469,13 +3252,15 @@
               "مبلمان",
               "لوازم خانگی"
             ],
-            "title": "Top Group"
+            "title": "Top Group",
+            "description": "Catalog section the weight applies to."
           },
           "weight": {
             "type": "number",
             "maximum": 1.0,
             "minimum": 0.0,
-            "title": "Weight"
+            "title": "Weight",
+            "description": "Competitor share: `weight × competitor + (1 − weight) × Parsina`."
           }
         },
         "type": "object",
@@ -2494,13 +3279,15 @@
               "مبلمان",
               "لوازم خانگی"
             ],
-            "title": "Top Group"
+            "title": "Top Group",
+            "description": "Catalog section the weight applies to."
           },
           "weight": {
             "type": "number",
             "maximum": 1.0,
             "minimum": 0.0,
-            "title": "Weight"
+            "title": "Weight",
+            "description": "Competitor share: `weight × competitor + (1 − weight) × Parsina`."
           }
         },
         "type": "object",
@@ -2515,7 +3302,8 @@
           "status": {
             "type": "string",
             "const": "running",
-            "title": "Status"
+            "title": "Status",
+            "description": "The job was accepted and is running."
           },
           "message": {
             "anyOf": [
@@ -2526,7 +3314,8 @@
                 "type": "null"
               }
             ],
-            "title": "Message"
+            "title": "Message",
+            "description": "Persian status message."
           }
         },
         "type": "object",
@@ -2540,7 +3329,8 @@
         "properties": {
           "configured": {
             "type": "boolean",
-            "title": "Configured"
+            "title": "Configured",
+            "description": "Whether the active source has credentials/data."
           },
           "source": {
             "type": "string",
@@ -2550,11 +3340,13 @@
               "dev"
             ],
             "title": "Source",
+            "description": "Active product source.",
             "default": "parsina"
           },
           "running": {
             "type": "boolean",
-            "title": "Running"
+            "title": "Running",
+            "description": "A manual or scheduled run currently holds the lock."
           },
           "running_since": {
             "anyOf": [
@@ -2566,7 +3358,8 @@
                 "type": "null"
               }
             ],
-            "title": "Running Since"
+            "title": "Running Since",
+            "description": "UTC start of the current run."
           },
           "last_attempt_at": {
             "anyOf": [
@@ -2578,7 +3371,8 @@
                 "type": "null"
               }
             ],
-            "title": "Last Attempt At"
+            "title": "Last Attempt At",
+            "description": "UTC start of the last run."
           },
           "last_success_at": {
             "anyOf": [
@@ -2590,7 +3384,8 @@
                 "type": "null"
               }
             ],
-            "title": "Last Success At"
+            "title": "Last Success At",
+            "description": "UTC end of the last fully applied run."
           },
           "last_error": {
             "anyOf": [
@@ -2601,36 +3396,43 @@
                 "type": "null"
               }
             ],
-            "title": "Last Error"
+            "title": "Last Error",
+            "description": "Persian error from the last failed run."
           },
           "last_processed": {
             "type": "integer",
             "title": "Last Processed",
+            "description": "Rows read in the last run.",
             "default": 0
           },
           "last_created": {
             "type": "integer",
             "title": "Last Created",
+            "description": "Rows created in the last run.",
             "default": 0
           },
           "last_updated": {
             "type": "integer",
             "title": "Last Updated",
+            "description": "Rows updated in the last run.",
             "default": 0
           },
           "last_deactivated": {
             "type": "integer",
             "title": "Last Deactivated",
+            "description": "Rows soft-deleted in the last run.",
             "default": 0
           },
           "last_skipped": {
             "type": "integer",
             "title": "Last Skipped",
+            "description": "Rows skipped by the importer in the last run.",
             "default": 0
           },
           "interval_minutes": {
             "type": "integer",
-            "title": "Interval Minutes"
+            "title": "Interval Minutes",
+            "description": "Scheduled interval in minutes."
           }
         },
         "type": "object",
@@ -2640,47 +3442,49 @@
           "interval_minutes"
         ],
         "title": "SyncStatusOut"
-      },
-      "ValidationError": {
-        "properties": {
-          "loc": {
-            "items": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "integer"
-                }
-              ]
-            },
-            "type": "array",
-            "title": "Location"
-          },
-          "msg": {
-            "type": "string",
-            "title": "Message"
-          },
-          "type": {
-            "type": "string",
-            "title": "Error Type"
-          },
-          "input": {
-            "title": "Input"
-          },
-          "ctx": {
-            "type": "object",
-            "title": "Context"
-          }
-        },
-        "type": "object",
-        "required": [
-          "loc",
-          "msg",
-          "type"
-        ],
-        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "SessionCookie": {
+        "type": "apiKey",
+        "description": "HttpOnly cookie set by `POST /api/v1/auth/login`. Browsers send it automatically; other clients must forward it as a `Cookie` header.",
+        "in": "cookie",
+        "name": "charsooq_session"
       }
     }
-  }
+  },
+  "tags": [
+    {
+      "name": "Health",
+      "description": "Liveness and database readiness probes."
+    },
+    {
+      "name": "Auth",
+      "description": "Admin login, logout, and current session."
+    },
+    {
+      "name": "Dashboard",
+      "description": "Aggregated catalog, stock, and competitor metrics."
+    },
+    {
+      "name": "Products",
+      "description": "Catalog listing, creation, groups, and inventory summary."
+    },
+    {
+      "name": "Categories",
+      "description": "Category management with an in-use delete guard."
+    },
+    {
+      "name": "Competitors",
+      "description": "Competitor links, manual price overrides, and price checks."
+    },
+    {
+      "name": "Integrations",
+      "description": "Background Parsina and competitor sync jobs plus their status."
+    },
+    {
+      "name": "Settings",
+      "description": "Admin preferences: thresholds, sync intervals, pricing weights, table columns."
+    }
+  ]
 }

@@ -9,6 +9,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.routing import APIRoute
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -17,6 +18,7 @@ from starlette.responses import Response
 
 from app.api import router
 from app.api.dependencies import get_db_readonly
+from app.api.openapi import API_DESCRIPTION, TAGS_METADATA
 from app.core.config import get_settings
 from app.core.rate_limit import login_rate_key, rate_limited
 
@@ -98,9 +100,31 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         scheduler.stop()
 
 
+def _operation_id(route: APIRoute) -> str:
+    """Stable, readable ids (`list_products`) instead of generated path ids."""
+    return route.name
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
-    app = FastAPI(title="Charsooq Admin API", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(
+        title="Charsooq Admin API",
+        summary="Catalog, pricing, and competitor administration for چهارسوق.",
+        description=API_DESCRIPTION,
+        version="0.1.0",
+        openapi_tags=TAGS_METADATA,
+        license_info={"name": "MIT"},
+        generate_unique_id_function=_operation_id,
+        swagger_ui_parameters={
+            "docExpansion": "list",
+            "defaultModelsExpandDepth": 0,
+            "displayRequestDuration": True,
+            "filter": True,
+            "persistAuthorization": True,
+            "tryItOutEnabled": True,
+        },
+        lifespan=lifespan,
+    )
 
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(

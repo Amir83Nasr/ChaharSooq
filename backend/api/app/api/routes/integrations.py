@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.dependencies import get_db, get_db_readonly, require_admin
+from app.api.openapi import CONFLICT, SERVICE_UNAVAILABLE, UNAUTHORIZED
 from app.core.database import get_engine
 from app.models import Admin, ParsinaSyncState
 from app.models.competitor import CompetitorSyncState
@@ -26,7 +27,7 @@ from app.services.sync import (
     SyncNotConfiguredError,
 )
 
-router = APIRouter()
+router = APIRouter(tags=["Integrations"], responses={401: UNAUTHORIZED})
 log = logging.getLogger("charsooq.integrations")
 
 
@@ -95,7 +96,16 @@ def _run_competitor_manual() -> None:
             log.exception("manual competitor refresh failed")
 
 
-@router.get("/integrations/parsina/status", response_model=SyncStatusOut)
+@router.get(
+    "/integrations/parsina/status",
+    response_model=SyncStatusOut,
+    summary="Parsina sync status",
+    description=(
+        "Current product-sync state: configured source, running flag, last "
+        "attempt/success, last error, counters from the last run, and the "
+        "configured interval in minutes."
+    ),
+)
 def parsina_status(
     _admin: Admin = Depends(require_admin),  # noqa: B008
     session: Session = Depends(get_db_readonly),  # noqa: B008
@@ -107,6 +117,13 @@ def parsina_status(
     "/integrations/parsina/sync",
     response_model=SyncRunOut,
     status_code=status.HTTP_202_ACCEPTED,
+    summary="Start product sync",
+    description=(
+        "Starts a background catalog sync and returns immediately. Poll the "
+        "status endpoint for progress. A run already holding the lock returns "
+        "`409`; an unconfigured source returns `503`."
+    ),
+    responses={409: CONFLICT, 503: SERVICE_UNAVAILABLE},
 )
 def parsina_sync(
     _admin: Admin = Depends(require_admin),  # noqa: B008
@@ -131,7 +148,15 @@ def parsina_sync(
     return SyncRunOut(status="running", message=message)
 
 
-@router.get("/integrations/competitors/status", response_model=CompetitorSyncStatusOut)
+@router.get(
+    "/integrations/competitors/status",
+    response_model=CompetitorSyncStatusOut,
+    summary="Competitor sync status",
+    description=(
+        "Current bulk-refresh state: running flag, last attempt/success, last "
+        "error, and counters from the last run."
+    ),
+)
 def competitors_status(
     _admin: Admin = Depends(require_admin),  # noqa: B008
     session: Session = Depends(get_db_readonly),  # noqa: B008
@@ -143,6 +168,13 @@ def competitors_status(
     "/integrations/competitors/sync",
     response_model=CompetitorSyncRunOut,
     status_code=status.HTTP_202_ACCEPTED,
+    summary="Start competitor refresh",
+    description=(
+        "Refreshes every active competitor link in the background and returns "
+        "immediately. Poll the status endpoint for progress; `409` while "
+        "another bulk run holds the lock."
+    ),
+    responses={409: CONFLICT},
 )
 def competitors_sync(
     _admin: Admin = Depends(require_admin),  # noqa: B008

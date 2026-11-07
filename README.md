@@ -129,7 +129,7 @@ Schema changes require an Alembic migration under `backend/api/migrations/`. Aut
 
 ## API contract
 
-Base path `/api/v1`. Committed OpenAPI snapshot: [backend/api/openapi.json](backend/api/openapi.json) — regenerate after any route/schema change:
+Base path `/api/v1`. Interactive docs: Swagger UI at `/docs` (start the API with `make dev-api` or `make dev-all`, then open <http://localhost:8000/docs>) and ReDoc at `/redoc`. Log in through `POST /api/v1/auth/login`; the browser sends the resulting HttpOnly cookie automatically. Committed OpenAPI snapshot: [backend/api/openapi.json](backend/api/openapi.json) — regenerate after any route/schema change:
 
 ```bash
 uv run --project backend/api python backend/api/scripts/export_openapi.py

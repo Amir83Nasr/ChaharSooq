@@ -23,25 +23,61 @@ type ProductTableColumn = Literal[
 
 
 class SettingsOut(BaseModel):
-    low_stock_threshold: int
-    default_page_size: int
-    sync_interval_minutes: int
-    competitor_sync_interval_minutes: int
-    default_competitor_store: Literal["digikala", "technolife"]
-    suggested_price_formulas: list[SuggestedPriceFormulaOut]
-    product_table_columns: list[ProductTableColumn]
+    low_stock_threshold: int = Field(description="Stock at or below this value counts as low.")
+    default_page_size: int = Field(description="Products per page; 0 means show all.")
+    sync_interval_minutes: int = Field(description="Product sync interval.")
+    competitor_sync_interval_minutes: int = Field(description="Bulk competitor refresh interval.")
+    default_competitor_store: Literal["digikala", "technolife"] = Field(
+        description="Store pre-selected when adding a competitor link."
+    )
+    suggested_price_formulas: list[SuggestedPriceFormulaOut] = Field(
+        description="Per-group competitor weight for the suggested price."
+    )
+    product_table_columns: list[ProductTableColumn] = Field(
+        description="Visible product-table columns, in canonical order."
+    )
 
 
 class SettingsUpdateIn(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(
+        extra="ignore",
+        json_schema_extra={
+            "examples": [
+                {
+                    "low_stock_threshold": 10,
+                    "default_page_size": 20,
+                    "sync_interval_minutes": 720,
+                    "competitor_sync_interval_minutes": 1440,
+                    "default_competitor_store": "digikala",
+                    "suggested_price_formulas": [{"top_group": "فرش", "weight": 0.4}],
+                    "product_table_columns": ["name", "price", "stock"],
+                }
+            ]
+        },
+    )
 
-    low_stock_threshold: int | None = Field(default=None, ge=0, le=1_000_000)
-    default_page_size: Literal[0, 10, 20, 50, 100, 500] | None = None
-    sync_interval_minutes: int | None = Field(default=None, ge=1, le=10080)
-    competitor_sync_interval_minutes: int | None = Field(default=None, ge=15, le=10080)
-    default_competitor_store: Literal["digikala", "technolife"] | None = None
-    suggested_price_formulas: list[SuggestedPriceFormulaIn] | None = None
-    product_table_columns: list[ProductTableColumn] | None = None
+    low_stock_threshold: int | None = Field(
+        default=None, ge=0, le=1_000_000, description="Stock at or below this value is low."
+    )
+    default_page_size: Literal[0, 10, 20, 50, 100, 500] | None = Field(
+        default=None, description="0 means show all products."
+    )
+    sync_interval_minutes: int | None = Field(
+        default=None, ge=1, le=10080, description="Product sync interval, in minutes."
+    )
+    competitor_sync_interval_minutes: int | None = Field(
+        default=None, ge=15, le=10080, description="Bulk competitor refresh interval, in minutes."
+    )
+    default_competitor_store: Literal["digikala", "technolife"] | None = Field(
+        default=None, description="Store pre-selected when adding a competitor link."
+    )
+    suggested_price_formulas: list[SuggestedPriceFormulaIn] | None = Field(
+        default=None, description="Replaces the saved list; omit to keep the current weights."
+    )
+    product_table_columns: list[ProductTableColumn] | None = Field(
+        default=None,
+        description="Replaces the visible list (at least one column, no duplicates).",
+    )
 
     @field_validator("product_table_columns")
     @classmethod

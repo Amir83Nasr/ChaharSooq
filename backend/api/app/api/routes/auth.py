@@ -4,12 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_admin, get_db
+from app.api.openapi import RATE_LIMITED, UNAUTHORIZED, VALIDATION_ERROR
 from app.core.config import get_settings
 from app.models import Admin
-from app.schemas import ErrorEnvelope, LoginIn, LoginOut, MeOut
+from app.schemas import LoginIn, LoginOut, MeOut
 from app.services import LOGIN_ERROR, AuthService
 
-router = APIRouter()
+router = APIRouter(tags=["Auth"])
 
 
 def _session_cookie(token: str | None, *, max_age: int | None) -> dict[str, object]:
@@ -32,7 +33,13 @@ def _session_cookie(token: str | None, *, max_age: int | None) -> dict[str, obje
     "/auth/login",
     response_model=LoginOut,
     status_code=status.HTTP_200_OK,
-    responses={401: {"model": ErrorEnvelope}, 422: {"model": ErrorEnvelope}},
+    summary="Log in",
+    description=(
+        "Validates the admin credentials and rotates the server-side session, "
+        "returning an HttpOnly cookie. Rate-limited to 10 attempts per minute "
+        "per IP and username."
+    ),
+    responses={401: UNAUTHORIZED, 422: VALIDATION_ERROR, 429: RATE_LIMITED},
 )
 def login(payload: LoginIn, response: Response, session: Session = Depends(get_db)) -> LoginOut:  # noqa: B008
     token = AuthService(session).login(payload)
@@ -43,7 +50,13 @@ def login(payload: LoginIn, response: Response, session: Session = Depends(get_d
     return LoginOut(ok=True)
 
 
-@router.post("/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
+@router.post(
+    "/auth/logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Log out",
+    description="Deletes the server-side session and clears the session cookie.",
+    responses={204: {"description": "Session cookie cleared."}},
+)
 def logout(request: Request, response: Response, session: Session = Depends(get_db)) -> None:  # noqa: B008
     token = request.cookies.get(get_settings().session_cookie_name)
     if token:
@@ -57,7 +70,13 @@ def logout(request: Request, response: Response, session: Session = Depends(get_
     response.status_code = status.HTTP_204_NO_CONTENT
 
 
-@router.get("/auth/me", response_model=MeOut)
+@router.get(
+    "/auth/me",
+    response_model=MeOut,
+    summary="Current admin",
+    description="Returns the username behind the current session cookie.",
+    responses={401: UNAUTHORIZED},
+)
 def me(admin: Admin | None = Depends(get_current_admin)) -> MeOut:  # noqa: B008
     if admin is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=LOGIN_ERROR)

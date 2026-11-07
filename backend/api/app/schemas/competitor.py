@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 CompetitorStore = Literal["digikala", "technolife", "other"]
 CompetitorStatus = Literal[
@@ -13,17 +13,34 @@ Currency = Literal["IRR", "IRT"]
 
 
 class CompetitorListingCreate(BaseModel):
-    store: CompetitorStore
-    url: str = Field(min_length=12, max_length=2048)
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "store": "digikala",
+                    "url": "https://www.digikala.com/product/dkp-123456/",
+                }
+            ]
+        }
+    )
+
+    store: CompetitorStore = Field(
+        description="`digikala` and `technolife` are fetched automatically; `other` is manual-only."
+    )
+    url: str = Field(min_length=12, max_length=2048, description="Public product page URL.")
 
 
 class CompetitorListingUpdate(BaseModel):
     store: CompetitorStore | None = None
     url: str | None = Field(default=None, min_length=12, max_length=2048)
-    is_active: bool | None = None
-    manual_price: float | None = Field(default=None, ge=0, le=10**15)
-    manual_currency: Currency | None = None
-    manual_in_stock: bool | None = None
+    is_active: bool | None = Field(default=None, description="Pause auto-checks without deleting.")
+    manual_price: float | None = Field(
+        default=None, ge=0, le=10**15, description="Manual override in `manual_currency`."
+    )
+    manual_currency: Currency | None = Field(
+        default=None, description="`IRT` = Toman, `IRR` = Rial. Defaults to the store's currency."
+    )
+    manual_in_stock: bool | None = Field(default=None, description="Manual stock override.")
 
 
 class CompetitorListingOut(BaseModel):
@@ -31,22 +48,39 @@ class CompetitorListingOut(BaseModel):
     product_id: int
     store: CompetitorStore
     url: str
-    is_active: bool
-    status: CompetitorStatus
-    fetched_price: float | None
-    fetched_currency: Currency | None
-    fetched_in_stock: bool | None
-    manual_price: float | None
-    manual_currency: Currency | None
-    manual_in_stock: bool | None
-    effective_price: float | None
-    effective_currency: Currency | None
-    effective_in_stock: bool | None
-    price_is_fresh: bool
-    last_checked_at: datetime | None
-    last_success_at: datetime | None
-    manual_updated_at: datetime | None
-    last_error: str | None
+    is_active: bool = Field(description="Inactive links are skipped by checks and bulk refresh.")
+    status: CompetitorStatus = Field(
+        description=(
+            "Last fetch result: `success`, `not_found`, `unavailable`, `blocked`, "
+            "`failed`, `pending`, or `manual`."
+        )
+    )
+    fetched_price: float | None = Field(default=None, description="Last automatic price.")
+    fetched_currency: Currency | None = None
+    fetched_in_stock: bool | None = None
+    manual_price: float | None = Field(default=None, description="Admin override, if set.")
+    manual_currency: Currency | None = None
+    manual_in_stock: bool | None = None
+    effective_price: float | None = Field(
+        default=None,
+        description=(
+            "Fresh manual override, otherwise a fresh fetched price; null for "
+            "inactive links or stale data."
+        ),
+    )
+    effective_currency: Currency | None = None
+    effective_in_stock: bool | None = None
+    price_is_fresh: bool = Field(description="The effective price is fresh and the link is active.")
+    last_checked_at: datetime | None = Field(default=None, description="Last fetch attempt (UTC).")
+    last_success_at: datetime | None = Field(
+        default=None, description="Last successful fetch (UTC)."
+    )
+    manual_updated_at: datetime | None = Field(
+        default=None, description="Last override update (UTC)."
+    )
+    last_error: str | None = Field(
+        default=None, description="Persian error from the last failed fetch."
+    )
     created_at: datetime
     updated_at: datetime
 
@@ -60,28 +94,34 @@ class CompetitorPriceOut(BaseModel):
     store: CompetitorStore
     url: str
     status: CompetitorStatus
-    price: float | None
-    currency: Currency | None
-    in_stock: bool | None
-    is_fresh: bool
-    is_manual: bool
-    last_checked_at: datetime | None
+    price: float | None = Field(default=None, description="Effective price (manual wins).")
+    currency: Currency | None = None
+    in_stock: bool | None = None
+    is_fresh: bool = Field(description="Price is within the configured TTL.")
+    is_manual: bool = Field(description="The effective price comes from a manual override.")
+    last_checked_at: datetime | None = None
 
 
 class CompetitorSyncRunOut(BaseModel):
     """Accepted trigger only — counters arrive via the status endpoint."""
 
-    status: Literal["running"]
-    message: str | None = None
+    status: Literal["running"] = Field(description="The job was accepted and is running.")
+    message: str | None = Field(default=None, description="Persian status message.")
 
 
 class CompetitorSyncStatusOut(BaseModel):
-    running: bool
-    running_since: datetime | None = None
-    last_attempt_at: datetime | None = None
-    last_success_at: datetime | None = None
-    last_error: str | None = None
-    last_checked: int = 0
-    last_updated: int = 0
-    last_failed: int = 0
-    last_skipped: int = 0
+    running: bool = Field(description="A bulk refresh currently holds the lock.")
+    running_since: datetime | None = Field(
+        default=None, description="UTC start of the current run."
+    )
+    last_attempt_at: datetime | None = Field(default=None, description="UTC start of the last run.")
+    last_success_at: datetime | None = Field(
+        default=None, description="UTC end of the last fully applied run."
+    )
+    last_error: str | None = Field(
+        default=None, description="Persian error from the last failed run."
+    )
+    last_checked: int = Field(default=0, description="Links checked in the last run.")
+    last_updated: int = Field(default=0, description="Listings updated in the last run.")
+    last_failed: int = Field(default=0, description="Links that failed in the last run.")
+    last_skipped: int = Field(default=0, description="Inactive links skipped in the last run.")

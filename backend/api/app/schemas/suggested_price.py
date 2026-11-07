@@ -12,8 +12,12 @@ TopGroup = Literal["فرش", "مبلمان", "لوازم خانگی"]
 
 
 class SuggestedPriceFormulaIn(BaseModel):
-    top_group: TopGroup
-    weight: float = Field(ge=0, le=1)
+    top_group: TopGroup = Field(description="Catalog section the weight applies to.")
+    weight: float = Field(
+        ge=0,
+        le=1,
+        description="Competitor share: `weight × competitor + (1 − weight) × Parsina`.",
+    )
 
 
 class SuggestedPriceFormulaOut(SuggestedPriceFormulaIn):

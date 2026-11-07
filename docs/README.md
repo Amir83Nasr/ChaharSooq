@@ -12,8 +12,8 @@ Start with the [architecture overview](architecture/overview.md). Read the secti
 | [architecture/authentication.md](architecture/authentication.md) | Admin login, sessions, and rate limiting             |
 | [architecture/testing.md](architecture/testing.md)               | Test layers and commands                             |
 | [architecture/deployment.md](architecture/deployment.md)         | Environments, hosting, and Docker                    |
-| [api/README.md](api/README.md)                                   | API contract and the committed OpenAPI snapshot      |
+| [api/README.md](api/README.md)                                   | Swagger usage, API conventions, OpenAPI snapshot     |
 | [api/parsina-api.pdf](api/parsina-api.pdf)                       | Vendor document for the Parsina accounting API       |
-| [adr/](adr/)                                                     | Architecture decision records (`001` to `004`)       |
+| [adr/](adr/)                                                     | Architecture decision records (`001` to `008`)       |
 
 New significant decisions get the next ADR number. Do not renumber existing ADRs.

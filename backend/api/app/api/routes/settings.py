@@ -4,14 +4,24 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db, get_db_readonly, require_admin
+from app.api.openapi import UNAUTHORIZED, VALIDATION_ERROR
 from app.models import Admin
 from app.schemas import SettingsOut, SettingsUpdateIn
 from app.services import SettingsService
 
-router = APIRouter()
+router = APIRouter(tags=["Settings"], responses={401: UNAUTHORIZED})
 
 
-@router.get("/settings", response_model=SettingsOut)
+@router.get(
+    "/settings",
+    response_model=SettingsOut,
+    summary="Read settings",
+    description=(
+        "Admin preferences: low-stock threshold, default page size, sync "
+        "intervals, default competitor store, suggested-price weights, and "
+        "the visible product-table columns."
+    ),
+)
 def get_settings_view(
     _admin: Admin = Depends(require_admin),  # noqa: B008
     session: Session = Depends(get_db_readonly),  # noqa: B008
@@ -19,7 +29,16 @@ def get_settings_view(
     return SettingsOut.model_validate(SettingsService(session).get_all())
 
 
-@router.put("/settings", response_model=SettingsOut)
+@router.put(
+    "/settings",
+    response_model=SettingsOut,
+    summary="Update settings",
+    description=(
+        "Partial update: only supplied fields change. `suggested_price_formulas` "
+        "and `product_table_columns` replace their full lists."
+    ),
+    responses={422: VALIDATION_ERROR},
+)
 def update_settings(
     payload: SettingsUpdateIn,
     _admin: Admin = Depends(require_admin),  # noqa: B008

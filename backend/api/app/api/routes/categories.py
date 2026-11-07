@@ -8,14 +8,23 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db, get_db_readonly, require_admin
+from app.api.openapi import CONFLICT, NOT_FOUND, UNAUTHORIZED, VALIDATION_ERROR
 from app.models import Admin
 from app.schemas import CategoryIn, CategoryOut
 from app.services import CategoryService
 
-router = APIRouter()
+router = APIRouter(tags=["Categories"], responses={401: UNAUTHORIZED})
 
 
-@router.get("/categories", response_model=list[CategoryOut])
+@router.get(
+    "/categories",
+    response_model=list[CategoryOut],
+    summary="List categories",
+    description=(
+        "All categories ordered by name. The response carries a weak `ETag` "
+        "and a 60-second private cache hint."
+    ),
+)
 def list_categories(
     response: Response,
     _admin: Admin = Depends(require_admin),  # noqa: B008
@@ -28,7 +37,14 @@ def list_categories(
     return rows
 
 
-@router.post("/categories", response_model=CategoryOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/categories",
+    response_model=CategoryOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create category",
+    description="Creates a category; duplicate names return `409`.",
+    responses={409: CONFLICT, 422: VALIDATION_ERROR},
+)
 def create_category(
     payload: CategoryIn,
     _admin: Admin = Depends(require_admin),  # noqa: B008
@@ -44,7 +60,21 @@ def create_category(
     return CategoryOut.model_validate(category)
 
 
-@router.delete("/categories/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/categories/{category_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete category",
+    description=(
+        "Deletes an empty category. A category that still has products returns "
+        "`409 category_in_use`; an unknown id returns `404`."
+    ),
+    responses={
+        204: {"description": "Category deleted."},
+        404: NOT_FOUND,
+        409: CONFLICT,
+        422: VALIDATION_ERROR,
+    },
+)
 def delete_category(
     category_id: int,
     _admin: Admin = Depends(require_admin),  # noqa: B008

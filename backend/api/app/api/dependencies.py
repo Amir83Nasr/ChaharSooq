@@ -1,10 +1,13 @@
 """FastAPI dependencies — DB session + admin auth guard."""
 
 from collections.abc import Iterator
+from typing import Annotated
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, Security, status
+from fastapi.security import APIKeyCookie
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.database import get_readonly_session as _get_readonly_session
 from app.core.database import get_session as _get_session
 from app.core.errors import LOGIN_REQUIRED
@@ -21,24 +24,34 @@ def get_db_readonly() -> Iterator[Session]:
     yield from _get_readonly_session()
 
 
-def _token_from_request(request: Request) -> str | None:
-    from app.core.config import get_settings
+# Documents the session cookie in OpenAPI (Swagger's Authorize dialog).
+# `auto_error=False` keeps missing sessions on the shared error envelope
+# instead of FastAPI's default 403.
+_SESSION_COOKIE = APIKeyCookie(
+    name=get_settings().session_cookie_name,
+    auto_error=False,
+    scheme_name="SessionCookie",
+    description=(
+        "HttpOnly cookie set by `POST /api/v1/auth/login`. Browsers send it "
+        "automatically; other clients must forward it as a `Cookie` header."
+    ),
+)
 
-    return request.cookies.get(get_settings().session_cookie_name)
+SessionToken = Annotated[str | None, Security(_SESSION_COOKIE)]
 
 
 def get_current_admin(
-    request: Request,
+    token: SessionToken,
     session: Session = Depends(get_db_readonly),  # noqa: B008
 ) -> Admin | None:
-    return AuthService(session).current_admin(_token_from_request(request))
+    return AuthService(session).current_admin(token)
 
 
 def require_admin(
-    request: Request,
+    token: SessionToken,
     session: Session = Depends(get_db_readonly),  # noqa: B008
 ) -> Admin:
-    admin = AuthService(session).current_admin(_token_from_request(request))
+    admin = AuthService(session).current_admin(token)
     if admin is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=LOGIN_REQUIRED)
     return admin

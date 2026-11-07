@@ -1,16 +1,18 @@
+import { cache } from "react"
 import { cookies } from "next/headers"
 
 import { apiOrigin } from "./env"
+import type { SessionUser } from "./session"
 
 /* Server-side session check — forwards browser cookies to the API. */
 
 const API = apiOrigin()
 
-export interface SessionAdmin {
-  username: string
-}
-
-export async function getSessionAdmin(): Promise<SessionAdmin | null> {
+/**
+ * One `/auth/me` call per request even when nested layouts both check the
+ * session (React's per-request cache dedupes it).
+ */
+export const getSessionAdmin = cache(async (): Promise<SessionUser | null> => {
   const cookieHeader = (await cookies()).toString()
   let res: Response
   try {
@@ -34,5 +36,15 @@ export async function getSessionAdmin(): Promise<SessionAdmin | null> {
       })
     return null
   }
-  return (await res.json()) as SessionAdmin
-}
+  const data = (await res.json()) as {
+    id: number
+    username: string
+    role?: string
+  }
+  // Unknown/missing roles fail closed to the read-only level.
+  return {
+    id: data.id,
+    username: data.username,
+    role: data.role === "admin" ? "admin" : "viewer",
+  }
+})

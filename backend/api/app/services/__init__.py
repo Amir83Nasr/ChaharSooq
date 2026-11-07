@@ -23,6 +23,13 @@ from app.services.settings import (
     SYNC_INTERVAL_KEY,
     SettingsService,
 )
+from app.services.users import (
+    CannotDeleteSelfError,
+    LastAdminError,
+    UsernameTakenError,
+    UserNotFoundError,
+    UserService,
+)
 
 __all__ = [
     "LOGIN_ERROR",
@@ -38,11 +45,16 @@ __all__ = [
     "DEFAULT_PAGE_SIZE",
     "DEFAULT_PAGE_SIZE_KEY",
     "AuthService",
+    "CannotDeleteSelfError",
     "CategoryService",
     "DashboardService",
     "InvalidCategoryError",
+    "LastAdminError",
     "ProductService",
     "ProductNotFoundError",
     "SettingsService",
     "SYNC_INTERVAL_KEY",
+    "UsernameTakenError",
+    "UserNotFoundError",
+    "UserService",
 ]

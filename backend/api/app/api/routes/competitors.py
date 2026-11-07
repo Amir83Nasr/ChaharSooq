@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_db, get_db_readonly, require_admin
+from app.api.dependencies import get_db, get_db_readonly, require_admin, require_user
 from app.api.openapi import (
     NOT_FOUND,
     RATE_LIMITED,
@@ -38,7 +38,7 @@ router = APIRouter(tags=["Competitors"], responses={401: UNAUTHORIZED})
 )
 def list_competitor_listings(
     product_id: int,
-    _admin: Admin = Depends(require_admin),  # noqa: B008
+    _user: Admin = Depends(require_user),  # noqa: B008
     session: Session = Depends(get_db_readonly),  # noqa: B008
 ) -> list[CompetitorListingOut]:
     try:

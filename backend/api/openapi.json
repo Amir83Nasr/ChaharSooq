@@ -144,8 +144,8 @@
         "tags": [
           "Auth"
         ],
-        "summary": "Current admin",
-        "description": "Returns the username behind the current session cookie.",
+        "summary": "Current account",
+        "description": "Returns the id, username, and role behind the current session cookie.",
         "operationId": "me",
         "responses": {
           "200": {
@@ -1858,6 +1858,213 @@
           }
         ]
       }
+    },
+    "/api/v1/users": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "List users",
+        "description": "Every login account with its role. Admin-only; write endpoints that use this list require the same role.",
+        "operationId": "list_users",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/UserOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Users"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Signed in, but the account role is not allowed to perform this action (`forbidden`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Create user",
+        "description": "Creates a login account. `role=admin` grants full management; `role=viewer` can only read. Duplicate usernames return `409`.",
+        "operationId": "create_user",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCreateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Signed in, but the account role is not allowed to perform this action (`forbidden`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The request conflicts with the current state (`conflict`, or `category_in_use` for categories).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/users/{user_id}": {
+      "delete": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Delete user",
+        "description": "Deletes the account and every active session it owns. An admin cannot delete their own account, and the last admin cannot be removed.",
+        "operationId": "delete_user",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Account deleted."
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Signed in, but the account role is not allowed to perform this action (`forbidden`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource does not exist (`not_found`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The request conflicts with the current state (`conflict`, or `category_in_use` for categories).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2993,15 +3200,31 @@
       },
       "MeOut": {
         "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "Id of the account behind the current session."
+          },
           "username": {
             "type": "string",
             "title": "Username",
             "description": "Username behind the current session."
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "viewer"
+            ],
+            "title": "Role",
+            "description": "Access level: `admin` or `viewer`."
           }
         },
         "type": "object",
         "required": [
-          "username"
+          "id",
+          "username",
+          "role"
         ],
         "title": "MeOut"
       },
@@ -3692,6 +3915,84 @@
           "interval_minutes"
         ],
         "title": "SyncStatusOut"
+      },
+      "UserCreateIn": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 3,
+            "title": "Username",
+            "description": "Login username, unique across accounts."
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Password",
+            "description": "Plain password, hashed with Argon2id; never logged or returned."
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "viewer"
+            ],
+            "title": "Role",
+            "description": "`admin` manages everything; `viewer` has read-only access.",
+            "default": "viewer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "UserCreateIn",
+        "examples": [
+          {
+            "password": "••••••••",
+            "role": "viewer",
+            "username": "operator"
+          }
+        ]
+      },
+      "UserOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "Account id."
+          },
+          "username": {
+            "type": "string",
+            "title": "Username",
+            "description": "Login username."
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "viewer"
+            ],
+            "title": "Role",
+            "description": "Access level: `admin` or `viewer`."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "UTC creation timestamp."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "username",
+          "role",
+          "created_at"
+        ],
+        "title": "UserOut"
       }
     },
     "securitySchemes": {
@@ -3735,6 +4036,10 @@
     {
       "name": "Settings",
       "description": "Admin preferences: thresholds, sync intervals, pricing weights, table columns."
+    },
+    {
+      "name": "Users",
+      "description": "Admin-only account management: list, create, and delete users."
     }
   ]
 }

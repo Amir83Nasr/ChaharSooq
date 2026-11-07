@@ -46,7 +46,10 @@ def test_me_requires_auth(client: TestClient) -> None:
 
 def test_login_me_logout_cycle(client: TestClient) -> None:
     login(client)
-    assert client.get("/api/v1/auth/me").json() == {"username": "admin"}
+    me = client.get("/api/v1/auth/me").json()
+    assert me["username"] == "admin"
+    assert me["role"] == "admin"
+    assert isinstance(me["id"], int)
     assert client.post("/api/v1/auth/logout").status_code == 204
     assert client.get("/api/v1/auth/me").status_code == 401
 

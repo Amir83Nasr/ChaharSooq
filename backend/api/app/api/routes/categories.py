@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_db, get_db_readonly, require_admin
+from app.api.dependencies import get_db, get_db_readonly, require_admin, require_user
 from app.api.openapi import CONFLICT, NOT_FOUND, UNAUTHORIZED, VALIDATION_ERROR
 from app.models import Admin
 from app.schemas import CategoryIn, CategoryOut
@@ -27,7 +27,7 @@ router = APIRouter(tags=["Categories"], responses={401: UNAUTHORIZED})
 )
 def list_categories(
     response: Response,
-    _admin: Admin = Depends(require_admin),  # noqa: B008
+    _user: Admin = Depends(require_user),  # noqa: B008
     session: Session = Depends(get_db_readonly),  # noqa: B008
 ) -> list[CategoryOut]:
     rows = [CategoryOut.model_validate(c) for c in CategoryService(session).list()]

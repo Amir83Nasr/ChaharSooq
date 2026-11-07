@@ -3,6 +3,7 @@
 from fastapi import HTTPException, status
 
 LOGIN_REQUIRED = "نیاز به ورود است"
+FORBIDDEN = "دسترسی ندارید"
 
 
 def unauthorized(detail: str = LOGIN_REQUIRED) -> HTTPException:

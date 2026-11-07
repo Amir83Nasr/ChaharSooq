@@ -18,6 +18,7 @@ import type {
   DashboardSummary,
   DefaultCompetitorStore,
   InventorySummary,
+  MeOut,
   ProductFilters,
   ProductOut,
   ProductPage,
@@ -26,6 +27,8 @@ import type {
   SettingsUpdate,
   SyncRun,
   SyncStatus,
+  UserCreate,
+  UserOut,
 } from "./api-types"
 
 export type * from "./api-types"
@@ -147,10 +150,22 @@ export const api = {
     })
   },
   me() {
-    return request<{ username: string }>("/api/v1/auth/me")
+    return request<MeOut>("/api/v1/auth/me")
   },
   logout() {
     return request<undefined>("/api/v1/auth/logout", { method: "POST" })
+  },
+  users() {
+    return request<UserOut[]>("/api/v1/users")
+  },
+  createUser(payload: UserCreate) {
+    return request<UserOut>("/api/v1/users", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    })
+  },
+  deleteUser(id: number) {
+    return request<undefined>(`/api/v1/users/${id}`, { method: "DELETE" })
   },
   products(params: ProductFilters = {}) {
     // `page_size=0` is the canonical "show all" — the backend caps it at

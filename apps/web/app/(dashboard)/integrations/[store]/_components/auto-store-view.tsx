@@ -27,6 +27,7 @@ import {
   type SuggestedPriceWeights,
 } from "@/lib/suggested-price"
 import { CompetitorSyncPanel } from "@/components/data/competitor-sync-panel"
+import { useSession } from "@/components/auth/session-provider"
 import {
   DataTableToolbar,
   SearchInput,
@@ -71,6 +72,7 @@ export function AutoStoreView({
   storeName: string
   description: string
 }) {
+  const { canManage } = useSession()
   const [page, setPage] = useState<ProductPage | null>(null)
   const [freshTotal, setFreshTotal] = useState(0)
   const [gaps, setGaps] = useState<CompetitorGap[]>([])
@@ -197,10 +199,12 @@ export function AutoStoreView({
         title={`اتصال ${storeName}`}
         subtitle={description}
         actions={
-          <CompetitorSyncPanel
-            onSynced={refreshData}
-            onUnauthorized={goLogin}
-          />
+          canManage ? (
+            <CompetitorSyncPanel
+              onSynced={refreshData}
+              onUnauthorized={goLogin}
+            />
+          ) : null
         }
       />
 
@@ -395,8 +399,9 @@ export function AutoStoreView({
             />
           </div>
           <p className="text-xs leading-5 text-muted-foreground">
-            برای ثبت یا بررسی لینک {storeName}، روی ردیف کالا بزنید تا جزئیات
-            باز شود. قیمت فقط تا ۲۴ ساعت تازه محسوب می‌شود.
+            {canManage
+              ? `برای ثبت یا بررسی لینک ${storeName}، روی ردیف کالا بزنید تا جزئیات باز شود. قیمت فقط تا ۲۴ ساعت تازه محسوب می‌شود.`
+              : "برای مشاهده جزئیات و قیمت‌های ثبت‌شده، روی ردیف کالا بزنید."}
           </p>
         </div>
       )}
@@ -405,6 +410,7 @@ export function AutoStoreView({
         selected={selected}
         onClose={() => setSelected(null)}
         onCompetitorChanged={refreshData}
+        canEdit={canManage}
       />
     </>
   )

@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.models import Admin, AdminSession
+from app.models.auth import ROLE_ADMIN
 
 
 class AdminRepository:
@@ -22,6 +23,26 @@ class AdminRepository:
             self._session.execute(select(Admin).where(Admin.username == username))
             .scalars()
             .one_or_none()
+        )
+
+    def list_all(self) -> list[Admin]:
+        return list(self._session.execute(select(Admin).order_by(Admin.id)).scalars())
+
+    def add(self, admin: Admin) -> Admin:
+        self._session.add(admin)
+        self._session.flush()
+        return admin
+
+    def delete(self, admin: Admin) -> None:
+        self._session.delete(admin)
+        self._session.flush()
+
+    def count_admins(self) -> int:
+        return (
+            self._session.scalar(
+                select(func.count()).select_from(Admin).where(Admin.role == ROLE_ADMIN)
+            )
+            or 0
         )
 
 

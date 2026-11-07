@@ -1,5 +1,7 @@
 """Auth handlers — login/logout/me + session cookie."""
 
+from typing import cast
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
@@ -7,7 +9,7 @@ from app.api.dependencies import get_current_admin, get_db
 from app.api.openapi import RATE_LIMITED, UNAUTHORIZED, VALIDATION_ERROR
 from app.core.config import get_settings
 from app.models import Admin
-from app.schemas import LoginIn, LoginOut, MeOut
+from app.schemas import LoginIn, LoginOut, MeOut, UserRole
 from app.services import LOGIN_ERROR, AuthService
 
 router = APIRouter(tags=["Auth"])
@@ -73,11 +75,11 @@ def logout(request: Request, response: Response, session: Session = Depends(get_
 @router.get(
     "/auth/me",
     response_model=MeOut,
-    summary="Current admin",
-    description="Returns the username behind the current session cookie.",
+    summary="Current account",
+    description="Returns the id, username, and role behind the current session cookie.",
     responses={401: UNAUTHORIZED},
 )
 def me(admin: Admin | None = Depends(get_current_admin)) -> MeOut:  # noqa: B008
     if admin is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=LOGIN_ERROR)
-    return MeOut(username=admin.username)
+    return MeOut(id=admin.id, username=admin.username, role=cast(UserRole, admin.role))

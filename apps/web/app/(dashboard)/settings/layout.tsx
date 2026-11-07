@@ -1,16 +1,22 @@
 import type { Metadata } from "next"
+import { redirect } from "next/navigation"
 
 import { PageHeader } from "@workspace/ui/layout/page-header"
 
 import { SettingsNav } from "@/components/settings/settings-nav"
+import { getSessionAdmin } from "@/lib/auth"
 
 export const metadata: Metadata = { title: "چهارسوق | تنظیمات" }
 
-export default function SettingsLayout({
+export default async function SettingsLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const user = await getSessionAdmin()
+  if (!user) redirect("/login")
+  // Settings change shop-wide behaviour, so the read-only role never sees them.
+  if (user.role !== "admin") redirect("/products")
   return (
     <div className="flex flex-1 flex-col gap-4 sm:gap-6">
       <PageHeader title="تنظیمات" subtitle="پیکربندی فروشگاه" />

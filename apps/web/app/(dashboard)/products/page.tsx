@@ -26,6 +26,7 @@ import {
   type StockFilter,
 } from "@/lib/products-store"
 import { toSuggestedPriceWeights } from "@/lib/suggested-price"
+import { useSession } from "@/components/auth/session-provider"
 import { ParsinaSyncPanel } from "@/components/data/parsina-sync-panel"
 import { CompetitorSyncPanel } from "@/components/data/competitor-sync-panel"
 import { ProductDetailDialog } from "./_components/product-dialogs"
@@ -49,6 +50,7 @@ function ProductsPageContent() {
   const searchParams = useSearchParams()
   const stockParam = searchParams.get("stock")
   const isMobile = useIsMobile()
+  const { canManage } = useSession()
   const { view, page, error, settings, syncBaseline } = useProductsStore()
 
   // Inputs are local so the caret never jumps; the store receives their
@@ -182,20 +184,22 @@ function ProductsPageContent() {
         title="محصولات"
         subtitle="مدیریت کالاهای فروشگاه"
         actions={
-          <>
-            <ParsinaSyncPanel
-              initialLastSuccess={syncBaseline.parsina}
-              onStatus={(value) => setSyncBaseline("parsina", value)}
-              onSynced={refreshProducts}
-              onUnauthorized={goLogin}
-            />
-            <CompetitorSyncPanel
-              initialLastSuccess={syncBaseline.competitor}
-              onStatus={(value) => setSyncBaseline("competitor", value)}
-              onSynced={refreshProducts}
-              onUnauthorized={goLogin}
-            />
-          </>
+          canManage ? (
+            <>
+              <ParsinaSyncPanel
+                initialLastSuccess={syncBaseline.parsina}
+                onStatus={(value) => setSyncBaseline("parsina", value)}
+                onSynced={refreshProducts}
+                onUnauthorized={goLogin}
+              />
+              <CompetitorSyncPanel
+                initialLastSuccess={syncBaseline.competitor}
+                onStatus={(value) => setSyncBaseline("competitor", value)}
+                onSynced={refreshProducts}
+                onUnauthorized={goLogin}
+              />
+            </>
+          ) : null
         }
       />
 
@@ -276,6 +280,7 @@ function ProductsPageContent() {
         selected={selected}
         onClose={() => setSelected(null)}
         onCompetitorChanged={refreshProducts}
+        canEdit={canManage}
       />
     </>
   )

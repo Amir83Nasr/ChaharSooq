@@ -3,10 +3,14 @@
 from fastapi.testclient import TestClient
 
 
-def login(client: TestClient) -> None:
-    r = client.post("/api/v1/auth/login", json={"username": "admin", "password": "secret123"})
+def login_as(client: TestClient, username: str, password: str) -> None:
+    r = client.post("/api/v1/auth/login", json={"username": username, "password": password})
     assert r.status_code == 200, r.text
     assert r.json() == {"ok": True}
+
+
+def login(client: TestClient) -> None:
+    login_as(client, "admin", "secret123")
 
 
 def seed(client: TestClient) -> dict[str, int]:

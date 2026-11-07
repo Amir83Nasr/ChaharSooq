@@ -11,6 +11,7 @@ from app.api.routes import (
     integrations,
     products,
     settings,
+    users,
 )
 
 router = APIRouter()
@@ -22,3 +23,4 @@ router.include_router(competitors.router)
 router.include_router(categories.router)
 router.include_router(integrations.router)
 router.include_router(settings.router)
+router.include_router(users.router)

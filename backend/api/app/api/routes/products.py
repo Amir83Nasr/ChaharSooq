@@ -6,7 +6,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_db, get_db_readonly, require_admin
+from app.api.dependencies import get_db, get_db_readonly, require_admin, require_user
 from app.api.openapi import NOT_FOUND, UNAUTHORIZED, VALIDATION_ERROR
 from app.models import Admin
 from app.schemas import (
@@ -74,7 +74,7 @@ def list_products(
         le=500,
         description="0 returns all matches; explicit sizes are capped at 500.",
     ),
-    _admin: Admin = Depends(require_admin),  # noqa: B008
+    _user: Admin = Depends(require_user),  # noqa: B008
     session: Session = Depends(get_db_readonly),  # noqa: B008
 ) -> ProductPage:
     items, total = ProductService(session).list(
@@ -177,7 +177,7 @@ def update_product_price_bounds(
 )
 def products_summary(
     threshold: int = Query(default=10, ge=0, description="Low-stock cutoff."),
-    _admin: Admin = Depends(require_admin),  # noqa: B008
+    _user: Admin = Depends(require_user),  # noqa: B008
     session: Session = Depends(get_db_readonly),  # noqa: B008
 ) -> InventorySummaryOut:
     summary = ProductService(session).summary(low_stock_threshold=threshold)
@@ -195,7 +195,7 @@ def products_summary(
 )
 def product_groups(
     response: Response,
-    _admin: Admin = Depends(require_admin),  # noqa: B008
+    _user: Admin = Depends(require_user),  # noqa: B008
     session: Session = Depends(get_db_readonly),  # noqa: B008
 ) -> list[str]:
     groups = ProductService(session).groups()

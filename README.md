@@ -95,6 +95,18 @@ Each app owns its env file: [backend/api/.env.example](backend/api/.env.example)
 | `PARSINA_*`                     | Parsina accounting API (URL, credentials, org, year, optional warehouse/sale-type). Empty = integration off. `PARSINA_SYNC_INTERVAL_MINUTES` (default 1440) seeds the initial auto-sync interval and `PARSINA_SYNC_ENABLED` toggles the backend scheduler |
 | `PRODUCTS_CSV_PATH`             | Development-only product CSV; defaults to `<repo>/data/parsina.csv`                                                                                                                                                                                       |
 
+## Roles and users
+
+Accounts have one of two roles. `admin` manages everything; `viewer` is read-only (catalog, dashboard, integration pages, and the settings values those views use). Admins manage accounts from `/users` in the panel or through `/api/v1/users`:
+
+```bash
+GET    /api/v1/users          # admin only
+POST   /api/v1/users          # { "username", "password", "role": "admin" | "viewer" }
+DELETE /api/v1/users/{id}     # also revokes that account's sessions
+```
+
+An admin cannot delete their own account, and the last admin cannot be removed. Viewers get `403 forbidden` on every write. `/settings` and `/users` are admin-only in the UI; write buttons are hidden for viewers. See [docs/architecture/authentication.md](docs/architecture/authentication.md) and [ADR 009](docs/adr/009-role-based-access.md).
+
 ## Product data sources
 
 Products mirror an external catalog (`external_id` = Parsina `goodId`), and the GET endpoints always read the local mirror. Where the mirror comes from depends on `APP_ENV`:
@@ -142,7 +154,7 @@ The frontend client (`apps/web/lib/api.ts`) mirrors these shapes; see [docs/api/
 
 - Frontend unit tests: `packages/ui/src/lib/*.test.ts` (vitest) — Persian digits, `٬` grouping, `٫` dates
 - Frontend e2e: `apps/web/e2e/` (playwright) — unauthenticated redirects, Persian login form, RTL shell, mobile layout; runs against the production build without a backend — `pnpm --filter web test:e2e`
-- Backend tests: `backend/api/tests/` (pytest) — auth flow, product CRUD, validation envelope
+- Backend tests: `backend/api/tests/` (pytest) — auth flow, roles and user management, product CRUD, validation envelope
 - CI runs lint, format check, typecheck, both test suites, the production build, and the Playwright e2e suite; deploy happens only after CI succeeds.
 
 ## Build

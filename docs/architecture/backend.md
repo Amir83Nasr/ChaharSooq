@@ -9,17 +9,17 @@ exception handlers, routers, and the scheduler. Schema changes live in `migratio
 app/api/routes  →  app/services  →  app/repositories  →  app/core/database  →  PostgreSQL
 ```
 
-| Layer              | Responsibility                                                                  |
-| ------------------ | ------------------------------------------------------------------------------- |
-| `api/routes`       | Parse input, call one service, set status codes. No business logic, no SQL.     |
-| `api/dependencies` | DB sessions (`get_db`, `get_db_readonly`) and the session-cookie auth guard.    |
-| `api/openapi.py`   | Tag metadata, descriptions, and shared error responses for Swagger.             |
-| `services`         | Business rules; the only layer that coordinates multiple repositories.          |
-| `repositories`     | All SQLAlchemy 2.x queries. ORM models never leave this layer.                  |
-| `schemas`          | Pydantic boundary types for requests and responses.                             |
-| `models`           | SQLAlchemy ORM models.                                                          |
-| `integrations`     | External systems: Parsina, the dev mirror, the CSV fixture, competitor pages.   |
-| `core`             | Config, engine/session, security, rate limiting, migrations, scheduler, errors. |
+| Layer              | Responsibility                                                                               |
+| ------------------ | -------------------------------------------------------------------------------------------- |
+| `api/routes`       | Parse input, call one service, set status codes. No business logic, no SQL.                  |
+| `api/dependencies` | DB sessions (`get_db`, `get_db_readonly`) and auth guards (`require_user`, `require_admin`). |
+| `api/openapi.py`   | Tag metadata, descriptions, and shared error responses for Swagger.                          |
+| `services`         | Business rules; the only layer that coordinates multiple repositories.                       |
+| `repositories`     | All SQLAlchemy 2.x queries. ORM models never leave this layer.                               |
+| `schemas`          | Pydantic boundary types for requests and responses.                                          |
+| `models`           | SQLAlchemy ORM models.                                                                       |
+| `integrations`     | External systems: Parsina, the dev mirror, the CSV fixture, competitor pages.                |
+| `core`             | Config, engine/session, security, rate limiting, migrations, scheduler, errors.              |
 
 Shared `__init__.py` files re-export the public names, so handlers import from the package
 (`from app.services import ProductService`). Standalone ops scripts live in `scripts/`;
@@ -29,7 +29,7 @@ Shared `__init__.py` files re-export the public names, so handlers import from t
 
 1. Middleware adds security headers and CORS, and rate-limits `POST /auth/login`.
 2. The route validates input through a schema, resolves the session cookie through
-   `require_admin`, and calls exactly one service.
+   `require_user` (reads) or `require_admin` (writes), and calls exactly one service.
 3. The service applies the rules and delegates persistence to repositories.
 4. Read handlers use a read-only session; write handlers use a committing session.
 5. Exceptions become the shared error envelope. Validation errors are translated to Persian
@@ -47,12 +47,15 @@ Tests create the app through the same factory, so middleware and handlers stay c
 | Competitors  | `competitors.py`                               | `competitor`, `competitor_check`, `competitor_sync` | `competitor`, `suggested_price` |
 | Integrations | `integrations.py`                              | `sync`, `competitor_sync`                           | `catalog`, `competitor`         |
 | Settings     | `settings.py`                                  | `settings`                                          | `settings`                      |
+| Users        | `users.py`                                     | `users`                                             | `users`                         |
 | Health       | `health.py`                                    | —                                                   | —                               |
 
 ## Authentication and security
 
 - Passwords are hashed with Argon2id (`argon2-cffi`); plaintext is never stored or logged.
 - Sessions are opaque random tokens; only their SHA-256 hash is stored with an expiry.
+- Accounts have a `role`: `admin` manages everything; `viewer` is read-only. Read routes use
+  `require_user`; write routes and `/api/v1/users*` use `require_admin` (`403 forbidden` otherwise).
 - The session ID travels in an HttpOnly cookie (`charsooq_session`, configurable). `Secure` is on
   in production or when `SameSite=None`; the explicit policy is `SameSite=Lax` by default.
 - Login rotates the session: a fresh login invalidates older sessions for that admin.
@@ -65,7 +68,8 @@ Tests create the app through the same factory, so middleware and handlers stay c
 - Configuration loads repo-root env files first, then `backend/api/.env*`; production fails fast
   when `SESSION_SECRET` is the dev default or shorter than 32 bytes.
 
-See [authentication.md](authentication.md) and [ADR 002](../adr/002-authentication.md).
+See [authentication.md](authentication.md), [ADR 002](../adr/002-authentication.md), and
+[ADR 009](../adr/009-role-based-access.md).
 
 ## Product data and sync
 

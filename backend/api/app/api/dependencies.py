@@ -10,8 +10,9 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.database import get_readonly_session as _get_readonly_session
 from app.core.database import get_session as _get_session
-from app.core.errors import LOGIN_REQUIRED
+from app.core.errors import FORBIDDEN, LOGIN_REQUIRED
 from app.models import Admin
+from app.models.auth import ROLE_ADMIN
 from app.services import AuthService
 
 
@@ -47,11 +48,21 @@ def get_current_admin(
     return AuthService(session).current_admin(token)
 
 
-def require_admin(
+def require_user(
     token: SessionToken,
     session: Session = Depends(get_db_readonly),  # noqa: B008
 ) -> Admin:
+    """Any signed-in account, regardless of role (read endpoints)."""
     admin = AuthService(session).current_admin(token)
     if admin is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=LOGIN_REQUIRED)
+    return admin
+
+
+def require_admin(
+    admin: Annotated[Admin, Depends(require_user)],
+) -> Admin:
+    """Signed-in account with the `admin` role (write endpoints + user management)."""
+    if admin.role != ROLE_ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=FORBIDDEN)
     return admin

@@ -23,6 +23,7 @@ from app.schemas.dashboard import (
 )
 from app.schemas.settings import SettingsOut, SettingsUpdateIn
 from app.schemas.suggested_price import SuggestedPriceFormulaIn, SuggestedPriceFormulaOut
+from app.schemas.users import UserCreateIn, UserOut, UserRole
 
 __all__ = [
     "CatalogBrandOut",
@@ -49,4 +50,7 @@ __all__ = [
     "SuggestedPriceFormulaOut",
     "SyncRunOut",
     "SyncStatusOut",
+    "UserCreateIn",
+    "UserOut",
+    "UserRole",
 ]

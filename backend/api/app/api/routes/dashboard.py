@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_db_readonly, require_admin
+from app.api.dependencies import get_db_readonly, require_user
 from app.api.openapi import UNAUTHORIZED, VALIDATION_ERROR
 from app.models import Admin
 from app.schemas import (
@@ -29,7 +29,7 @@ router = APIRouter(tags=["Dashboard"], responses={401: UNAUTHORIZED})
 )
 def dashboard_overview(
     threshold: int = Query(default=10, ge=0, description="Low-stock cutoff."),
-    _admin: Admin = Depends(require_admin),  # noqa: B008
+    _user: Admin = Depends(require_user),  # noqa: B008
     session: Session = Depends(get_db_readonly),  # noqa: B008
 ) -> DashboardOverviewOut:
     return DashboardService(session).overview(low_stock_threshold=threshold)
@@ -47,7 +47,7 @@ def dashboard_overview(
 )
 def dashboard_competitor_gaps(
     limit: int = Query(default=8, ge=1, le=50, description="Number of gaps to return."),
-    _admin: Admin = Depends(require_admin),  # noqa: B008
+    _user: Admin = Depends(require_user),  # noqa: B008
     session: Session = Depends(get_db_readonly),  # noqa: B008
 ) -> list[CompetitorGapOut]:
     return DashboardService(session).competitor_gaps(limit=limit)
@@ -63,7 +63,7 @@ def dashboard_competitor_gaps(
     ),
 )
 def dashboard_catalog_breakdown(
-    _admin: Admin = Depends(require_admin),  # noqa: B008
+    _user: Admin = Depends(require_user),  # noqa: B008
     session: Session = Depends(get_db_readonly),  # noqa: B008
 ) -> list[CatalogSectionOut]:
     return DashboardService(session).catalog_breakdown()
@@ -82,7 +82,7 @@ def dashboard_catalog_breakdown(
 def dashboard_summary(
     threshold: int = Query(default=10, ge=0, description="Low-stock cutoff."),
     gap_limit: int = Query(default=8, ge=1, le=50, description="Number of gaps to return."),
-    _admin: Admin = Depends(require_admin),  # noqa: B008
+    _user: Admin = Depends(require_user),  # noqa: B008
     session: Session = Depends(get_db_readonly),  # noqa: B008
 ) -> DashboardSummaryOut:
     """Aggregated dashboard payload — one fetch instead of three."""

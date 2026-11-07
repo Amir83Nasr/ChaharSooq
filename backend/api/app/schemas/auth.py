@@ -2,6 +2,8 @@
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.users import UserRole
+
 
 class LoginIn(BaseModel):
     model_config = ConfigDict(
@@ -21,4 +23,6 @@ class LoginOut(BaseModel):
 
 
 class MeOut(BaseModel):
+    id: int = Field(description="Id of the account behind the current session.")
     username: str = Field(description="Username behind the current session.")
+    role: UserRole = Field(description="Access level: `admin` or `viewer`.")

@@ -29,6 +29,7 @@ import {
   DataTableToolbar,
   SearchInput,
 } from "@/components/data/data-table-toolbar"
+import { useSession } from "@/components/auth/session-provider"
 import { ProductDetailDialog } from "@/app/(dashboard)/products/_components/product-dialogs"
 import {
   ProductsCards,
@@ -81,6 +82,7 @@ export function GroupStoreView({
   storeName: string
   description: string
 }) {
+  const { canManage } = useSession()
   const [page, setPage] = useState<ProductPage | null>(null)
   const [overview, setOverview] = useState<DashboardOverview | null>(null)
   const [weight, setWeight] = useState<number | null>(null)
@@ -368,6 +370,7 @@ export function GroupStoreView({
         selected={selected}
         onClose={() => setSelected(null)}
         onCompetitorChanged={refreshData}
+        canEdit={canManage}
       />
     </>
   )

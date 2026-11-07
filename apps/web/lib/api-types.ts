@@ -189,6 +189,27 @@ export interface ApiError {
   }
 }
 
+export type UserRole = "admin" | "viewer"
+
+export interface MeOut {
+  id: number
+  username: string
+  role: UserRole
+}
+
+export interface UserOut {
+  id: number
+  username: string
+  role: UserRole
+  created_at: string
+}
+
+export interface UserCreate {
+  username: string
+  password: string
+  role: UserRole
+}
+
 export type ProductTableColumn =
   | "row"
   | "name"

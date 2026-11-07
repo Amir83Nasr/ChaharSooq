@@ -11,6 +11,7 @@ import {
   Settings,
   Sparkles,
   Store,
+  UsersRound,
   X,
   type LucideIcon,
 } from "lucide-react"
@@ -34,6 +35,7 @@ import { Badge } from "@workspace/ui/primitives/badge"
 import { Button } from "@workspace/ui/primitives/button"
 import { cn } from "@workspace/ui/lib/utils"
 import { LogoutMenuItem } from "@/components/auth/logout-menu-item"
+import { useSession } from "@/components/auth/session-provider"
 import { prefetchProducts } from "@/lib/products-store"
 
 type NavChild = {
@@ -103,7 +105,10 @@ const NAV: NavGroup[] = [
   },
   {
     group: "سیستم",
-    items: [{ href: "/settings", label: "تنظیمات", icon: Settings }],
+    items: [
+      { href: "/settings", label: "تنظیمات", icon: Settings },
+      { href: "/users", label: "کاربران", icon: UsersRound },
+    ],
   },
 ]
 
@@ -116,6 +121,9 @@ function isLinkActive(href: string, pathname: string) {
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
   const { isMobile, setOpenMobile, state } = useSidebar()
+  const { canManage } = useSession()
+  // Views that only make sense for the full-management role.
+  const nav = canManage ? NAV : NAV.filter((group) => group.group !== "سیستم")
   const storesActive = pathname.startsWith("/integrations")
   const [storesOpen, setStoresOpen] = useState(storesActive)
   // Links are keyboard-reachable only when the submenu is actually visible:
@@ -187,7 +195,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        {NAV.map((entry) => (
+        {nav.map((entry) => (
           <SidebarGroup key={entry.group}>
             <SidebarGroupLabel>{entry.group}</SidebarGroupLabel>
             <SidebarMenu>

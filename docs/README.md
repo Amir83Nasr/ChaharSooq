@@ -14,6 +14,6 @@ Start with the [architecture overview](architecture/overview.md). Read the secti
 | [architecture/deployment.md](architecture/deployment.md)         | Environments, hosting, and Docker                    |
 | [api/README.md](api/README.md)                                   | Swagger usage, API conventions, OpenAPI snapshot     |
 | [api/parsina-api.pdf](api/parsina-api.pdf)                       | Vendor document for the Parsina accounting API       |
-| [adr/](adr/)                                                     | Architecture decision records (`001` to `008`)       |
+| [adr/](adr/)                                                     | Architecture decision records (`001` to `009`)       |
 
 New significant decisions get the next ADR number. Do not renumber existing ADRs.

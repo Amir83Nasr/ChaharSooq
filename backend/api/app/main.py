@@ -29,6 +29,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message
 _FIELD_LABELS: dict[str, str] = {
     "username": "نام کاربری",
     "password": "گذرواژه",
+    "role": "سطح دسترسی",
     "name": "نام",
     "sku": "کد",
     "price": "قیمت",

@@ -45,6 +45,10 @@ TAGS_METADATA: list[dict[str, Any]] = [
             "Admin preferences: thresholds, sync intervals, pricing weights, table columns."
         ),
     },
+    {
+        "name": "Users",
+        "description": "Admin-only account management: list, create, and delete users.",
+    },
 ]
 
 
@@ -55,6 +59,10 @@ def _error(model: type[ErrorEnvelope], description: str) -> dict[str, Any]:
 UNAUTHORIZED = _error(
     ErrorEnvelope,
     "Missing, expired, or invalid session cookie (`unauthorized`).",
+)
+FORBIDDEN = _error(
+    ErrorEnvelope,
+    "Signed in, but the account role is not allowed to perform this action (`forbidden`).",
 )
 VALIDATION_ERROR = _error(
     ErrorEnvelope,

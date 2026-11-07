@@ -53,8 +53,10 @@ class CompetitorListing(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    # RESTRICT is deliberate: a stray product delete must fail instead of
+    # silently cascading into manually curated competitor links.
     product_id: Mapped[int] = mapped_column(
-        ForeignKey("products.id", ondelete="CASCADE"), nullable=False
+        ForeignKey("products.id", ondelete="RESTRICT"), nullable=False
     )
     store: Mapped[str] = mapped_column(String(30), nullable=False)
     url: Mapped[str] = mapped_column(String(2048), nullable=False)

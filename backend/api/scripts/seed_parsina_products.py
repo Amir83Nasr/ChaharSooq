@@ -1,7 +1,9 @@
 """Load the Parsina CSV export into the development database.
 
-Development only. Replaces the whole product mirror with the CSV catalog so the
+Development only. Upserts the CSV catalog into the dev product mirror so the
 dev UI shows the same shaped data as production without Parsina credentials.
+Existing product rows keep their ids; rows absent from the CSV are deactivated
+(never deleted), so competitor links and other product-bound data survive.
 Run via `make db-seed-parsina` (which applies migrations first).
 
 The CSV path defaults to `<repo>/data/parsina.csv` and can be
@@ -38,11 +40,12 @@ def main() -> int:
         return 1
 
     with Session(get_engine()) as session:
-        result = ProductSyncService(session, source=source).run(replace=True)
+        result = ProductSyncService(session, source=source).run()
 
     print(
-        f"{result.processed} products loaded from {source.path.name} "
-        f"(created {result.created}, skipped {result.skipped})"
+        f"{result.processed} products synced from {source.path.name} "
+        f"(created {result.created}, updated {result.updated}, "
+        f"deactivated {result.deactivated}, skipped {result.skipped})"
     )
     return 0
 

@@ -9,6 +9,8 @@ Rules:
     this includes manual rows (`external_id IS NULL`);
   * the source (CSV in development, Parsina in production) is
     authoritative and always wins, including on SKU collisions;
+  * products are never hard-deleted by sync, so dependent rows such as
+    competitor links keep their product ids and survive every run;
   * failures never overwrite `last_success_at`.
 """
 
@@ -124,19 +126,21 @@ class ProductSyncService:
             self._sync_state.release(success=True)
             raise SyncNotConfiguredError(self._not_configured_message())
 
-    def run(self, *, replace: bool = False) -> SyncResult:
+    def run(self) -> SyncResult:
         self.acquire()
-        return self.run_acquired(replace=replace)
+        return self.run_acquired()
 
-    def run_acquired(self, *, replace: bool = False) -> SyncResult:
+    def run_acquired(self) -> SyncResult:
         """Fetch + validate + apply. Caller already holds the sync lock.
 
-        `replace` drops the existing mirror first (dev CSV seeding only).
+        Existing product rows are updated in place and missing ones are
+        soft-deactivated; no product row is ever deleted, so dependent rows
+        (competitor links, categories, ids) are preserved.
         """
         now = datetime.now(UTC)
         try:
             rows, units = self._fetch()
-            result = self._apply(rows, units, now, replace=replace)
+            result = self._apply(rows, units, now)
         except Exception as exc:  # noqa: BLE001 — record, then let the caller classify
             self._fail(now, exc)
             raise
@@ -200,13 +204,7 @@ class ProductSyncService:
         rows: list[CommodityRow],
         units: dict[int, str],
         now: datetime,
-        *,
-        replace: bool,
     ) -> SyncResult:
-        if replace:
-            removed = self._products.delete_all()
-            self._session.flush()
-            log.info("product catalog replaced: %d existing rows removed", removed)
         ids = {row.good_id for row in rows}
         existing = self._products.by_external_ids(ids)
         created = updated = 0

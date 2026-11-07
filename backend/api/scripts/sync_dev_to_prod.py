@@ -8,13 +8,18 @@ Or directly:
     uv run --project backend/api --env-file .env.production \\
         python backend/api/scripts/sync_dev_to_prod.py [--dev-url ...] [--prod-url ...] [--yes]
 
-Defaults:
-    dev  = postgresql://charsooq:charsooq@localhost:5433/charsooq
-    prod = DATABASE_URL from the loaded env file
+The sync is non-destructive and upsert-based:
 
-What it copies (data only; schema must already be migrated on prod):
-    categories, settings, parsina_sync_state, products
-It never touches admins / admin_sessions / alembic_version on prod.
+  * categories are matched by name and their dev ids are remapped;
+  * settings and the Parsina sync-state row are updated in place;
+  * products are matched by `external_id` (manual rows by SKU), so destination
+    primary keys never change and rows are never deleted;
+  * competitor listings are copied for products that do not have that
+    `(product, store)` link on the destination yet. Existing destination links
+    are left untouched, so a local copy can never erase production work.
+
+It never touches admins / admin_sessions / alembic_version and never deletes
+products, categories, or competitor listings.
 """
 
 from __future__ import annotations
@@ -26,27 +31,198 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import psycopg
-from psycopg import sql
+from sqlalchemy import create_engine, select
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session
 
-DEFAULT_DEV_URL = "postgresql://charsooq:charsooq@localhost:5433/charsooq"
+from app.models import Category, CompetitorListing, ParsinaSyncState, Product, Setting
+from app.models.parsina import SYNC_STATE_ID
+
+DEFAULT_DEV_URL = "postgresql+psycopg://charsooq:charsooq@localhost:5433/charsooq"
 
 
-def _reset_sequences(cur: psycopg.Cursor) -> None:
-    cur.execute(
-        "SELECT setval('categories_id_seq', (SELECT COALESCE(MAX(id), 1) FROM categories), true)"
+def _sqlalchemy_url(url: str) -> str:
+    """Accept psycopg-style URLs from the environment and pin the driver."""
+    if url.startswith("postgresql://"):
+        return "postgresql+psycopg://" + url.removeprefix("postgresql://")
+    if url.startswith("postgres://"):
+        return "postgresql+psycopg://" + url.removeprefix("postgres://")
+    return url
+
+
+def _engine(url: str) -> Engine:
+    return create_engine(_sqlalchemy_url(url), pool_pre_ping=True)
+
+
+def _sync_categories(dev: Session, prod: Session) -> dict[int, int]:
+    """Upsert categories by unique name; return dev id → prod id."""
+    mapping: dict[int, int] = {}
+    for source in dev.scalars(select(Category).order_by(Category.id)):
+        target = prod.scalar(select(Category).where(Category.name == source.name))
+        if target is None:
+            target = Category(name=source.name, created_at=source.created_at)
+            prod.add(target)
+            prod.flush()
+        mapping[source.id] = target.id
+    return mapping
+
+
+def _sync_settings(dev: Session, prod: Session) -> int:
+    count = 0
+    for source in dev.scalars(select(Setting).order_by(Setting.key)):
+        target = prod.get(Setting, source.key)
+        if target is None:
+            prod.add(Setting(key=source.key, value=source.value))
+        else:
+            target.value = source.value
+        count += 1
+    return count
+
+
+def _sync_parsina_state(dev: Session, prod: Session) -> None:
+    """Copy counters/timestamps but never the lock fields of a running job."""
+    source = dev.get(ParsinaSyncState, SYNC_STATE_ID)
+    if source is None:
+        return
+    target = prod.get(ParsinaSyncState, SYNC_STATE_ID)
+    if target is None:
+        target = ParsinaSyncState(id=SYNC_STATE_ID)
+        prod.add(target)
+    target.last_attempt_at = source.last_attempt_at
+    target.last_success_at = source.last_success_at
+    target.last_error = source.last_error
+    target.last_processed = source.last_processed
+    target.last_created = source.last_created
+    target.last_updated = source.last_updated
+    target.last_deactivated = source.last_deactivated
+    target.last_skipped = source.last_skipped
+
+
+def _find_destination_product(prod: Session, source: Product) -> Product | None:
+    if source.external_id is not None:
+        return prod.scalar(select(Product).where(Product.external_id == source.external_id))
+    return prod.scalar(
+        select(Product).where(
+            Product.external_id.is_(None),
+            Product.sku == source.sku,
+        )
     )
-    cur.execute(
-        "SELECT setval('products_id_seq', (SELECT COALESCE(MAX(id), 1) FROM products), true)"
-    )
-    cur.execute(
-        "SELECT setval('parsina_sync_state_id_seq', "
-        "(SELECT COALESCE(MAX(id), 1) FROM parsina_sync_state), true)"
-    )
+
+
+def _assign_product(target: Product, source: Product, category_id: int | None) -> None:
+    target.external_id = source.external_id
+    target.name = source.name
+    target.sku = source.sku
+    target.price = source.price
+    target.stock = source.stock
+    target.category_id = category_id
+    target.main_group_id = source.main_group_id
+    target.sub_group_id = source.sub_group_id
+    target.main_group_name = source.main_group_name
+    target.sub_group_name = source.sub_group_name
+    target.unit_id = source.unit_id
+    target.unit_name = source.unit_name
+    target.weight = source.weight
+    target.is_special = source.is_special
+    target.is_active = source.is_active
+    target.buy_price = source.buy_price
+    target.sale_pack_price = source.sale_pack_price
+    target.sale_box_price = source.sale_box_price
+    target.use_price = source.use_price
+    target.discount = source.discount
+    target.extra = source.extra
+    target.number_in_box = source.number_in_box
+    target.number_in_pack = source.number_in_pack
+    target.ware_remain = source.ware_remain
+    target.synced_at = source.synced_at
+
+
+def _sync_products(dev: Session, prod: Session, category_map: dict[int, int]) -> dict[int, int]:
+    """Upsert products without changing destination ids; return dev id → prod id."""
+    pairs: list[tuple[int, Product]] = []
+    for source in dev.scalars(select(Product).order_by(Product.id)):
+        target = _find_destination_product(prod, source)
+        if target is None:
+            target = Product(created_at=source.created_at)
+            prod.add(target)
+        _assign_product(
+            target,
+            source,
+            category_map.get(source.category_id) if source.category_id is not None else None,
+        )
+        pairs.append((source.id, target))
+    # One flush assigns ids to new rows; existing rows keep their ids.
+    prod.flush()
+    return {source_id: target.id for source_id, target in pairs}
+
+
+def _sync_competitor_listings(dev: Session, prod: Session, product_map: dict[int, int]) -> int:
+    """Add missing links only; never overwrite or delete a destination link."""
+    added = 0
+    for source in dev.scalars(select(CompetitorListing).order_by(CompetitorListing.id)):
+        product_id = product_map.get(source.product_id)
+        if product_id is None:
+            continue
+        target = prod.scalar(
+            select(CompetitorListing).where(
+                CompetitorListing.product_id == product_id,
+                CompetitorListing.store == source.store,
+            )
+        )
+        if target is not None:
+            continue
+        prod.add(
+            CompetitorListing(
+                product_id=product_id,
+                store=source.store,
+                url=source.url,
+                is_active=source.is_active,
+                status=source.status,
+                fetched_price=source.fetched_price,
+                fetched_currency=source.fetched_currency,
+                fetched_in_stock=source.fetched_in_stock,
+                manual_price=source.manual_price,
+                manual_currency=source.manual_currency,
+                manual_in_stock=source.manual_in_stock,
+                manual_updated_at=source.manual_updated_at,
+                last_checked_at=source.last_checked_at,
+                last_success_at=source.last_success_at,
+                last_error=source.last_error,
+                created_at=source.created_at,
+                updated_at=source.updated_at,
+            )
+        )
+        added += 1
+    return added
+
+
+def sync(dev_url: str, prod_url: str) -> dict[str, int]:
+    """Run one non-destructive sync and return per-table counters."""
+    dev_engine = _engine(dev_url)
+    prod_engine = _engine(prod_url)
+    try:
+        with Session(dev_engine) as dev, Session(prod_engine) as prod:
+            category_map = _sync_categories(dev, prod)
+            settings = _sync_settings(dev, prod)
+            _sync_parsina_state(dev, prod)
+            product_map = _sync_products(dev, prod, category_map)
+            listings = _sync_competitor_listings(dev, prod, product_map)
+            prod.commit()
+            return {
+                "categories": len(category_map),
+                "settings": settings,
+                "products": len(product_map),
+                "competitor_listings_added": listings,
+            }
+    finally:
+        dev_engine.dispose()
+        prod_engine.dispose()
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Sync dev DB data into prod DB.")
+    parser = argparse.ArgumentParser(
+        description="Sync dev DB data into prod DB without deleting rows."
+    )
     parser.add_argument("--dev-url", default=os.environ.get("DEV_DATABASE_URL", DEFAULT_DEV_URL))
     parser.add_argument("--prod-url", default=None)
     parser.add_argument("--yes", action="store_true", help="Skip confirmation prompt.")
@@ -64,91 +240,20 @@ def main() -> int:
         print(f"DEV : {args.dev_url}")
         print(f"PROD: {args.prod_url}")
         answer = input(
-            "This will REPLACE data in prod (categories/settings/products/sync_state). "
-            "Continue? [y/N] "
+            "This will UPSERT dev data into prod and copy missing competitor links. "
+            "No products, categories, or links are deleted. Continue? [y/N] "
         )
         if answer.strip().lower() not in {"y", "yes"}:
             print("aborted")
             return 1
 
-    with psycopg.connect(args.dev_url) as dev, psycopg.connect(args.prod_url) as prod:
-        dcur = dev.cursor()
-        pcur = prod.cursor()
-
-        for t in ["products", "parsina_sync_state", "settings", "categories"]:
-            pcur.execute(
-                sql.SQL("TRUNCATE TABLE {} RESTART IDENTITY CASCADE").format(sql.Identifier(t))
-            )
-        prod.commit()
-
-        # categories
-        dcur.execute("SELECT id, name, created_at FROM categories")
-        with pcur.copy("COPY categories (id, name, created_at) FROM STDIN") as cp:
-            for row in dcur:
-                cp.write_row(row)
-        print("categories: synced")
-
-        # settings
-        dcur.execute("SELECT key, value FROM settings")
-        with pcur.copy("COPY settings (key, value) FROM STDIN") as cp:
-            for row in dcur:
-                cp.write_row(row)
-        print("settings: synced")
-
-        # parsina_sync_state
-        dcur.execute(
-            """SELECT id, lock_until, running_since, last_attempt_at, last_success_at,
-                      last_error, last_processed, last_created, last_updated,
-                      last_deactivated, last_skipped
-               FROM parsina_sync_state"""
-        )
-        cols = [
-            "id",
-            "lock_until",
-            "running_since",
-            "last_attempt_at",
-            "last_success_at",
-            "last_error",
-            "last_processed",
-            "last_created",
-            "last_updated",
-            "last_deactivated",
-            "last_skipped",
-        ]
-        with pcur.copy(
-            sql.SQL("COPY parsina_sync_state ({}) FROM STDIN").format(
-                sql.SQL(", ").join(sql.Identifier(c) for c in cols)
-            )
-        ) as cp:
-            for row in dcur:
-                cp.write_row(row)
-        print("parsina_sync_state: synced")
-
-        # products (columns resolved from dev schema)
-        dcur.execute(
-            "SELECT column_name FROM information_schema.columns "
-            "WHERE table_name = 'products' ORDER BY ordinal_position"
-        )
-        prod_cols = [r[0] for r in dcur.fetchall()]
-        dcur.execute(
-            sql.SQL("SELECT {} FROM products").format(
-                sql.SQL(", ").join(sql.Identifier(c) for c in prod_cols)
-            )
-        )
-        n = 0
-        with pcur.copy(
-            sql.SQL("COPY products ({}) FROM STDIN").format(
-                sql.SQL(", ").join(sql.Identifier(c) for c in prod_cols)
-            )
-        ) as cp:
-            for row in dcur:
-                cp.write_row(row)
-                n += 1
-        print(f"products: synced {n}")
-
-        _reset_sequences(pcur)
-        prod.commit()
-        print("done: sequences reset")
+    counts = sync(args.dev_url, args.prod_url)
+    print(
+        "synced: "
+        f"{counts['categories']} categories, {counts['settings']} settings, "
+        f"{counts['products']} products, "
+        f"{counts['competitor_listings_added']} new competitor links"
+    )
     return 0
 
 

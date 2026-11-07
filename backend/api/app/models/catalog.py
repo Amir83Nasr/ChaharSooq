@@ -121,5 +121,5 @@ class Product(Base):
 
     category: Mapped["Category | None"] = relationship(back_populates="products")
     competitor_listings: Mapped[list["CompetitorListing"]] = relationship(
-        back_populates="product", cascade="all, delete-orphan"
+        back_populates="product", passive_deletes=True
     )

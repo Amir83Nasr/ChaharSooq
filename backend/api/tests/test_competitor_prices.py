@@ -9,12 +9,14 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 from pytest import MonkeyPatch
+from sqlalchemy import delete, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_engine
 from app.integrations import competitor_prices as prices
 from app.integrations.competitor_prices import FetchedPrice, PriceFetchError, _price_from_html
-from app.models import CompetitorListing
+from app.models import CompetitorListing, Product
 from app.models.competitor import CompetitorSyncState
 from app.services.competitor_sync import (
     CompetitorSyncBusyError,
@@ -71,6 +73,24 @@ def test_manual_link_and_price_are_preserved_after_failed_check(
     assert body["manual_price"] == 25000000
     assert body["effective_price"] == 25000000
     assert body["last_error"] == "تست محدودیت"
+
+
+def test_product_delete_is_blocked_while_a_competitor_link_exists(client: TestClient) -> None:
+    product_id = _product_id(client)
+    created = client.post(
+        f"/api/v1/products/{product_id}/competitors",
+        json={"store": "digikala", "url": "https://www.digikala.com/product/dkp-123456/"},
+    )
+    assert created.status_code == 201, created.text
+
+    with Session(get_engine()) as session:
+        # SQLite (local test runs) does not enforce foreign keys unless asked;
+        # CI uses PostgreSQL where RESTRICT is always active.
+        if session.bind is not None and session.bind.dialect.name == "sqlite":
+            session.execute(text("PRAGMA foreign_keys=ON"))
+        with pytest.raises(IntegrityError):
+            session.execute(delete(Product).where(Product.id == product_id))
+            session.commit()
 
 
 def test_bulk_check_refreshes_all_active_listings(
@@ -152,6 +172,7 @@ def test_link_edit_keeps_manual_values_but_marks_them_stale(client: TestClient) 
     )
     assert edited.status_code == 200, edited.text
     assert edited.json()["store"] == "other"
+    assert edited.json()["url"] == "https://example.com/product/123"
     assert edited.json()["manual_price"] == 25000000
     assert edited.json()["effective_price"] is None
     assert edited.json()["price_is_fresh"] is False

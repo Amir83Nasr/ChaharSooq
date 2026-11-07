@@ -7,6 +7,7 @@ Tables: `admins`, `admin_sessions` (indexed `expires_at`, token SHA-256 unique),
 Rules:
 
 - Prices are integer toman; datetimes tz-aware UTC. Never store Persian digits or Jalali strings.
+- Catalog sync never hard-deletes products; missing rows are soft-deactivated. `competitor_listings.product_id` is `ON DELETE RESTRICT`, so a stray product delete fails instead of erasing curated links.
 - Schema changes via Alembic migrations only.
 - Indexes follow query patterns (`expires_at`, `created_at`); FKs/constraints added as the domain grows.
 - Transactions: one commit per request in `get_session()` (commit on success, rollback on error).

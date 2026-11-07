@@ -74,7 +74,7 @@ db-seed: db-migrate ## Create dev admin user (ADMIN_USER, ADMIN_PASSWORD or DEV_
 	ADMIN_USER="$(strip $(ADMIN_USER))" ADMIN_PASSWORD="$(strip $(or $(ADMIN_PASSWORD),$(DEV_ADMIN_PASSWORD)))" \
 	uv run --no-sync --project backend/api python backend/api/scripts/seed_admin.py
 
-db-seed-parsina: db-migrate ## Load data/parsina.csv into dev DB (replaces products)
+db-seed-parsina: db-migrate ## Upsert data/parsina.csv into dev DB (keeps product ids + links)
 	uv run --no-sync --project backend/api python backend/api/scripts/seed_parsina_products.py
 
 db-clear-products: db-migrate ## Delete all products + competitor listings from dev DB (refuses production)
@@ -93,7 +93,7 @@ db-seed-prod: ## Create prod admin user (requires ADMIN_PASSWORD=... on the comm
 	uv run --no-sync --project backend/api --env-file $(CURDIR)/.env.production python backend/api/scripts/seed_admin.py
 
 # ─── DATABASE: SYNC DEV → PROD ─────────────────────────────
-db-sync-dev-to-prod: ## Copy dev DB data (categories/settings/products/sync_state) into prod Neon (reads .env.production)
+db-sync-dev-to-prod: ## Upsert dev data + missing competitor links into prod Neon (never deletes; reads .env.production)
 	@test -f $(CURDIR)/.env.production || { echo ".env.production is required" >&2; exit 1; }
 	uv run --no-sync --project backend/api --env-file $(CURDIR)/.env.production python backend/api/scripts/sync_dev_to_prod.py $(if $(filter 1,$(YES)),--yes,)
 

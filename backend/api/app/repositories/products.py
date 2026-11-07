@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast
 
-from sqlalchemy import ColumnElement, and_, case, delete, exists, func, not_, or_, select, update
+from sqlalchemy import ColumnElement, and_, case, exists, func, not_, or_, select, update
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.sql.elements import Case
 
@@ -79,12 +79,6 @@ class ProductRepository:
             .order_by(Product.main_group_name)
         ).scalars()
         return [name for name in rows if name]
-
-    def delete_all(self) -> int:
-        """Drop the whole mirror — used only by the dev CSV seed (replace mode)."""
-        total = self._session.execute(select(func.count()).select_from(Product)).scalar_one()
-        self._session.execute(delete(Product))
-        return total
 
     def deactivate_missing(self, keep_external_ids: set[int]) -> int:
         """Soft-delete every active mirror row absent from a *complete* source listing.

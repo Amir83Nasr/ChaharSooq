@@ -19,7 +19,7 @@ from app.integrations.dev_db import (
 from app.integrations.parsina import parse_commodity
 from app.integrations.parsina_csv import CsvCommoditySource, CsvSourceError
 from app.integrations.sources import ParsinaCommoditySource, build_commodity_source
-from app.models import Product
+from app.models import CompetitorListing, Product
 from app.services.sync import ProductSyncService
 
 FIELDS = [
@@ -265,17 +265,55 @@ def test_csv_sync_inserts_then_updates(session: Session, tmp_path: Path) -> None
     assert {p.unit_name for p in products} == {"عدد"}
 
 
-def test_csv_sync_replace_drops_existing_catalog(session: Session, tmp_path: Path) -> None:
+def test_csv_sync_deactivates_missing_rows_instead_of_deleting_them(
+    session: Session, tmp_path: Path
+) -> None:
     session.add(Product(name="دستی", sku="MANUAL-1", price=Decimal(1), stock=Decimal(1)))
     session.commit()
     path = _write_csv(tmp_path / "products.csv", [_row("1", "A-1", "کالا یک")])
 
-    result = ProductSyncService(session, source=CsvCommoditySource(path)).run(replace=True)
+    result = ProductSyncService(session, source=CsvCommoditySource(path)).run()
 
     assert result.created == 1
     rows = session.execute(select(Product)).scalars().all()
-    assert len(rows) == 1
-    assert rows[0].external_id == 1
+    assert len(rows) == 2
+    manual = next(row for row in rows if row.sku == "MANUAL-1")
+    assert manual.is_active is False
+
+
+def test_csv_sync_keeps_competitor_links_when_products_change(
+    session: Session, tmp_path: Path
+) -> None:
+    path = _write_csv(tmp_path / "products.csv", [_row("1", "A-1", "کالا یک")])
+    ProductSyncService(session, source=CsvCommoditySource(path)).run()
+
+    product = session.execute(select(Product).where(Product.external_id == 1)).scalar_one()
+    product_id = product.id
+    listing = CompetitorListing(
+        product_id=product_id,
+        store="digikala",
+        url="https://www.digikala.com/product/dkp-123456/",
+    )
+    session.add(listing)
+    session.commit()
+    listing_id = listing.id
+
+    # Re-run with the same catalog: the product id and its link must survive.
+    ProductSyncService(session, source=CsvCommoditySource(path)).run()
+    session.expire_all()
+    assert session.get(Product, product_id) is not None
+    assert session.get(CompetitorListing, listing_id) is not None
+
+    # Remove the product from the source: it is deactivated, not deleted.
+    path.unlink()
+    _write_csv(path, [_row("2", "A-2", "کالا دو")])
+    result = ProductSyncService(session, source=CsvCommoditySource(path)).run()
+    assert result.deactivated == 1
+    session.expire_all()
+    old_product = session.get(Product, product_id)
+    assert old_product is not None
+    assert old_product.is_active is False
+    assert session.get(CompetitorListing, listing_id) is not None
 
 
 # ── DEV-DB SYNC ──────────────────────────────────────────────

@@ -1,6 +1,7 @@
 """Dashboard aggregates — overview, competitor gaps, catalog breakdown."""
 
 from collections.abc import Iterator
+from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -110,6 +111,57 @@ def _add_manual_price(client: TestClient, product_id: int, price: int) -> None:
         json={"manual_price": price, "manual_currency": "IRT"},
     )
     assert updated.status_code == 200, updated.text
+
+
+def test_dashboard_coverage_counts_appliances_only(client: TestClient, session: Session) -> None:
+    """The coverage numerator cannot exceed its appliance-only denominator."""
+    from decimal import Decimal
+
+    from app.models import CompetitorListing, Product
+
+    login(client)
+    now = datetime.now(UTC)
+    fridge = Product(
+        name="یخچال",
+        sku="FRZ-2",
+        price=Decimal(100),
+        stock=Decimal(1),
+        main_group_name="یخچال اسنوا",
+    )
+    rug = Product(
+        name="فرش",
+        sku="RUG-2",
+        price=Decimal(100),
+        stock=Decimal(1),
+        main_group_name="فرش نگین",
+    )
+    session.add_all([fridge, rug])
+    session.commit()
+
+    _add_manual_price(client, fridge.id, 90)
+    # Tracking stores (دیجی‌فرش) reject manual prices; give the rug a fresh
+    # fetched price instead.
+    created = client.post(
+        f"/api/v1/products/{rug.id}/competitors",
+        json={
+            "store": "digifresh",
+            "url": "https://www.digifarsh.com/product/demo-2/",
+        },
+    )
+    assert created.status_code == 201, created.text
+    listing = session.get(CompetitorListing, created.json()["id"])
+    assert listing is not None
+    listing.fetched_price = Decimal(90)
+    listing.fetched_currency = "IRT"
+    listing.fetched_in_stock = True
+    listing.last_checked_at = now
+    listing.last_success_at = now
+    session.commit()
+
+    body = client.get("/api/v1/dashboard/overview").json()
+    # The rug has a fresh price too, but only appliances count on both sides.
+    assert body["competitor_coverage"] == 1
+    assert body["appliance_total"] == 1
 
 
 def test_dashboard_competitor_gaps_empty(client: TestClient) -> None:

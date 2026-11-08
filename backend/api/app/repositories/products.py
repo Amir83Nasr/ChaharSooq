@@ -225,29 +225,31 @@ class ProductRepository:
         (`competitor_coverage`, `appliance_total`): two scalar subqueries
         instead of two round-trips, so the dashboard overview costs 3
         (summary, groups, this) not 4.
+
+        Both sides share the appliance filter: carpet/furniture track the
+        linked product's daily change instead of a direct competitor price,
+        so counting them in the numerator would push the KPI past 100%.
         """
+        appliance_criteria: tuple[ColumnElement[bool], ...] = (
+            Product.is_active.is_(True),
+            Product.main_group_name.is_not(None),
+            not_(Product.main_group_name.ilike("فرش%")),
+            not_(Product.main_group_name.ilike("مبلمان%")),
+        )
         price = effective_competitor_price(since)
         coverage_sq = (
             select(func.count(func.distinct(Product.id)))
             .select_from(Product)
             .join(CompetitorListing, CompetitorListing.product_id == Product.id)
             .where(
-                Product.is_active.is_(True),
+                *appliance_criteria,
                 CompetitorListing.is_active.is_(True),
                 price.is_not(None),
             )
             .scalar_subquery()
         )
         appliance_sq = (
-            select(func.count())
-            .select_from(Product)
-            .where(
-                Product.is_active.is_(True),
-                Product.main_group_name.is_not(None),
-                not_(Product.main_group_name.ilike("فرش%")),
-                not_(Product.main_group_name.ilike("مبلمان%")),
-            )
-            .scalar_subquery()
+            select(func.count()).select_from(Product).where(*appliance_criteria).scalar_subquery()
         )
         row = self._session.execute(select(coverage_sq, appliance_sq)).one()
         return int(row[0] or 0), int(row[1] or 0)

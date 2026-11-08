@@ -1,10 +1,10 @@
-"""Fill the development database with demo competitor prices.
+"""Fill a development or staging database with demo competitor prices.
 
-Development only. Every active product gets the competitor links its group
-uses in the table — Digikala/Technolife for appliances, Sofa for furniture,
-DigiFresh for carpets — plus a fresh price and two daily observations, so the
-products table shows competitor price, price difference, suggested price and
-daily change instead of empty cells.
+Never run against production. Every active product gets the competitor links
+its group uses in the table — Digikala/Technolife for appliances, Sofa for
+furniture, DigiFresh for carpets — plus a fresh price and two daily
+observations, so the products table shows competitor price, price difference,
+suggested price and daily change instead of empty cells.
 
 Products rotate through four suggested-price scenarios (stable per product id)
 so the demo covers every clamp branch: a price below the floor, one above the
@@ -18,11 +18,13 @@ Rows created here carry a `demo-` URL path, which is what makes the script
 idempotent and safe to re-run: demo rows are refreshed, while real/manual
 links and their observations are never touched (products that already have a
 real link are skipped). Run via `make db-seed-demo` (which imports
-`data/parsina.csv` first).
+`data/parsina.csv` first) or, against a staging database explicitly,
+`make db-seed-demo-staging` (passes `--staging`).
 """
 
 from __future__ import annotations
 
+import argparse
 import sys
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
@@ -307,13 +309,28 @@ def seed_demo_competitors(session: Session, *, now: datetime | None = None) -> S
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Fill a development or staging database with demo competitor prices."
+    )
+    parser.add_argument(
+        "--staging",
+        action="store_true",
+        help=(
+            "Allow writing demo data to a database flagged APP_ENV=production. "
+            "Only use this against a staging database, never production."
+        ),
+    )
+    args = parser.parse_args()
+
     settings = get_settings()
-    if settings.is_production:
+    if settings.is_production and not args.staging:
         print(
             "refusing to seed demo competitor prices into a production database",
             file=sys.stderr,
         )
         return 1
+    if settings.is_production:
+        print("staging mode: writing demo competitor prices to the staging database")
 
     with Session(get_engine()) as session:
         if session.scalar(select(Product.id).limit(1)) is None:

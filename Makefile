@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-.PHONY: build check clean-build clean-cache db-clear-products db-migrate db-migrate-prod db-seed db-seed-demo db-seed-parsina db-seed-prod db-sync-dev-to-prod db-sync-dev-to-staging sync-dev-to-prod sync-dev-to-staging sync-prod sync-staging dev-to-prod dev-to-staging db-up db-validate db-wait deploy-api dev-all dev-api dev-web docker-build docker-down docker-logs docker-up doctor help install lint openapi-check test test-e2e typecheck
+.PHONY: build check clean-build clean-cache db-clear-products db-migrate db-migrate-prod db-seed db-seed-demo db-seed-demo-staging db-seed-parsina db-seed-prod db-sync-dev-to-prod db-sync-dev-to-staging sync-dev-to-prod sync-dev-to-staging sync-prod sync-staging dev-to-prod dev-to-staging db-up db-validate db-wait deploy-api dev-all dev-api dev-web docker-build docker-down docker-logs docker-up doctor help install lint openapi-check test test-e2e typecheck
 
 # ─── HELP ─────────────────────────────────────────────────
 help: ## Show this help message
@@ -96,9 +96,14 @@ db-sync-dev-to-prod: ## Upsert dev data + missing competitor links into prod Neo
 	@test -f $(CURDIR)/.env.production || { echo ".env.production is required" >&2; exit 1; }
 	uv run --no-sync --project backend/api --env-file $(CURDIR)/.env.production python backend/api/scripts/sync_dev_to_prod.py $(if $(filter 1,$(YES)),--yes,)
 
-db-sync-dev-to-staging: ## Upsert dev data + missing competitor links into staging Neon (never deletes; reads backend/api/.env.staging)
+db-sync-dev-to-staging: ## Upsert dev data into staging Neon, then fill demo competitor prices (reads backend/api/.env.staging)
 	@test -f $(CURDIR)/backend/api/.env.staging || { echo "backend/api/.env.staging is required" >&2; exit 1; }
 	uv run --no-sync --project backend/api --env-file $(CURDIR)/backend/api/.env.staging python backend/api/scripts/sync_dev_to_prod.py $(if $(filter 1,$(YES)),--yes,)
+	uv run --no-sync --project backend/api --env-file $(CURDIR)/backend/api/.env.staging python backend/api/scripts/seed_demo_competitors.py --staging
+
+db-seed-demo-staging: ## Fill staging Neon with demo competitor prices (reads backend/api/.env.staging)
+	@test -f $(CURDIR)/backend/api/.env.staging || { echo "backend/api/.env.staging is required" >&2; exit 1; }
+	uv run --no-sync --project backend/api --env-file $(CURDIR)/backend/api/.env.staging python backend/api/scripts/seed_demo_competitors.py --staging
 
 # ─── Aliases (dev → prod/staging sync) ───────────────────
 sync-dev-to-prod sync-prod dev-to-prod: db-sync-dev-to-prod ## Alias for db-sync-dev-to-prod

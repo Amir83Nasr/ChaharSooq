@@ -136,7 +136,8 @@ make db-seed            # ensure the owner account from OWNER_USERNAME/OWNER_PAS
 make db-seed-parsina    # upsert dev product catalog from data/parsina.csv
 make db-seed-demo       # demo competitor prices + daily changes for the products table
 make db-sync-dev-to-prod # upsert dev data into prod; never deletes products or links
-make db-sync-dev-to-staging # same upsert against staging Neon (reads backend/api/.env.staging)
+make db-sync-dev-to-staging # upsert dev data into staging Neon + demo prices (reads backend/api/.env.staging)
+make db-seed-demo-staging # only refresh staging demo competitor prices (reads backend/api/.env.staging)
 
 make db-migrate-prod                          # prod Neon: migrations (reads .env.production)
 make db-seed-prod                             # prod Neon: ensure owner (OWNER_PASSWORD required)

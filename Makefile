@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-.PHONY: build check clean-build clean-cache db-clear-products db-migrate db-migrate-prod db-seed db-seed-demo db-seed-parsina db-seed-prod db-sync-dev-to-prod sync-dev-to-prod sync-prod dev-to-prod db-up db-validate db-wait deploy-api dev-all dev-api dev-web docker-build docker-down docker-logs docker-up doctor help install lint openapi-check test test-e2e typecheck
+.PHONY: build check clean-build clean-cache db-clear-products db-migrate db-migrate-prod db-seed db-seed-demo db-seed-parsina db-seed-prod db-sync-dev-to-prod db-sync-dev-to-staging sync-dev-to-prod sync-dev-to-staging sync-prod sync-staging dev-to-prod dev-to-staging db-up db-validate db-wait deploy-api dev-all dev-api dev-web docker-build docker-down docker-logs docker-up doctor help install lint openapi-check test test-e2e typecheck
 
 # ─── HELP ─────────────────────────────────────────────────
 help: ## Show this help message
@@ -20,7 +20,7 @@ help: ## Show this help message
 # ─── CONFIG / VARIABLES ───────────────────────────────────
 COMPOSE_FILE ?= compose.yml ## Compose file used by up/down/logs
 DB_PORT ?= 5433 ## Host port of the dev postgres db-wait/dev-api expect
-YES ?= 0 ## Set YES=1 to skip the confirmation prompt for db-sync-dev-to-prod
+YES ?= 0 ## Set YES=1 to skip the confirmation prompt for db-sync-dev-to-{prod,staging}
 
 # ─── INSTALL / SETUP ──────────────────────────────────────
 install: ## Install frontend and backend dependencies and git hooks
@@ -96,8 +96,13 @@ db-sync-dev-to-prod: ## Upsert dev data + missing competitor links into prod Neo
 	@test -f $(CURDIR)/.env.production || { echo ".env.production is required" >&2; exit 1; }
 	uv run --no-sync --project backend/api --env-file $(CURDIR)/.env.production python backend/api/scripts/sync_dev_to_prod.py $(if $(filter 1,$(YES)),--yes,)
 
-# ─── Aliases (dev → prod sync) ───────────────────────────
+db-sync-dev-to-staging: ## Upsert dev data + missing competitor links into staging Neon (never deletes; reads backend/api/.env.staging)
+	@test -f $(CURDIR)/backend/api/.env.staging || { echo "backend/api/.env.staging is required" >&2; exit 1; }
+	uv run --no-sync --project backend/api --env-file $(CURDIR)/backend/api/.env.staging python backend/api/scripts/sync_dev_to_prod.py $(if $(filter 1,$(YES)),--yes,)
+
+# ─── Aliases (dev → prod/staging sync) ───────────────────
 sync-dev-to-prod sync-prod dev-to-prod: db-sync-dev-to-prod ## Alias for db-sync-dev-to-prod
+sync-dev-to-staging sync-staging dev-to-staging: db-sync-dev-to-staging ## Alias for db-sync-dev-to-staging
 
 # ─── DATABASE: VALIDATE (NO DB NEEDED) ───────────────────
 db-validate: ## Validate migrations offline: single head + SQL renders cleanly

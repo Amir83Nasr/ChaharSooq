@@ -4,8 +4,15 @@ Development only. Every active product gets the competitor links its group
 uses in the table — Digikala/Technolife for appliances, Sofa for furniture,
 DigiFresh for carpets — plus a fresh price and two daily observations, so the
 products table shows competitor price, price difference, suggested price and
-daily change instead of empty cells. Products without a saved clamp also get
-demo suggested-price floor/ceiling percentages (existing values are kept).
+daily change instead of empty cells.
+
+Products rotate through four suggested-price scenarios (stable per product id)
+so the demo covers every clamp branch: a price below the floor, one above the
+ceiling, one that stays inside the bounds, and one with no bounds at all. The
+floor/ceiling rows use a tight demo clamp so the competitor price really lands
+outside it; the no-bounds row keeps an out-of-range suggestion unclamped.
+Bounds this script wrote earlier are refreshed to the new scenario, while an
+admin's own clamp (any other value) is kept.
 
 Rows created here carry a `demo-` URL path, which is what makes the script
 idempotent and safe to re-run: demo rows are refreshed, while real/manual
@@ -52,6 +59,14 @@ TARGET_WEIGHTS = {
 }
 TOMAN = Decimal("1")
 
+# Suggested-price scenarios, picked from the product id so a re-run keeps the
+# same shape and all four cases appear once ids span 4 consecutive values.
+SCENARIOS = ("floor", "ceiling", "inside", "no_bounds")
+CLAMP_SCENARIOS = frozenset({"floor", "ceiling"})
+NO_BOUNDS_SCENARIO = "no_bounds"
+# Tight enough that a ±12% competitor move (or ±5% daily change) lands outside.
+CLAMP_BOUND_PERCENT = Decimal("1.50")
+
 
 @dataclass(frozen=True)
 class SeedResult:
@@ -82,19 +97,33 @@ def _offset(seed: str) -> Decimal:
     return Decimal(value % 2001 - 1000) / Decimal(1000)
 
 
+def demo_scenario(product: Product) -> str:
+    """Stable clamp scenario for this product (see SCENARIOS)."""
+    return SCENARIOS[(product.id - 1) % len(SCENARIOS)]
+
+
 def demo_prices(product: Product, store: str) -> tuple[Decimal, Decimal]:
     """Today's competitor price and its daily change percent (IRR-free toman)."""
     base = Decimal(product.price)
     url_seed = f"{product.id}:{store}"
-    # Competitor prices sit within ±12% of our price, so the diff column has
-    # both "cheaper" and "more expensive" rows (and a few "no difference").
-    factor = _offset(f"price:{url_seed}") * Decimal("0.12")
+    scenario = demo_scenario(product)
+    if scenario == "inside":
+        # Competitor prices sit within ±12% of our price, so the diff column has
+        # both "cheaper" and "more expensive" rows (and a few "no difference").
+        factor = _offset(f"price:{url_seed}") * Decimal("0.12")
+        # Furniture/carpet suggestions follow the linked product's daily change;
+        # keep it between -5% and +5%, never exactly zero, so the demo differs.
+        change = _offset(f"change:{url_seed}") * Decimal("5")
+        if change.copy_abs() < Decimal("0.5"):
+            change = Decimal("0.5") if change >= 0 else Decimal("-0.5")
+    else:
+        # Push the competitor to a clear edge so the suggested price really
+        # crosses the tight demo clamp (floor/ceiling) or visibly stays
+        # unclamped when the product has no bounds.
+        direction = Decimal(1) if scenario == "ceiling" else Decimal(-1)
+        factor = direction * Decimal("0.12")
+        change = direction * Decimal("5")
     price = (base * (Decimal(1) + factor)).quantize(TOMAN, rounding=ROUND_HALF_UP)
-    # Furniture/carpet suggestions follow the linked product's daily change;
-    # keep it between -5% and +5%, never exactly zero, so the demo differs.
-    change = _offset(f"change:{url_seed}") * Decimal("5")
-    if change.copy_abs() < Decimal("0.5"):
-        change = Decimal("0.5") if change >= 0 else Decimal("-0.5")
     return max(price, Decimal(1)), change.quantize(Decimal("0.1"))
 
 
@@ -110,10 +139,31 @@ def _half_percent(low: Decimal, high: Decimal, seed: str) -> Decimal:
 
 
 def demo_bounds(product: Product) -> tuple[Decimal, Decimal]:
-    """Floor/ceiling percentages around the base price for the demo rows."""
+    """Floor/ceiling percentages for the demo rows with an "inside" outcome."""
     decrease = _half_percent(Decimal(5), Decimal(15), f"floor:{product.id}")
     increase = _half_percent(Decimal(8), Decimal("18"), f"ceiling:{product.id}")
     return decrease.quantize(Decimal("0.01")), increase.quantize(Decimal("0.01"))
+
+
+def scenario_bounds(product: Product, scenario: str) -> tuple[Decimal | None, Decimal | None]:
+    """Target clamp for a product's scenario.
+
+    Floor/ceiling rows get a tight clamp so the demo competitor price lands
+    outside it; "inside" keeps the looser random clamp; "no_bounds" stays
+    unlimited so the unclamped price is visible.
+    """
+    if scenario in CLAMP_SCENARIOS:
+        return CLAMP_BOUND_PERCENT, CLAMP_BOUND_PERCENT
+    if scenario == NO_BOUNDS_SCENARIO:
+        return None, None
+    return demo_bounds(product)
+
+
+def _seed_owns_bound(
+    current: Decimal | None, demo_default: Decimal, target: Decimal | None
+) -> bool:
+    """True when an unset bound or one this seed already wrote can be refreshed."""
+    return current is None or current == demo_default or current == target
 
 
 def _existing_observation_dates(session: Session) -> dict[int, set[date]]:
@@ -195,15 +245,20 @@ def seed_demo_competitors(session: Session, *, now: datetime | None = None) -> S
         listing.is_active = True
         refreshed += 1
 
-        # Suggested-price floor/ceiling: only fill blanks, so an admin's
-        # saved bounds are never overwritten by re-running the demo seed.
-        decrease, increase = demo_bounds(product)
-        if product.allowed_decrease_percent is None:
-            product.allowed_decrease_percent = decrease
-            bounds_added += 1
-        if product.allowed_increase_percent is None:
-            product.allowed_increase_percent = increase
-            bounds_added += 1
+        # Suggested-price clamp: refresh blanks and values this seed wrote
+        # earlier (including the old loose defaults) to the product's scenario,
+        # but never replace an admin's own clamp.
+        scenario = demo_scenario(product)
+        decrease, increase = scenario_bounds(product, scenario)
+        default_decrease, default_increase = demo_bounds(product)
+        if _seed_owns_bound(product.allowed_decrease_percent, default_decrease, decrease):
+            if product.allowed_decrease_percent != decrease:
+                product.allowed_decrease_percent = decrease
+                bounds_added += 1
+        if _seed_owns_bound(product.allowed_increase_percent, default_increase, increase):
+            if product.allowed_increase_percent != increase:
+                product.allowed_increase_percent = increase
+                bounds_added += 1
 
         dates = observations.setdefault(listing.id, set())
         if today not in dates:
@@ -273,7 +328,7 @@ def main() -> int:
         f"demo competitor prices seeded: {result.created} links created, "
         f"{result.refreshed} refreshed, {result.observations} observations added, "
         f"{result.weights} suggested-price weights added, "
-        f"{result.bounds} price bounds added"
+        f"{result.bounds} price bounds written"
     )
     return 0
 

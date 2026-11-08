@@ -14,7 +14,13 @@ from app.models import (
     Product,
     SuggestedPriceFormula,
 )
-from scripts.seed_demo_competitors import seed_demo_competitors
+from scripts.seed_demo_competitors import (
+    TARGET_WEIGHTS,
+    demo_bounds,
+    demo_prices,
+    demo_scenario,
+    seed_demo_competitors,
+)
 
 NOW = datetime(2026, 1, 2, 12, 0, tzinfo=UTC)
 
@@ -44,8 +50,9 @@ def test_seed_fills_every_group_and_refreshes_only_demo_rows(tmp_path: Path) -> 
         appliance = _product("یخچال", "لوازم خانگی دوو", 10_000_000)
         sofa = _product("مبل", "مبلمان", 20_000_000)
         carpet = _product("فرش", "فرش آدینا", 30_000_000)
+        unbounded = _product("بدون محدوده", "لوازم خانگی سام", 50_000_000)
         manual = _product("دستی", "لوازم خانگی سام", 40_000_000)
-        session.add_all([appliance, sofa, carpet, manual])
+        session.add_all([appliance, sofa, carpet, unbounded, manual])
         session.flush()
         session.add(
             CompetitorListing(
@@ -58,33 +65,42 @@ def test_seed_fills_every_group_and_refreshes_only_demo_rows(tmp_path: Path) -> 
         session.commit()
 
         result = seed_demo_competitors(session, now=NOW)
-        assert result.created == 4  # two appliance stores + sofa + digifresh
-        assert result.refreshed == 4
-        assert result.observations == 8  # today + yesterday per demo listing
+        assert result.created == 6  # two appliance stores each for two rows + sofa + digifresh
+        assert result.refreshed == 6
+        assert result.observations == 12  # today + yesterday per demo listing
         assert result.weights == 2  # فرش and مبلمان; the appliance weight stays
-        assert result.bounds == 6  # floor + ceiling for the three demo products
+        assert result.bounds == 6  # tight floor+ceiling for two rows, loose pair for one
 
         listings = _all(session, CompetitorListing)
         demo = [row for row in listings if "/product/demo-" in row.url]
-        assert len(demo) == 4
+        assert len(demo) == 6
         assert {row.store for row in demo} == {"digikala", "technolife", "sofa", "digifresh"}
         assert all(row.status == "success" and row.fetched_price for row in demo)
         assert all(row.fetched_currency == "IRT" for row in demo)
 
         observations = _all(session, CompetitorPriceObservation)
-        assert len(observations) == 8
+        assert len(observations) == 12
         assert {row.observed_at.date() for row in observations} == {
             NOW.date(),
             (NOW - timedelta(days=1)).date(),
         }
         assert all(row.price > 0 for row in observations)
 
-        for demo_product in (appliance, sofa, carpet):
+        # id 1 = floor, id 2 = ceiling, id 3 = inside, id 4 = no bounds.
+        for demo_product in (appliance, sofa):
             session.refresh(demo_product)
-            assert demo_product.allowed_decrease_percent is not None
-            assert demo_product.allowed_increase_percent is not None
-            assert Decimal(5) <= demo_product.allowed_decrease_percent <= Decimal(15)
-            assert Decimal(8) <= demo_product.allowed_increase_percent <= Decimal(18)
+            assert demo_product.allowed_decrease_percent == Decimal("1.50")
+            assert demo_product.allowed_increase_percent == Decimal("1.50")
+        session.refresh(carpet)
+        carpet_decrease = carpet.allowed_decrease_percent
+        carpet_increase = carpet.allowed_increase_percent
+        assert carpet_decrease is not None
+        assert carpet_increase is not None
+        assert Decimal(5) <= carpet_decrease <= Decimal(15)
+        assert Decimal(8) <= carpet_increase <= Decimal(18)
+        session.refresh(unbounded)
+        assert unbounded.allowed_decrease_percent is None
+        assert unbounded.allowed_increase_percent is None
         session.refresh(manual)
         assert manual.allowed_decrease_percent is None
         assert manual.allowed_increase_percent is None
@@ -103,14 +119,14 @@ def test_seed_fills_every_group_and_refreshes_only_demo_rows(tmp_path: Path) -> 
         # A second run refreshes freshness without duplicating rows.
         again = seed_demo_competitors(session, now=NOW)
         assert again.created == 0
-        assert again.refreshed == 4
+        assert again.refreshed == 6
         assert again.observations == 0
         assert again.weights == 0
         assert again.bounds == 0
         session.refresh(appliance)
         assert appliance.allowed_decrease_percent == Decimal("3")
-        assert len(_all(session, CompetitorListing)) == 5
-        assert len(_all(session, CompetitorPriceObservation)) == 8
+        assert len(_all(session, CompetitorListing)) == 7
+        assert len(_all(session, CompetitorPriceObservation)) == 12
 
         weights = {row.top_group: row.weight for row in _all(session, SuggestedPriceFormula)}
         assert weights == {
@@ -118,3 +134,44 @@ def test_seed_fills_every_group_and_refreshes_only_demo_rows(tmp_path: Path) -> 
             "فرش": Decimal("0.4000"),
             "مبلمان": Decimal("0.5000"),
         }
+
+
+def test_demo_rows_cover_every_suggested_price_clamp_branch(tmp_path: Path) -> None:
+    """Demo data must land below the floor, above the ceiling, and inside."""
+    with _session(tmp_path / "scenarios.db") as session:
+        appliance = _product("یخچال", "لوازم خانگی دوو", 10_000_000)  # id 1 → floor
+        sofa = _product("مبل", "مبلمان", 20_000_000)  # id 2 → ceiling
+        carpet = _product("فرش", "فرش آدینا", 30_000_000)  # id 3 → inside
+        session.add_all([appliance, sofa, carpet])
+        session.commit()
+        seed_demo_competitors(session, now=NOW)
+        for product in (appliance, sofa, carpet):
+            session.refresh(product)
+
+        assert demo_scenario(appliance) == "floor"
+        assert demo_scenario(sofa) == "ceiling"
+        assert demo_scenario(carpet) == "inside"
+
+        # Appliances blend the competitor price; furniture/carpet use the link's
+        # daily change. Mirror the frontend formula to check the seed's intent.
+        appliance_base = appliance.price
+        appliance_price, _ = demo_prices(appliance, "digikala")
+        appliance_weight = TARGET_WEIGHTS["لوازم خانگی"]
+        appliance_raw = appliance_weight * appliance_price + (1 - appliance_weight) * appliance_base
+        appliance_floor = appliance_base * (1 - Decimal("1.50") / 100)
+        assert appliance_raw < appliance_floor
+
+        sofa_base = sofa.price
+        _, sofa_change = demo_prices(sofa, "sofa")
+        sofa_weight = TARGET_WEIGHTS["مبلمان"]
+        sofa_raw = sofa_base * (1 + sofa_weight * sofa_change / 100)
+        sofa_ceiling = sofa_base * (1 + Decimal("1.50") / 100)
+        assert sofa_raw > sofa_ceiling
+
+        carpet_base = carpet.price
+        _, carpet_change = demo_prices(carpet, "digifresh")
+        carpet_weight = TARGET_WEIGHTS["فرش"]
+        carpet_raw = carpet_base * (1 + carpet_weight * carpet_change / 100)
+        decrease, increase = demo_bounds(carpet)
+        assert carpet_base * (1 - decrease / 100) <= carpet_raw
+        assert carpet_raw <= carpet_base * (1 + increase / 100)

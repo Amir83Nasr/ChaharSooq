@@ -51,6 +51,15 @@ Dependency flow: `api/routes → services → repositories → database`.
 - Do not add another component library without an ADR.
 - The main sidebar uses the shadcn Sidebar / Block approach.
 - Code in `packages/ui` must not import from `apps/web`.
+- Vertical centering: center content with flex on the element that directly
+  wraps it (`flex items-center justify-center`). Never leave a block whose
+  only child is an inline-level box (`inline-flex`, `inline-block`,
+  `inline-grid`, `svg`) to be centered by its parent: the child sits on the
+  text baseline, the line box gains uneven leading, and the visible content
+  lands a few pixels above the center (see `BusyLabel` in `packages/ui`).
+  After changing a button, badge, tab, or row layout, verify the element
+  center against the content center in the browser, not only in the class
+  names.
 
 ## 5. RTL and fonts
 

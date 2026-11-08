@@ -129,7 +129,7 @@ export function ProductDetailDialog(props: {
           </ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
         {product ? (
-          <div className="no-scrollbar min-h-0 space-y-3 md:grid md:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] md:items-start md:gap-3 md:space-y-0 md:overflow-y-auto md:pe-1">
+          <div className="no-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain md:grid md:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] md:items-start md:gap-3 md:space-y-0 md:pe-1">
             <div className="space-y-3">
               <ProductSuggestedPrice product={product} />
               <ProductPriceBounds

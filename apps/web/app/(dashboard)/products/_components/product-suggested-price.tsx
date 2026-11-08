@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 
 import { Price } from "@workspace/ui/persian/price"
 import { formatPersianNumber } from "@workspace/ui/lib/number"
+import { cn } from "@workspace/ui/lib/utils"
 
 import { api, type ProductOut, type TopGroup } from "@/lib/api"
 import { toTomanAmount } from "@/lib/money"
@@ -86,80 +87,61 @@ export function ProductSuggestedPrice({ product }: { product: ProductOut }) {
     product.allowed_decrease_percent,
     product.allowed_increase_percent
   )
+  const changePercent =
+    suggested !== null && product.price > 0
+      ? ((suggested - product.price) / product.price) * 100
+      : null
+
+  const hint = error
+    ? "دریافت تنظیمات ممکن نشد."
+    : weights === null
+      ? "در حال خواندن وزن‌ها…"
+      : weight === null
+        ? `برای گروه ${topGroup} وزنی ثبت نشده است.`
+        : suggested === null
+          ? tracking
+            ? "برای محاسبه، لینک تازه و تغییر قیمت دو روز لازم است."
+            : "قیمت تازه‌ای از فروشگاه رقیب ثبت نشده است."
+          : null
 
   return (
-    <section className="space-y-3 rounded-2xl border border-border bg-card p-4 text-start">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <h3 className="font-semibold">قیمت پیشنهادی</h3>
-          <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-            {tracking
-              ? "بر پایه قیمت پایه و تغییر روزانه محصول لینک‌شده"
-              : "ترکیب وزنی قیمت پایه و تازه‌ترین قیمت رقیب"}
-          </p>
-        </div>
-        {suggested !== null ? (
-          <Price value={suggested} className="text-lg font-bold" />
-        ) : (
-          <span className="text-sm text-muted-foreground">محاسبه نشد</span>
-        )}
-      </div>
-
-      {error ? (
-        <p className="text-xs text-destructive">دریافت تنظیمات ممکن نشد.</p>
-      ) : weights === null ? (
-        <p className="text-xs text-muted-foreground">در حال خواندن وزن‌ها…</p>
-      ) : weight === null ? (
-        <p className="text-xs text-muted-foreground">
-          برای گروه {topGroup} وزنی در تنظیمات قیمت‌گذاری ثبت نشده است.
-        </p>
-      ) : suggested === null ? (
-        <p className="text-xs text-muted-foreground">
-          {tracking
-            ? "برای این کالا لینک تازه و تغییر قیمت دو روز لازم است."
-            : "برای این کالا قیمت تازه‌ای از فروشگاه رقیب ثبت نشده است."}
-        </p>
-      ) : (
-        <div className="space-y-1.5 rounded-xl bg-muted/50 px-3 py-2 text-[11px] leading-5 text-muted-foreground">
-          {tracking ? (
-            <p dir="ltr" className="text-center font-mono">
-              P = Pb × (1 + {formatPersianNumber(weight)} ×{" "}
-              {competitor?.price_change_percent !== null &&
-              competitor?.price_change_percent !== undefined
-                ? formatPercent(competitor.price_change_percent)
-                : "Δ"}
-              )
-            </p>
+    <section className="rounded-2xl border border-border bg-card px-3 py-2.5 text-start">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+          <h3 className="shrink-0 text-xs font-medium text-muted-foreground">
+            قیمت پیشنهادی
+          </h3>
+          {suggested !== null ? (
+            <Price value={suggested} className="text-base font-bold" />
           ) : (
-            <p dir="ltr" className="text-center font-mono">
-              P = {formatPersianNumber(weight)} × Pc +{" "}
-              {formatPersianNumber(1 - weight)} × Pb
-            </p>
+            <span className="text-sm text-muted-foreground">محاسبه نشد</span>
           )}
-          <p>
-            کف مجاز:{" "}
-            {product.allowed_decrease_percent === null ? (
-              "بدون محدودیت"
-            ) : (
-              <Price
-                value={Math.round(
-                  product.price * (1 - product.allowed_decrease_percent / 100)
-                )}
-              />
-            )}{" "}
-            · سقف مجاز:{" "}
-            {product.allowed_increase_percent === null ? (
-              "بدون محدودیت"
-            ) : (
-              <Price
-                value={Math.round(
-                  product.price * (1 + product.allowed_increase_percent / 100)
-                )}
-              />
-            )}
-          </p>
         </div>
-      )}
+        {changePercent !== null ? (
+          <span
+            className={cn(
+              "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium",
+              changePercent > 0
+                ? "bg-destructive/10 text-destructive"
+                : changePercent < 0
+                  ? "bg-success/10 text-success"
+                  : "bg-muted text-muted-foreground"
+            )}
+          >
+            {formatPercent(changePercent)} نسبت به قیمت فعلی
+          </span>
+        ) : null}
+      </div>
+      {hint ? (
+        <p
+          className={cn(
+            "mt-1 text-[11px] leading-4",
+            error ? "text-destructive" : "text-muted-foreground"
+          )}
+        >
+          {hint}
+        </p>
+      ) : null}
     </section>
   )
 }

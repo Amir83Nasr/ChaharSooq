@@ -164,7 +164,7 @@ function FilledSlotCard({
   }
 
   return (
-    <article className="space-y-3 rounded-2xl border border-border bg-background p-3 sm:p-4">
+    <article className="space-y-2 rounded-2xl border border-border bg-background p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-1.5">
           <Badge variant="secondary">{listingStoreLabel(listing)}</Badge>
@@ -199,7 +199,7 @@ function FilledSlotCard({
         </a>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-2xl bg-muted/50 px-3 py-2">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 rounded-2xl bg-muted/50 px-3 py-1.5">
         <div>
           <p className="text-xs text-muted-foreground">
             {TRACKING_STORES.has(listing.store) ? "قیمت ثبت‌شده" : "قیمت مؤثر"}
@@ -271,17 +271,13 @@ function FilledSlotCard({
                 : "ناموجود"}
           </p>
         </div>
-        <div className="hidden sm:block">
-          <p className="text-xs text-muted-foreground">آخرین بررسی</p>
-          <p className="text-sm">
-            {listing.last_checked_at ? (
-              <PersianDateTime value={listing.last_checked_at} />
-            ) : (
-              "هنوز بررسی نشده"
-            )}
-          </p>
-        </div>
       </div>
+
+      {!canEdit && listing.last_checked_at ? (
+        <p className="text-[11px] text-muted-foreground">
+          آخرین بررسی: <PersianDateTime value={listing.last_checked_at} />
+        </p>
+      ) : null}
 
       {listing.last_error ? (
         <p role="alert" className="text-xs text-destructive">
@@ -316,7 +312,7 @@ function FilledSlotCard({
               autoCapitalize="off"
               spellCheck={false}
               inputMode="url"
-              className="h-10 w-full min-w-0 text-left text-sm text-ellipsis placeholder:font-normal placeholder:text-muted-foreground/40"
+              className="h-9 w-full min-w-0 text-left text-sm text-ellipsis placeholder:font-normal placeholder:text-muted-foreground/40"
               required
               disabled={busy}
             />
@@ -347,7 +343,7 @@ function FilledSlotCard({
             variant="outline"
             disabled={!canPersist}
             onClick={persistLink}
-            className="h-11 rounded-2xl sm:h-9"
+            className="h-11 rounded-2xl sm:h-8"
           >
             ذخیره لینک
           </Button>
@@ -356,11 +352,19 @@ function FilledSlotCard({
             variant="outline"
             disabled={busy || trimmedUrl === "" || urlMismatch}
             onClick={() => onCheck(url.trim())}
-            className="h-11 rounded-2xl sm:h-9"
+            className="h-11 rounded-2xl sm:h-8"
           >
             <BusyRefreshIcon busy={busy} />
             بررسی لینک
           </Button>
+          <span className="hidden text-[11px] leading-4 text-muted-foreground sm:inline">
+            آخرین بررسی:{" "}
+            {listing.last_checked_at ? (
+              <PersianDateTime value={listing.last_checked_at} />
+            ) : (
+              "هنوز بررسی نشده"
+            )}
+          </span>
           <span className="col-span-2 flex gap-1 sm:col-span-1 sm:ms-auto">
             <Button
               size="sm"
@@ -373,7 +377,7 @@ function FilledSlotCard({
                   onDelete()
                 }
               }}
-              className="h-11 w-full rounded-2xl sm:h-9 sm:w-auto"
+              className="h-11 w-full rounded-2xl sm:h-8 sm:w-auto"
             >
               <Trash2 /> حذف
             </Button>
@@ -406,7 +410,7 @@ function EmptySlotCard({
   }
 
   return (
-    <article className="space-y-3 rounded-2xl border border-dashed border-border bg-background p-3 sm:p-4">
+    <article className="space-y-3 rounded-2xl border border-dashed border-border bg-background p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-1.5">
           <Badge variant="secondary">{STORE_LABELS[store]}</Badge>
@@ -436,7 +440,7 @@ function EmptySlotCard({
             autoCapitalize="off"
             spellCheck={false}
             inputMode="url"
-            className="h-10 w-full min-w-0 text-left text-sm text-ellipsis placeholder:font-normal placeholder:text-muted-foreground/40"
+            className="h-9 w-full min-w-0 text-left text-sm text-ellipsis placeholder:font-normal placeholder:text-muted-foreground/40"
             required
             disabled={busy}
           />
@@ -452,7 +456,7 @@ function EmptySlotCard({
             size="sm"
             disabled={busy || trimmedUrl === "" || urlMismatch}
             aria-busy={busy}
-            className="h-11 w-full rounded-2xl sm:h-9 sm:w-auto"
+            className="h-11 w-full rounded-2xl sm:h-8 sm:w-auto"
           >
             <BusyLabel
               busy={busy}
@@ -616,13 +620,13 @@ export function ProductCompetitorPrices({
     : listings.filter((listing) => listing.store === "other")
 
   return (
-    <section className="space-y-4 rounded-2xl border border-border bg-muted/30 p-4 text-start">
+    <section className="space-y-2.5 rounded-2xl border border-border bg-muted/30 p-2.5 text-start">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <h3 className="font-semibold">
             {trackingOnly ? "تغییرات قیمت روزانه" : "قیمت فروشگاه‌های دیگر"}
           </h3>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground md:hidden">
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
             {trackingOnly
               ? canEdit
                 ? "لینک محصول را وارد کنید تا قیمت و تغییر روزانهٔ آن ثبت شود."
@@ -630,15 +634,6 @@ export function ProductCompetitorPrices({
               : canEdit
                 ? "لینک هر فروشگاه را وارد کنید تا قیمت به‌صورت خودکار بررسی شود."
                 : "قیمت‌ها و وضعیت ثبت‌شدهٔ فروشگاه‌ها را می‌بینید."}
-          </p>
-          <p className="mt-1 hidden text-xs leading-5 text-muted-foreground md:block">
-            {trackingOnly
-              ? canEdit
-                ? "لینک محصول را وارد کنید؛ قیمت مستقیماً وارد نمی‌شود. هر روز یک مشاهده ثبت می‌شود و درصد تغییر قیمت نسبت به روز قبل مبنای فرمول قیمت پیشنهادی این گروه است."
-                : "قیمت و درصد تغییر روزانهٔ ثبت‌شده برای این محصول نمایش داده می‌شود."
-              : canEdit
-                ? "برای هر فروشگاه یک کارت وجود دارد. لینک را وارد کنید تا ذخیره و به‌صورت خودکار بررسی شود؛ با «بررسی لینک» می‌توانید بعداً قیمت را به‌روزرسانی کنید و با «حذف» لینک دستی پاک می‌شود. با «به‌روزرسانی همه قیمت‌ها» همه لینک‌های فعال یکجا بررسی می‌شوند. قیمت فقط تا ۲۴ ساعت تازه محسوب می‌شود."
-                : "برای هر فروشگاه یک کارت وجود دارد؛ قیمت مؤثر، وضعیت بررسی و آخرین زمان بررسی را می‌بینید. قیمت فقط تا ۲۴ ساعت تازه محسوب می‌شود."}
           </p>
         </div>
         {canEdit ? (

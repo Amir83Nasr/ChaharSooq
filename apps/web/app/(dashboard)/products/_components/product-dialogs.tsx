@@ -100,31 +100,45 @@ export function ProductDetailDialog(props: {
     >
       <ResponsiveDialogContent
         aria-label="جزئیات کالا"
-        className="no-scrollbar max-h-[90dvh] overflow-y-auto rounded-t-2xl pb-[calc(1rem+env(safe-area-inset-bottom))] sm:max-w-5xl sm:rounded-2xl sm:pb-6"
+        className="no-scrollbar max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-2xl pb-[calc(1rem+env(safe-area-inset-bottom))] sm:max-w-5xl sm:rounded-2xl md:flex md:max-h-[96dvh] md:flex-col md:gap-3 md:overflow-hidden md:p-5"
       >
-        <ResponsiveDialogHeader>
+        <ResponsiveDialogHeader className="shrink-0 gap-1 pe-8">
           <ResponsiveDialogTitle>{product?.name ?? ""}</ResponsiveDialogTitle>
-          <ResponsiveDialogDescription>
-            {product ? `کد کالا: ${product.sku}` : ""}
+          <ResponsiveDialogDescription className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            {product ? (
+              <>
+                <span>کد کالا: {product.sku}</span>
+                <span aria-hidden="true" className="text-border">
+                  ·
+                </span>
+                <span>
+                  موجودی: <PersianNumber value={product.stock} /> عدد
+                </span>
+                <span aria-hidden="true" className="text-border">
+                  ·
+                </span>
+                <span>
+                  قیمت فعلی:{" "}
+                  <Price
+                    value={product.price}
+                    className="font-medium text-foreground"
+                  />
+                </span>
+              </>
+            ) : null}
           </ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
         {product ? (
-          <div className="no-scrollbar min-h-0 space-y-4 overflow-y-auto">
-            <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <div className="rounded-2xl border border-border px-3 py-2">
-                <dt className="text-xs text-muted-foreground">موجودی</dt>
-                <dd className="mt-0.5 font-semibold">
-                  <PersianNumber value={product.stock} /> عدد
-                </dd>
-              </div>
-              <div className="rounded-2xl border border-border px-3 py-2">
-                <dt className="text-xs text-muted-foreground">قیمت</dt>
-                <dd className="mt-0.5 font-semibold">
-                  <Price value={product.price} />
-                </dd>
-              </div>
-            </dl>
-            <ProductSuggestedPrice product={product} />
+          <div className="no-scrollbar min-h-0 space-y-3 md:grid md:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] md:items-start md:gap-3 md:space-y-0 md:overflow-y-auto md:pe-1">
+            <div className="space-y-3">
+              <ProductSuggestedPrice product={product} />
+              <ProductPriceBounds
+                product={product}
+                canEdit={canEdit}
+                onChanged={onCompetitorChanged}
+                onSaved={handleBoundsSaved}
+              />
+            </div>
             {topGroup ? (
               <ProductCompetitorPrices
                 productId={product.id}
@@ -134,12 +148,6 @@ export function ProductDetailDialog(props: {
                 canEdit={canEdit}
               />
             ) : null}
-            <ProductPriceBounds
-              product={product}
-              canEdit={canEdit}
-              onChanged={onCompetitorChanged}
-              onSaved={handleBoundsSaved}
-            />
           </div>
         ) : null}
       </ResponsiveDialogContent>

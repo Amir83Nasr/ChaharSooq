@@ -28,6 +28,13 @@ class AdminRepository:
     def list_all(self) -> list[Admin]:
         return list(self._session.execute(select(Admin).order_by(Admin.id)).scalars())
 
+    def list_by_roles(self, roles: tuple[str, ...]) -> list[Admin]:
+        return list(
+            self._session.execute(
+                select(Admin).where(Admin.role.in_(roles)).order_by(Admin.id)
+            ).scalars()
+        )
+
     def add(self, admin: Admin) -> Admin:
         self._session.add(admin)
         self._session.flush()

@@ -24,7 +24,9 @@ from app.services.settings import (
     SettingsService,
 )
 from app.services.users import (
+    CannotDeleteOwnerError,
     CannotDeleteSelfError,
+    ForbiddenRoleError,
     LastAdminError,
     UsernameTakenError,
     UserNotFoundError,
@@ -45,9 +47,11 @@ __all__ = [
     "DEFAULT_PAGE_SIZE",
     "DEFAULT_PAGE_SIZE_KEY",
     "AuthService",
+    "CannotDeleteOwnerError",
     "CannotDeleteSelfError",
     "CategoryService",
     "DashboardService",
+    "ForbiddenRoleError",
     "InvalidCategoryError",
     "LastAdminError",
     "ProductService",

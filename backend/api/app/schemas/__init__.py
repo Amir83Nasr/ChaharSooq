@@ -23,9 +23,10 @@ from app.schemas.dashboard import (
 )
 from app.schemas.settings import SettingsOut, SettingsUpdateIn
 from app.schemas.suggested_price import SuggestedPriceFormulaIn, SuggestedPriceFormulaOut
-from app.schemas.users import UserCreateIn, UserOut, UserRole
+from app.schemas.users import AssignableRole, UserCreateIn, UserOut, UserRole
 
 __all__ = [
+    "AssignableRole",
     "CatalogBrandOut",
     "CatalogSectionOut",
     "CategoryIn",

@@ -13,6 +13,10 @@ def login(client: TestClient) -> None:
     login_as(client, "admin", "secret123")
 
 
+def login_owner(client: TestClient) -> None:
+    login_as(client, "root", "root-pass-123")
+
+
 def seed(client: TestClient) -> dict[str, int]:
     login(client)
     ids: dict[str, int] = {}

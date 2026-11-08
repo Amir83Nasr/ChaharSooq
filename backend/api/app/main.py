@@ -88,13 +88,15 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    """Migrate, then start/stop the Parsina scheduler (never in tests)."""
+    """Migrate, ensure the env owner, then start/stop the Parsina scheduler."""
     from app.core.migrations import upgrade_to_head
     from app.core.scheduler import build_scheduler
+    from app.services.owner import bootstrap_owner
 
     settings = get_settings()
     if settings.app_env != "test":
         upgrade_to_head()
+        bootstrap_owner()
     scheduler = None if settings.app_env == "test" else build_scheduler()
     if scheduler is not None:
         scheduler.start()

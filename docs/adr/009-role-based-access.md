@@ -1,6 +1,9 @@
 # ADR 009 — Role-based access (admin vs viewer)
 
-Date: 2026-11-07 · Status: accepted
+Date: 2026-11-07 · Status: superseded by [ADR 010](010-owner-role.md)
+
+> The viewer rules below still hold; the top-level role is now `owner` and
+> `admin` is the middle management role. See ADR 010.
 
 ## Context
 

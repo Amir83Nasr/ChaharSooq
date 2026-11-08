@@ -5,6 +5,7 @@ import { PageHeader } from "@workspace/ui/layout/page-header"
 
 import { SettingsNav } from "@/components/settings/settings-nav"
 import { getSessionAdmin } from "@/lib/auth"
+import { isAdmin } from "@/lib/session"
 
 export const metadata: Metadata = { title: "چهارسوق | تنظیمات" }
 
@@ -16,7 +17,7 @@ export default async function SettingsLayout({
   const user = await getSessionAdmin()
   if (!user) redirect("/login")
   // Settings change shop-wide behaviour, so the read-only role never sees them.
-  if (user.role !== "admin") redirect("/products")
+  if (!isAdmin(user.role)) redirect("/products")
   return (
     <div className="flex flex-1 flex-col gap-4 sm:gap-6">
       <PageHeader title="تنظیمات" subtitle="پیکربندی فروشگاه" />

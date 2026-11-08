@@ -45,6 +45,11 @@ export const getSessionAdmin = cache(async (): Promise<SessionUser | null> => {
   return {
     id: data.id,
     username: data.username,
-    role: data.role === "admin" ? "admin" : "viewer",
+    role:
+      data.role === "owner"
+        ? "owner"
+        : data.role === "admin"
+          ? "admin"
+          : "viewer",
   }
 })

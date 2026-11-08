@@ -28,6 +28,13 @@ def client() -> Iterator[TestClient]:
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     with Session(engine) as s:
+        s.add(
+            Admin(
+                username="root",
+                password_hash=hash_password("root-pass-123"),
+                role="owner",
+            )
+        )
         s.add(Admin(username="admin", password_hash=hash_password("secret123")))
         s.commit()
     with TestClient(create_app()) as c:

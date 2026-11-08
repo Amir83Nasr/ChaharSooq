@@ -3,7 +3,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 # Repository layout: backend/api/app/core/config.py → backend/api → repo root.
@@ -34,6 +34,16 @@ class Settings(BaseSettings):
     session_cookie_name: str = Field(default="charsooq_session")
     session_ttl_hours: int = Field(default=12)
     session_samesite: Literal["lax", "none"] = Field(default="lax")
+    # Highest-privilege account, created/updated on every API boot. Legacy
+    # ADMIN_USER / ADMIN_PASSWORD stay accepted as aliases for existing envs.
+    owner_username: str = Field(
+        default="admin",
+        validation_alias=AliasChoices("OWNER_USERNAME", "ADMIN_USER", "owner_username"),
+    )
+    owner_password: str = Field(
+        default="",
+        validation_alias=AliasChoices("OWNER_PASSWORD", "ADMIN_PASSWORD", "owner_password"),
+    )
     # Optional Redis URL for cross-worker rate limiting (e.g. redis://localhost:6379/0).
     # Empty means single-process in-memory limiting (dev / single replica).
     # Requires the optional `redis` library wherever set (see pyproject note).
@@ -83,6 +93,11 @@ class Settings(BaseSettings):
                 raise ValueError("SESSION_SECRET must be set explicitly in production")
             if len(self.session_secret.encode()) < 32:
                 raise ValueError("SESSION_SECRET must be at least 32 bytes in production")
+            if len(self.owner_password) < 8:
+                raise ValueError("OWNER_PASSWORD must be at least 8 characters in production")
+        self.owner_username = self.owner_username.strip()
+        if not self.owner_username:
+            raise ValueError("OWNER_USERNAME must not be empty")
         return self
 
     @property

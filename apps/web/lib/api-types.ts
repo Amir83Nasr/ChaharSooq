@@ -189,7 +189,9 @@ export interface ApiError {
   }
 }
 
-export type UserRole = "admin" | "viewer"
+export type UserRole = "owner" | "admin" | "viewer"
+/** Roles the panel may assign; the owner comes from the environment. */
+export type AssignableRole = Exclude<UserRole, "owner">
 
 export interface MeOut {
   id: number
@@ -207,7 +209,7 @@ export interface UserOut {
 export interface UserCreate {
   username: string
   password: string
-  role: UserRole
+  role: AssignableRole
 }
 
 export type ProductTableColumn =

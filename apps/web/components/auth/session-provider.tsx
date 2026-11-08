@@ -5,7 +5,7 @@ import { createContext, useContext, type ReactNode } from "react"
 import { isAdmin, type SessionUser } from "@/lib/session"
 
 type SessionContextValue = SessionUser & {
-  /** True for the full-management role; read-only accounts get `false`. */
+  /** True for the management roles (`owner`/`admin`); read-only gets `false`. */
   canManage: boolean
 }
 

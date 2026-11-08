@@ -24,9 +24,16 @@ import {
 import { Skeleton } from "@workspace/ui/primitives/skeleton"
 import { PersianDateTime } from "@workspace/ui/persian/persian-date"
 
-import { api, ApiRequestError, type UserOut, type UserRole } from "@/lib/api"
+import {
+  api,
+  ApiRequestError,
+  type AssignableRole,
+  type UserOut,
+  type UserRole,
+} from "@/lib/api"
 
 const ROLE_LABELS: Record<UserRole, string> = {
+  owner: "مالک",
   admin: "مدیر",
   viewer: "کاربر",
 }
@@ -41,14 +48,20 @@ function errorMessage(error: unknown): string {
   return "خطایی رخ داد. لطفاً دوباره تلاش کنید."
 }
 
-export function UsersView({ currentUsername }: { currentUsername: string }) {
+export function UsersView({
+  currentUsername,
+  isOwner,
+}: {
+  currentUsername: string
+  isOwner: boolean
+}) {
   const [users, setUsers] = useState<UserOut[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
-  const [role, setRole] = useState<UserRole>("viewer")
+  const [role, setRole] = useState<AssignableRole>("viewer")
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [formError, setFormError] = useState<string | null>(null)
   const [created, setCreated] = useState<string | null>(null)
@@ -157,6 +170,9 @@ export function UsersView({ currentUsername }: { currentUsername: string }) {
           <CardDescription>
             «کاربر» فقط می‌تواند اطلاعات و مشخصات را ببیند؛ «مدیر» همه بخش‌ها را
             مدیریت می‌کند.
+            {isOwner
+              ? " به‌عنوان مالک می‌توانید مدیر هم بسازید."
+              : " ساخت مدیر فقط توسط مالک انجام می‌شود."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -226,24 +242,30 @@ export function UsersView({ currentUsername }: { currentUsername: string }) {
 
             <div className="flex flex-col gap-2">
               <span className="text-sm font-medium">سطح دسترسی</span>
-              <Select
-                value={role}
-                onValueChange={(value) => setRole(value as UserRole)}
-              >
-                <SelectTrigger className="h-10" aria-label="سطح دسترسی">
-                  <SelectValue>
-                    {(value: string | null) =>
-                      value
-                        ? (ROLE_LABELS[value as UserRole] ?? "کاربر")
-                        : "کاربر"
-                    }
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent align="start">
-                  <SelectItem value="viewer">کاربر — فقط مشاهده</SelectItem>
-                  <SelectItem value="admin">مدیر — دسترسی کامل</SelectItem>
-                </SelectContent>
-              </Select>
+              {isOwner ? (
+                <Select
+                  value={role}
+                  onValueChange={(value) => setRole(value as AssignableRole)}
+                >
+                  <SelectTrigger className="h-10" aria-label="سطح دسترسی">
+                    <SelectValue>
+                      {(value: string | null) =>
+                        value
+                          ? (ROLE_LABELS[value as UserRole] ?? "کاربر")
+                          : "کاربر"
+                      }
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent align="start">
+                    <SelectItem value="viewer">کاربر — فقط مشاهده</SelectItem>
+                    <SelectItem value="admin">مدیر — دسترسی کامل</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                  کاربر — فقط مشاهده
+                </p>
+              )}
             </div>
 
             {formError ? (
@@ -331,14 +353,16 @@ export function UsersView({ currentUsername }: { currentUsername: string }) {
                       </div>
                     </div>
                     <Badge
-                      variant={user.role === "admin" ? "default" : "secondary"}
+                      variant={user.role === "viewer" ? "secondary" : "default"}
                     >
                       {ROLE_LABELS[user.role]}
                     </Badge>
                     <Button
                       variant="destructive"
                       size="sm"
-                      disabled={isSelf || deletingId !== null}
+                      disabled={
+                        isSelf || user.role === "owner" || deletingId !== null
+                      }
                       aria-busy={deletingId === user.id}
                       onClick={() => void deleteUser(user)}
                       className="h-9 gap-1.5"

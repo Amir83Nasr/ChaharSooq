@@ -1,8 +1,13 @@
-"""Role-based access + admin user management."""
+"""Role-based access + owner/admin user management."""
 
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
-from tests.helpers import login, login_as
+from app.core.database import get_engine
+from app.core.security import hash_password
+from app.models import Admin
+from app.models.auth import ROLE_OWNER
+from tests.helpers import login, login_as, login_owner
 
 VIEWER_PASSWORD = "viewer-pass-123"
 
@@ -19,11 +24,18 @@ def create_viewer(client: TestClient, username: str = "viewer") -> dict[str, obj
     return body
 
 
-def test_admin_can_list_users(client: TestClient) -> None:
+def user_id(username: str) -> int:
+    with Session(get_engine()) as session:
+        return session.query(Admin).filter_by(username=username).one().id
+
+
+def test_admin_lists_only_viewers(client: TestClient) -> None:
     login(client)
+    create_viewer(client)
     r = client.get("/api/v1/users")
     assert r.status_code == 200
-    assert [user["username"] for user in r.json()] == ["admin"]
+    # The owner and other admins stay hidden from an admin.
+    assert [user["username"] for user in r.json()] == ["viewer"]
 
 
 def test_admin_creates_viewer_with_read_only_access(client: TestClient) -> None:
@@ -38,7 +50,7 @@ def test_admin_creates_viewer_with_read_only_access(client: TestClient) -> None:
     assert client.get("/api/v1/categories").status_code == 200
     assert client.get("/api/v1/integrations/parsina/status").status_code == 200
 
-    # Writes and account management require the admin role.
+    # Writes and account management require a management role.
     product = {"name": "کالای آزمایشی", "sku": "VIEW-1", "price": 100, "stock": 1}
     writes = [
         client.post("/api/v1/products", json=product),
@@ -57,13 +69,29 @@ def test_admin_creates_viewer_with_read_only_access(client: TestClient) -> None:
         assert response.json()["error"]["code"] == "forbidden"
 
 
-def test_admin_creates_another_admin(client: TestClient) -> None:
+def test_admin_cannot_create_admin(client: TestClient) -> None:
     login(client)
     r = client.post(
         "/api/v1/users",
         json={"username": "second-admin", "password": "second-pass-123", "role": "admin"},
     )
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "forbidden"
+
+
+def test_owner_lists_every_account_and_creates_admins(client: TestClient) -> None:
+    login_owner(client)
+    assert [user["username"] for user in client.get("/api/v1/users").json()] == [
+        "root",
+        "admin",
+    ]
+    r = client.post(
+        "/api/v1/users",
+        json={"username": "second-admin", "password": "second-pass-123", "role": "admin"},
+    )
     assert r.status_code == 201, r.text
+    assert r.json()["role"] == "admin"
+
     login_as(client, "second-admin", "second-pass-123")
     assert client.get("/api/v1/users").status_code == 200
 
@@ -95,15 +123,15 @@ def test_short_password_is_rejected_with_persian_details(client: TestClient) -> 
 def test_delete_user_removes_account_and_sessions(client: TestClient) -> None:
     login(client)
     created = create_viewer(client)
-    user_id = created["id"]
+    user_id_value = created["id"]
 
     login_as(client, "viewer", VIEWER_PASSWORD)
     viewer_cookie = client.cookies.get("charsooq_session")
     assert viewer_cookie
 
     login(client)
-    assert client.delete(f"/api/v1/users/{user_id}").status_code == 204
-    assert [u["username"] for u in client.get("/api/v1/users").json()] == ["admin"]
+    assert client.delete(f"/api/v1/users/{user_id_value}").status_code == 204
+    assert client.get("/api/v1/users").json() == []
 
     stale = TestClient(client.app)
     stale.cookies.set("charsooq_session", viewer_cookie)
@@ -117,6 +145,51 @@ def test_admin_cannot_delete_self(client: TestClient) -> None:
     assert r.status_code == 409
     assert "خودتان" in r.json()["error"]["message"]
     assert client.get("/api/v1/users").status_code == 200
+
+
+def test_admin_cannot_delete_higher_roles(client: TestClient) -> None:
+    login(client)
+    # Hidden accounts answer 404 so admin usernames never leak to an admin.
+    assert client.delete(f"/api/v1/users/{user_id('root')}").status_code == 404
+    assert client.delete(f"/api/v1/users/{user_id('admin')}").status_code == 409
+
+
+def test_owner_deletes_another_admin(client: TestClient) -> None:
+    login_owner(client)
+    r = client.post(
+        "/api/v1/users",
+        json={"username": "second-admin", "password": "second-pass-123", "role": "admin"},
+    )
+    assert r.status_code == 201, r.text
+    second_id = r.json()["id"]
+    assert client.delete(f"/api/v1/users/{second_id}").status_code == 204
+    assert [user["username"] for user in client.get("/api/v1/users").json()] == [
+        "root",
+        "admin",
+    ]
+
+
+def test_owner_account_cannot_be_deleted(client: TestClient) -> None:
+    with Session(get_engine()) as session:
+        session.add(
+            Admin(
+                username="root2",
+                password_hash=hash_password(VIEWER_PASSWORD),
+                role=ROLE_OWNER,
+            )
+        )
+        session.commit()
+    login_owner(client)
+    r = client.delete(f"/api/v1/users/{user_id('root2')}")
+    assert r.status_code == 409
+    assert "مالک" in r.json()["error"]["message"]
+
+
+def test_last_admin_cannot_be_deleted(client: TestClient) -> None:
+    login_owner(client)
+    r = client.delete(f"/api/v1/users/{user_id('admin')}")
+    assert r.status_code == 409
+    assert "مدیر" in r.json()["error"]["message"]
 
 
 def test_delete_unknown_user_is_404(client: TestClient) -> None:

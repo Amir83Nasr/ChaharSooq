@@ -12,7 +12,7 @@ from app.core.database import get_readonly_session as _get_readonly_session
 from app.core.database import get_session as _get_session
 from app.core.errors import FORBIDDEN, LOGIN_REQUIRED
 from app.models import Admin
-from app.models.auth import ROLE_ADMIN
+from app.models.auth import ROLE_ADMIN, ROLE_OWNER
 from app.services import AuthService
 
 
@@ -62,7 +62,11 @@ def require_user(
 def require_admin(
     admin: Annotated[Admin, Depends(require_user)],
 ) -> Admin:
-    """Signed-in account with the `admin` role (write endpoints + user management)."""
-    if admin.role != ROLE_ADMIN:
+    """Signed-in management account (`owner` or `admin`) — write endpoints.
+
+    Owner-only operations are decided in the service layer from the actor's
+    role, because `/users` is shared by both management roles.
+    """
+    if admin.role not in (ROLE_OWNER, ROLE_ADMIN):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=FORBIDDEN)
     return admin

@@ -19,8 +19,6 @@ help: ## Show this help message
 
 # ─── CONFIG / VARIABLES ───────────────────────────────────
 COMPOSE_FILE ?= compose.yml ## Compose file used by up/down/logs
-ADMIN_USER ?= admin ## Admin username for db-seed and db-seed-prod
-DEV_ADMIN_PASSWORD ?= secret123 ## Dev-only admin password for db-seed (never used in prod)
 DB_PORT ?= 5433 ## Host port of the dev postgres db-wait/dev-api expect
 YES ?= 0 ## Set YES=1 to skip the confirmation prompt for db-sync-dev-to-prod
 
@@ -70,8 +68,7 @@ db-wait: ## Wait up to 20s for dev postgres to accept connections (no DB needed 
 db-migrate: db-up ## Apply Alembic migrations to dev database
 	cd backend/api && uv run --no-sync alembic upgrade head
 
-db-seed: db-migrate ## Create dev admin user (ADMIN_USER, ADMIN_PASSWORD or DEV_ADMIN_PASSWORD)
-	ADMIN_USER="$(strip $(ADMIN_USER))" ADMIN_PASSWORD="$(strip $(or $(ADMIN_PASSWORD),$(DEV_ADMIN_PASSWORD)))" \
+db-seed: db-migrate ## Ensure the env-managed owner (OWNER_USERNAME, OWNER_PASSWORD)
 	uv run --no-sync --project backend/api python backend/api/scripts/seed_admin.py
 
 db-seed-parsina: db-migrate ## Upsert data/parsina.csv into dev DB (keeps product ids + links)
@@ -90,9 +87,8 @@ db-clear-products: db-migrate ## Delete all products + competitor listings from 
 db-migrate-prod: ## Manually apply migrations to prod Neon (fallback; deploys auto-migrate on boot)
 	cd backend/api && uv run --no-sync --env-file $(CURDIR)/.env.production alembic upgrade head
 
-db-seed-prod: ## Create prod admin user (requires ADMIN_PASSWORD=... on the command line)
-	@test -n "$(strip $(ADMIN_PASSWORD))" || { echo "ADMIN_PASSWORD is required for db-seed-prod" >&2; exit 1; }
-	ADMIN_USER="$(strip $(ADMIN_USER))" ADMIN_PASSWORD="$(strip $(ADMIN_PASSWORD))" \
+db-seed-prod: ## Ensure the prod owner (reads OWNER_PASSWORD from .env.production)
+	@test -f $(CURDIR)/.env.production || { echo ".env.production is required" >&2; exit 1; }
 	uv run --no-sync --project backend/api --env-file $(CURDIR)/.env.production python backend/api/scripts/seed_admin.py
 
 # ─── DATABASE: SYNC DEV → PROD ─────────────────────────────

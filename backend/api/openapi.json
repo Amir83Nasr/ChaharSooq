@@ -1865,7 +1865,7 @@
           "Users"
         ],
         "summary": "List users",
-        "description": "Every login account with its role. Admin-only; write endpoints that use this list require the same role.",
+        "description": "The owner sees every account; an admin sees only viewer accounts. Write endpoints use the same visibility and permission rules.",
         "operationId": "list_users",
         "responses": {
           "200": {
@@ -1914,7 +1914,7 @@
           "Users"
         ],
         "summary": "Create user",
-        "description": "Creates a login account. `role=admin` grants full management; `role=viewer` can only read. Duplicate usernames return `409`.",
+        "description": "Creates a login account. The owner may create `admin` or `viewer` accounts; an admin may create viewers only. Duplicate usernames return `409`.",
         "operationId": "create_user",
         "requestBody": {
           "content": {
@@ -1991,7 +1991,7 @@
           "Users"
         ],
         "summary": "Delete user",
-        "description": "Deletes the account and every active session it owns. An admin cannot delete their own account, and the last admin cannot be removed.",
+        "description": "Deletes the account and every active session it owns. The owner may delete admins and viewers; an admin may delete viewers only. No one can delete their own account and the env-managed owner cannot be removed. The last admin cannot be deleted.",
         "operationId": "delete_user",
         "security": [
           {
@@ -3213,6 +3213,7 @@
           "role": {
             "type": "string",
             "enum": [
+              "owner",
               "admin",
               "viewer"
             ],
@@ -3939,7 +3940,7 @@
               "viewer"
             ],
             "title": "Role",
-            "description": "`admin` manages everything; `viewer` has read-only access.",
+            "description": "`admin` manages shop data and viewers (owner only); `viewer` has read-only access.",
             "default": "viewer"
           }
         },
@@ -3972,11 +3973,12 @@
           "role": {
             "type": "string",
             "enum": [
+              "owner",
               "admin",
               "viewer"
             ],
             "title": "Role",
-            "description": "Access level: `admin` or `viewer`."
+            "description": "Access level: `owner`, `admin`, or `viewer`."
           },
           "created_at": {
             "type": "string",

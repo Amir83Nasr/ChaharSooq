@@ -1,4 +1,4 @@
-"""Account model — admins and read-only viewers share one login table."""
+"""Account model — owner, admins, and read-only viewers share one login table."""
 
 from datetime import datetime
 
@@ -8,20 +8,27 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
 from app.models.base import utcnow
 
+ROLE_OWNER = "owner"
 ROLE_ADMIN = "admin"
 ROLE_VIEWER = "viewer"
-ROLES = (ROLE_ADMIN, ROLE_VIEWER)
+ROLES = (ROLE_OWNER, ROLE_ADMIN, ROLE_VIEWER)
+# Roles the panel may assign when creating an account. The owner itself is
+# env-managed (see app/services/owner.py) and never created from the panel.
+ASSIGNABLE_ROLES = (ROLE_ADMIN, ROLE_VIEWER)
 
 
 class Admin(Base):
-    """One login account, seeded by scripts/seed_admin.py or created in the panel.
+    """One login account, seeded from the env owner or created in the panel.
 
-    ``role`` decides what the account may do: ``admin`` manages everything
-    (including users), ``viewer`` is read-only.
+    ``role`` decides what the account may do: ``owner`` manages everything
+    (including admins), ``admin`` manages shop data and viewers, ``viewer``
+    is read-only.
     """
 
     __tablename__ = "admins"
-    __table_args__ = (CheckConstraint("role IN ('admin', 'viewer')", name="ck_admins_role"),)
+    __table_args__ = (
+        CheckConstraint("role IN ('owner', 'admin', 'viewer')", name="ck_admins_role"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     username: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)

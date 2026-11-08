@@ -32,7 +32,7 @@ Run everything from the repository root with make (`make help` lists all targets
 make install           # install frontend + backend deps
 make db-up             # start dev postgres (compose, host :5433)
 make db-migrate        # apply Alembic migrations to dev database
-make db-seed           # create dev admin (DEV_ADMIN_PASSWORD, default secret123)
+make db-seed           # ensure the env-managed owner (OWNER_USERNAME/OWNER_PASSWORD)
 make db-seed-parsina   # upsert data/parsina.csv into the dev catalog (keeps links)
 make db-seed-demo      # add demo competitor prices, daily changes, weights and price bounds
 make dev-all           # postgres + migrate, then backend :8000 + frontend :3000
@@ -82,31 +82,38 @@ cache copy; `make clean-build` removes `.next` and Playwright artifacts.
 
 Each app owns its env file: [backend/api/.env.example](backend/api/.env.example) (copy to `backend/api/.env.local`) and [apps/web/.env.example](apps/web/.env.example) (copy to `apps/web/.env.local`). Never commit real secrets. The backend reads its env file by absolute path, so the API, Alembic, and the seed scripts always target the same configuration. A shared root `.env.local` (or `.env`) is also loaded by both apps as a fallback, which is convenient for LAN/mobile dev (e.g. whitelisting device IPs in `ALLOWED_DEV_ORIGINS` / `CORS_ORIGINS`); per-app values take precedence.
 
-| Variable                        | Purpose                                                                                                                                                                                                                                                   |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `APP_ENV`                       | `development` / `test` / `production` (Secure cookies only in production)                                                                                                                                                                                 |
-| `DATABASE_URL`                  | SQLAlchemy URL, e.g. `postgresql+psycopg://charsooq:charsooq@localhost:5433/charsooq`                                                                                                                                                                     |
-| `SESSION_SECRET`                | Session signing secret; change the dev default in production                                                                                                                                                                                              |
-| `SESSION_SAMESITE`              | `lax` (same-site dev) / `none` (Vercel frontend + separate API host)                                                                                                                                                                                      |
-| `API_URL_INTERNAL`              | Server-side API origin for Next `/api/*` rewrites; falls back to `NEXT_PUBLIC_API_URL`                                                                                                                                                                    |
-| `NEXT_PUBLIC_API_URL`           | API origin fallback for rewrites (browser always calls same-origin `/api/*`)                                                                                                                                                                              |
-| `CORS_ORIGINS`                  | Backend CORS allowlist, comma-separated                                                                                                                                                                                                                   |
-| `ALLOWED_DEV_ORIGINS`           | Extra Next.js dev origins, comma-separated                                                                                                                                                                                                                |
-| `ADMIN_USER` / `ADMIN_PASSWORD` | Admin seed credentials. `make db-seed` uses `ADMIN_PASSWORD` or `DEV_ADMIN_PASSWORD` (default `secret123`). `make db-seed-prod` **requires** `ADMIN_PASSWORD=…` on the command line                                                                       |
-| `PARSINA_*`                     | Parsina accounting API (URL, credentials, org, year, optional warehouse/sale-type). Empty = integration off. `PARSINA_SYNC_INTERVAL_MINUTES` (default 1440) seeds the initial auto-sync interval and `PARSINA_SYNC_ENABLED` toggles the backend scheduler |
-| `PRODUCTS_CSV_PATH`             | Development-only product CSV; defaults to `<repo>/data/parsina.csv`                                                                                                                                                                                       |
+| Variable              | Purpose                                                                                                                                                                                                                                                   |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `APP_ENV`             | `development` / `test` / `production` (Secure cookies only in production)                                                                                                                                                                                 |
+| `DATABASE_URL`        | SQLAlchemy URL, e.g. `postgresql+psycopg://charsooq:charsooq@localhost:5433/charsooq`                                                                                                                                                                     |
+| `SESSION_SECRET`      | Session signing secret; change the dev default in production                                                                                                                                                                                              |
+| `SESSION_SAMESITE`    | `lax` (same-site dev) / `none` (Vercel frontend + separate API host)                                                                                                                                                                                      |
+| `API_URL_INTERNAL`    | Server-side API origin for Next `/api/*` rewrites; falls back to `NEXT_PUBLIC_API_URL`                                                                                                                                                                    |
+| `NEXT_PUBLIC_API_URL` | API origin fallback for rewrites (browser always calls same-origin `/api/*`)                                                                                                                                                                              |
+| `CORS_ORIGINS`        | Backend CORS allowlist, comma-separated                                                                                                                                                                                                                   |
+| `ALLOWED_DEV_ORIGINS` | Extra Next.js dev origins, comma-separated                                                                                                                                                                                                                |
+| `OWNER_USERNAME`      | Highest-privilege `owner` login. Defaults to `admin`. The API creates this account on boot and keeps it in sync with the env.                                                                                                                             |
+| `OWNER_PASSWORD`      | Owner password. Required in production (minimum 8 characters). Changing it re-hashes the account and revokes its sessions on the next boot.                                                                                                               |
+| `PARSINA_*`           | Parsina accounting API (URL, credentials, org, year, optional warehouse/sale-type). Empty = integration off. `PARSINA_SYNC_INTERVAL_MINUTES` (default 1440) seeds the initial auto-sync interval and `PARSINA_SYNC_ENABLED` toggles the backend scheduler |
+| `PRODUCTS_CSV_PATH`   | Development-only product CSV; defaults to `<repo>/data/parsina.csv`                                                                                                                                                                                       |
 
 ## Roles and users
 
-Accounts have one of two roles. `admin` manages everything; `viewer` is read-only (catalog, dashboard, integration pages, and the settings values those views use). Admins manage accounts from `/users` in the panel or through `/api/v1/users`:
+Accounts have one of three roles:
+
+| Role     | Can do                                                                                             |
+| -------- | -------------------------------------------------------------------------------------------------- |
+| `owner`  | Everything, including creating/removing admins. Comes only from `OWNER_USERNAME`/`OWNER_PASSWORD`. |
+| `admin`  | Shop data (products, categories, settings, sync) and viewer management. Never sees other admins.   |
+| `viewer` | Read-only: catalog, dashboard, integration pages, and the settings values those views use.         |
+
+`/users` is available to the owner and admins. The owner sees every account and may create `admin` or `viewer` accounts. An admin sees only viewer accounts and may create/delete viewers; the owner and other admins stay hidden. Viewers get `403 forbidden` on every write. `/settings` is available to the owner and admins; the sidebar hides the سیستم group from viewers. See [docs/architecture/authentication.md](docs/architecture/authentication.md) and [ADR 010](docs/adr/010-owner-role.md).
 
 ```bash
-GET    /api/v1/users          # admin only
+GET    /api/v1/users          # owner: all accounts; admin: viewers only
 POST   /api/v1/users          # { "username", "password", "role": "admin" | "viewer" }
 DELETE /api/v1/users/{id}     # also revokes that account's sessions
 ```
-
-An admin cannot delete their own account, and the last admin cannot be removed. Viewers get `403 forbidden` on every write. `/settings` and `/users` are admin-only in the UI; write buttons are hidden for viewers. See [docs/architecture/authentication.md](docs/architecture/authentication.md) and [ADR 009](docs/adr/009-role-based-access.md).
 
 ## Product data sources
 
@@ -125,13 +132,13 @@ Competitor links and observations are stored separately from the Parsina catalog
 
 ```bash
 make db-migrate        # dev: start postgres + `alembic upgrade head`
-make db-seed            # dev admin user
+make db-seed            # ensure the owner account from OWNER_USERNAME/OWNER_PASSWORD
 make db-seed-parsina    # upsert dev product catalog from data/parsina.csv
 make db-seed-demo       # demo competitor prices + daily changes for the products table
 make db-sync-dev-to-prod # upsert dev data into prod; never deletes products or links
 
 make db-migrate-prod                          # prod Neon: migrations (reads .env.production)
-make db-seed-prod ADMIN_PASSWORD=<password>   # prod Neon: admin user (password required)
+make db-seed-prod                             # prod Neon: ensure owner (OWNER_PASSWORD required)
 ```
 
 ## Migrations

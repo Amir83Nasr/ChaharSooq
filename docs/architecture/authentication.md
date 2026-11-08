@@ -13,15 +13,17 @@ Password flow: `POST /api/v1/auth/login` → HttpOnly session cookie → `GET /a
 
 Every account has one role in `admins.role`:
 
-| Role     | Can do                                                                                     |
-| -------- | ------------------------------------------------------------------------------------------ |
-| `admin`  | Everything: reads, catalog/settings writes, sync triggers, and user management.            |
-| `viewer` | Read-only: catalog, dashboard, integration pages, and the settings values those views use. |
+| Role     | Can do                                                                                             |
+| -------- | -------------------------------------------------------------------------------------------------- |
+| `owner`  | Everything, including creating/removing admins. Comes only from `OWNER_USERNAME`/`OWNER_PASSWORD`. |
+| `admin`  | Shop data (products, categories, settings, sync) and viewer management. Never sees other admins.   |
+| `viewer` | Read-only: catalog, dashboard, integration pages, and the settings values those views use.         |
 
-- Backend: read routes depend on `require_user`; every write route and `/api/v1/users*` depends on `require_admin`. A viewer calling a write endpoint gets `403 forbidden` (`دسترسی ندارید`).
-- User management: an admin lists/creates/deletes accounts at `/api/v1/users`. Creating accepts `username`, `password`, and `role` (default `viewer`). Passwords are minimum 8 characters. Deleting revokes that account's active sessions; an admin cannot delete their own account, and the last admin cannot be removed.
-- Frontend: `/auth/me` returns `id`, `username`, and `role`. The session context hides write controls and the settings/users navigation for viewers; `/settings` and `/users` redirect viewers to `/products`. These are UX guards only — the API enforces the role.
+- The owner is env-managed: on every API boot (after migrations) `app/services/owner.py` creates the account if missing, re-hashes it when `OWNER_PASSWORD` changes, revokes its sessions, and demotes any other `owner` row. Production refuses to boot when the password is missing or shorter than 8 characters.
+- Backend: read routes depend on `require_user`; every write route, `/api/v1/users*`, and `/api/v1/settings*` depend on `require_admin`, which accepts `owner` and `admin`. Owner-only decisions are made in `UserService` from the actor's role. A viewer calling a write endpoint gets `403 forbidden` (`دسترسی ندارید`).
+- User management: `GET /api/v1/users` returns every account for the owner and only viewers for an admin. `POST` accepts `username`, `password`, and `role` (default `viewer`); an admin may create viewers only, the owner may also create admins. Passwords are minimum 8 characters. Deleting revokes that account's active sessions; nobody can delete their own account, the owner cannot be deleted from the panel, and the last admin cannot be removed.
+- Frontend: `/auth/me` returns `id`, `username`, and `role`. The session context treats `owner` and `admin` as management roles, hiding write controls and the settings/users navigation from viewers; `/settings` and `/users` redirect viewers to `/products`. An admin's `/users` form only offers the viewer role. These are UX guards only — the API enforces the role.
 
-Seed: `scripts/seed_admin.py` creates an `admin`. New accounts are created in the panel at `/users`.
+Seed: `scripts/seed_admin.py` ensures the env owner (same service as API boot). New admin/viewer accounts are created in the panel at `/users`.
 
-ADR: [002-authentication](../adr/002-authentication.md), [009-role-based-access](../adr/009-role-based-access.md).
+ADR: [002-authentication](../adr/002-authentication.md), [009-role-based-access](../adr/009-role-based-access.md), [010-owner-role](../adr/010-owner-role.md).

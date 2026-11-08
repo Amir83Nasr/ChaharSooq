@@ -27,7 +27,7 @@ export function BusyLabel({
       <span
         aria-hidden={busy || undefined}
         className={cn(
-          "col-start-1 row-start-1 transition-opacity duration-200 ease-out motion-reduce:transition-none",
+          "col-start-1 row-start-1 flex items-center justify-center transition-opacity duration-200 ease-out motion-reduce:transition-none",
           busy ? "opacity-0" : "opacity-100"
         )}
       >
@@ -36,7 +36,7 @@ export function BusyLabel({
       <span
         aria-hidden={busy ? undefined : true}
         className={cn(
-          "col-start-1 row-start-1 transition-opacity duration-200 ease-out motion-reduce:transition-none",
+          "col-start-1 row-start-1 flex items-center justify-center transition-opacity duration-200 ease-out motion-reduce:transition-none",
           busy ? "opacity-100" : "opacity-0"
         )}
       >

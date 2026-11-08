@@ -15,6 +15,15 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_engine
 
+# Demo rows use this path segment so seeds can refresh only their own links
+# and the dev → prod sync can leave them behind.
+DEMO_COMPETITOR_URL_MARKER = "/product/demo-"
+
+
+def is_demo_competitor_url(url: str) -> bool:
+    """True for competitor links created by `seed_demo_competitors.py`."""
+    return DEMO_COMPETITOR_URL_MARKER in url
+
 
 def require_env(name: str) -> str:
     """Read a required env var or exit with a actionable message."""

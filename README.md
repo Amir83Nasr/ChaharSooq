@@ -34,6 +34,7 @@ make db-up             # start dev postgres (compose, host :5433)
 make db-migrate        # apply Alembic migrations to dev database
 make db-seed           # create dev admin (DEV_ADMIN_PASSWORD, default secret123)
 make db-seed-parsina   # upsert data/parsina.csv into the dev catalog (keeps links)
+make db-seed-demo      # add demo competitor prices, daily changes, weights and price bounds
 make dev-all           # postgres + migrate, then backend :8000 + frontend :3000
 ```
 
@@ -112,7 +113,7 @@ An admin cannot delete their own account, and the last admin cannot be removed. 
 Products mirror an external catalog (`external_id` = Parsina `goodId`), and the GET endpoints always read the local mirror. Where the mirror comes from depends on `APP_ENV`:
 
 - **production** — live Parsina API (`PARSINA_*` credentials). The backend scheduler syncs at the interval configured in Settings (default `PARSINA_SYNC_INTERVAL_MINUTES`, 1440); the products page has a «به‌روزرسانی از پارسینا» button for a manual run.
-- **development** — `data/parsina.csv` (an export of the live catalog, same field names). `make db-seed-parsina` upserts it into the dev product mirror; existing product ids, categories, and competitor links are kept and rows missing from the CSV are deactivated, never deleted. The same button re-imports the file. No Parsina credentials are needed; the scheduler ticks on the same interval from the CSV, like production. The export only carries `countUnit` ids, so the CSV source supplies mock unit titles to keep the dev catalog identical to production.
+- **development** — `data/parsina.csv` (an export of the live catalog, same field names). `make db-seed-parsina` upserts it into the dev product mirror; existing product ids, categories, and competitor links are kept and rows missing from the CSV are deactivated, never deleted. The same button re-imports the file. No Parsina credentials are needed; the scheduler ticks on the same interval from the CSV, like production. The export only carries `countUnit` ids, so the CSV source supplies mock unit titles to keep the dev catalog identical to production. `make db-seed-demo` additionally gives every active product demo competitor prices (Digikala/Technolife for appliances, Sofa for furniture, DigiFresh for carpets) with two daily observations, the missing suggested-price weights, and demo floor/ceiling percentages (only where a product has no saved clamp), so all products-table columns are populated in dev. Demo links use a `demo-` URL path; re-running refreshes only those rows and never touches real/manual links.
 
 Both paths share one validation/apply routine and one DB lock, so runs never overlap. Manual runs return `202` and the UI polls `GET /integrations/parsina/status` until the run finishes, then re-fetches the table in place. A failed or partial fetch never overwrites the last successful data; rows missing from a complete listing are deactivated, never deleted.
 
@@ -126,6 +127,7 @@ Competitor links and observations are stored separately from the Parsina catalog
 make db-migrate        # dev: start postgres + `alembic upgrade head`
 make db-seed            # dev admin user
 make db-seed-parsina    # upsert dev product catalog from data/parsina.csv
+make db-seed-demo       # demo competitor prices + daily changes for the products table
 make db-sync-dev-to-prod # upsert dev data into prod; never deletes products or links
 
 make db-migrate-prod                          # prod Neon: migrations (reads .env.production)

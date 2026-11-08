@@ -31,6 +31,8 @@ def _seed_dev(url: str) -> None:
             price=Decimal(100),
             stock=Decimal(2),
             category_id=category.id,
+            allowed_decrease_percent=Decimal(7),
+            allowed_increase_percent=Decimal(12),
         )
         session.add(product)
         session.flush()
@@ -39,6 +41,14 @@ def _seed_dev(url: str) -> None:
                 product_id=product.id,
                 store="digikala",
                 url="https://www.digikala.com/product/dkp-1/",
+            )
+        )
+        # Demo rows are dev-only and must never be copied into production.
+        session.add(
+            CompetitorListing(
+                product_id=product.id,
+                store="other",
+                url="https://example.com/product/demo-1/",
             )
         )
         session.add(Setting(key="low_stock_threshold", value="4"))
@@ -59,6 +69,10 @@ def _seed_prod(url: str) -> None:
             price=Decimal(90),
             stock=Decimal(1),
             category_id=category.id,
+            # Bounds are per-environment admin settings; the sync must not
+            # overwrite them with the dev values.
+            allowed_decrease_percent=Decimal(4),
+            allowed_increase_percent=Decimal(9),
         )
         session.add(product)
         session.flush()
@@ -100,6 +114,8 @@ def test_sync_upserts_products_and_keeps_existing_links(tmp_path: Path) -> None:
         assert product.id == product_id
         assert product.name == "یخچال"
         assert product.category_id == category_id
+        assert product.allowed_decrease_percent == Decimal(4)
+        assert product.allowed_increase_percent == Decimal(9)
         assert session.get(Product, manual_id) is not None
 
         links = session.scalars(

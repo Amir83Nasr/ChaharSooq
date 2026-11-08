@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-.PHONY: build check clean-build clean-cache db-clear-products db-migrate db-migrate-prod db-seed db-seed-parsina db-seed-prod db-sync-dev-to-prod sync-dev-to-prod sync-prod dev-to-prod db-up db-validate db-wait deploy-api dev-all dev-api dev-web docker-build docker-down docker-logs docker-up doctor help install lint openapi-check test test-e2e typecheck
+.PHONY: build check clean-build clean-cache db-clear-products db-migrate db-migrate-prod db-seed db-seed-demo db-seed-parsina db-seed-prod db-sync-dev-to-prod sync-dev-to-prod sync-prod dev-to-prod db-up db-validate db-wait deploy-api dev-all dev-api dev-web docker-build docker-down docker-logs docker-up doctor help install lint openapi-check test test-e2e typecheck
 
 # ─── HELP ─────────────────────────────────────────────────
 help: ## Show this help message
@@ -76,6 +76,9 @@ db-seed: db-migrate ## Create dev admin user (ADMIN_USER, ADMIN_PASSWORD or DEV_
 
 db-seed-parsina: db-migrate ## Upsert data/parsina.csv into dev DB (keeps product ids + links)
 	uv run --no-sync --project backend/api python backend/api/scripts/seed_parsina_products.py
+
+db-seed-demo: db-seed-parsina ## Fill dev demo competitor prices, daily changes, weights and price bounds
+	uv run --no-sync --project backend/api python backend/api/scripts/seed_demo_competitors.py
 
 db-clear-products: db-migrate ## Delete all products + competitor listings from dev DB (refuses production)
 	uv run --no-sync --project backend/api python backend/api/scripts/clear_products.py

@@ -17,6 +17,10 @@ The sync is non-destructive and upsert-based:
   * competitor listings are copied for products that do not have that
     `(product, store)` link on the destination yet. Existing destination links
     are left untouched, so a local copy can never erase production work.
+  * demo links from `make db-seed-demo` are skipped, so fake dev prices never
+    reach production;
+  * per-product suggested-price bounds are admin settings and stay
+    environment-local (copied fields never include them).
 
 It never touches admins / admin_sessions / alembic_version and never deletes
 products, categories, or competitor listings.
@@ -37,6 +41,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Category, CompetitorListing, ParsinaSyncState, Product, Setting
 from app.models.parsina import SYNC_STATE_ID
+from scripts.common import is_demo_competitor_url
 
 DEFAULT_DEV_URL = "postgresql+psycopg://charsooq:charsooq@localhost:5433/charsooq"
 
@@ -157,9 +162,15 @@ def _sync_products(dev: Session, prod: Session, category_map: dict[int, int]) ->
 
 
 def _sync_competitor_listings(dev: Session, prod: Session, product_map: dict[int, int]) -> int:
-    """Add missing links only; never overwrite or delete a destination link."""
+    """Add missing links only; never overwrite or delete a destination link.
+
+    Demo links from `make db-seed-demo` stay local — they are fake prices and
+    must never reach production.
+    """
     added = 0
     for source in dev.scalars(select(CompetitorListing).order_by(CompetitorListing.id)):
+        if is_demo_competitor_url(source.url):
+            continue
         product_id = product_map.get(source.product_id)
         if product_id is None:
             continue

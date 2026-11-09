@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import Base
 from app.models import Category, CompetitorListing, Product, Setting
-from scripts.sync_dev_to_prod import sync
+from scripts.sync_dev_to_prod import _safe_url, sync
 
 
 def _database(path: Path) -> str:
@@ -141,3 +141,12 @@ def test_sync_upserts_products_and_keeps_existing_links(tmp_path: Path) -> None:
             )
             == 2
         )
+
+
+def test_confirmation_url_hides_password() -> None:
+    rendered = _safe_url(
+        "postgresql+psycopg://user:super-secret@db.example.com/neondb?sslmode=require"
+    )
+    assert "super-secret" not in rendered
+    assert "user" in rendered
+    assert "db.example.com" in rendered

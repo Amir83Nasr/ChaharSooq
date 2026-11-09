@@ -36,7 +36,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import create_engine, select
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import Session
 
 from app.models import Category, CompetitorListing, ParsinaSyncState, Product, Setting
@@ -53,6 +53,14 @@ def _sqlalchemy_url(url: str) -> str:
     if url.startswith("postgres://"):
         return "postgresql+psycopg://" + url.removeprefix("postgres://")
     return url
+
+
+def _safe_url(url: str) -> str:
+    """Render a database URL for terminal output with its password masked."""
+    try:
+        return make_url(_sqlalchemy_url(url)).render_as_string(hide_password=True)
+    except Exception:  # noqa: BLE001 — an unparsable URL must not echo secrets either
+        return "<invalid database url>"
 
 
 def _engine(url: str) -> Engine:
@@ -232,10 +240,10 @@ def sync(dev_url: str, prod_url: str) -> dict[str, int]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Sync dev DB data into prod DB without deleting rows."
+        description="Sync dev DB data into a destination DB (staging/prod) without deleting rows."
     )
     parser.add_argument("--dev-url", default=os.environ.get("DEV_DATABASE_URL", DEFAULT_DEV_URL))
-    parser.add_argument("--prod-url", default=None)
+    parser.add_argument("--prod-url", default=None, help="Destination database URL.")
     parser.add_argument("--yes", action="store_true", help="Skip confirmation prompt.")
     args = parser.parse_args()
 
@@ -244,15 +252,18 @@ def main() -> int:
 
         args.prod_url = get_settings().database_url
     if not args.prod_url:
-        print("prod DATABASE_URL is empty", file=sys.stderr)
+        print("destination DATABASE_URL is empty", file=sys.stderr)
         return 1
 
     if not args.yes:
-        print(f"DEV : {args.dev_url}")
-        print(f"PROD: {args.prod_url}")
+        # Never echo credentials: the destination URL usually contains a Neon
+        # password, and this confirmation runs in shared terminals/CI logs.
+        print(f"DEV : {_safe_url(args.dev_url)}")
+        print(f"DEST: {_safe_url(args.prod_url)}")
         answer = input(
-            "This will UPSERT dev data into prod and copy missing competitor links. "
-            "No products, categories, or links are deleted. Continue? [y/N] "
+            "This will UPSERT dev data into the destination and copy missing "
+            "competitor links. No products, categories, or links are deleted. "
+            "Continue? [y/N] "
         )
         if answer.strip().lower() not in {"y", "yes"}:
             print("aborted")

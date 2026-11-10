@@ -1865,7 +1865,7 @@
           "Users"
         ],
         "summary": "List users",
-        "description": "The owner sees every account; an admin sees only viewer accounts. Write endpoints use the same visibility and permission rules.",
+        "description": "The owner sees every account; an admin sees viewer accounts plus their own account. Write endpoints use the same visibility and permission rules.",
         "operationId": "list_users",
         "responses": {
           "200": {
@@ -1991,7 +1991,7 @@
           "Users"
         ],
         "summary": "Delete user",
-        "description": "Deletes the account and every active session it owns. The owner may delete admins and viewers; an admin may delete viewers only. No one can delete their own account and the env-managed owner cannot be removed. The last admin cannot be deleted.",
+        "description": "Deletes the account and every active session it owns. The owner may delete admins and viewers; an admin may delete viewers only. No one can delete their own account and the env-managed owner cannot be removed. The last remaining management account cannot be deleted, so an owner may remove every admin.",
         "operationId": "delete_user",
         "security": [
           {

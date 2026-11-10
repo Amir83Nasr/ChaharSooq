@@ -31,8 +31,9 @@ router = APIRouter(tags=["Users"], responses={401: UNAUTHORIZED, 403: FORBIDDEN}
     response_model=list[UserOut],
     summary="List users",
     description=(
-        "The owner sees every account; an admin sees only viewer accounts. "
-        "Write endpoints use the same visibility and permission rules."
+        "The owner sees every account; an admin sees viewer accounts plus "
+        "their own account. Write endpoints use the same visibility and "
+        "permission rules."
     ),
 )
 def list_users(
@@ -64,7 +65,7 @@ def create_user(
     except ForbiddenRoleError:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="فقط مالک می‌تواند مدیر جدید بسازد",
+            detail="فقط سوپرادمین می‌تواند مدیر جدید بسازد",
         ) from None
     except UsernameTakenError:
         raise HTTPException(
@@ -82,7 +83,8 @@ def create_user(
         "Deletes the account and every active session it owns. The owner may "
         "delete admins and viewers; an admin may delete viewers only. No one "
         "can delete their own account and the env-managed owner cannot be "
-        "removed. The last admin cannot be deleted."
+        "removed. The last remaining management account cannot be deleted, "
+        "so an owner may remove every admin."
     ),
     responses={
         204: {"description": "Account deleted."},
@@ -110,11 +112,11 @@ def delete_user(
     except CannotDeleteOwnerError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="حساب مالک با متغیرهای محیطی مدیریت می‌شود و حذف نمی‌شود",
+            detail="حساب سوپرادمین با متغیرهای محیطی مدیریت می‌شود و حذف نمی‌شود",
         ) from None
     except LastAdminError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="حداقل یک مدیر باید در سیستم باقی بماند",
+            detail="حداقل یک حساب مدیریتی باید در سیستم باقی بماند",
         ) from None
     return Response(status_code=status.HTTP_204_NO_CONTENT)

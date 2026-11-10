@@ -29,7 +29,7 @@ class CannotDeleteOwnerError(Exception):
 
 
 class LastAdminError(Exception):
-    """The last remaining admin account cannot be deleted."""
+    """The last remaining management account cannot be deleted."""
 
 
 class ForbiddenRoleError(Exception):
@@ -43,10 +43,15 @@ class UserService:
         self._sessions = AdminSessionRepository(session)
 
     def list(self, *, actor: Admin) -> list[Admin]:
-        """Owner sees every account; an admin sees only viewers."""
+        """Owner sees every account; an admin sees viewers plus themselves."""
         if actor.role == ROLE_OWNER:
             return self._admins.list_all()
-        return self._admins.list_by_roles((ROLE_VIEWER,))
+        accounts = self._admins.list_by_roles((ROLE_VIEWER,))
+        self_account = self._admins.get(actor.id)
+        if self_account is not None:
+            accounts.append(self_account)
+            accounts.sort(key=lambda account: account.id)
+        return accounts
 
     def create(self, payload: UserCreateIn, *, actor: Admin) -> Admin:
         if payload.role == ROLE_ADMIN and actor.role != ROLE_OWNER:
@@ -77,7 +82,9 @@ class UserService:
             raise UserNotFoundError
         if target.role == ROLE_OWNER:
             raise CannotDeleteOwnerError
-        if target.role == ROLE_ADMIN and self._admins.count_admins() <= 1:
+        # Keep at least one management login. The owner is included in the
+        # count, so an owner may remove the last admin (the owner remains).
+        if target.role == ROLE_ADMIN and self._admins.count_managers() <= 1:
             raise LastAdminError
         # Sessions must go first: the FK has no cascade and an orphaned
         # session would keep a deleted account usable until expiry.

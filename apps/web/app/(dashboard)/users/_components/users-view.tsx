@@ -1,7 +1,15 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Plus, Trash2, UserRound } from "lucide-react"
+import {
+  Check,
+  Plus,
+  Shield,
+  ShieldCheck,
+  Trash2,
+  UserRound,
+  type LucideIcon,
+} from "lucide-react"
 
 import { Badge } from "@workspace/ui/primitives/badge"
 import { BusyLabel } from "@workspace/ui/primitives/busy-label"
@@ -22,6 +30,7 @@ import {
   SelectValue,
 } from "@workspace/ui/primitives/select"
 import { Skeleton } from "@workspace/ui/primitives/skeleton"
+import { toPersianDigits } from "@workspace/ui/lib/number"
 import { PersianDateTime } from "@workspace/ui/persian/persian-date"
 
 import {
@@ -31,11 +40,31 @@ import {
   type UserOut,
   type UserRole,
 } from "@/lib/api"
+import { DeleteUserDialog } from "./delete-user-dialog"
 
 const ROLE_LABELS: Record<UserRole, string> = {
-  owner: "مالک",
+  owner: "سوپرادمین",
   admin: "مدیر",
   viewer: "کاربر",
+}
+
+const ROLE_ICONS: Record<UserRole, LucideIcon> = {
+  owner: ShieldCheck,
+  admin: Shield,
+  viewer: UserRound,
+}
+
+function RoleBadge({ role }: { role: UserRole }) {
+  const Icon = ROLE_ICONS[role]
+  return (
+    <Badge
+      variant={role === "viewer" ? "secondary" : "default"}
+      className="gap-1"
+    >
+      <Icon className="size-3" aria-hidden="true" />
+      {ROLE_LABELS[role]}
+    </Badge>
+  )
 }
 
 type FieldErrors = {
@@ -67,6 +96,8 @@ export function UsersView({
   const [created, setCreated] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<UserOut | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -135,22 +166,33 @@ export function UsersView({
     }
   }
 
-  async function deleteUser(user: UserOut) {
-    if (
-      !window.confirm(
-        `حساب «${user.username}» حذف شود؟ این کار قابل بازگشت نیست.`
-      )
-    )
-      return
-    setDeletingId(user.id)
-    setFormError(null)
+  function requestDelete(user: UserOut) {
+    setDeleteError(null)
+    setDeleteTarget(user)
+  }
+
+  function handleDeleteOpenChange(open: boolean) {
+    // Keep the dialog open while the delete request is in flight.
+    if (!open && deletingId !== null) return
+    if (!open) {
+      setDeleteTarget(null)
+      setDeleteError(null)
+    }
+  }
+
+  async function confirmDelete() {
+    if (deleteTarget === null || deletingId !== null) return
+    const target = deleteTarget
+    setDeletingId(target.id)
+    setDeleteError(null)
     try {
-      await api.deleteUser(user.id)
+      await api.deleteUser(target.id)
       setUsers((current) =>
-        (current ?? []).filter((item) => item.id !== user.id)
+        (current ?? []).filter((item) => item.id !== target.id)
       )
+      setDeleteTarget(null)
     } catch (error) {
-      setFormError(errorMessage(error))
+      setDeleteError(errorMessage(error))
     } finally {
       setDeletingId(null)
     }
@@ -158,232 +200,292 @@ export function UsersView({
 
   const canSubmit =
     username.trim().length >= 3 && password.length >= 8 && !creating
+  const currentUser =
+    users?.find((user) => user.username === currentUsername) ?? null
+  const otherUsers =
+    users?.filter((user) => user.username !== currentUsername) ?? []
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[22rem_minmax(0,1fr)] lg:items-start">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <UserRound className="size-4" aria-hidden="true" />
-            افزودن کاربر
-          </CardTitle>
-          <CardDescription>
-            «کاربر» فقط می‌تواند اطلاعات و مشخصات را ببیند؛ «مدیر» همه بخش‌ها را
-            مدیریت می‌کند.
-            {isOwner
-              ? " به‌عنوان مالک می‌توانید مدیر هم بسازید."
-              : " ساخت مدیر فقط توسط مالک انجام می‌شود."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form
-            onSubmit={createUser}
-            className="flex flex-col gap-4"
-            noValidate
-          >
-            <div className="flex flex-col gap-2">
-              <label htmlFor="new-username" className="text-sm font-medium">
-                نام کاربری
-              </label>
-              <Input
-                id="new-username"
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-                dir="ltr"
-                autoComplete="off"
-                autoCapitalize="off"
-                spellCheck={false}
-                aria-invalid={fieldErrors.username ? true : undefined}
-                aria-describedby={
-                  fieldErrors.username ? "new-username-error" : undefined
-                }
-                className="h-10 bg-background text-left"
-                required
-              />
-              {fieldErrors.username ? (
-                <p
-                  id="new-username-error"
-                  role="alert"
-                  className="text-sm text-destructive"
-                >
-                  {fieldErrors.username}
-                </p>
-              ) : null}
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <label htmlFor="new-password" className="text-sm font-medium">
-                گذرواژه
-              </label>
-              <Input
-                id="new-password"
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                dir="ltr"
-                autoComplete="new-password"
-                aria-invalid={fieldErrors.password ? true : undefined}
-                aria-describedby={
-                  fieldErrors.password ? "new-password-error" : undefined
-                }
-                className="h-10 bg-background text-left"
-                required
-              />
-              {fieldErrors.password ? (
-                <p
-                  id="new-password-error"
-                  role="alert"
-                  className="text-sm text-destructive"
-                >
-                  {fieldErrors.password}
-                </p>
-              ) : null}
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <span className="text-sm font-medium">سطح دسترسی</span>
-              {isOwner ? (
-                <Select
-                  value={role}
-                  onValueChange={(value) => setRole(value as AssignableRole)}
-                >
-                  <SelectTrigger
-                    className="h-10 w-full"
-                    aria-label="سطح دسترسی"
-                  >
-                    <SelectValue>
-                      {(value: string | null) =>
-                        value
-                          ? (ROLE_LABELS[value as UserRole] ?? "کاربر")
-                          : "کاربر"
-                      }
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent align="start">
-                    <SelectItem value="viewer">کاربر — فقط مشاهده</SelectItem>
-                    <SelectItem value="admin">مدیر — دسترسی کامل</SelectItem>
-                  </SelectContent>
-                </Select>
-              ) : (
-                <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-                  کاربر — فقط مشاهده
-                </p>
-              )}
-            </div>
-
-            {formError ? (
-              <p role="alert" className="text-sm text-destructive">
-                {formError}
-              </p>
-            ) : null}
-            {created ? (
-              <p role="status" className="text-sm text-success">
-                حساب «{created}» ساخته شد.
-              </p>
-            ) : null}
-
-            <Button
-              type="submit"
-              disabled={!canSubmit}
-              aria-busy={creating}
-              className="h-11 w-full md:h-9"
+    <>
+      <div className="grid gap-4 lg:grid-cols-[22rem_minmax(0,1fr)] lg:items-start">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <UserRound className="size-4" aria-hidden="true" />
+              افزودن کاربر
+            </CardTitle>
+            <CardDescription>
+              «کاربر» فقط می‌تواند اطلاعات و مشخصات را ببیند؛ «مدیر» همه بخش‌ها
+              را مدیریت می‌کند.
+              {isOwner
+                ? " به‌عنوان سوپرادمین می‌توانید مدیر هم بسازید."
+                : " ساخت مدیر فقط توسط سوپرادمین انجام می‌شود."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form
+              onSubmit={createUser}
+              className="flex flex-col gap-4"
+              noValidate
             >
-              <BusyLabel
-                busy={creating}
-                idle={
-                  <span className="inline-flex items-center gap-1">
-                    <Plus className="size-4" aria-hidden="true" />
-                    افزودن کاربر
-                  </span>
-                }
-                busyLabel="در حال ساخت…"
-                spinner
-              />
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>حساب‌های کاربری</CardTitle>
-          <CardDescription>
-            هر حساب با نام کاربری و گذرواژه خودش وارد می‌شود.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="space-y-2" aria-label="در حال بارگذاری کاربران">
-              {Array.from({ length: 3 }, (_, index) => (
-                <Skeleton key={index} className="h-14 w-full rounded-2xl" />
-              ))}
-            </div>
-          ) : loadError ? (
-            <div className="flex flex-col items-start gap-3">
-              <p role="alert" className="text-sm text-destructive">
-                {loadError}
-              </p>
-              <Button variant="outline" onClick={() => void load()}>
-                تلاش مجدد
-              </Button>
-            </div>
-          ) : users && users.length > 0 ? (
-            <ul className="divide-y divide-border">
-              {users.map((user) => {
-                const isSelf = user.username === currentUsername
-                return (
-                  <li
-                    key={user.id}
-                    className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0"
+              <div className="flex flex-col gap-2">
+                <label htmlFor="new-username" className="text-sm font-medium">
+                  نام کاربری
+                </label>
+                <Input
+                  id="new-username"
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
+                  dir="ltr"
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  aria-invalid={fieldErrors.username ? true : undefined}
+                  aria-describedby={
+                    fieldErrors.username ? "new-username-error" : undefined
+                  }
+                  className="h-10 bg-background text-left"
+                  required
+                />
+                {fieldErrors.username ? (
+                  <p
+                    id="new-username-error"
+                    role="alert"
+                    className="text-sm text-destructive"
                   >
-                    <div className="flex min-w-0 flex-1 items-center gap-2">
-                      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-bold">
-                        {user.username.slice(0, 1)}
+                    {fieldErrors.username}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label htmlFor="new-password" className="text-sm font-medium">
+                  گذرواژه
+                </label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  dir="ltr"
+                  autoComplete="new-password"
+                  aria-invalid={fieldErrors.password ? true : undefined}
+                  aria-describedby={
+                    fieldErrors.password ? "new-password-error" : undefined
+                  }
+                  className="h-10 bg-background text-left"
+                  required
+                />
+                {fieldErrors.password ? (
+                  <p
+                    id="new-password-error"
+                    role="alert"
+                    className="text-sm text-destructive"
+                  >
+                    {fieldErrors.password}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <span className="text-sm font-medium">سطح دسترسی</span>
+                {isOwner ? (
+                  <Select
+                    value={role}
+                    onValueChange={(value) => setRole(value as AssignableRole)}
+                  >
+                    <SelectTrigger
+                      className="h-10 w-full"
+                      aria-label="سطح دسترسی"
+                    >
+                      <SelectValue>
+                        {(value: string | null) =>
+                          value
+                            ? (ROLE_LABELS[value as UserRole] ?? "کاربر")
+                            : "کاربر"
+                        }
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent align="start">
+                      <SelectItem value="viewer">کاربر — فقط مشاهده</SelectItem>
+                      <SelectItem value="admin">مدیر — دسترسی کامل</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                    کاربر — فقط مشاهده
+                  </p>
+                )}
+              </div>
+
+              {formError ? (
+                <p role="alert" className="text-sm text-destructive">
+                  {formError}
+                </p>
+              ) : null}
+              {created ? (
+                <p role="status" className="text-sm text-success">
+                  حساب «{created}» ساخته شد.
+                </p>
+              ) : null}
+
+              <Button
+                type="submit"
+                disabled={!canSubmit}
+                aria-busy={creating}
+                className="h-11 w-full md:h-9"
+              >
+                <BusyLabel
+                  busy={creating}
+                  idle={
+                    <span className="inline-flex items-center gap-1">
+                      <Plus className="size-4" aria-hidden="true" />
+                      افزودن کاربر
+                    </span>
+                  }
+                  busyLabel="در حال ساخت…"
+                  spinner
+                />
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>حساب‌های کاربری</CardTitle>
+            <CardDescription>
+              هر حساب با نام کاربری و گذرواژه خودش وارد می‌شود.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="space-y-2" aria-label="در حال بارگذاری کاربران">
+                {Array.from({ length: 3 }, (_, index) => (
+                  <Skeleton key={index} className="h-14 w-full rounded-2xl" />
+                ))}
+              </div>
+            ) : loadError ? (
+              <div className="flex flex-col items-start gap-3">
+                <p role="alert" className="text-sm text-destructive">
+                  {loadError}
+                </p>
+                <Button variant="outline" onClick={() => void load()}>
+                  تلاش مجدد
+                </Button>
+              </div>
+            ) : users ? (
+              <div className="flex flex-col gap-5">
+                {currentUser ? (
+                  <section
+                    aria-labelledby="current-account-heading"
+                    className="rounded-2xl border border-primary/20 bg-primary/[0.04] p-3.5 dark:bg-primary/[0.06]"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <h3
+                        id="current-account-heading"
+                        className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"
+                      >
+                        <UserRound className="size-3.5" aria-hidden="true" />
+                        حساب شما
+                      </h3>
+                      <Badge variant="success" className="gap-1">
+                        <Check className="size-3" aria-hidden="true" />
+                        وارد شده
+                      </Badge>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-3">
+                      <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary text-base font-bold text-primary-foreground shadow-sm">
+                        {currentUser.username.slice(0, 1)}
                       </span>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium" dir="ltr">
-                          {user.username}
-                          {isSelf ? (
-                            <span className="ms-2 text-xs font-normal text-muted-foreground">
-                              (شما)
-                            </span>
-                          ) : null}
+                      <div className="min-w-0 flex-1">
+                        <p
+                          className="truncate text-right text-sm font-semibold"
+                          dir="ltr"
+                        >
+                          {currentUser.username}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           ساخته‌شده در{" "}
-                          <PersianDateTime value={user.created_at} />
+                          <PersianDateTime value={currentUser.created_at} />
                         </p>
                       </div>
+                      <RoleBadge role={currentUser.role} />
                     </div>
-                    <Badge
-                      variant={user.role === "viewer" ? "secondary" : "default"}
-                    >
-                      {ROLE_LABELS[user.role]}
-                    </Badge>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      disabled={
-                        isSelf || user.role === "owner" || deletingId !== null
-                      }
-                      aria-busy={deletingId === user.id}
-                      onClick={() => void deleteUser(user)}
-                      className="h-9 gap-1.5"
-                    >
-                      <Trash2 className="size-4" aria-hidden="true" />
-                      حذف
-                    </Button>
-                  </li>
-                )
-              })}
-            </ul>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              هنوز کاربری ساخته نشده است.
-            </p>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+                  </section>
+                ) : null}
+
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between gap-2 px-1">
+                    <h3 className="text-xs font-medium text-muted-foreground">
+                      سایر حساب‌ها
+                    </h3>
+                    {otherUsers.length > 0 ? (
+                      <span className="text-xs text-muted-foreground">
+                        {toPersianDigits(otherUsers.length)} حساب
+                      </span>
+                    ) : null}
+                  </div>
+                  {otherUsers.length > 0 ? (
+                    <ul className="divide-y divide-border">
+                      {otherUsers.map((user) => (
+                        <li
+                          key={user.id}
+                          className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0"
+                        >
+                          <div className="flex min-w-0 flex-1 items-center gap-2">
+                            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-bold">
+                              {user.username.slice(0, 1)}
+                            </span>
+                            <div className="min-w-0">
+                              <p
+                                className="truncate text-right text-sm font-medium"
+                                dir="ltr"
+                              >
+                                {user.username}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                ساخته‌شده در{" "}
+                                <PersianDateTime value={user.created_at} />
+                              </p>
+                            </div>
+                          </div>
+                          <RoleBadge role={user.role} />
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            disabled={
+                              user.role === "owner" || deletingId !== null
+                            }
+                            aria-busy={deletingId === user.id}
+                            onClick={() => requestDelete(user)}
+                            className="h-9 gap-1.5"
+                          >
+                            <Trash2 className="size-4" aria-hidden="true" />
+                            حذف
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="rounded-2xl border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
+                      حساب دیگری وجود ندارد.
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      </div>
+
+      <DeleteUserDialog
+        user={deleteTarget}
+        onOpenChange={handleDeleteOpenChange}
+        onConfirm={confirmDelete}
+        pending={deletingId !== null}
+        error={deleteError}
+      />
+    </>
   )
 }

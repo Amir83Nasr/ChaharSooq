@@ -29,13 +29,14 @@ def user_id(username: str) -> int:
         return session.query(Admin).filter_by(username=username).one().id
 
 
-def test_admin_lists_only_viewers(client: TestClient) -> None:
+def test_admin_lists_viewers_and_self(client: TestClient) -> None:
     login(client)
     create_viewer(client)
     r = client.get("/api/v1/users")
     assert r.status_code == 200
-    # The owner and other admins stay hidden from an admin.
-    assert [user["username"] for user in r.json()] == ["viewer"]
+    # The admin sees their own row plus viewers; the owner and other admins
+    # stay hidden.
+    assert [user["username"] for user in r.json()] == ["admin", "viewer"]
 
 
 def test_admin_creates_viewer_with_read_only_access(client: TestClient) -> None:
@@ -131,7 +132,7 @@ def test_delete_user_removes_account_and_sessions(client: TestClient) -> None:
 
     login(client)
     assert client.delete(f"/api/v1/users/{user_id_value}").status_code == 204
-    assert client.get("/api/v1/users").json() == []
+    assert [user["username"] for user in client.get("/api/v1/users").json()] == ["admin"]
 
     stale = TestClient(client.app)
     stale.cookies.set("charsooq_session", viewer_cookie)
@@ -182,14 +183,17 @@ def test_owner_account_cannot_be_deleted(client: TestClient) -> None:
     login_owner(client)
     r = client.delete(f"/api/v1/users/{user_id('root2')}")
     assert r.status_code == 409
-    assert "مالک" in r.json()["error"]["message"]
+    assert "سوپرادمین" in r.json()["error"]["message"]
 
 
-def test_last_admin_cannot_be_deleted(client: TestClient) -> None:
+def test_owner_deletes_the_last_admin(client: TestClient) -> None:
+    # The owner is still a management account, so removing the only admin
+    # leaves the panel manageable.
     login_owner(client)
-    r = client.delete(f"/api/v1/users/{user_id('admin')}")
-    assert r.status_code == 409
-    assert "مدیر" in r.json()["error"]["message"]
+    assert client.delete(f"/api/v1/users/{user_id('admin')}").status_code == 204
+    assert [user["username"] for user in client.get("/api/v1/users").json()] == [
+        "root",
+    ]
 
 
 def test_delete_unknown_user_is_404(client: TestClient) -> None:

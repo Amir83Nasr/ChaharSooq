@@ -92,7 +92,7 @@ Each app owns its env file: [backend/api/.env.example](backend/api/.env.example)
 | `NEXT_PUBLIC_API_URL` | API origin fallback for rewrites (browser always calls same-origin `/api/*`)                                                                                                                                                                              |
 | `CORS_ORIGINS`        | Backend CORS allowlist, comma-separated                                                                                                                                                                                                                   |
 | `ALLOWED_DEV_ORIGINS` | Extra Next.js dev origins, comma-separated                                                                                                                                                                                                                |
-| `OWNER_USERNAME`      | Highest-privilege `owner` login. Defaults to `admin`. The API creates this account on boot and keeps it in sync with the env.                                                                                                                             |
+| `OWNER_USERNAME`      | Highest-privilege `owner` login. Defaults to `superadmin`. The API creates this account on boot and keeps it in sync with the env.                                                                                                                        |
 | `OWNER_PASSWORD`      | Owner password. Required in production (minimum 8 characters). Changing it re-hashes the account and revokes its sessions on the next boot.                                                                                                               |
 | `PARSINA_*`           | Parsina accounting API (URL, credentials, org, year, optional warehouse/sale-type). Empty = integration off. `PARSINA_SYNC_INTERVAL_MINUTES` (default 1440) seeds the initial auto-sync interval and `PARSINA_SYNC_ENABLED` toggles the backend scheduler |
 | `PRODUCTS_CSV_PATH`   | Development-only product CSV; defaults to `<repo>/data/parsina.csv`                                                                                                                                                                                       |
@@ -107,10 +107,10 @@ Accounts have one of three roles:
 | `admin`  | Shop data (products, categories, settings, sync) and viewer management. Never sees other admins.   |
 | `viewer` | Read-only: catalog, dashboard, integration pages, and the settings values those views use.         |
 
-`/users` is available to the owner and admins. The owner sees every account and may create `admin` or `viewer` accounts. An admin sees only viewer accounts and may create/delete viewers; the owner and other admins stay hidden. Viewers get `403 forbidden` on every write. `/settings` is available to the owner and admins; the sidebar hides the سیستم group from viewers. See [docs/architecture/authentication.md](docs/architecture/authentication.md) and [ADR 010](docs/adr/010-owner-role.md).
+`/users` is available to the owner and admins. The owner sees every account and may create or delete `admin` and `viewer` accounts. An admin sees viewer accounts plus their own account and may create/delete viewers; the owner and other admins stay hidden. At least one management account always remains; since the owner cannot be deleted, the owner can remove every admin. Viewers get `403 forbidden` on every write. `/settings` is available to the owner and admins; the sidebar hides the سیستم group from viewers. See [docs/architecture/authentication.md](docs/architecture/authentication.md) and [ADR 010](docs/adr/010-owner-role.md).
 
 ```bash
-GET    /api/v1/users          # owner: all accounts; admin: viewers only
+GET    /api/v1/users          # owner: all accounts; admin: viewers + self
 POST   /api/v1/users          # { "username", "password", "role": "admin" | "viewer" }
 DELETE /api/v1/users/{id}     # also revokes that account's sessions
 ```

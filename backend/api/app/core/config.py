@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     # Highest-privilege account, created/updated on every API boot. Legacy
     # ADMIN_USER / ADMIN_PASSWORD stay accepted as aliases for existing envs.
     owner_username: str = Field(
-        default="admin",
+        default="superadmin",
         validation_alias=AliasChoices("OWNER_USERNAME", "ADMIN_USER", "owner_username"),
     )
     owner_password: str = Field(

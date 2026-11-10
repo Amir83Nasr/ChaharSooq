@@ -8,7 +8,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.models import Admin, AdminSession
-from app.models.auth import ROLE_ADMIN
+from app.models.auth import ROLE_ADMIN, ROLE_OWNER
 
 
 class AdminRepository:
@@ -44,10 +44,13 @@ class AdminRepository:
         self._session.delete(admin)
         self._session.flush()
 
-    def count_admins(self) -> int:
+    def count_managers(self) -> int:
+        """Accounts that can manage the panel — the owner plus admins."""
         return (
             self._session.scalar(
-                select(func.count()).select_from(Admin).where(Admin.role == ROLE_ADMIN)
+                select(func.count())
+                .select_from(Admin)
+                .where(Admin.role.in_((ROLE_OWNER, ROLE_ADMIN)))
             )
             or 0
         )

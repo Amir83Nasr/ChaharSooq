@@ -33,7 +33,7 @@ test("login page shows the Persian admin form", async ({ page }) => {
 
   const submit = page.getByRole("button", { name: "ورود" })
   await expect(submit).toBeDisabled()
-  await page.getByLabel("نام کاربری").fill("admin")
+  await page.getByLabel("نام کاربری").fill("superadmin")
   await page.getByLabel("گذرواژه").fill("secret123")
   await expect(submit).toBeEnabled()
 })

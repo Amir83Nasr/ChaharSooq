@@ -270,12 +270,29 @@ export function SuggestedPriceSettings() {
             </p>
           </div>
         </div>
-        <div
-          dir="ltr"
-          className="mt-4 space-y-1 rounded-xl border border-border/70 bg-background px-4 py-3 text-center font-mono text-sm font-medium"
-        >
-          <p>لوازم خانگی: P = w × Pc + (1 − w) × Pb</p>
-          <p>مبلمان/فرش: P = Pb × (1 + w × Δ)</p>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <div className="rounded-xl border border-border/70 bg-background px-4 py-3">
+            <p className="text-xs font-medium text-muted-foreground">
+              لوازم خانگی
+            </p>
+            <p
+              dir="ltr"
+              className="mt-1 text-center font-mono text-sm font-medium tracking-tight text-foreground"
+            >
+              P = w × Pc + (1 − w) × Pb
+            </p>
+          </div>
+          <div className="rounded-xl border border-border/70 bg-background px-4 py-3">
+            <p className="text-xs font-medium text-muted-foreground">
+              مبلمان و فرش
+            </p>
+            <p
+              dir="ltr"
+              className="mt-1 text-center font-mono text-sm font-medium tracking-tight text-foreground"
+            >
+              P = Pb × (1 + w × Δ)
+            </p>
+          </div>
         </div>
         <dl className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-4">
           <div className="flex items-center gap-2">

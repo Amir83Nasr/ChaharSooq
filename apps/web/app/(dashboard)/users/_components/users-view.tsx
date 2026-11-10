@@ -247,7 +247,10 @@ export function UsersView({
                   value={role}
                   onValueChange={(value) => setRole(value as AssignableRole)}
                 >
-                  <SelectTrigger className="h-10" aria-label="سطح دسترسی">
+                  <SelectTrigger
+                    className="h-10 w-full"
+                    aria-label="سطح دسترسی"
+                  >
                     <SelectValue>
                       {(value: string | null) =>
                         value

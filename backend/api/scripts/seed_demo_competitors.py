@@ -6,20 +6,23 @@ furniture, DigiFresh for carpets — plus a fresh price and two daily
 observations, so the products table shows competitor price, price difference,
 suggested price and daily change instead of empty cells.
 
-Products rotate through four suggested-price scenarios (stable per product id)
-so the demo covers every clamp branch: a price below the floor, one above the
-ceiling, one that stays inside the bounds, and one with no bounds at all. The
+Products rotate through four suggested-price scenarios (stable per product
+`external_id`, falling back to SKU) so the demo covers every clamp branch: a
+price below the floor, one above the ceiling, one that stays inside the
+bounds, and one with no bounds at all. Keying on the synced product identity
+instead of the database primary key keeps dev and staging showing the same
+demo prices even though the two databases assign different ids. The
 floor/ceiling rows use a tight demo clamp so the competitor price really lands
 outside it; the no-bounds row keeps an out-of-range suggestion unclamped.
 Bounds this script wrote earlier are refreshed to the new scenario, while an
 admin's own clamp (any other value) is kept.
 
 Rows created here carry a `demo-` URL path, which is what makes the script
-idempotent and safe to re-run: demo rows are refreshed, while real/manual
-links and their observations are never touched (products that already have a
-real link are skipped). Run via `make db-seed-demo` (which imports
-`data/parsina.csv` first) or, against a staging database explicitly,
-`make db-seed-demo-staging` (passes `--staging`).
+idempotent and safe to re-run: demo rows (and their observations) are
+refreshed, while real/manual links and their observations are never touched
+(products that already have a real link are skipped). Run via
+`make db-seed-demo` (which imports `data/parsina.csv` first) or, against a
+staging database explicitly, `make db-seed-demo-staging` (passes `--staging`).
 """
 
 from __future__ import annotations
@@ -27,14 +30,14 @@ from __future__ import annotations
 import argparse
 import sys
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from hashlib import sha256
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -61,8 +64,9 @@ TARGET_WEIGHTS = {
 }
 TOMAN = Decimal("1")
 
-# Suggested-price scenarios, picked from the product id so a re-run keeps the
-# same shape and all four cases appear once ids span 4 consecutive values.
+# Suggested-price scenarios, picked from the synced product identity so a
+# re-run keeps the same shape in every environment (dev and staging assign
+# different database ids to the same catalog row).
 SCENARIOS = ("floor", "ceiling", "inside", "no_bounds")
 CLAMP_SCENARIOS = frozenset({"floor", "ceiling"})
 NO_BOUNDS_SCENARIO = "no_bounds"
@@ -99,15 +103,33 @@ def _offset(seed: str) -> Decimal:
     return Decimal(value % 2001 - 1000) / Decimal(1000)
 
 
+def stable_seed(product: Product) -> str:
+    """Identity that is identical in every environment for the same catalog row.
+
+    Database ids are assigned by insert order, so dev and staging hold the same
+    product under different ids. `external_id` is the synced Parsina key; manual
+    rows are matched by SKU (see `sync_dev_to_prod`), so both are stable keys.
+    """
+    if product.external_id is not None:
+        return f"ext:{product.external_id}"
+    return f"sku:{product.sku}"
+
+
+def _seed_bucket(product: Product) -> int:
+    """Stable integer for scenario rotation."""
+    digest = sha256(stable_seed(product).encode()).digest()
+    return int.from_bytes(digest[:4], "big")
+
+
 def demo_scenario(product: Product) -> str:
     """Stable clamp scenario for this product (see SCENARIOS)."""
-    return SCENARIOS[(product.id - 1) % len(SCENARIOS)]
+    return SCENARIOS[_seed_bucket(product) % len(SCENARIOS)]
 
 
 def demo_prices(product: Product, store: str) -> tuple[Decimal, Decimal]:
     """Today's competitor price and its daily change percent (IRR-free toman)."""
     base = Decimal(product.price)
-    url_seed = f"{product.id}:{store}"
+    url_seed = f"{stable_seed(product)}:{store}"
     scenario = demo_scenario(product)
     if scenario == "inside":
         # Competitor prices sit within ±12% of our price, so the diff column has
@@ -142,6 +164,24 @@ def _half_percent(low: Decimal, high: Decimal, seed: str) -> Decimal:
 
 def demo_bounds(product: Product) -> tuple[Decimal, Decimal]:
     """Floor/ceiling percentages for the demo rows with an "inside" outcome."""
+    seed = stable_seed(product)
+    decrease = _half_percent(Decimal(5), Decimal(15), f"floor:{seed}")
+    increase = _half_percent(Decimal(8), Decimal("18"), f"ceiling:{seed}")
+    return decrease.quantize(Decimal("0.01")), increase.quantize(Decimal("0.01"))
+
+
+def _legacy_scenario_bounds(product: Product) -> tuple[Decimal | None, Decimal | None]:
+    """Bounds the previous id-keyed seed may have written for this row.
+
+    Used once to recognise (and refresh) demo clamps written before the switch
+    to `stable_seed`, so re-seeding converges instead of mistaking them for an
+    admin's own clamp.
+    """
+    scenario = SCENARIOS[(product.id - 1) % len(SCENARIOS)]
+    if scenario in CLAMP_SCENARIOS:
+        return CLAMP_BOUND_PERCENT, CLAMP_BOUND_PERCENT
+    if scenario == NO_BOUNDS_SCENARIO:
+        return None, None
     decrease = _half_percent(Decimal(5), Decimal(15), f"floor:{product.id}")
     increase = _half_percent(Decimal(8), Decimal("18"), f"ceiling:{product.id}")
     return decrease.quantize(Decimal("0.01")), increase.quantize(Decimal("0.01"))
@@ -162,28 +202,20 @@ def scenario_bounds(product: Product, scenario: str) -> tuple[Decimal | None, De
 
 
 def _seed_owns_bound(
-    current: Decimal | None, demo_default: Decimal, target: Decimal | None
+    current: Decimal | None,
+    demo_default: Decimal,
+    target: Decimal | None,
+    legacy: Decimal | None,
 ) -> bool:
-    """True when an unset bound or one this seed already wrote can be refreshed."""
-    return current is None or current == demo_default or current == target
-
-
-def _existing_observation_dates(session: Session) -> dict[int, set[date]]:
-    rows = session.execute(
-        select(
-            CompetitorPriceObservation.listing_id,
-            CompetitorPriceObservation.observed_at,
-        )
-    ).all()
-    dates: dict[int, set[date]] = {}
-    for listing_id, observed_at in rows:
-        dates.setdefault(listing_id, set()).add(observed_at.date())
-    return dates
+    """True when an unset bound or one this seed wrote can be refreshed."""
+    if current is None or current == demo_default or current == target:
+        return True
+    # One-time migration from the old id-keyed seed.
+    return current == legacy
 
 
 def seed_demo_competitors(session: Session, *, now: datetime | None = None) -> SeedResult:
     now = now or datetime.now(UTC)
-    today = now.date()
     yesterday = now - timedelta(days=1)
 
     products = session.scalars(
@@ -224,15 +256,26 @@ def seed_demo_competitors(session: Session, *, now: datetime | None = None) -> S
         created += 1
     session.flush()
 
-    observations = _existing_observation_dates(session)
+    demo_rows = [
+        (product, existing[(product.id, store)])
+        for product, store in seedable
+        if is_demo_competitor_url(existing[(product.id, store)].url)
+    ]
+    # Demo history is regenerated, not accumulated: the two observations below
+    # are deterministic from the product identity, so every environment shows
+    # the same competitor price and daily change after a re-seed.
+    if demo_rows:
+        session.execute(
+            delete(CompetitorPriceObservation).where(
+                CompetitorPriceObservation.listing_id.in_([listing.id for _, listing in demo_rows])
+            )
+        )
+
     refreshed = 0
     observations_added = 0
     bounds_added = 0
-    for product, store in seedable:
-        listing = existing[(product.id, store)]
-        if not is_demo_competitor_url(listing.url):
-            continue
-        price, change = demo_prices(product, store)
+    for product, listing in demo_rows:
+        price, change = demo_prices(product, listing.store)
         listing.status = "success"
         listing.fetched_price = price
         listing.fetched_currency = "IRT"
@@ -248,47 +291,44 @@ def seed_demo_competitors(session: Session, *, now: datetime | None = None) -> S
         refreshed += 1
 
         # Suggested-price clamp: refresh blanks and values this seed wrote
-        # earlier (including the old loose defaults) to the product's scenario,
-        # but never replace an admin's own clamp.
+        # earlier (including the old id-keyed defaults) to the product's
+        # scenario, but never replace an admin's own clamp.
         scenario = demo_scenario(product)
         decrease, increase = scenario_bounds(product, scenario)
         default_decrease, default_increase = demo_bounds(product)
-        if _seed_owns_bound(product.allowed_decrease_percent, default_decrease, decrease):
+        legacy_decrease, legacy_increase = _legacy_scenario_bounds(product)
+        if _seed_owns_bound(
+            product.allowed_decrease_percent, default_decrease, decrease, legacy_decrease
+        ):
             if product.allowed_decrease_percent != decrease:
                 product.allowed_decrease_percent = decrease
                 bounds_added += 1
-        if _seed_owns_bound(product.allowed_increase_percent, default_increase, increase):
+        if _seed_owns_bound(
+            product.allowed_increase_percent, default_increase, increase, legacy_increase
+        ):
             if product.allowed_increase_percent != increase:
                 product.allowed_increase_percent = increase
                 bounds_added += 1
 
-        dates = observations.setdefault(listing.id, set())
-        if today not in dates:
-            session.add(
-                CompetitorPriceObservation(
-                    listing_id=listing.id,
-                    price=price,
-                    currency="IRT",
-                    in_stock=True,
-                    observed_at=now,
-                )
+        session.add(
+            CompetitorPriceObservation(
+                listing_id=listing.id,
+                price=price,
+                currency="IRT",
+                in_stock=True,
+                observed_at=now,
             )
-            dates.add(today)
-            observations_added += 1
-        # Without any history there is no daily change to compute; seed the
-        # previous day as well so the change column is populated immediately.
-        if not dates - {today} and yesterday.date() not in dates:
-            session.add(
-                CompetitorPriceObservation(
-                    listing_id=listing.id,
-                    price=_previous_price(price, change),
-                    currency="IRT",
-                    in_stock=True,
-                    observed_at=yesterday,
-                )
+        )
+        session.add(
+            CompetitorPriceObservation(
+                listing_id=listing.id,
+                price=_previous_price(price, change),
+                currency="IRT",
+                in_stock=True,
+                observed_at=yesterday,
             )
-            dates.add(yesterday.date())
-            observations_added += 1
+        )
+        observations_added += 2
 
     weights = {row.top_group for row in session.scalars(select(SuggestedPriceFormula))}
     weights_added = 0

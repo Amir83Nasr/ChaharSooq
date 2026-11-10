@@ -41,16 +41,25 @@ def _product(name: str, group: str, price: int) -> Product:
     )
 
 
+def _product_for_scenario(scenario: str, group: str, price: int, *, prefix: str = "p") -> Product:
+    """Product whose stable SKU key lands in the requested demo scenario."""
+    for suffix in range(10_000):
+        product = _product(f"{prefix}-{scenario}-{suffix}", group, price)
+        if demo_scenario(product) == scenario:
+            return product
+    raise AssertionError(f"no SKU produced scenario {scenario!r}")
+
+
 def _all(session: Session, model: type) -> list:
     return list(session.scalars(select(model)))
 
 
 def test_seed_fills_every_group_and_refreshes_only_demo_rows(tmp_path: Path) -> None:
     with _session(tmp_path / "demo.db") as session:
-        appliance = _product("یخچال", "لوازم خانگی دوو", 10_000_000)
-        sofa = _product("مبل", "مبلمان", 20_000_000)
-        carpet = _product("فرش", "فرش آدینا", 30_000_000)
-        unbounded = _product("بدون محدوده", "لوازم خانگی سام", 50_000_000)
+        appliance = _product_for_scenario("floor", "لوازم خانگی دوو", 10_000_000)
+        sofa = _product_for_scenario("ceiling", "مبلمان", 20_000_000)
+        carpet = _product_for_scenario("inside", "فرش آدینا", 30_000_000)
+        unbounded = _product_for_scenario("no_bounds", "لوازم خانگی سام", 50_000_000)
         manual = _product("دستی", "لوازم خانگی سام", 40_000_000)
         session.add_all([appliance, sofa, carpet, unbounded, manual])
         session.flush()
@@ -86,7 +95,8 @@ def test_seed_fills_every_group_and_refreshes_only_demo_rows(tmp_path: Path) -> 
         }
         assert all(row.price > 0 for row in observations)
 
-        # id 1 = floor, id 2 = ceiling, id 3 = inside, id 4 = no bounds.
+        # Every scenario is requested explicitly, so the clamp assertions are
+        # independent of database insertion order.
         for demo_product in (appliance, sofa):
             session.refresh(demo_product)
             assert demo_product.allowed_decrease_percent == Decimal("1.50")
@@ -116,11 +126,11 @@ def test_seed_fills_every_group_and_refreshes_only_demo_rows(tmp_path: Path) -> 
         appliance.allowed_decrease_percent = Decimal("3")
         session.commit()
 
-        # A second run refreshes freshness without duplicating rows.
+        # A second run refreshes demo history in place (no duplicated rows).
         again = seed_demo_competitors(session, now=NOW)
         assert again.created == 0
         assert again.refreshed == 6
-        assert again.observations == 0
+        assert again.observations == 12  # yesterday + today rewritten
         assert again.weights == 0
         assert again.bounds == 0
         session.refresh(appliance)
@@ -139,9 +149,9 @@ def test_seed_fills_every_group_and_refreshes_only_demo_rows(tmp_path: Path) -> 
 def test_demo_rows_cover_every_suggested_price_clamp_branch(tmp_path: Path) -> None:
     """Demo data must land below the floor, above the ceiling, and inside."""
     with _session(tmp_path / "scenarios.db") as session:
-        appliance = _product("یخچال", "لوازم خانگی دوو", 10_000_000)  # id 1 → floor
-        sofa = _product("مبل", "مبلمان", 20_000_000)  # id 2 → ceiling
-        carpet = _product("فرش", "فرش آدینا", 30_000_000)  # id 3 → inside
+        appliance = _product_for_scenario("floor", "لوازم خانگی دوو", 10_000_000)
+        sofa = _product_for_scenario("ceiling", "مبلمان", 20_000_000)
+        carpet = _product_for_scenario("inside", "فرش آدینا", 30_000_000)
         session.add_all([appliance, sofa, carpet])
         session.commit()
         seed_demo_competitors(session, now=NOW)
@@ -175,3 +185,26 @@ def test_demo_rows_cover_every_suggested_price_clamp_branch(tmp_path: Path) -> N
         decrease, increase = demo_bounds(carpet)
         assert carpet_base * (1 - decrease / 100) <= carpet_raw
         assert carpet_raw <= carpet_base * (1 + increase / 100)
+
+
+def test_demo_values_do_not_depend_on_database_ids() -> None:
+    """Dev and staging store the same catalog row under different ids."""
+
+    def row(primary_key: int, external_id: int) -> Product:
+        return Product(
+            id=primary_key,
+            external_id=external_id,
+            name="یخچال",
+            sku="SKU-1",
+            price=Decimal(10_000_000),
+            stock=Decimal(1),
+            main_group_name="لوازم خانگی",
+        )
+
+    dev_row = row(7, 1234)
+    staging_row = row(91, 1234)
+
+    assert demo_scenario(dev_row) == demo_scenario(staging_row)
+    assert demo_bounds(dev_row) == demo_bounds(staging_row)
+    for store in ("digikala", "technolife", "sofa", "digifresh"):
+        assert demo_prices(dev_row, store) == demo_prices(staging_row, store)

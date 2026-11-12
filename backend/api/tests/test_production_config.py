@@ -22,10 +22,14 @@ import app.services.owner as owner_module
 from app.core.config import (
     DEFAULT_DATABASE_URL,
     DatabaseSettings,
+    MigrationSettings,
     ParsinaSettings,
+    ProvisioningSettings,
     Settings,
     get_database_settings,
+    get_migration_settings,
     get_parsina_settings,
+    get_provisioning_settings,
     get_settings,
 )
 from app.core.deployment import is_production_deployment, resolve_deployment_env_optional
@@ -50,6 +54,8 @@ def _use_production(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _clear_caches() -> None:
     get_database_settings.cache_clear()
+    get_migration_settings.cache_clear()
+    get_provisioning_settings.cache_clear()
     get_settings.cache_clear()
     get_parsina_settings.cache_clear()
 
@@ -62,6 +68,28 @@ def test_database_settings_contain_only_database_and_migration_configuration() -
         "database_url",
         "migration_lock_timeout_seconds",
     }
+
+
+def test_api_settings_do_not_expose_the_migration_url() -> None:
+    assert "migration_database_url" not in DatabaseSettings.model_fields
+    assert "postgres_password" not in DatabaseSettings.model_fields
+
+
+def test_migration_settings_are_separate_from_application_settings() -> None:
+    assert "migration_database_url" in MigrationSettings.model_fields
+    assert "migration_database_url" not in Settings.model_fields
+
+
+def test_api_ignores_a_migration_url_and_uses_only_database_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    migration_url = "postgresql+psycopg://migrator:secret@db.invalid/charsooq"
+    monkeypatch.setenv("MIGRATION_DATABASE_URL", migration_url)
+
+    settings = DatabaseSettings()
+
+    assert settings.database_url == DEFAULT_DATABASE_URL
+    assert migration_url not in settings.model_dump().values()
 
 
 def test_database_url_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -605,6 +633,161 @@ def test_development_still_accepts_sqlite_and_the_local_default(
     monkeypatch.setenv("DATABASE_URL", "sqlite+pysqlite:///:memory:")
 
     assert DatabaseSettings().database_url == "sqlite+pysqlite:///:memory:"
+
+
+# ── MIGRATION DATABASE URL ───────────────────────────────────
+
+MIGRATION_DATABASE_URL = "postgresql+psycopg://migrator:test@db.invalid/charsooq"
+
+
+def test_development_migration_url_falls_back_to_database_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    url = "postgresql+psycopg://app:test@localhost:5433/charsooq"
+    monkeypatch.setenv("DATABASE_URL", url)
+
+    settings = MigrationSettings()
+
+    assert settings.migration_database_url == ""
+    assert settings.resolved_migration_database_url == url
+
+
+def test_development_migration_url_is_independent_when_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app_url = "postgresql+psycopg://app:test@localhost:5433/charsooq"
+    monkeypatch.setenv("DATABASE_URL", app_url)
+    monkeypatch.setenv("MIGRATION_DATABASE_URL", MIGRATION_DATABASE_URL)
+
+    settings = MigrationSettings()
+
+    assert settings.migration_database_url == MIGRATION_DATABASE_URL
+    assert settings.resolved_migration_database_url == MIGRATION_DATABASE_URL
+    assert settings.resolved_migration_database_url != settings.database_url
+
+
+def test_staging_migration_url_falls_back_to_database_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    url = "postgresql+psycopg://staging:test@db.invalid/staging"
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("DEPLOYMENT_ENV", "staging")
+    monkeypatch.setenv("DATABASE_URL", url)
+
+    settings = MigrationSettings()
+
+    assert settings.resolved_migration_database_url == url
+
+
+def test_production_requires_migration_database_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DEPLOYMENT_ENV", "production")
+    monkeypatch.setenv("DATABASE_URL", PRODUCTION_DATABASE_URL)
+
+    with pytest.raises(ValidationError, match="MIGRATION_DATABASE_URL must be set explicitly"):
+        MigrationSettings()
+
+
+def test_production_rejects_the_application_url_as_the_migration_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DEPLOYMENT_ENV", "production")
+    monkeypatch.setenv("DATABASE_URL", PRODUCTION_DATABASE_URL)
+    monkeypatch.setenv("MIGRATION_DATABASE_URL", PRODUCTION_DATABASE_URL)
+
+    with pytest.raises(ValidationError, match="must use different PostgreSQL roles"):
+        MigrationSettings()
+
+
+def test_production_accepts_independent_application_and_migration_urls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DEPLOYMENT_ENV", "production")
+    monkeypatch.setenv("DATABASE_URL", PRODUCTION_DATABASE_URL)
+    monkeypatch.setenv("MIGRATION_DATABASE_URL", MIGRATION_DATABASE_URL)
+
+    settings = MigrationSettings()
+
+    assert settings.database_url == PRODUCTION_DATABASE_URL
+    assert settings.migration_database_url == MIGRATION_DATABASE_URL
+    assert settings.resolved_migration_database_url == MIGRATION_DATABASE_URL
+
+
+def test_production_migration_url_can_come_from_secret_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _write_secret(tmp_path, "migration_database_url", MIGRATION_DATABASE_URL)
+    monkeypatch.setenv("DEPLOYMENT_ENV", "production")
+    monkeypatch.setenv("SECRETS_DIR", str(tmp_path))
+    _clear_caches()
+
+    assert MigrationSettings().resolved_migration_database_url == MIGRATION_DATABASE_URL
+
+
+@pytest.mark.parametrize(
+    ("url", "message"),
+    [
+        ("sqlite+pysqlite:///:memory:", "must be a PostgreSQL URL"),
+        ("postgresql+psycopg://migrator:test@localhost:5432/charsooq", "loopback"),
+        ("postgresql+psycopg://migrator:test@127.0.0.1:5432/charsooq", "loopback"),
+        ("postgresql+psycopg://migrator:test@[::1]:5432/charsooq", "loopback"),
+        ("postgresql+psycopg:///charsooq", "loopback"),
+        (
+            "postgresql+psycopg://migrator:test@db.invalid/charsooq?host=127.0.0.1",
+            "loopback",
+        ),
+        ("postgresql+psycopg://migrator:very-secret@[::1/charsooq", "not a valid"),
+    ],
+)
+def test_production_rejects_invalid_migration_urls_without_echoing_them(
+    monkeypatch: pytest.MonkeyPatch,
+    url: str,
+    message: str,
+) -> None:
+    monkeypatch.setenv("DEPLOYMENT_ENV", "production")
+    monkeypatch.setenv("MIGRATION_DATABASE_URL", url)
+
+    with pytest.raises(ValidationError) as exc:
+        MigrationSettings()
+
+    rendered = str(exc.value)
+    assert message in rendered
+    assert url not in rendered
+    assert "very-secret" not in rendered
+    assert "postgresql+psycopg" not in rendered
+
+
+def test_provisioning_settings_require_both_urls_and_the_admin_password(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DEPLOYMENT_ENV", "production")
+    monkeypatch.setenv("DATABASE_URL", PRODUCTION_DATABASE_URL)
+
+    with pytest.raises(ValidationError, match="must be set for database role provisioning"):
+        ProvisioningSettings()
+
+    monkeypatch.setenv("MIGRATION_DATABASE_URL", MIGRATION_DATABASE_URL)
+    with pytest.raises(ValidationError, match="POSTGRES_PASSWORD must be provided"):
+        ProvisioningSettings()
+
+
+def test_provisioning_settings_accept_secret_files(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _write_secret(tmp_path, "database_url", PRODUCTION_DATABASE_URL)
+    _write_secret(tmp_path, "migration_database_url", MIGRATION_DATABASE_URL)
+    _write_secret(tmp_path, "postgres_password", "admin-secret")
+    monkeypatch.setenv("DEPLOYMENT_ENV", "production")
+    monkeypatch.setenv("SECRETS_DIR", str(tmp_path))
+    _clear_caches()
+
+    settings = ProvisioningSettings()
+
+    assert settings.database_url == PRODUCTION_DATABASE_URL
+    assert settings.migration_database_url == MIGRATION_DATABASE_URL
+    assert settings.postgres_password == "admin-secret"
+    assert settings.postgres_user == "charsooq"
 
 
 # ── STARTUP FLAG DEFAULTS AND PRODUCTION POLICY ──────────────

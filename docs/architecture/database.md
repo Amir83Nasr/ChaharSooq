@@ -29,16 +29,18 @@ Each environment owns a separate database and a separate `DATABASE_URL`:
 | Production  | PostgreSQL 18.6 container on `market-linux` (`compose.production.yml`) |
 
 - Migrations run only against the database of the environment being deployed.
-- Alembic resolves its URL only through `DatabaseSettings` (`get_database_settings()`), which reads
-  `DATABASE_URL` or a `database_url` file under `SECRETS_DIR`. `alembic.ini` deliberately contains
-  no database URL, and the full application `Settings` is not required for migrations.
+- The API engine reads only `DATABASE_URL` through `DatabaseSettings` (the application role).
+  Alembic and `scripts/migrate.py` read only `MIGRATION_DATABASE_URL` through `MigrationSettings`
+  (the migration role). `alembic.ini` deliberately contains no database URL, and the full
+  application `Settings` is not required for migrations. When `MIGRATION_DATABASE_URL` is unset,
+  Development/Staging fall back to `DATABASE_URL`; Production requires the dedicated value.
 - `APP_ENV=production` requires an explicit, recognised `DEPLOYMENT_ENV`; a missing or unknown
   identity fails before any connection is opened, including in Alembic and offline SQL generation.
-- When `DEPLOYMENT_ENV=production` is explicit, the URL must be PostgreSQL with an explicit,
-  non-loopback host. A missing database URL, the committed localhost development default, SQLite,
-  `localhost`, `127.0.0.0/8`, `::1`, and IPv4-mapped loopback addresses all fail before any
-  connection is opened. Errors never include the URL, host, or credentials. Development and
-  Staging keep their previous compatibility.
+- When `DEPLOYMENT_ENV=production` is explicit, both URLs must be PostgreSQL with an explicit,
+  non-loopback host and must use different roles. A missing URL, the committed localhost
+  development default, SQLite, `localhost`, `127.0.0.0/8`, `::1`, and IPv4-mapped loopback
+  addresses all fail before any connection is opened. Errors never include a URL, host, or
+  credential. Development and Staging keep their previous compatibility.
 - `RUN_MIGRATIONS_ON_STARTUP` defaults to `true` in Development/Staging and `false` in Production.
   Staging keeps automatic migrations; Production rejects an explicit `true` and uses the
   standalone runner.
@@ -46,7 +48,8 @@ Each environment owns a separate database and a separate `DATABASE_URL`:
   `true` and runs `scripts/bootstrap_owner.py` explicitly after migrations.
 - Production migrations are ordered before the new API version and use a single locked runner;
   `compose.production.yml` makes `api` depend on the one-shot `migrate` service completing
-  successfully. The runner uses the `database_url` secret and `DEPLOYMENT_ENV=production`.
+  successfully. The runner uses only the `migration_database_url` secret and
+  `DEPLOYMENT_ENV=production`; the API uses only `database_url`.
 - No automatic Production → Staging/Development data transfer is allowed. Real data used outside
   Production requires a controlled, sanitized process.
 - The existing dev-to-staging sync script is an explicit manual helper. The legacy `*-prod` targets
@@ -74,19 +77,61 @@ reachable only on the internal `backend` Compose network.
 - **Backups:** not implemented in this task. Backup/restore tooling, encryption, off-host retention,
   and a restore drill are the next task. Take a verified backup before destructive migrations.
 
-### Role plan (not implemented)
+### Roles and least privilege (implemented)
 
-The current container creates one `charsooq` role through `POSTGRES_USER`; in the official image
-that role is a superuser. The API receives `database_url` for that role, not the
-`postgres_password` file, but this is not least privilege. The planned split is:
+Production uses three independent roles. The names below are the documented convention; the actual
+role names are read from the two database URLs, so an operator may choose different lowercase names
+as long as both URLs point at the same database and use different roles.
 
-- an administrative `postgres` role used only to administer the container/database;
-- a migrator role that owns the schema and has the DDL rights Alembic needs;
-- an application role with `CONNECT`, schema `USAGE`, and DML on the application tables/sequences.
+| Role           | URL / credential                      | Rights                                                                                                                                                                                                                                                                           |
+| -------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Administrative | `POSTGRES_USER` + `postgres_password` | `SUPERUSER`. Used only by the PostgreSQL container and the one-shot `provision` service. Never given to the API or migration runner.                                                                                                                                             |
+| Migration      | `migration_database_url`              | `LOGIN`, `NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `NOBYPASSRLS`; owns schema `public` and the objects Alembic creates; `CREATE` on the database for future trusted extensions.                                                                                               |
+| Application    | `database_url`                        | `LOGIN`, `NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `NOBYPASSRLS`; `CONNECT`; schema `USAGE`; `SELECT`/`INSERT`/`UPDATE`/`DELETE` on application tables; `USAGE`/`SELECT` on sequences. No `CREATE` on the schema, no object ownership, no role membership in the other roles. |
 
-It requires an initialization path and grant/default-privilege work that must be tested with the
-existing migrations and owner bootstrap. Do not assume it is in place. No role, grant, or migration
-was changed in this task.
+The committed migrations create every table in `public` (there is no `schema=` anywhere under
+`backend/api/migrations`), so `public` is the target schema. The migration role owns it after
+provisioning. `alembic_version` is explicitly excluded from the application grants, so the runtime
+role cannot rewrite the recorded schema version. Future tables and sequences created by the
+migration role receive the same application DML privileges through `ALTER DEFAULT PRIVILEGES`.
+
+`app/core/provisioning.py` implements provisioning as a single transaction:
+
+1. connect as the administrative role;
+2. take a provisioning-specific advisory lock;
+3. create or `ALTER` both roles with safe attributes and the passwords from the two URLs;
+4. revoke role memberships and broad database/schema grants;
+5. transfer existing objects owned by the administrative role (an old single-role volume) to the
+   migration role;
+6. ensure `alembic_version` exists, grant exact application DML/sequence privileges and default
+   privileges, then revoke all privileges on `alembic_version` from the application role;
+7. verify the post-state (no superuser/createdb/createrole/bypassrls, no schema `CREATE`, no role
+   membership, migration role owns the schema, application role owns no objects) and raise if it
+   does not match.
+
+The `provision` service runs on every stack start and is idempotent. PostgreSQL initialization
+scripts are **not** used for this: they run only when the data directory is first created, so they
+cannot create, rotate, or repair roles on an existing volume. A pre-split volume is handled by the
+ownership-transfer step above; no human `ALTER TABLE` loop is required.
+
+Passwords come from `database_url`, `migration_database_url`, and `postgres_password` secret files.
+They are never passed as command arguments, written to Compose, or printed. The provisioning module
+does not log SQL and sets `log_statement=none` for its transaction so a server that logs statements
+does not capture the `ALTER ROLE ... PASSWORD` text.
+
+**Password rotation.** Change the password inside the role's URL secret (and, for the administrative
+role, `postgres_password`), then run `make prod-provision` (or let the next `make prod-up` run the
+`provision` service), then restart the service that uses it (`api` for `database_url`, `migrate`
+for `migration_database_url`). Rotation is a short window: the old credential keeps working until
+the provisioning transaction commits, and the new credential works immediately afterwards.
+
+**Migrating an existing single-role volume.** Take a verified backup, write
+`migration_database_url` with the migration role/password, replace `database_url` with the
+application role URL (same database host/name), then run `make prod-provision` followed by
+`make prod-migrate` before recreating `api`. The old administrative role is untouched and remains
+the container administrator; the provisioning step only transfers table/sequence/view ownership
+from it to the migration role and grants the application role. If an object is owned by an
+unexpected role, provisioning fails closed instead of changing it.
 
 ## Migrations and the single-runner lock
 
@@ -97,12 +142,16 @@ DEPLOYMENT_ENV=development uv run --project backend/api \
   python backend/api/scripts/migrate.py
 ```
 
-- It uses `DatabaseSettings` and never instantiates the full application settings.
+- It uses `MigrationSettings` (`MIGRATION_DATABASE_URL`) and never instantiates the full application
+  settings or reads the API's application credential in Production.
 - It never calls `create_all` and never creates a migration revision.
 - On PostgreSQL it takes a **session-level** advisory lock from `app/core/migration_lock.py` and
   passes the same connection to Alembic through `config.attributes["connection"]`. The lock covers
   the entire upgrade, is released on success or failure, and is also released by PostgreSQL when
   the connection closes after a crash.
+- The lock query opens a SQLAlchemy transaction before Alembic configures itself. Alembic does not
+  commit a transaction it did not start, so `migrations/env.py` commits the connection after the
+  upgrade; otherwise closing the connection would roll the migrations back.
 - The lock key is fixed and documented: `int.from_bytes(b"charsooq", "big")`.
 - If another runner holds the lock, the command waits up to
   `MIGRATION_LOCK_TIMEOUT_SECONDS` (default 60) and then exits non-zero with a clear timeout.

@@ -8,10 +8,13 @@ The same migration path serves three entry points:
 * a plain ``alembic upgrade head``, whose ``migrations/env.py`` acquires the
   same advisory lock when it opens its own connection.
 
-Every run uses ``DatabaseSettings`` only, so migrating never requires
-authentication secrets. On PostgreSQL the Alembic upgrade and the advisory lock
-share one connection (see :mod:`app.core.migration_lock`). Production must run
-on PostgreSQL and fails closed without lock support.
+Every run uses ``MigrationSettings`` only, so migrating never requires
+authentication secrets and never reads the API's application credential. In
+Production ``MIGRATION_DATABASE_URL`` is mandatory; Development and Staging
+fall back to ``DATABASE_URL`` when it is unset (the previous behavior). On
+PostgreSQL the Alembic upgrade and the advisory lock share one connection (see
+:mod:`app.core.migration_lock`). Production must run on PostgreSQL and fails
+closed without lock support.
 
 Skipped when ``APP_ENV=test`` for the lifespan only: tests manage their own
 schema with ``Base.metadata.create_all`` (see tests/conftest.py). The explicit
@@ -28,7 +31,7 @@ from sqlalchemy import Connection, Engine, create_engine
 from sqlalchemy.engine import make_url
 from sqlalchemy.pool import NullPool, StaticPool
 
-from app.core.config import get_database_settings
+from app.core.config import get_migration_settings
 from app.core.migration_lock import migration_lock
 
 log = logging.getLogger("charsooq.migrations")
@@ -38,12 +41,15 @@ _BACKEND_DIR = Path(__file__).resolve().parents[2]
 
 
 def _database_url() -> str:
-    """Same resolution as migrations/env.py: DatabaseSettings only.
+    """Same resolution as migrations/env.py: MigrationSettings only.
 
-    Environment variables still win over ``SECRETS_DIR`` files through the
-    shared settings sources; the full application Settings is never required.
+    Production requires the dedicated ``MIGRATION_DATABASE_URL``; Development
+    and Staging keep the old fallback to ``DATABASE_URL``. The application
+    credential is never used in Production. Environment variables still win
+    over ``SECRETS_DIR`` files through the shared settings sources, and the
+    full application Settings is never required.
     """
-    return get_database_settings().database_url.strip()
+    return get_migration_settings().resolved_migration_database_url.strip()
 
 
 def _build_migration_engine(url: str) -> Engine:
@@ -86,7 +92,7 @@ def apply_migrations() -> None:
     old multi-replica retry loop: a second runner waits, then finds the
     database already at head instead of racing the first one.
     """
-    settings = get_database_settings()
+    settings = get_migration_settings()
     engine = _build_migration_engine(_database_url())
     try:
         with engine.connect() as connection:
@@ -110,11 +116,14 @@ def upgrade_to_head() -> None:
 
 
 def redact_migration_error(message: str) -> str:
-    """Remove the database URL and password from an error shown by the CLI."""
+    """Remove the migration URL and password from an error shown by the CLI."""
     try:
-        url = get_database_settings().database_url.strip()
+        url = _database_url()
     except Exception:  # noqa: BLE001 — config errors must still be printable
-        url = os.environ.get("DATABASE_URL", "").strip()
+        url = (
+            os.environ.get("MIGRATION_DATABASE_URL", "").strip()
+            or os.environ.get("DATABASE_URL", "").strip()
+        )
 
     if not url:
         return message

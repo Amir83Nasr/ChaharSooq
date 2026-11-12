@@ -82,14 +82,15 @@ cache copy; `make clean-build` removes `.next` and Playwright artifacts.
 
 ## Environment variables
 
-Each app owns its env file: [backend/api/.env.example](backend/api/.env.example) (copy to `backend/api/.env.local`) and [apps/web/.env.example](apps/web/.env.example) (copy to `apps/web/.env.local`). Never commit real secrets. Values are environment-specific: never share secrets or `DATABASE_URL` between Development, Staging, and Production. Deployed environments get their variables from their own platform or server secret source, not from env files shipped with the repository. The backend reads its env file by absolute path, so the API, Alembic, and the seed scripts always target the same configuration. A shared root `.env.local` (or `.env`) is also loaded by both apps as a fallback, which is convenient for LAN/mobile dev (e.g. whitelisting device IPs in `ALLOWED_DEV_ORIGINS` / `CORS_ORIGINS`); per-app values take precedence.
+Each app owns its env file: [backend/api/.env.example](backend/api/.env.example) (copy to `backend/api/.env.local`) and [apps/web/.env.example](apps/web/.env.example) (copy to `apps/web/.env.local`). Never commit real secrets. Values are environment-specific: never share secrets or `DATABASE_URL` between Development, Staging, and Production. Deployed environments get their variables from their own platform or server secret source, not from env files shipped with the repository. The backend reads its env file by absolute path, so every backend process resolves the same configuration sources. In Production the API and Alembic intentionally use different credentials (`DATABASE_URL` and `MIGRATION_DATABASE_URL`) for the same database. A shared root `.env.local` (or `.env`) is also loaded by both apps as a fallback, which is convenient for LAN/mobile dev (e.g. whitelisting device IPs in `ALLOWED_DEV_ORIGINS` / `CORS_ORIGINS`); per-app values take precedence.
 
 | Variable                         | Purpose                                                                                                                                                                                                                                                                                                                                           |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `APP_ENV`                        | `development` / `test` / `production`. Staging and Production both run `production` app behavior (Secure cookies, strict secret checks); the environment is identified by the explicit `DEPLOYMENT_ENV`.                                                                                                                                          |
 | `DEPLOYMENT_ENV`                 | Explicit environment identity: `development`, `staging`, `production`. Mandatory whenever `APP_ENV=production`; a missing or unknown value fails configuration before any database connection. It also gates protected scripts (the Development/Staging Make targets set it). `APP_ENV` cannot replace it because Staging also uses `production`. |
-| `DATABASE_URL`                   | SQLAlchemy URL, e.g. `postgresql+psycopg://charsooq:charsooq@localhost:5433/charsooq`. In an explicitly identified Production deployment it must be PostgreSQL and must not target localhost or any loopback address.                                                                                                                             |
-| `SECRETS_DIR`                    | Optional directory of one-value secret files: `database_url`, `session_secret`, `owner_password`, `parsina_password`. Environment variables take precedence; the Production stack mounts it at `/run/secrets`.                                                                                                                                    |
+| `DATABASE_URL`                   | The **application role** SQLAlchemy URL, e.g. `postgresql+psycopg://charsooq_app:<password>@localhost:5433/charsooq`. The API reads only this URL; it is never used for migrations in Production. In an explicitly identified Production deployment it must be PostgreSQL and must not target localhost or any loopback address.                  |
+| `MIGRATION_DATABASE_URL`         | The **migration role** SQLAlchemy URL used only by Alembic and `scripts/migrate.py`. Required in Production and must use a different PostgreSQL role than `DATABASE_URL`. Development/Staging fall back to `DATABASE_URL` when it is unset.                                                                                                       |
+| `SECRETS_DIR`                    | Optional directory of one-value secret files: `database_url`, `migration_database_url`, `postgres_password`, `session_secret`, `owner_password`, `parsina_password`. Environment variables take precedence; the Production stack mounts it at `/run/secrets`.                                                                                     |
 | `SESSION_SECRET`                 | Validated in production (minimum 32 bytes); the current opaque-token sessions do not sign cookies with it                                                                                                                                                                                                                                         |
 | `SESSION_SAMESITE`               | `lax` (same-site dev) / `none` (split frontend/API hosts, e.g. Staging)                                                                                                                                                                                                                                                                           |
 | `RUN_MIGRATIONS_ON_STARTUP`      | Defaults: `true` in Development/Staging, `false` in Production. `true` runs Alembic in the API lifespan under the advisory lock; Production rejects an explicit `true` so the standalone migration runner must apply schema first.                                                                                                                |
@@ -115,20 +116,23 @@ configuration before the database is opened. Development keeps the previous leni
 APP_ENV=development
 DEPLOYMENT_ENV=development          # optional for the API, required by protected CLIs
 DATABASE_URL=postgresql+psycopg://charsooq:charsooq@localhost:5433/charsooq
+# MIGRATION_DATABASE_URL is optional here: migrations fall back to DATABASE_URL.
 RUN_MIGRATIONS_ON_STARTUP=true
 RUN_OWNER_BOOTSTRAP_ON_STARTUP=true
 
 # Staging (production behavior, staging identity)
 APP_ENV=production
 DEPLOYMENT_ENV=staging
-DATABASE_URL=<staging PostgreSQL URL>
+DATABASE_URL=<staging application-role PostgreSQL URL>
+# Optional in Staging: migrations fall back to DATABASE_URL.
 RUN_MIGRATIONS_ON_STARTUP=true
 RUN_OWNER_BOOTSTRAP_ON_STARTUP=true
 
 # Production (explicit identity; startup steps are separate commands)
 APP_ENV=production
 DEPLOYMENT_ENV=production
-DATABASE_URL=<production PostgreSQL URL, not localhost/loopback>
+DATABASE_URL=<production application-role URL, not localhost/loopback>
+MIGRATION_DATABASE_URL=<production migration-role URL, different role>
 RUN_MIGRATIONS_ON_STARTUP=false
 RUN_OWNER_BOOTSTRAP_ON_STARTUP=false
 ```
@@ -216,6 +220,7 @@ See [docs/architecture/deployment.md](docs/architecture/deployment.md).
 Schema changes require an Alembic migration under `backend/api/migrations/`. Autogenerate from models, review, then apply (`make db-migrate`).
 
 - Migration is now a separate, controlled step: `backend/api/scripts/migrate.py` applies `head` under a PostgreSQL session-level advisory lock. The API lifespan runs the same locked path by default only in Development and Staging (`RUN_MIGRATIONS_ON_STARTUP=true`); Production defaults it to `false`.
+- Migrations read `MIGRATION_DATABASE_URL` only. In Production it is mandatory and must use the migration role; the API's `DATABASE_URL` (application role) is never accepted as a migration credential. Development and Staging fall back to `DATABASE_URL` when the dedicated value is unset, preserving the previous single-URL behavior.
 - A plain `alembic upgrade head` also takes the same lock. The lock and the Alembic upgrade share one connection, so they cannot drift onto different sessions.
 - The lock key is fixed and documented (`app/core/migration_lock.py`, ASCII `charsooq`). A second runner waits up to `MIGRATION_LOCK_TIMEOUT_SECONDS` (default 60), then fails with a clear timeout instead of racing. On success or failure the lock is released; closing the connection or killing the process is the final PostgreSQL-side safety net.
 - PostgreSQL is required for the lock. SQLite keeps the previous development behavior; an explicitly identified Production deployment fails closed if the URL is not PostgreSQL or targets a loopback host.
@@ -257,49 +262,65 @@ or extend [compose.yml](compose.yml). The stack is built for a Docker Engine hos
 `market-linux` but this repository does not deploy it and the stack is not live yet.
 
 ```bash
-make prod-config   # validate compose structure; no secret files needed
-make prod-build    # build pinned API + web production images
-make prod-up       # build and start db -> migrate -> api -> web
-make prod-ps       # service status and health
-make prod-logs     # follow logs
-make prod-down     # stop services; volumes and data are kept
+make prod-config    # validate compose structure; no secret files needed
+make prod-build     # build pinned API + web production images
+make prod-up        # start db -> provision -> migrate -> api -> web
+make prod-provision # run idempotent role provisioning once (needs secrets)
+make prod-migrate   # run the locked migration runner once (needs secrets)
+make prod-ps        # service status and health
+make prod-logs      # follow logs
+make prod-down      # stop services; volumes and data are kept
 ```
 
-`make prod-migrate` runs the locked migration runner as a one-off, and
-`make prod-bootstrap-owner` runs the explicit owner CLI. Both need real Production secrets and are
-deliberately not part of `prod-up` (owner bootstrap stays an explicit step).
+`make prod-up` runs the one-shot `provision` and `migrate` services in order; the API is not
+created until both succeed. `make prod-provision` and `make prod-migrate` run those same steps
+manually as one-offs, and `make prod-bootstrap-owner` runs the explicit owner CLI. All of them need
+real Production secrets; owner bootstrap remains a separate explicit step.
 
-### Production secrets
+### Database roles and production secrets
+
+Production separates three PostgreSQL roles. The image-created `charsooq` role is the
+**administrative superuser** and is used only by PostgreSQL itself and the one-shot provisioning
+service. `charsooq_migrator` owns the schema and runs Alembic; `charsooq_app` is the runtime role
+with `CONNECT`, schema `USAGE`, and `SELECT`/`INSERT`/`UPDATE`/`DELETE` on application tables and
+`USAGE`/`SELECT` on sequences. The application role cannot create, alter, or drop schema objects and
+cannot create roles. Role names are read from the URLs, so an operator may choose different
+lowercase names; both URLs must target the same database.
 
 Secrets are file-backed Docker Compose secrets, sourced from outside the repository. The default
 host directory is `/etc/charsooq/secrets`; override it with `CHARSOOQ_SECRETS_DIR=...`.
 
-| Secret file         | Used by          | Content                                                     |
-| ------------------- | ---------------- | ----------------------------------------------------------- |
-| `postgres_password` | `db`             | PostgreSQL password for the `charsooq` database role        |
-| `database_url`      | `migrate`, `api` | `postgresql+psycopg://charsooq:<password>@db:5432/charsooq` |
-| `session_secret`    | `api`            | Session configuration secret, at least 32 bytes             |
-| `owner_password`    | `api`            | Owner bootstrap password, at least 8 characters             |
-| `parsina_password`  | `api`            | Parsina password when the integration is configured         |
+| Secret file              | Used by                | Content                                                              |
+| ------------------------ | ---------------------- | -------------------------------------------------------------------- |
+| `postgres_password`      | `db`, `provision`      | Password for the administrative `charsooq` role                      |
+| `database_url`           | `provision`, `api`     | `postgresql+psycopg://charsooq_app:<password>@db:5432/charsooq`      |
+| `migration_database_url` | `provision`, `migrate` | `postgresql+psycopg://charsooq_migrator:<password>@db:5432/charsooq` |
+| `session_secret`         | `api`                  | Session configuration secret, at least 32 bytes                      |
+| `owner_password`         | `api`                  | Owner bootstrap password, at least 8 characters                      |
+| `parsina_password`       | `api`                  | Parsina password when the integration is configured                  |
+
+The API never receives `postgres_password` or `migration_database_url`; the migration runner never
+receives `postgres_password` or `database_url`. The provisioning service receives only the three
+secrets it needs to create roles and set passwords.
 
 Compose file-backed secrets are bind-mounted read-only into `/run/secrets`; host ownership and mode
 are what the container sees. `uid`, `gid`, and `mode` in the Compose file only apply to Swarm
-secrets and are intentionally not set. Make `postgres_password` readable by the PostgreSQL image
-user (`999:999`) and the other files readable by the API runtime user (`10001:10001`), for example
-with mode `0400` and matching ownership. Never commit these files or place them in an image.
+secrets and are intentionally not set. Make `postgres_password` owned by `999:999` with mode `0440`
+(the `provision` service joins GID `999` to read it), and the other files owned by `10001:10001`
+with mode `0400`. Never commit these files or place them in an image.
 See [docs/architecture/deployment.md](docs/architecture/deployment.md#production-secrets) for the
-exact commands and verification steps.
+exact commands, rotation steps, and verification.
 
-No host port is published by this stack. `db`, `api`, and `web` listen only on internal Compose
-networks (`web:3000`, `api:8000`, `db:5432`). TLS termination and the reverse proxy are a separate
-task; backup tooling and restore drills are not implemented yet. PostgreSQL data lives in the
-`charsooq-production_pgdata` volume at `/var/lib/postgresql` (the PostgreSQL 18 image path), and
-`make prod-down` never removes it.
+No host port is published by this stack. `db`, `provision`, `migrate`, `api`, and `web` listen only on
+internal Compose networks (`web:3000`, `api:8000`, `db:5432`). TLS termination and the reverse proxy
+are a separate task; backup tooling and restore drills are not implemented yet. PostgreSQL data
+lives in the `charsooq-production_pgdata` volume at `/var/lib/postgresql` (the PostgreSQL 18 image
+path), and `make prod-down` never removes it.
 
 ## Deployment
 
-Charsooq has three independent environments — Development, Staging, and Production. Each has its own secrets, `DATABASE_URL`, and configuration; no Production data is copied automatically to Staging or Development. A push to `main` is not a Production release. See [docs/architecture/deployment.md](docs/architecture/deployment.md) for the source of truth.
+Charsooq has three independent environments — Development, Staging, and Production. Each has its own secrets, database credentials (`DATABASE_URL`, plus `MIGRATION_DATABASE_URL` where role separation is used), and configuration; no Production data is copied automatically to Staging or Development. A push to `main` is not a Production release. See [docs/architecture/deployment.md](docs/architecture/deployment.md) for the source of truth.
 
 - Development: local Next.js + FastAPI + PostgreSQL; `make docker-up` runs `web` + `api` + `postgres` from [compose.yml](compose.yml), with a one-shot `migrate` service running the locked migration runner before the API starts. The development stack sets `APP_ENV=production` to exercise production behavior locally and `DEPLOYMENT_ENV=development` so it is never mistaken for Production. `compose.yml` is the development stack, not a Production file.
 - Staging: Vercel frontend (`vercel.json` pins pnpm install/build for the monorepo) + FastAPI Cloud backend (`make deploy-api`) + Neon database. Set `API_URL_INTERNAL` + `NEXT_PUBLIC_API_URL` to the Staging API origin in Vercel — the build fails fast if they still point at localhost. Browser calls same-origin `/api/*`; Next rewrites to the API origin, so the session cookie stays first-party. The API auto-migrates on boot in Staging.
-- Production: Docker Engine + Docker Compose on Ubuntu `market-linux` (`172.30.2.2`): Next.js, FastAPI, and PostgreSQL 18.6. [compose.production.yml](compose.production.yml) encodes the service order, file-backed secrets, internal networks, and health checks. TLS/reverse proxy, backups, image registry/promotion, and the actual server deployment remain separate open work. Production is not live yet; see the deployment document.
+- Production: Docker Engine + Docker Compose on Ubuntu `market-linux` (`172.30.2.2`): Next.js, FastAPI, and PostgreSQL 18.6, with separate administrative, migration, and application database roles. [compose.production.yml](compose.production.yml) encodes the service order (`db` → `provision` → `migrate` → `api` → `web`), file-backed secrets, internal networks, and health checks. TLS/reverse proxy, backups, image registry/promotion, and the actual server deployment remain separate open work. Production is not live yet; see the deployment document.

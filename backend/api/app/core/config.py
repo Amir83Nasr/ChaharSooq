@@ -57,6 +57,39 @@ _PRODUCTION_DATABASE_HOST_ERROR = (
 _PRODUCTION_DATABASE_INVALID_ERROR = (
     "DATABASE_URL is not a valid SQLAlchemy URL; provide a PostgreSQL URL for Production."
 )
+_PRODUCTION_MIGRATION_URL_ERROR = (
+    "MIGRATION_DATABASE_URL must be set explicitly in Production; the application "
+    "database URL is not accepted for migrations. Provide the MIGRATION_DATABASE_URL "
+    "environment variable or a 'migration_database_url' file in SECRETS_DIR."
+)
+_PRODUCTION_MIGRATION_URL_NOT_DISTINCT_ERROR = (
+    "MIGRATION_DATABASE_URL and DATABASE_URL must use different PostgreSQL roles in "
+    "Production; the API and the migration runner may not share one role."
+)
+_PRODUCTION_PROVISIONING_URL_ERROR = (
+    "DATABASE_URL and MIGRATION_DATABASE_URL must be set for database role "
+    "provisioning; each needs its own PostgreSQL role."
+)
+_PRODUCTION_POSTGRES_ADMIN_ERROR = (
+    "POSTGRES_PASSWORD must be provided for database role provisioning."
+)
+_PRODUCTION_MIGRATION_DIALECT_ERROR = (
+    "MIGRATION_DATABASE_URL must be a PostgreSQL URL in Production; the configured "
+    "database is not PostgreSQL."
+)
+_PRODUCTION_MIGRATION_HOST_ERROR = (
+    "MIGRATION_DATABASE_URL must not target localhost or a loopback address in "
+    "Production; point it at the Production database host."
+)
+_PRODUCTION_MIGRATION_INVALID_ERROR = (
+    "MIGRATION_DATABASE_URL is not a valid SQLAlchemy URL; provide a PostgreSQL URL for Production."
+)
+_PROVISIONING_DATABASE_INVALID_ERROR = (
+    "DATABASE_URL is not a valid SQLAlchemy PostgreSQL URL for role provisioning."
+)
+_PROVISIONING_MIGRATION_INVALID_ERROR = (
+    "MIGRATION_DATABASE_URL is not a valid SQLAlchemy PostgreSQL URL for role provisioning."
+)
 
 
 def _configured_app_env() -> str:
@@ -87,37 +120,58 @@ def _iter_url_hosts(parsed: URL) -> list[str]:
     handled as text, never by searching the raw URL string.
     """
     hosts: list[str] = []
-    if isinstance(parsed.host, str) and parsed.host.strip():
-        hosts.append(parsed.host)
+    main_host = parsed.host
+    if main_host and main_host.strip():
+        hosts.append(main_host)
     for key in ("host", "hostaddr"):
         value = parsed.query.get(key)
-        if isinstance(value, str):
+        # Runtime query values may be a tuple for repeated keys even though the
+        # URL typing used here narrows them to str.
+        if isinstance(value, str):  # pyright: ignore[reportUnnecessaryIsInstance]
             hosts.append(value)
         elif isinstance(value, (tuple, list)):
-            hosts.extend(item for item in value if isinstance(item, str))
+            hosts.extend(value)
     return hosts
 
 
-def _validate_production_database_url(url: str) -> None:
+#: Per-setting Production URL messages. Keeping them in one table means a new
+#: URL setting cannot accidentally reuse another setting's error text (which is
+#: the only place an operator sees which variable failed).
+_PRODUCTION_URL_MESSAGES: dict[str, tuple[str, str, str]] = {
+    "DATABASE_URL": (
+        _PRODUCTION_DATABASE_INVALID_ERROR,
+        _PRODUCTION_DATABASE_DIALECT_ERROR,
+        _PRODUCTION_DATABASE_HOST_ERROR,
+    ),
+    "MIGRATION_DATABASE_URL": (
+        _PRODUCTION_MIGRATION_INVALID_ERROR,
+        _PRODUCTION_MIGRATION_DIALECT_ERROR,
+        _PRODUCTION_MIGRATION_HOST_ERROR,
+    ),
+}
+
+
+def _validate_production_database_url(url: str, *, setting_name: str = "DATABASE_URL") -> None:
     """Reject non-PostgreSQL, missing-host, and loopback Production URLs.
 
     Parsing uses SQLAlchemy's URL parser, not substring matching. Errors carry
     no URL, host, username, or password so a failed boot cannot leak secrets.
     """
+    invalid_message, dialect_message, host_message = _PRODUCTION_URL_MESSAGES[setting_name]
     try:
         parsed = make_url(url)
     except (ArgumentError, ValueError):
-        raise ValueError(_PRODUCTION_DATABASE_INVALID_ERROR) from None
+        raise ValueError(invalid_message) from None
 
     if parsed.get_backend_name() != "postgresql":
-        raise ValueError(_PRODUCTION_DATABASE_DIALECT_ERROR)
+        raise ValueError(dialect_message)
 
     hosts = _iter_url_hosts(parsed)
     if not hosts:
         # No host cannot be proven to be a remote, non-loopback Production host.
-        raise ValueError(_PRODUCTION_DATABASE_HOST_ERROR)
+        raise ValueError(host_message)
     if any(_is_loopback_host(host) for host in hosts):
-        raise ValueError(_PRODUCTION_DATABASE_HOST_ERROR)
+        raise ValueError(host_message)
 
 
 def _configured_secrets_dir() -> Path | None:
@@ -173,13 +227,15 @@ class SecretFileSettings(BaseSettings):
 
 
 class DatabaseSettings(SecretFileSettings):
-    """Database and migration configuration, usable without authentication settings.
+    """Application database configuration, usable without authentication settings.
 
-    Alembic and the migration helper instantiate this model instead of the full
-    application ``Settings``. Production refuses the localhost default so a
+    The API engine and the full application ``Settings`` use this model. It
+    contains only the application role URL; Alembic and the migration runner use
+    :class:`MigrationSettings` instead, so the API never reads the migration or
+    administrative credential. Production refuses the localhost default so a
     missing database configuration cannot silently target the development
-    database. The lock timeout belongs here because the standalone migration
-    runner must not require application secrets.
+    database. The lock timeout remains a field here for compatibility with
+    existing consumers; the migration models carry their own copy.
     """
 
     database_url: str = Field(default=DEFAULT_DATABASE_URL)
@@ -195,9 +251,9 @@ class DatabaseSettings(SecretFileSettings):
 
     @model_validator(mode="after")
     def _require_explicit_production_database_url(self) -> "DatabaseSettings":
-        # Enforce the runtime identity here too: Alembic and the migration
-        # runners instantiate DatabaseSettings without the full Settings model,
-        # so APP_ENV=production must never proceed with an unknown identity.
+        # Enforce the runtime identity here too: this model can be loaded
+        # without the full Settings model, so APP_ENV=production must never
+        # proceed with an unknown identity.
         resolve_runtime_deployment_env(_configured_app_env())
 
         url = self.database_url.strip()
@@ -211,6 +267,130 @@ class DatabaseSettings(SecretFileSettings):
             self.database_url = url
             if is_production_deployment():
                 _validate_production_database_url(url)
+        return self
+
+
+class MigrationSettings(SecretFileSettings):
+    """Migration-only configuration for Alembic and the standalone runner.
+
+    The API uses :class:`DatabaseSettings` and therefore never sees the
+    migration credential. Alembic and ``scripts/migrate.py`` use this model
+    instead, so a leaked application URL cannot run DDL.
+
+    ``DATABASE_URL`` is accepted here only as a Development/Staging
+    compatibility fallback while ``MIGRATION_DATABASE_URL`` is unset. In an
+    explicitly identified Production deployment the migration URL is
+    mandatory and the application URL is never used as a fallback.
+    """
+
+    #: Compatibility fallback; ignored in an explicit Production deployment.
+    database_url: str = Field(default=DEFAULT_DATABASE_URL)
+    #: Dedicated migration role URL. Set this in Production and preferably
+    #: everywhere else too.
+    migration_database_url: str = Field(default="")
+    #: How long a migration runner waits for another runner's advisory lock.
+    migration_lock_timeout_seconds: float = Field(default=60.0, ge=0, le=3600)
+
+    @field_validator("database_url", "migration_database_url", mode="before")
+    @classmethod
+    def _strip_urls(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
+
+    @model_validator(mode="after")
+    def _resolve_migration_url(self) -> "MigrationSettings":
+        # Alembic and the runner load without the full application Settings, so
+        # the deployment identity is enforced here as well.
+        resolve_runtime_deployment_env(_configured_app_env())
+
+        app_url = self.database_url.strip()
+        migration_url = self.migration_database_url.strip()
+
+        if is_production_deployment():
+            if not migration_url or migration_url == DEFAULT_DATABASE_URL:
+                raise ValueError(_PRODUCTION_MIGRATION_URL_ERROR)
+            _validate_production_database_url(migration_url, setting_name="MIGRATION_DATABASE_URL")
+            if app_url and app_url != DEFAULT_DATABASE_URL:
+                _validate_production_database_url(app_url, setting_name="DATABASE_URL")
+                try:
+                    shares_role = make_url(app_url).username == make_url(migration_url).username
+                except (ArgumentError, ValueError):  # pragma: no cover — validated above
+                    shares_role = True
+                if shares_role:
+                    raise ValueError(_PRODUCTION_MIGRATION_URL_NOT_DISTINCT_ERROR)
+            self.migration_database_url = migration_url
+            self.database_url = app_url or DEFAULT_DATABASE_URL
+            return self
+
+        # Development/Staging keep the previous single-URL behavior: when the
+        # dedicated value is absent, migrations use DATABASE_URL. The fallback
+        # is explicit and tested; it is never used in Production.
+        self.migration_database_url = migration_url
+        self.database_url = app_url or DEFAULT_DATABASE_URL
+        return self
+
+    @property
+    def resolved_migration_database_url(self) -> str:
+        """The URL Alembic must use (dedicated value, or the dev fallback)."""
+        return self.migration_database_url or self.database_url
+
+
+class ProvisioningSettings(SecretFileSettings):
+    """Inputs for the one-shot PostgreSQL role provisioning service.
+
+    This model is intentionally separate from :class:`DatabaseSettings` and
+    :class:`Settings`: only the provisioning service receives the PostgreSQL
+    administrator password. The API and the migration runner never instantiate
+    it, so they can never read that secret.
+    """
+
+    #: Application role URL. Its role name and password are provisioned.
+    database_url: str = Field(default="")
+    #: Migration role URL. Its role name and password are provisioned.
+    migration_database_url: str = Field(default="")
+    #: Password of the container's administrative PostgreSQL role.
+    postgres_password: str = Field(default="")
+    #: Administrative role name created by the PostgreSQL image
+    #: (``POSTGRES_USER``). It is used only to administer roles and grants.
+    postgres_user: str = Field(default="charsooq")
+
+    @field_validator(
+        "database_url",
+        "migration_database_url",
+        "postgres_password",
+        "postgres_user",
+        mode="before",
+    )
+    @classmethod
+    def _strip_values(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
+
+    @model_validator(mode="after")
+    def _require_provisioning_inputs(self) -> "ProvisioningSettings":
+        resolve_runtime_deployment_env(_configured_app_env())
+
+        if not self.database_url or not self.migration_database_url:
+            raise ValueError(_PRODUCTION_PROVISIONING_URL_ERROR)
+        if not self.postgres_password:
+            raise ValueError(_PRODUCTION_POSTGRES_ADMIN_ERROR)
+        if not self.postgres_user:
+            raise ValueError("POSTGRES_USER must not be empty for role provisioning")
+
+        for url, setting_name, invalid_message in (
+            (self.database_url, "DATABASE_URL", _PROVISIONING_DATABASE_INVALID_ERROR),
+            (
+                self.migration_database_url,
+                "MIGRATION_DATABASE_URL",
+                _PROVISIONING_MIGRATION_INVALID_ERROR,
+            ),
+        ):
+            try:
+                parsed = make_url(url)
+            except (ArgumentError, ValueError):
+                raise ValueError(invalid_message) from None
+            if parsed.get_backend_name() != "postgresql":
+                raise ValueError(invalid_message)
+            if is_production_deployment():
+                _validate_production_database_url(url, setting_name=setting_name)
         return self
 
 
@@ -276,8 +456,8 @@ class Settings(DatabaseSettings):
     @model_validator(mode="after")
     def _fail_fast_on_default_secret(self) -> "Settings":
         # APP_ENV=production requires an explicit identity (Staging also uses
-        # production behavior). DatabaseSettings performs the same check for
-        # Alembic and the migration runners.
+        # production behavior). DatabaseSettings and MigrationSettings perform
+        # the same check when loaded without this full model.
         resolve_runtime_deployment_env(self.app_env)
 
         # APP_ENV=production covers Staging and Production application behavior.
@@ -368,8 +548,20 @@ class ParsinaSettings(SecretFileSettings):
 
 @lru_cache
 def get_database_settings() -> DatabaseSettings:
-    """Database configuration for the API, Alembic, and migration helpers."""
+    """Application database configuration used by the API engine."""
     return DatabaseSettings()
+
+
+@lru_cache
+def get_migration_settings() -> MigrationSettings:
+    """Migration configuration for Alembic and the standalone runner."""
+    return MigrationSettings()
+
+
+@lru_cache
+def get_provisioning_settings() -> ProvisioningSettings:
+    """Role-provisioning configuration; only the one-shot service uses this."""
+    return ProvisioningSettings()
 
 
 @lru_cache

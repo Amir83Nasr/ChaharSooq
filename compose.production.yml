@@ -14,10 +14,13 @@ x-api-image: &api-image
     context: .
     dockerfile: Dockerfile.api
 
-x-api-env: &api-env
+x-service-env: &service-env
   APP_ENV: production
   DEPLOYMENT_ENV: production
   SECRETS_DIR: /run/secrets
+
+x-api-env: &api-env
+  <<: *service-env
   # The ordered one-shot steps below are the only supported path in Production.
   RUN_MIGRATIONS_ON_STARTUP: "false"
   RUN_OWNER_BOOTSTRAP_ON_STARTUP: "false"
@@ -55,15 +58,27 @@ services:
           cpus: "1"
           memory: 512M
 
-  # One-shot schema upgrade. It exits 0 only when the database is at head, and
-  # `api` is not created until this service completes successfully. A failure
-  # therefore stops the release with the database untouched by the new API.
-  migrate:
+  # One-shot role and grant provisioning. It connects with the container's
+  # administrative role (postgres_password) and reads the two database URLs to
+  # derive the application and migration role names/passwords. Idempotent on
+  # both a fresh volume and an existing single-role volume.
+  provision:
     <<: *api-image
-    command: ["python", "backend/api/scripts/migrate.py"]
-    environment: *api-env
+    command: ["python", "backend/api/scripts/provision_database_roles.py"]
+    environment:
+      <<: *service-env
+      # Name of the image-created administrative role, not a secret.
+      POSTGRES_USER: charsooq
     secrets:
+      - postgres_password
       - database_url
+      - migration_database_url
+    # The postgres_password file is owned by the PostgreSQL image user
+    # (999:999) and mode 0440. The API image runs as 10001, so this one-shot
+    # service joins GID 999 to read that file; the other two secrets are
+    # owned by 10001 and need no extra group.
+    group_add:
+      - "999"
     restart: "no"
     networks:
       - backend
@@ -76,6 +91,33 @@ services:
           cpus: "1"
           memory: 512M
 
+  # One-shot schema upgrade. It exits 0 only when the database is at head, and
+  # `api` is not created until this service completes successfully. A failure
+  # therefore stops the release with the database untouched by the new API.
+  # It receives only the migration credential: no administrative password and
+  # no application URL.
+  migrate:
+    <<: *api-image
+    command: ["python", "backend/api/scripts/migrate.py"]
+    environment: *api-env
+    secrets:
+      - migration_database_url
+    restart: "no"
+    networks:
+      - backend
+    depends_on:
+      db:
+        condition: service_healthy
+      provision:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+
+  # Runtime API. It receives only the application credential: no
+  # postgres_password and no migration_database_url.
   api:
     <<: *api-image
     restart: unless-stopped
@@ -170,6 +212,8 @@ secrets:
     file: ${CHARSOOQ_SECRETS_DIR:-/etc/charsooq/secrets}/postgres_password
   database_url:
     file: ${CHARSOOQ_SECRETS_DIR:-/etc/charsooq/secrets}/database_url
+  migration_database_url:
+    file: ${CHARSOOQ_SECRETS_DIR:-/etc/charsooq/secrets}/migration_database_url
   session_secret:
     file: ${CHARSOOQ_SECRETS_DIR:-/etc/charsooq/secrets}/session_secret
   owner_password:

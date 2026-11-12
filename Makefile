@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-.PHONY: build check clean-build clean-cache db-bootstrap-owner db-clear-products db-migrate db-migrate-prod db-seed db-seed-demo db-seed-demo-staging db-seed-parsina db-seed-prod db-sync-dev-to-prod db-sync-dev-to-staging sync-dev-to-prod sync-dev-to-staging sync-prod sync-staging dev-to-prod dev-to-staging db-up db-validate db-wait deploy-api dev-all dev-api dev-web docker-build docker-down docker-logs docker-up doctor help install lint openapi-check test test-e2e typecheck prod-bootstrap-owner prod-build prod-config prod-down prod-logs prod-migrate prod-ps prod-up
+.PHONY: build check clean-build clean-cache db-bootstrap-owner db-clear-products db-migrate db-migrate-prod db-seed db-seed-demo db-seed-demo-staging db-seed-parsina db-seed-prod db-sync-dev-to-prod db-sync-dev-to-staging sync-dev-to-prod sync-dev-to-staging sync-prod sync-staging dev-to-prod dev-to-staging db-up db-validate db-wait deploy-api dev-all dev-api dev-web docker-build docker-down docker-logs docker-up doctor help install lint openapi-check test test-e2e typecheck prod-bootstrap-owner prod-build prod-config prod-down prod-logs prod-migrate prod-provision prod-ps prod-up
 
 # ─── HELP ─────────────────────────────────────────────────
 help: ## Show this help message
@@ -157,6 +157,9 @@ prod-config: ## Validate the production compose file (no secrets needed)
 
 prod-build: ## Build production API and web images from this commit
 	docker compose -f $(COMPOSE_PROD_FILE) build
+
+prod-provision: ## Run idempotent database role provisioning once (needs real secrets)
+	docker compose -f $(COMPOSE_PROD_FILE) run --rm provision
 
 prod-migrate: ## Run the production migration runner once (needs real secrets)
 	docker compose -f $(COMPOSE_PROD_FILE) run --rm migrate

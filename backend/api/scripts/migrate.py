@@ -5,10 +5,12 @@ Usage from the repository root::
     DEPLOYMENT_ENV=development uv run --project backend/api \
       python backend/api/scripts/migrate.py
 
-The runner resolves the database through ``DatabaseSettings`` only, applies
-Alembic to ``head`` under the ChaharSooq PostgreSQL advisory lock, and exits
-non-zero on failure or lock timeout. It never calls ``create_all`` and never
-prints the database URL or a password.
+The runner resolves the database through ``MigrationSettings`` only
+(``MIGRATION_DATABASE_URL``; Development/Staging may still fall back to
+``DATABASE_URL``), applies Alembic to ``head`` under the ChaharSooq PostgreSQL
+advisory lock, and exits non-zero on failure or lock timeout. It never reads
+the API's application credential in Production, never calls ``create_all``,
+and never prints a database URL or a password.
 """
 
 from __future__ import annotations

@@ -121,7 +121,10 @@ make docker-down # stop
 ```
 
 The one-shot `migrate` service runs the locked `scripts/migrate.py` before `api` starts. Native
-`pnpm dev` remains the default development path.
+`pnpm dev` remains the default development path. Development keeps its existing single-role
+`charsooq` database and has no provisioning service; `MIGRATION_DATABASE_URL` is optional and
+migrations fall back to `DATABASE_URL`. Role separation is a Production requirement, not a
+Development one.
 
 ## Staging
 
@@ -157,7 +160,9 @@ dashboard for the Staging environment, never shared with Production:
 
 - `APP_ENV=production` (production behavior)
 - `DEPLOYMENT_ENV=staging` (explicit identity; Staging and Production share `APP_ENV=production`)
-- the Staging Neon `DATABASE_URL`
+- the Staging Neon `DATABASE_URL` (application role)
+- optionally `MIGRATION_DATABASE_URL` (migration role); when absent, Staging migrations fall back to
+  `DATABASE_URL`, preserving the previous single-URL behavior
 - a Staging-only `SESSION_SECRET` (at least 32 characters)
 - the Staging `CORS_ORIGINS`
 - `SESSION_SAMESITE=none` for the split frontend/API hosts
@@ -166,6 +171,7 @@ dashboard for the Staging environment, never shared with Production:
 FastAPI lifespan on every boot (except `APP_ENV=test`), under the ChaharSooq PostgreSQL advisory
 lock. The lock makes concurrent replicas single-flight; a waiting replica applies a no-op upgrade
 after the first one finishes. This is still a Staging convenience, not the Production process.
+Staging does not have a separate provisioning service; the managed Neon role is used as-is.
 
 Staging data is demo/staging data. Do not load a Production dump into Staging. The current
 controlled helpers for staging are:
@@ -191,19 +197,20 @@ registry promotion, TLS, and backups remain separate work.
 
 ### Production services
 
-| Service   | Image / build                     | Runtime identity | Exposure / purpose                                                |
-| --------- | --------------------------------- | ---------------- | ----------------------------------------------------------------- |
-| `db`      | `postgres:18.6-trixie`            | `999:999`        | Internal only; persistent volume at `/var/lib/postgresql`         |
-| `migrate` | `Dockerfile.api` (`charsooq-api`) | `10001:10001`    | One-shot locked migration runner; exits 0 at `head`               |
-| `api`     | `Dockerfile.api` (`charsooq-api`) | `10001:10001`    | Internal only on `backend` + `edge`; FastAPI on port `8000`       |
-| `web`     | `Dockerfile.web` (`charsooq-web`) | `1000:1000`      | Internal only on `edge`; Next.js standalone server on port `3000` |
+| Service     | Image / build                     | Runtime identity | Exposure / purpose                                                            |
+| ----------- | --------------------------------- | ---------------- | ----------------------------------------------------------------------------- |
+| `db`        | `postgres:18.6-trixie`            | `999:999`        | Internal only; persistent volume at `/var/lib/postgresql`                     |
+| `provision` | `Dockerfile.api` (`charsooq-api`) | `10001:10001`    | One-shot idempotent role/grant provisioning; exits 0 when the roles are ready |
+| `migrate`   | `Dockerfile.api` (`charsooq-api`) | `10001:10001`    | One-shot locked migration runner; exits 0 at `head`                           |
+| `api`       | `Dockerfile.api` (`charsooq-api`) | `10001:10001`    | Internal only on `backend` + `edge`; FastAPI on port `8000`                   |
+| `web`       | `Dockerfile.web` (`charsooq-web`) | `1000:1000`      | Internal only on `edge`; Next.js standalone server on port `3000`             |
 
-`db`, `migrate`, `api`, and `web` are the only services. Redis is not part of this stack: login
-rate limiting is in-memory for the current single-host deployment, and adding Redis without a
-measured need would add another stateful service. The Compose project name is
+`db`, `provision`, `migrate`, `api`, and `web` are the only services. Redis is not part of this
+stack: login rate limiting is in-memory for the current single-host deployment, and adding Redis
+without a measured need would add another stateful service. The Compose project name is
 `charsooq-production`, so its networks and volume are separate from the development stack.
 
-All API-side services set:
+The `api` and `migrate` services set:
 
 ```text
 APP_ENV=production
@@ -218,14 +225,15 @@ Nothing is inherited from `compose.yml` or from repo env files.
 ### Build and run
 
 ```bash
-make prod-config   # structure only; does not read secret files
-make prod-build    # build pinned API + web images
-make prod-migrate  # run the locked migration runner once (needs secrets)
+make prod-config    # structure only; does not read secret files
+make prod-build     # build pinned API + web images
+make prod-provision # run idempotent role provisioning once (needs secrets)
+make prod-migrate   # run the locked migration runner once (needs secrets)
 make prod-bootstrap-owner # explicit owner CLI (needs secrets)
-make prod-up       # build and start the stack in dependency order
-make prod-ps       # status and health
-make prod-logs     # follow logs
-make prod-down     # stop; volumes and data are kept
+make prod-up        # build and start the stack in dependency order
+make prod-ps        # status and health
+make prod-logs      # follow logs
+make prod-down      # stop; volumes and data are kept
 ```
 
 Equivalent direct commands:
@@ -246,16 +254,24 @@ with immutable digests (still open).
 Compose enforces this order:
 
 1. `db` starts and becomes healthy (`pg_isready` against the local socket/TCP port).
-2. `migrate` runs only after `db` is healthy.
-3. `migrate` must complete with exit code 0. A failed migration, lock timeout, or bad configuration
+2. `provision` runs only after `db` is healthy. It creates/updates the migration and application
+   roles, transfers ownership on an existing volume, applies grants/default privileges, and verifies
+   the result.
+3. `provision` must complete with exit code 0. A failed provision leaves it failed and `migrate` /
+   `api` are never started.
+4. `migrate` runs after `provision` completed successfully (and `db` is healthy). It uses only the
+   migration credential.
+5. `migrate` must complete with exit code 0. A failed migration, lock timeout, or bad configuration
    leaves it failed and `api` is never started.
-4. `api` starts after `migrate` completed successfully and `db` is healthy. Its healthcheck calls
-   `/ready`, which executes `SELECT 1` against the database.
-5. `web` starts only after `api` is healthy. Its healthcheck requests `/login` from the Next server.
+6. `api` starts after `migrate` completed successfully and `db` is healthy. Its healthcheck calls
+   `/ready`, which executes `SELECT 1` against the database as the application role.
+7. `web` starts only after `api` is healthy. Its healthcheck requests `/login` from the Next server.
 
-`migrate` uses `restart: "no"` so a one-shot failure does not loop; `db`, `api`, and `web` use
-`unless-stopped`. API and web healthchecks are real requests, not process checks. The API keeps
-Uvicorn at two workers (the existing single-host sizing); no worker count is raised in this task.
+`provision` and `migrate` use `restart: "no"` so a one-shot failure does not loop; `db`, `api`, and
+`web` use `unless-stopped`. API and web healthchecks are real requests, not process checks. The API
+keeps Uvicorn at two workers (the existing single-host sizing); no worker count is raised in this
+task. Provisioning and migration are serialized by their own locks, so a manual one-off cannot race
+a stack start.
 
 ### Production secrets
 
@@ -263,18 +279,22 @@ Production uses **file-backed Docker Compose secrets**, mounted read-only at `/r
 The host directory defaults to `/etc/charsooq/secrets` and can be overridden with
 `CHARSOOQ_SECRETS_DIR`. The directory must not be inside the repository.
 
-| Secret file         | Delivered to     | Required content                                            |
-| ------------------- | ---------------- | ----------------------------------------------------------- |
-| `postgres_password` | `db`             | Password for the `charsooq` PostgreSQL role                 |
-| `database_url`      | `migrate`, `api` | `postgresql+psycopg://charsooq:<password>@db:5432/charsooq` |
-| `session_secret`    | `api`            | Session configuration secret, at least 32 bytes             |
-| `owner_password`    | `api`            | Owner bootstrap password, at least 8 characters             |
-| `parsina_password`  | `api`            | Parsina password when the integration is configured         |
+| Secret file              | Delivered to           | Required content                                                     |
+| ------------------------ | ---------------------- | -------------------------------------------------------------------- |
+| `postgres_password`      | `db`, `provision`      | Password for the administrative `charsooq` PostgreSQL role           |
+| `database_url`           | `provision`, `api`     | `postgresql+psycopg://charsooq_app:<password>@db:5432/charsooq`      |
+| `migration_database_url` | `provision`, `migrate` | `postgresql+psycopg://charsooq_migrator:<password>@db:5432/charsooq` |
+| `session_secret`         | `api`                  | Session configuration secret, at least 32 bytes                      |
+| `owner_password`         | `api`                  | Owner bootstrap password, at least 8 characters                      |
+| `parsina_password`       | `api`                  | Parsina password when the integration is configured                  |
 
-Only the services that need a secret receive it. In particular, the API never mounts
-`postgres_password`; that file belongs to the database container only. The API and migration
-runner use `database_url` instead. `parsina_password` must exist for the stack to start; when
-Parsina is intentionally disabled, an empty file keeps `ParsinaSettings.is_configured` false.
+Only the services that need a secret receive it. The API never mounts `postgres_password` or
+`migration_database_url`; the migration runner never mounts `postgres_password` or `database_url`.
+The provisioning service receives the administrative password plus both URLs because it must create
+the roles and set their passwords. The role names and passwords are taken from the URLs; both URLs
+must target `db:5432/charsooq` and use different roles. `parsina_password` must exist for the stack
+to start; when Parsina is intentionally disabled, an empty file keeps
+`ParsinaSettings.is_configured` false.
 
 Compose file-backed secrets are bind-mounted files. Their host ownership and mode are what the
 container sees; `uid`, `gid`, and `mode` in the Compose file apply to Swarm secrets and are
@@ -286,36 +306,63 @@ container identity that consumes it:
 sudo install -d -m 0700 -o root -g root /etc/charsooq/secrets
 sudo chown 999:999 /etc/charsooq/secrets/postgres_password
 sudo chown 10001:10001 /etc/charsooq/secrets/database_url \
-  /etc/charsooq/secrets/session_secret /etc/charsooq/secrets/owner_password \
-  /etc/charsooq/secrets/parsina_password
-sudo chmod 0400 /etc/charsooq/secrets/postgres_password /etc/charsooq/secrets/database_url \
-  /etc/charsooq/secrets/session_secret /etc/charsooq/secrets/owner_password \
-  /etc/charsooq/secrets/parsina_password
+  /etc/charsooq/secrets/migration_database_url /etc/charsooq/secrets/session_secret \
+  /etc/charsooq/secrets/owner_password /etc/charsooq/secrets/parsina_password
+# The provision service joins GID 999 so it can read the admin password too.
+sudo chmod 0440 /etc/charsooq/secrets/postgres_password
+sudo chmod 0400 /etc/charsooq/secrets/database_url \
+  /etc/charsooq/secrets/migration_database_url /etc/charsooq/secrets/session_secret \
+  /etc/charsooq/secrets/owner_password /etc/charsooq/secrets/parsina_password
 ```
 
 The file values are never printed by the API or the migration runner, and configuration errors
 exclude URLs, hosts, usernames, and passwords. Secret values must not appear in Compose, Dockerfiles,
 docs, logs, or images.
 
-### Database role and least privilege
+### Database roles and least privilege
 
-The current stack creates the `charsooq` role through `POSTGRES_USER`; in the official PostgreSQL
-image that role is a **superuser**, and the API's `database_url` authenticates as it. This is the
-existing single-role architecture, not a least-privilege end state. The API does not receive the
-`postgres_password` file, but it still holds credentials for a powerful role.
+Production now uses three roles instead of one:
 
-Role separation is deliberately not guessed or partially implemented here because it needs a
-database initialization path and grants that match the existing migrations:
+| Role           | Credential                            | Rights and use                                                                                                                                                                                          |
+| -------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Administrative | `POSTGRES_USER` + `postgres_password` | Superuser created by the PostgreSQL image. Used by `db` and the one-shot `provision` service only. Never delivered to `api`/`migrate`.                                                                  |
+| Migration      | `migration_database_url`              | Owns schema `public` and Alembic-created objects; `CONNECT`/`CREATE` on the database; can run current and future migrations. Not a superuser and cannot create roles/databases.                         |
+| Application    | `database_url`                        | `CONNECT`, schema `USAGE`, `SELECT`/`INSERT`/`UPDATE`/`DELETE` on application tables, `USAGE`/`SELECT` on sequences. No schema `CREATE`, no ownership, no role management, no `alembic_version` access. |
 
-1. Keep `postgres`/`postgres_password` for container administration only.
-2. Create a migration role that owns the schema and has the DDL rights Alembic needs.
-3. Create an application role with `CONNECT`, schema `USAGE`, and table/sequence `SELECT`,
-   `INSERT`, `UPDATE`, and `DELETE` only.
-4. Give `migrate` a migrator `database_url`; give `api` the application `database_url`.
-5. Define default privileges for future tables and verify the owner bootstrap still works.
+The committed schema lives in `public` (no migration specifies another schema). The migration role
+gets ownership of that schema and of existing objects; the application role gets exact DML plus
+default privileges for future tables/sequences. The implementation is
+`backend/api/app/core/provisioning.py`; the service command is
+`backend/api/scripts/provision_database_roles.py`.
 
-Until that is implemented and tested, do not describe the current `charsooq` role as
-least-privilege. No migration was changed for this task.
+**Why a service, not initialization scripts.** PostgreSQL `docker-entrypoint-initdb.d` scripts run
+only when the data directory is empty. They cannot create roles, apply grants, or rotate passwords
+on an existing `charsooq-production_pgdata` volume. The one-shot `provision` service runs on every
+stack start, is idempotent, and handles both cases:
+
+- **New volume:** `db` creates the administrative role/database, `provision` creates the migration
+  and application roles, `migrate` creates the schema as the migration role, and `api` connects as
+  the application role.
+- **Existing single-role volume:** the old tables are owned by the administrative role. `provision`
+  transfers tables/sequences/views owned by that known role to the migration role, revokes broad
+  grants, applies the least-privilege set, and grants the application role. If an object is owned by
+  an unexpected role, it fails closed rather than changing ownership.
+
+**Password rotation.** Update the password inside `database_url` (application role) or
+`migration_database_url` (migration role), keep the same role name and database, then run
+`make prod-provision` and restart the consuming service (`api` or `migrate`). The provisioning
+transaction updates the role password and converges grants; the old password stops working when the
+transaction commits. Rotating the administrative password means updating `postgres_password` and
+running the same provisioning step so the container and provisioning service agree; the container
+also needs a restart to read the file again. Secrets are read from files, never passed as Compose
+arguments, so rotation does not require editing `compose.production.yml`.
+
+**Migrating from the previous single-URL deployment.** Take a verified backup first. Create both
+role URLs with the same host/database, replace the existing `database_url` value with the
+application-role URL, add `migration_database_url`, then run `make prod-provision` and
+`make prod-migrate` before recreating `api`. The administrative password file does not change. The
+old single-role credential is never reused as `database_url`; if both URLs name the same role,
+configuration and provisioning both fail.
 
 ### Networking and exposure
 
@@ -323,8 +370,8 @@ least-privilege. No migration was changed for this task.
 browser -> (future reverse proxy) -> web:3000 -> /api/* rewrite -> api:8000 -> db:5432
 ```
 
-- `backend` is an internal Compose network for `db`, `migrate`, and `api`. PostgreSQL is not
-  published to the host and has no external route on that network.
+- `backend` is an internal Compose network for `db`, `provision`, `migrate`, and `api`. PostgreSQL
+  is not published to the host and has no external route on that network.
 - `edge` connects `api` and `web`. It also gives the API outbound access to Parsina; no internal
   Parsina network link is created in this task.
 - `web` does not join `backend` and cannot reach the database directly.
@@ -363,13 +410,13 @@ certificate issuance, and the decision to publish only `80`/`443` remain open. D
 
 ### Remaining before a real server deployment
 
-- Provision the five secret files on the host and verify their ownership/modes as the consuming
-  UIDs; `make prod-config` only proves the compose structure.
+- Provision the six secret files on the host (`postgres_password`, `database_url`,
+  `migration_database_url`, `session_secret`, `owner_password`, `parsina_password`) and verify their
+  ownership/modes as the consuming UIDs; `make prod-config` only proves the compose structure.
 - Choose the image registry and promotion mechanism; build once from the approved commit and deploy
   by digest. The current Compose file can build locally, but Production must not rebuild ad hoc.
 - Add the reverse proxy/TLS layer and publish only its ports.
 - Implement and rehearse backup/restore.
-- Split database roles as described above.
 - Verify Docker Engine/Compose versions and resource limits on `market-linux`, then perform the
   controlled first deployment. No such deployment has been performed or validated in this task.
 
@@ -457,10 +504,16 @@ section describes implemented behavior; it does not approve a Production release
 ### Settings split
 
 - `DatabaseSettings` (`backend/api/app/core/config.py`) contains `database_url` and
-  `migration_lock_timeout_seconds`. The SQLAlchemy engine, `app/core/migrations.py`, and
-  `migrations/env.py` use `get_database_settings()`; they no longer instantiate the full
-  application model. Database and migration configuration therefore works without authentication
-  secrets.
+  `migration_lock_timeout_seconds`. The SQLAlchemy engine and the API use
+  `get_database_settings()`; they never see the migration credential or the administrative
+  password. Database configuration therefore works without authentication secrets.
+- `MigrationSettings` contains `migration_database_url` (plus a `database_url` compatibility
+  fallback and the lock timeout). `app/core/migrations.py` and `migrations/env.py` use
+  `get_migration_settings()`. Production requires the dedicated URL and refuses the application
+  role; Development/Staging fall back when it is unset.
+- `ProvisioningSettings` contains both URLs plus `postgres_password` and `postgres_user`. It is
+  instantiated only by the one-shot `provision` service, so the API and migration runner can never
+  read the administrative password.
 - `Settings` inherits `DatabaseSettings` and adds application behavior: `APP_ENV`, session, owner,
   CORS, sync, `RUN_MIGRATIONS_ON_STARTUP`, and `RUN_OWNER_BOOTSTRAP_ON_STARTUP`. Its public fields
   and consumers are unchanged apart from the new startup switch.
@@ -472,12 +525,14 @@ section describes implemented behavior; it does not approve a Production release
 When `SECRETS_DIR` is set, settings read one value per file from that directory. Expected file
 names:
 
-| Secret file        | Setting            | Required in Production?                                              |
-| ------------------ | ------------------ | -------------------------------------------------------------------- |
-| `database_url`     | `DATABASE_URL`     | Yes, must be explicit, PostgreSQL, and non-loopback.                 |
-| `session_secret`   | `SESSION_SECRET`   | Yes (existing production rule).                                      |
-| `owner_password`   | `OWNER_PASSWORD`   | Yes (existing production rule, minimum 8 chars).                     |
-| `parsina_password` | `PARSINA_PASSWORD` | No for settings; the Production Compose file still expects the file. |
+| Secret file              | Setting / reader                     | Required in Production?                                                     |
+| ------------------------ | ------------------------------------ | --------------------------------------------------------------------------- |
+| `database_url`           | `DATABASE_URL` (API/provision)       | Yes, application role, PostgreSQL, non-loopback.                            |
+| `migration_database_url` | `MIGRATION_DATABASE_URL` (migrate)   | Yes, migration role, PostgreSQL, non-loopback, different role from the API. |
+| `postgres_password`      | `POSTGRES_PASSWORD` (provision only) | Yes for provisioning; never read by `DatabaseSettings`/`MigrationSettings`. |
+| `session_secret`         | `SESSION_SECRET`                     | Yes (existing production rule).                                             |
+| `owner_password`         | `OWNER_PASSWORD`                     | Yes (existing production rule, minimum 8 chars).                            |
+| `parsina_password`       | `PARSINA_PASSWORD`                   | No for settings; the Production Compose file still expects the file.        |
 
 Precedence, highest first:
 
@@ -489,14 +544,18 @@ Precedence, highest first:
 Environment variables therefore keep their documented precedence. Secret values are not logged or
 included in configuration errors. An explicitly set `SECRETS_DIR` must be an existing directory in
 every environment; a missing directory fails fast. Production sets it to `/run/secrets`, where
-Compose mounts the file-backed secrets described above. `postgres_password` is consumed directly by
-the PostgreSQL image and is not read by `Settings`.
+Compose mounts the file-backed secrets described above. `postgres_password` is consumed by the
+PostgreSQL image and by `ProvisioningSettings` only; it is not read by `Settings`,
+`DatabaseSettings`, or `MigrationSettings`.
 
 When `DEPLOYMENT_ENV=production` is explicit, configuration fails closed if:
 
 - `DATABASE_URL` is missing, resolves to the committed localhost development default, is not a
   PostgreSQL URL, has no explicit host, or targets `localhost`, `127.0.0.0/8`, `::1`, or an
-  IPv4-mapped loopback address — including when Alembic runs in offline SQL mode;
+  IPv4-mapped loopback address;
+- `MIGRATION_DATABASE_URL` is missing, resolves to the localhost default, is not PostgreSQL, has no
+  explicit host, targets a loopback address, or uses the same role as `DATABASE_URL` — including
+  when Alembic runs in offline SQL mode;
 - `SESSION_SECRET` is the development default or shorter than 32 bytes;
 - `OWNER_PASSWORD` is shorter than 8 characters;
 - `RUN_MIGRATIONS_ON_STARTUP` or `RUN_OWNER_BOOTSTRAP_ON_STARTUP` is explicitly `true`.
@@ -527,7 +586,7 @@ An operator's explicit value is preserved, except in Production: an explicit `tr
 configuration error. The two switches remain independent, and neither weakens the existing
 `SESSION_SECRET` and `OWNER_PASSWORD` validation.
 
-Production starts the API only after `scripts/migrate.py` and, when needed,
+Production starts the API only after role provisioning, `scripts/migrate.py`, and, when needed,
 `scripts/bootstrap_owner.py` succeed, with both flags at `false`. In Development/Staging the
 automatic behavior is unchanged: the account is created when missing, re-hashed when the env
 password changes, and kept as the only `owner`.
@@ -572,7 +631,7 @@ this document.
 | Artifact promotion      | Can Staging and Production share one artifact, or only a commit SHA mapping?                                                |
 | Deploy access           | Self-hosted runner or SSH from CI? Which account and approvals?                                                             |
 | Migration control       | Who approves and triggers the Production compose release, and what backup gate applies before destructive migrations?       |
-| Database roles          | When to implement the migrator/application role split described above, including grants and default privileges.             |
+| Role password rotation  | Who rotates the application, migration, and administrative passwords, on what schedule, and how the backup gate applies.    |
 | Backup / DR             | Tooling, schedule, retention, off-site storage, RPO/RTO, restore drills.                                                    |
 | Observability           | Logs, metrics, uptime checks, alerting, and error tracking for each environment.                                            |
 | Staging identity        | Staging frontend/API domains, Vercel environment scope, and whether Staging tracks `main` or an explicit release candidate. |

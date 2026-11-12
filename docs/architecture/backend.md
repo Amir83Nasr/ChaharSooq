@@ -9,17 +9,17 @@ exception handlers, routers, and the scheduler. Schema changes live in `migratio
 app/api/routes  →  app/services  →  app/repositories  →  app/core/database  →  PostgreSQL
 ```
 
-| Layer              | Responsibility                                                                               |
-| ------------------ | -------------------------------------------------------------------------------------------- |
-| `api/routes`       | Parse input, call one service, set status codes. No business logic, no SQL.                  |
-| `api/dependencies` | DB sessions (`get_db`, `get_db_readonly`) and auth guards (`require_user`, `require_admin`). |
-| `api/openapi.py`   | Tag metadata, descriptions, and shared error responses for Swagger.                          |
-| `services`         | Business rules; the only layer that coordinates multiple repositories.                       |
-| `repositories`     | All SQLAlchemy 2.x queries. ORM models never leave this layer.                               |
-| `schemas`          | Pydantic boundary types for requests and responses.                                          |
-| `models`           | SQLAlchemy ORM models.                                                                       |
-| `integrations`     | External systems: Parsina, the dev mirror, the CSV fixture, competitor pages.                |
-| `core`             | Config, engine/session, security, rate limiting, migration lock/runner, scheduler, errors.   |
+| Layer              | Responsibility                                                                                                |
+| ------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `api/routes`       | Parse input, call one service, set status codes. No business logic, no SQL.                                   |
+| `api/dependencies` | DB sessions (`get_db`, `get_db_readonly`) and auth guards (`require_user`, `require_admin`).                  |
+| `api/openapi.py`   | Tag metadata, descriptions, and shared error responses for Swagger.                                           |
+| `services`         | Business rules; the only layer that coordinates multiple repositories.                                        |
+| `repositories`     | All SQLAlchemy 2.x queries. ORM models never leave this layer.                                                |
+| `schemas`          | Pydantic boundary types for requests and responses.                                                           |
+| `models`           | SQLAlchemy ORM models.                                                                                        |
+| `integrations`     | External systems: Parsina, the dev mirror, the CSV fixture, competitor pages.                                 |
+| `core`             | Config, engine/session, security, rate limiting, migration lock/runner, role provisioning, scheduler, errors. |
 
 Shared `__init__.py` files re-export the public names, so handlers import from the package
 (`from app.services import ProductService`). Standalone ops scripts live in `scripts/`;
@@ -66,18 +66,22 @@ Tests create the app through the same factory, so middleware and handlers stay c
   production adds HSTS.
 - CORS uses an explicit origin allowlist and limited methods/headers.
 - Configuration loads repo-root env files first, then `backend/api/.env*`. `DatabaseSettings`
-  provides database and migration configuration for the engine, the migration runner, and Alembic;
-  the full `Settings` model inherits it and adds authentication, session, CORS, and sync behavior.
-  With `SECRETS_DIR` set, settings can also read `database_url`, `session_secret`, `owner_password`,
-  and `parsina_password` files, with environment variables taking precedence.
+  provides the API engine's `DATABASE_URL` (application role); `MigrationSettings` provides
+  `MIGRATION_DATABASE_URL` for the migration runner and Alembic; `ProvisioningSettings` (one-shot
+  service only) adds `postgres_password`. The full `Settings` model inherits `DatabaseSettings` and
+  adds authentication, session, CORS, and sync behavior. With `SECRETS_DIR` set, settings can also
+  read `database_url`, `migration_database_url`, `postgres_password`, `session_secret`,
+  `owner_password`, and `parsina_password` files, with environment variables taking precedence.
+  The API never reads the migration or administrative credential.
 - `APP_ENV=production` requires an explicit, recognised `DEPLOYMENT_ENV` (`development`,
   `staging`, or `production`). A missing or unknown identity fails configuration before any
   database connection; Development keeps the previous lenient behavior. `DEPLOYMENT_ENV` alone
   decides whether Production-only rules apply.
-- In an explicitly identified Production deployment, `DATABASE_URL` must be a PostgreSQL URL with
-  an explicit host and must not target `localhost` or a loopback address (including `127.0.0.0/8`,
-  `::1`, and IPv4-mapped loopback). Validation uses SQLAlchemy's URL parser and never prints the
-  URL, host, or credentials.
+- In an explicitly identified Production deployment, `DATABASE_URL` and `MIGRATION_DATABASE_URL`
+  must be PostgreSQL URLs with explicit hosts, must not target `localhost` or a loopback address
+  (including `127.0.0.0/8`, `::1`, and IPv4-mapped loopback), and must use different roles.
+  Validation uses SQLAlchemy's URL parser and never prints a URL, host, or credential. Development
+  and Staging may omit `MIGRATION_DATABASE_URL`; migrations then fall back to `DATABASE_URL`.
 - `MIGRATION_LOCK_TIMEOUT_SECONDS` (default 60) bounds the wait for the PostgreSQL advisory lock.
 - `RUN_MIGRATIONS_ON_STARTUP` and `RUN_OWNER_BOOTSTRAP_ON_STARTUP` default to `true` in
   Development/Staging and `false` in Production. Production rejects an explicit `true` for either
@@ -111,11 +115,14 @@ either flag: the API may not change the schema or provision the owner there. Pro
 two CLI steps in the documented order, then starts the API with both flags `false`.
 
 Migrations are also available as a standalone command, `backend/api/scripts/migrate.py`. It and
-the lifespan call the same `apply_migrations()` path: `DatabaseSettings` for the URL, a
-short-lived engine, a PostgreSQL session-level advisory lock, and Alembic on that same connection
-through `config.attributes["connection"]`. The lock makes concurrent runners single-flight and is
-released on success, failure, or connection close. SQLite keeps the previous Development behavior;
-an explicit Production identity on a non-PostgreSQL dialect fails closed.
+the lifespan call the same `apply_migrations()` path: `MigrationSettings` for the URL
+(`MIGRATION_DATABASE_URL`, with the Development/Staging `DATABASE_URL` fallback), a short-lived
+engine, a PostgreSQL session-level advisory lock, and Alembic on that same connection through
+`config.attributes["connection"]`. The lock makes concurrent runners single-flight and is released
+on success, failure, or connection close. Because the lock query opens the connection's
+transaction, `migrations/env.py` commits it after the upgrade; Alembic does not commit a
+transaction it did not start. SQLite keeps the previous Development behavior; an explicit
+Production identity on a non-PostgreSQL dialect fails closed.
 
 The owner CLI, `backend/api/scripts/bootstrap_owner.py`, is the explicit Production-friendly path.
 It refuses `APP_ENV=test`, requires the `admins` table to already exist, never calls `create_all`,
@@ -125,18 +132,24 @@ and is idempotent. Disabling either startup step does not affect the other. See
 
 ## Container runtime (Production)
 
-The Production backend image is built by `Dockerfile.api` and used by both the `api` and one-shot
-`migrate` services in `compose.production.yml`:
+The Production backend image is built by `Dockerfile.api` and used by the `api` and one-shot
+`provision` and `migrate` services in `compose.production.yml`:
 
 - Multi-stage build: `uv sync --frozen --no-dev` runs in a builder stage; the runtime image copies
   only the virtualenv, app code, migrations, scripts, and `alembic.ini`. Base images are pinned
   (`python:3.12.16-slim-bookworm`, `uv:0.12.0`).
 - Runtime identity is `api` UID/GID `10001:10001` (non-root). App code is root-owned and read-only
   to that user. Secret files under `SECRETS_DIR=/run/secrets` are mounted by Compose and must be
-  readable by UID `10001`; the API never receives the PostgreSQL admin password file.
+  readable by UID `10001`; the API never receives the PostgreSQL admin password or migration URL.
+- `provision` runs `python backend/api/scripts/provision_database_roles.py` with
+  `DEPLOYMENT_ENV=production`, `POSTGRES_USER`, and the `postgres_password`, `database_url`, and
+  `migration_database_url` secrets. It depends on a healthy database and must exit 0 before
+  `migrate` starts. The implementation is `app/core/provisioning.py`; it is idempotent and fails
+  closed on unexpected object ownership or a non-least-privilege post-state.
 - `migrate` runs `python backend/api/scripts/migrate.py` with `DEPLOYMENT_ENV=production`,
-  `RUN_MIGRATIONS_ON_STARTUP=false`, and `RUN_OWNER_BOOTSTRAP_ON_STARTUP=false`. It depends on a
-  healthy database, and `api` depends on `migrate` completing successfully.
+  `RUN_MIGRATIONS_ON_STARTUP=false`, and `RUN_OWNER_BOOTSTRAP_ON_STARTUP=false`, and receives only
+  `migration_database_url`. It depends on a healthy database and successful provisioning; `api`
+  depends on `migrate` completing successfully.
 - The API serves on internal port `8000` only; no host port is published. Uvicorn keeps two workers
   and the existing `--proxy-headers --no-server-header` flags. `/ready` (database `SELECT 1`) is the
   container healthcheck.

@@ -15,12 +15,13 @@ from pydantic import ValidationError
 
 import app.core.migrations as migrations_module
 import scripts.migrate as migrate_script
-from app.core.config import Settings, get_database_settings, get_settings
+from app.core.config import Settings, get_migration_settings, get_settings
 from app.core.migration_lock import MigrationLockTimeoutError
 
 pytestmark = pytest.mark.usefixtures("isolated_settings")
 
 DATABASE_URL = "postgresql+psycopg://app:super-secret@db.invalid/charsooq"
+MIGRATION_URL = "postgresql+psycopg://migrator:migration-secret@db.invalid/charsooq"
 
 
 def _fake_connection() -> tuple[MagicMock, list[str]]:
@@ -58,10 +59,10 @@ def _use_fake_database(
     engine: MagicMock,
 ) -> None:
     settings = SimpleNamespace(
-        database_url=DATABASE_URL,
+        resolved_migration_database_url=MIGRATION_URL,
         migration_lock_timeout_seconds=0,
     )
-    monkeypatch.setattr(migrations_module, "get_database_settings", lambda: settings)
+    monkeypatch.setattr(migrations_module, "get_migration_settings", lambda: settings)
 
     def use_engine(_url: str) -> MagicMock:
         return engine
@@ -112,16 +113,16 @@ def test_runner_releases_lock_and_closes_engine_on_failure(
     engine.dispose.assert_called_once()
 
 
-def test_runner_uses_database_settings_only(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_runner_uses_migration_settings_only(monkeypatch: pytest.MonkeyPatch) -> None:
     connection, _ = _fake_connection()
     engine = _fake_engine(connection)
     used_urls: list[str] = []
     settings = SimpleNamespace(
-        database_url=DATABASE_URL,
+        resolved_migration_database_url=MIGRATION_URL,
         migration_lock_timeout_seconds=0,
     )
 
-    monkeypatch.setattr(migrations_module, "get_database_settings", lambda: settings)
+    monkeypatch.setattr(migrations_module, "get_migration_settings", lambda: settings)
 
     def build_engine(url: str) -> MagicMock:
         used_urls.append(url)
@@ -137,7 +138,7 @@ def test_runner_uses_database_settings_only(monkeypatch: pytest.MonkeyPatch) -> 
 
     migrations_module.apply_migrations()
 
-    assert used_urls == [DATABASE_URL]
+    assert used_urls == [MIGRATION_URL]
 
 
 def test_runner_never_calls_create_all(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -180,14 +181,14 @@ def test_startup_wrapper_skips_only_the_test_environment(
 def test_redact_migration_error_hides_url_and_password(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("DATABASE_URL", DATABASE_URL)
-    get_database_settings.cache_clear()
+    monkeypatch.setenv("MIGRATION_DATABASE_URL", MIGRATION_URL)
+    get_migration_settings.cache_clear()
 
-    message = f"could not connect to {DATABASE_URL} with password super-secret"
+    message = f"could not connect to {MIGRATION_URL} with password migration-secret"
     redacted = migrations_module.redact_migration_error(message)
 
-    assert DATABASE_URL not in redacted
-    assert "super-secret" not in redacted
+    assert MIGRATION_URL not in redacted
+    assert "migration-secret" not in redacted
     assert "<database-url>" in redacted
     assert "<redacted>" in redacted
 
@@ -199,7 +200,6 @@ def test_safe_error_message_omits_pydantic_input_values(
     monkeypatch.setenv("DATABASE_URL", DATABASE_URL)
     monkeypatch.setenv("SESSION_SECRET", "leaky-session-secret")
     monkeypatch.setenv("OWNER_PASSWORD", "owner-pass")
-    get_database_settings.cache_clear()
     get_settings.cache_clear()
 
     with pytest.raises(ValidationError) as exc:
@@ -275,11 +275,11 @@ def test_cli_failure_exits_non_zero_without_leaking_secrets(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setenv("DEPLOYMENT_ENV", "production")
-    monkeypatch.setenv("DATABASE_URL", DATABASE_URL)
-    get_database_settings.cache_clear()
+    monkeypatch.setenv("MIGRATION_DATABASE_URL", MIGRATION_URL)
+    get_migration_settings.cache_clear()
 
     def failure() -> None:
-        raise RuntimeError(f"connection to {DATABASE_URL} failed; password super-secret")
+        raise RuntimeError(f"connection to {MIGRATION_URL} failed; password migration-secret")
 
     monkeypatch.setattr(migrate_script, "apply_migrations", failure)
 
@@ -289,8 +289,8 @@ def test_cli_failure_exits_non_zero_without_leaking_secrets(
     assert exc.value.code == 1
     err = capsys.readouterr().err
     assert "migration failed" in err
-    assert DATABASE_URL not in err
-    assert "super-secret" not in err
+    assert MIGRATION_URL not in err
+    assert "migration-secret" not in err
 
 
 def test_cli_does_not_require_full_application_settings(

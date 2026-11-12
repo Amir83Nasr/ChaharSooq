@@ -24,6 +24,9 @@ _ISOLATED_SETTINGS_ENV = frozenset(
         "APP_ENV",
         "DEPLOYMENT_ENV",
         "DATABASE_URL",
+        "MIGRATION_DATABASE_URL",
+        "POSTGRES_PASSWORD",
+        "POSTGRES_USER",
         "SECRETS_DIR",
         "SESSION_SECRET",
         "SESSION_COOKIE_NAME",
@@ -57,6 +60,8 @@ def isolated_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     for model in (
         config.SecretFileSettings,
         config.DatabaseSettings,
+        config.MigrationSettings,
+        config.ProvisioningSettings,
         config.Settings,
         config.ParsinaSettings,
     ):

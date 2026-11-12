@@ -1,11 +1,23 @@
-/* Shared query-param builder for the products list endpoint.
+/* Shared query-param builders for the products list and CSV export endpoints.
    Browser-only helper — keeps `undefined`/`""` out of the URL so the API
    sees only the filters the user actually set. */
 
-import type { ProductFilters } from "./api-types"
+import type {
+  CompetitorStatus,
+  CompetitorStore,
+  ProductFilters,
+} from "./api-types"
 
-export function buildProductParams(params: ProductFilters): string {
-  const search = new URLSearchParams()
+export interface CompetitorExportFilters {
+  store?: CompetitorStore
+  status?: CompetitorStatus
+  is_active?: boolean
+}
+
+function appendProductParams(
+  search: URLSearchParams,
+  params: ProductFilters
+): void {
   if (params.q) search.set("q", params.q)
   if (params.category_id) search.set("category_id", String(params.category_id))
   if (params.top_group) search.set("top_group", params.top_group)
@@ -30,6 +42,43 @@ export function buildProductParams(params: ProductFilters): string {
   if (params.page) search.set("page", String(params.page))
   if (params.page_size !== undefined)
     search.set("page_size", String(params.page_size))
-  const suffix = search.size ? `?${search}` : ""
-  return suffix
+}
+
+function suffix(search: URLSearchParams): string {
+  return search.size ? `?${search}` : ""
+}
+
+export function buildProductParams(params: ProductFilters): string {
+  const search = new URLSearchParams()
+  appendProductParams(search, params)
+  return suffix(search)
+}
+
+/** Export endpoints accept the same filters, never paging. */
+export function buildProductExportParams(params: ProductFilters): string {
+  const search = new URLSearchParams()
+  appendProductParams(search, {
+    ...params,
+    page: undefined,
+    page_size: undefined,
+  })
+  return suffix(search)
+}
+
+/** Listing export = product filters + listing-specific filters. */
+export function buildCompetitorListingsExportParams(
+  params: ProductFilters,
+  filters: CompetitorExportFilters = {}
+): string {
+  const search = new URLSearchParams()
+  appendProductParams(search, {
+    ...params,
+    page: undefined,
+    page_size: undefined,
+  })
+  if (filters.store) search.set("store", filters.store)
+  if (filters.status) search.set("status", filters.status)
+  if (filters.is_active !== undefined)
+    search.set("is_active", String(filters.is_active))
+  return suffix(search)
 }

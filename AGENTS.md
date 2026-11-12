@@ -78,6 +78,13 @@ Charsooq has exactly three independent environments. Full operational detail liv
 - Do not add another component library without an ADR.
 - The main sidebar uses the shadcn Sidebar / Block approach.
 - Code in `packages/ui` must not import from `apps/web`.
+- Popups and overlays (dropdown menus, select menus, popovers, context menus) must
+  match the app theme, not browser/shadcn defaults: surface `rounded-2xl bg-popover`
+  with `ring-1 ring-foreground/10` and the standard shadow, items `rounded-xl`, and
+  the same spacing as `SelectContent`/`SelectItem`. Change these in the shared
+  primitive in `packages/ui`, never per-feature; a one-off popup that looks different
+  from the rest of the app is a bug. Verify the rendered radius, border, shadow, and
+  RTL alignment in the browser after touching a menu primitive.
 - Vertical centering: center content with flex on the element that directly
   wraps it (`flex items-center justify-center`). Never leave a block whose
   only child is an inline-level box (`inline-flex`, `inline-block`,

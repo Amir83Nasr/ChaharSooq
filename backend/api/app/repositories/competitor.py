@@ -1,13 +1,16 @@
 """SQL access for manually managed competitor listings."""
 
+from collections.abc import Iterator
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, NamedTuple
 
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import Select
 
 from app.models import CompetitorListing, CompetitorPriceObservation, Product
+from app.repositories.products import ProductFilters, product_base_criteria
 
 
 class DailyPriceChange(NamedTuple):
@@ -150,6 +153,96 @@ class CompetitorRepository:
                 select(CompetitorListing).order_by(CompetitorListing.created_at)
             ).scalars()
         )
+
+    def _export_criteria(
+        self,
+        *,
+        filters: ProductFilters,
+        store: str | None,
+        status: str | None,
+        is_active: bool | None,
+    ) -> list[ColumnElement[bool]]:
+        criteria = product_base_criteria(filters)
+        if store:
+            criteria.append(CompetitorListing.store == store)
+        if status:
+            criteria.append(CompetitorListing.status == status)
+        if is_active is not None:
+            criteria.append(CompetitorListing.is_active.is_(is_active))
+        return criteria
+
+    def _export_select(
+        self,
+        *,
+        filters: ProductFilters,
+        store: str | None,
+        status: str | None,
+        is_active: bool | None,
+    ) -> Select[CompetitorListing, Product]:
+        return (
+            select(CompetitorListing, Product)
+            .join(Product, Product.id == CompetitorListing.product_id)
+            .where(
+                *self._export_criteria(
+                    filters=filters,
+                    store=store,
+                    status=status,
+                    is_active=is_active,
+                )
+            )
+        )
+
+    def count_export(
+        self,
+        *,
+        filters: ProductFilters,
+        store: str | None,
+        status: str | None,
+        is_active: bool | None,
+    ) -> int:
+        stmt = (
+            select(func.count())
+            .select_from(CompetitorListing)
+            .join(Product, Product.id == CompetitorListing.product_id)
+            .where(
+                *self._export_criteria(
+                    filters=filters,
+                    store=store,
+                    status=status,
+                    is_active=is_active,
+                )
+            )
+        )
+        return int(self._session.execute(stmt).scalar_one())
+
+    def iter_export_batches(
+        self,
+        *,
+        filters: ProductFilters,
+        store: str | None,
+        status: str | None,
+        is_active: bool | None,
+        batch_size: int = 500,
+    ) -> Iterator[list[tuple[CompetitorListing, Product]]]:
+        """Stream listing + product pairs for CSV export, no row cap here."""
+        stmt = (
+            self._export_select(
+                filters=filters,
+                store=store,
+                status=status,
+                is_active=is_active,
+            )
+            .order_by(Product.id.desc(), CompetitorListing.id)
+            .execution_options(yield_per=batch_size)
+        )
+        batch: list[tuple[CompetitorListing, Product]] = []
+        for row in self._session.execute(stmt):
+            batch.append((row[0], row[1]))
+            if len(batch) >= batch_size:
+                yield batch
+                batch = []
+        if batch:
+            yield batch
 
     def get(self, listing_id: int) -> CompetitorListing | None:
         return self._session.get(CompetitorListing, listing_id)

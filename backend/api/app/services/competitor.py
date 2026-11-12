@@ -186,6 +186,15 @@ class CompetitorService:
         changes = self._changes({row.id for row in rows})
         return [self._out(row, changes.get(row.id)) for row in rows]
 
+    def details_for_listings(self, rows: list[CompetitorListing]) -> list[CompetitorListingOut]:
+        """Effective fields for a batch (API detail + CSV export share this).
+
+        Loads daily changes for the whole batch in one query instead of one
+        lookup per listing.
+        """
+        changes = self._changes({row.id for row in rows})
+        return [self._out(row, changes.get(row.id)) for row in rows]
+
     def prices_for_products(self, product_ids: set[int]) -> dict[int, list[CompetitorPriceOut]]:
         rows = self._repo.list_for_products(product_ids)
         changes = self._changes({row.id for row in rows})

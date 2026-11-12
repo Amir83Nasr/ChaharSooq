@@ -7,6 +7,7 @@ from app.api.routes import (
     categories,
     competitors,
     dashboard,
+    exports,
     health,
     integrations,
     products,
@@ -20,6 +21,7 @@ router.include_router(auth.router)
 router.include_router(dashboard.router)
 router.include_router(products.router)
 router.include_router(competitors.router)
+router.include_router(exports.router)
 router.include_router(categories.router)
 router.include_router(integrations.router)
 router.include_router(settings.router)

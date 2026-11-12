@@ -5,7 +5,12 @@
 import { toPersianDigits } from "@workspace/ui/lib/number"
 
 import { createTtlCache } from "./api-cache"
-import { buildProductParams } from "./api-params"
+import {
+  buildCompetitorListingsExportParams,
+  buildProductExportParams,
+  buildProductParams,
+  type CompetitorExportFilters,
+} from "./api-params"
 import type {
   ApiError,
   CatalogSection,
@@ -172,6 +177,17 @@ export const api = {
     // SHOW_ALL_MAX. Never rewrite it client-side: the route rejects explicit
     // sizes above 500, so sending 2000 would 422 and empty the table.
     return request<ProductPage>(`/api/v1/products${buildProductParams(params)}`)
+  },
+  /** CSV download URL — pass to `downloadFile`; never to `request`. */
+  productExportUrl(params: ProductFilters = {}) {
+    return `/api/v1/exports/products.csv${buildProductExportParams(params)}`
+  },
+  /** CSV download URL for competitor links; product filters narrow the rows. */
+  competitorListingsExportUrl(
+    params: ProductFilters = {},
+    filters: CompetitorExportFilters = {}
+  ) {
+    return `/api/v1/exports/competitor-listings.csv${buildCompetitorListingsExportParams(params, filters)}`
   },
   updateProductPriceBounds(id: number, payload: ProductPriceBoundsUpdate) {
     return request<ProductOut>(`/api/v1/products/${id}/price-bounds`, {

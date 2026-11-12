@@ -20,7 +20,7 @@ Endpoint behavior lives in [architecture/api.md](../architecture/api.md). Layer 
 3. The server sets the HttpOnly `charsooq_session` cookie. Because Swagger UI and the API share
    an origin, the browser sends it with every following request — no token to paste.
 4. Operations are grouped by tag: Health, Auth, Dashboard, Products, Categories, Competitors,
-   Integrations, Settings. Protected operations show a lock icon and list `401` in their
+   Exports, Integrations, Settings. Protected operations show a lock icon and list `401` in their
    responses.
 
 The **Authorize** dialog documents the cookie scheme for non-browser clients. Such clients should
@@ -43,6 +43,20 @@ call `login`, keep the returned `Set-Cookie` value, and forward it as a `Cookie`
   `Cache-Control: private, max-age=60`.
 - **Background jobs:** sync triggers return `202` immediately. Counters and errors arrive through
   the matching `GET …/status` endpoint.
+
+## CSV exports
+
+Two read-only endpoints stream files instead of JSON:
+
+| Endpoint                                      | Content                                                                |
+| --------------------------------------------- | ---------------------------------------------------------------------- |
+| `GET /api/v1/exports/products.csv`            | Catalog rows; accepts the same filters as `GET /products`.             |
+| `GET /api/v1/exports/competitor-listings.csv` | Competitor links; product filters plus `store`, `status`, `is_active`. |
+
+These are the deliberate exception to the machine-values rule above: headers, digits, and dates are
+Persian/Jalali so the file opens correctly in Excel. Files are UTF-8 with a BOM and
+comma-separated. Filters are optional (omit them for a full export), results are capped at 50,000
+rows (`409 export_too_large`), and any signed-in account may download them.
 
 ## Regenerating the snapshot
 

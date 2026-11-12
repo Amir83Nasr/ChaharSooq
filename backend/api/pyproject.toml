@@ -12,6 +12,7 @@ dependencies = [
   "pydantic>=2.7",
   "pydantic-settings>=2.5",
   "argon2-cffi>=23.1",
+  "jdatetime>=6.1.1",
 ]
 # NOTE: `redis` is an optional scaling dependency (multi-worker rate limiting
 # via REDIS_URL). It is intentionally NOT a hard dependency so `uv sync

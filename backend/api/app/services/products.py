@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
@@ -9,7 +10,12 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.models import Product
-from app.repositories import CategoryRepository, ProductRepository, ProductSort
+from app.repositories import (
+    CategoryRepository,
+    ProductFilters,
+    ProductRepository,
+    ProductSort,
+)
 from app.schemas import ProductIn, ProductPriceBoundsUpdate
 
 INVALID_CATEGORY_ERROR = "دسته‌بندی نامعتبر است"
@@ -30,6 +36,42 @@ class ProductService:
     def __init__(self, session: Session) -> None:
         self._repos = ProductRepository(session)
         self._categories = CategoryRepository(session)
+
+    def filters(
+        self,
+        *,
+        query: str,
+        category_id: int | None,
+        top_group: str | None,
+        main_group: str | None,
+        min_price: int | None,
+        max_price: int | None,
+        competitor_store: str | None = None,
+        min_competitor_price: int | None = None,
+        max_competitor_price: int | None = None,
+        min_stock: int | None,
+        max_stock: int | None,
+        in_stock: bool | None,
+    ) -> ProductFilters:
+        """Normalise query params once; the list and the CSV export share it."""
+        if min_price is not None and max_price is not None and min_price > max_price:
+            min_price, max_price = max_price, min_price
+        return ProductFilters(
+            query=query.strip(),
+            category_id=category_id,
+            top_group=(top_group or "").strip() or None,
+            main_group=(main_group or "").strip() or None,
+            min_price=min_price,
+            max_price=max_price,
+            competitor_store=competitor_store,
+            min_competitor_price=min_competitor_price,
+            max_competitor_price=max_competitor_price,
+            competitor_price_since=datetime.now(UTC)
+            - timedelta(hours=get_settings().competitor_price_ttl_hours),
+            min_stock=min_stock,
+            max_stock=max_stock,
+            in_stock=in_stock,
+        )
 
     def list(
         self,
@@ -57,27 +99,32 @@ class ProductService:
             page_size = 0
         else:
             page_size = min(max(page_size, 1), 500)
-        if min_price is not None and max_price is not None and min_price > max_price:
-            min_price, max_price = max_price, min_price
-        return self._repos.list(
-            query=query.strip(),
+        filters = self.filters(
+            query=query,
             category_id=category_id,
-            top_group=(top_group or "").strip() or None,
-            main_group=(main_group or "").strip() or None,
+            top_group=top_group,
+            main_group=main_group,
             min_price=min_price,
             max_price=max_price,
             competitor_store=competitor_store,
             min_competitor_price=min_competitor_price,
             max_competitor_price=max_competitor_price,
-            competitor_price_since=datetime.now(UTC)
-            - timedelta(hours=get_settings().competitor_price_ttl_hours),
             min_stock=min_stock,
             max_stock=max_stock,
             in_stock=in_stock,
+        )
+        return self._repos.list(
+            filters=filters,
             sort=sort,
             page=page,
             page_size=page_size,
         )
+
+    def count_export(self, *, filters: ProductFilters) -> int:
+        return self._repos.count(filters=filters)
+
+    def iter_export(self, *, filters: ProductFilters, sort: ProductSort) -> Iterator[list[Product]]:
+        return self._repos.iter_batches(filters=filters, sort=sort)
 
     def create(self, payload: ProductIn) -> Product:
         if payload.category_id is not None and self._categories.get(payload.category_id) is None:

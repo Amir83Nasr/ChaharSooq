@@ -10,7 +10,7 @@ import { useIsMobile } from "@workspace/ui/hooks/use-mobile"
 import { PageHeader } from "@workspace/ui/layout/page-header"
 import { Button } from "@workspace/ui/primitives/button"
 
-import { type ProductOut } from "@/lib/api"
+import { api, type ProductFilters, type ProductOut } from "@/lib/api"
 import { leaveToLogin } from "@/lib/auth-navigation"
 import { DEFAULT_LOW_STOCK_THRESHOLD } from "@/lib/inventory"
 import { normalizeProductTableColumns } from "@/lib/product-table-columns"
@@ -29,6 +29,10 @@ import { toSuggestedPriceWeights } from "@/lib/suggested-price"
 import { useSession } from "@/components/auth/session-provider"
 import { ParsinaSyncPanel } from "@/components/data/parsina-sync-panel"
 import { CompetitorSyncPanel } from "@/components/data/competitor-sync-panel"
+import {
+  ExportCsvMenu,
+  type ExportCsvOption,
+} from "@/components/data/export-csv-menu"
 import { ProductDetailDialog } from "./_components/product-dialogs"
 import {
   ProductsCards,
@@ -178,6 +182,49 @@ function ProductsPageContent() {
 
   const refreshFailed = error !== null && page !== null
 
+  // Export uses the committed filters (the same view the table shows), not the
+  // in-flight text inputs, so a half-typed search never shapes the file.
+  const exportFilters = useMemo<ProductFilters>(() => {
+    const toNumber = (value: string): number | undefined => {
+      const trimmed = value.trim()
+      if (!trimmed) return undefined
+      const parsed = Number(trimmed)
+      return Number.isFinite(parsed) ? parsed : undefined
+    }
+    const filters: ProductFilters = {
+      q: view.q || undefined,
+      top_group: view.topGroup ?? undefined,
+      min_price: toNumber(view.minPrice),
+      max_price: toNumber(view.maxPrice),
+      sort: view.sort,
+    }
+    if (view.stock === "in" || view.stock === "out") {
+      filters.in_stock = view.stock === "in"
+    } else if (view.stock === "low") {
+      filters.in_stock = true
+      filters.max_stock = threshold
+    }
+    return filters
+  }, [view, threshold])
+
+  const exportOptions: ExportCsvOption[] = [
+    {
+      label: "خروجی محصولات (فیلترشده)",
+      description: "همهٔ ردیف‌های منطبق با فیلترهای فعلی",
+      buildUrl: () => api.productExportUrl(exportFilters),
+    },
+    {
+      label: "خروجی کامل محصولات",
+      description: "همهٔ کالاها، بدون فیلتر",
+      buildUrl: () => api.productExportUrl(),
+    },
+    {
+      label: "خروجی قیمت رقبا (فیلترشده)",
+      description: "لینک رقبای همین محصولات",
+      buildUrl: () => api.competitorListingsExportUrl(exportFilters),
+    },
+  ]
+
   return (
     <>
       <PageHeader
@@ -207,9 +254,21 @@ function ProductsPageContent() {
         <ProductsMobileFilters
           {...filterProps}
           activeCount={activeFilterCount}
+          exportMenu={
+            <ExportCsvMenu
+              compact
+              options={exportOptions}
+              onUnauthorized={goLogin}
+            />
+          }
         />
       ) : (
-        <ProductsToolbar {...filterProps} />
+        <ProductsToolbar
+          {...filterProps}
+          exportMenu={
+            <ExportCsvMenu options={exportOptions} onUnauthorized={goLogin} />
+          }
+        />
       )}
 
       {refreshFailed ? (

@@ -1412,6 +1412,596 @@
         }
       }
     },
+    "/api/v1/exports/products.csv": {
+      "get": {
+        "tags": [
+          "Exports"
+        ],
+        "summary": "Export products as CSV",
+        "description": "Streams a UTF-8 CSV (with BOM, comma-separated) for Excel. Headers, digits, and dates are Persian/Jalali, unlike the JSON API. Filters mirror `GET /products`; omit them for a full export. The file is capped at 50,000 rows (`export_too_large` above that).",
+        "operationId": "export_products_csv",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Case-insensitive match on name, SKU, and groups.",
+              "default": "",
+              "title": "Q"
+            },
+            "description": "Case-insensitive match on name, SKU, and groups."
+          },
+          {
+            "name": "category_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exact category id.",
+              "title": "Category Id"
+            },
+            "description": "Exact category id."
+          },
+          {
+            "name": "top_group",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Section: فرش، مبلمان، or لوازم خانگی.",
+              "title": "Top Group"
+            },
+            "description": "Section: فرش، مبلمان، or لوازم خانگی."
+          },
+          {
+            "name": "main_group",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Raw group name.",
+              "title": "Main Group"
+            },
+            "description": "Raw group name."
+          },
+          {
+            "name": "min_price",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Minimum unit price, Toman.",
+              "title": "Min Price"
+            },
+            "description": "Minimum unit price, Toman."
+          },
+          {
+            "name": "max_price",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Maximum unit price, Toman.",
+              "title": "Max Price"
+            },
+            "description": "Maximum unit price, Toman."
+          },
+          {
+            "name": "competitor_store",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "digikala",
+                    "technolife",
+                    "sofa",
+                    "digifresh",
+                    "other"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only products with a fresh price from this store.",
+              "title": "Competitor Store"
+            },
+            "description": "Only products with a fresh price from this store."
+          },
+          {
+            "name": "min_competitor_price",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Minimum fresh competitor price.",
+              "title": "Min Competitor Price"
+            },
+            "description": "Minimum fresh competitor price."
+          },
+          {
+            "name": "max_competitor_price",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Maximum fresh competitor price.",
+              "title": "Max Competitor Price"
+            },
+            "description": "Maximum fresh competitor price."
+          },
+          {
+            "name": "min_stock",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Minimum stock.",
+              "title": "Min Stock"
+            },
+            "description": "Minimum stock."
+          },
+          {
+            "name": "max_stock",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Maximum stock.",
+              "title": "Max Stock"
+            },
+            "description": "Maximum stock."
+          },
+          {
+            "name": "in_stock",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`true` for stock > 0, `false` for zero stock.",
+              "title": "In Stock"
+            },
+            "description": "`true` for stock > 0, `false` for zero stock."
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "newest",
+                "cheapest",
+                "most_expensive"
+              ],
+              "type": "string",
+              "description": "Row order in the file.",
+              "default": "newest",
+              "title": "Sort"
+            },
+            "description": "Row order in the file."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The request conflicts with the current state (`conflict`, or `category_in_use` for categories).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/exports/competitor-listings.csv": {
+      "get": {
+        "tags": [
+          "Exports"
+        ],
+        "summary": "Export competitor listings as CSV",
+        "description": "Streams a UTF-8 CSV (with BOM, comma-separated) for Excel. Headers, digits, and dates are Persian/Jalali, unlike the JSON API. Filters mirror `GET /products`; omit them for a full export. The file is capped at 50,000 rows (`export_too_large` above that). Product filters (q, groups, price, stock) limit which products contribute their competitor links.",
+        "operationId": "export_competitor_listings_csv",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Case-insensitive match on product name/SKU/groups.",
+              "default": "",
+              "title": "Q"
+            },
+            "description": "Case-insensitive match on product name/SKU/groups."
+          },
+          {
+            "name": "category_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exact category id.",
+              "title": "Category Id"
+            },
+            "description": "Exact category id."
+          },
+          {
+            "name": "top_group",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Section: فرش، مبلمان، or لوازم خانگی.",
+              "title": "Top Group"
+            },
+            "description": "Section: فرش، مبلمان، or لوازم خانگی."
+          },
+          {
+            "name": "main_group",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Raw group name.",
+              "title": "Main Group"
+            },
+            "description": "Raw group name."
+          },
+          {
+            "name": "min_price",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Minimum product price.",
+              "title": "Min Price"
+            },
+            "description": "Minimum product price."
+          },
+          {
+            "name": "max_price",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Maximum product price.",
+              "title": "Max Price"
+            },
+            "description": "Maximum product price."
+          },
+          {
+            "name": "min_stock",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Minimum product stock.",
+              "title": "Min Stock"
+            },
+            "description": "Minimum product stock."
+          },
+          {
+            "name": "max_stock",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Maximum product stock.",
+              "title": "Max Stock"
+            },
+            "description": "Maximum product stock."
+          },
+          {
+            "name": "in_stock",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`true` for stock > 0, `false` for zero stock.",
+              "title": "In Stock"
+            },
+            "description": "`true` for stock > 0, `false` for zero stock."
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "digikala",
+                    "technolife",
+                    "sofa",
+                    "digifresh",
+                    "other"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only this competitor store.",
+              "title": "Store"
+            },
+            "description": "Only this competitor store."
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "pending",
+                    "success",
+                    "not_found",
+                    "unavailable",
+                    "blocked",
+                    "failed",
+                    "manual"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only this link status.",
+              "title": "Status"
+            },
+            "description": "Only this link status."
+          },
+          {
+            "name": "is_active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`true` for active links, `false` for paused ones.",
+              "title": "Is Active"
+            },
+            "description": "`true` for active links, `false` for paused ones."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The request conflicts with the current state (`conflict`, or `category_in_use` for categories).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/categories": {
       "get": {
         "tags": [
@@ -4030,6 +4620,10 @@
     {
       "name": "Competitors",
       "description": "Competitor links, manual price overrides, and price checks."
+    },
+    {
+      "name": "Exports",
+      "description": "CSV downloads for the catalog and competitor listings."
     },
     {
       "name": "Integrations",

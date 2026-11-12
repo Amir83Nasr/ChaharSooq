@@ -30,6 +30,7 @@ import {
   SearchInput,
 } from "@/components/data/data-table-toolbar"
 import { useSession } from "@/components/auth/session-provider"
+import { ExportCsvMenu } from "@/components/data/export-csv-menu"
 import { ProductDetailDialog } from "@/app/(dashboard)/products/_components/product-dialogs"
 import {
   ProductsCards,
@@ -190,7 +191,26 @@ export function GroupStoreView({
 
   return (
     <>
-      <PageHeader title={`اتصال ${storeName}`} subtitle={description} />
+      <PageHeader
+        title={`اتصال ${storeName}`}
+        subtitle={description}
+        actions={
+          <ExportCsvMenu
+            options={[
+              {
+                label: `لینک‌های ${storeName}`,
+                description: "همهٔ لینک‌های ثبت‌شده برای این گروه",
+                buildUrl: () =>
+                  api.competitorListingsExportUrl(
+                    { q: debouncedQ || undefined, top_group: topGroup },
+                    { store: market }
+                  ),
+              },
+            ]}
+            onUnauthorized={goLogin}
+          />
+        }
+      />
 
       {error ? (
         <ErrorState

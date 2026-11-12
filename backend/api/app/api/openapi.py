@@ -36,6 +36,10 @@ TAGS_METADATA: list[dict[str, Any]] = [
         "description": "Competitor links, manual price overrides, and price checks.",
     },
     {
+        "name": "Exports",
+        "description": "CSV downloads for the catalog and competitor listings.",
+    },
+    {
         "name": "Integrations",
         "description": "Background Parsina and competitor sync jobs plus their status.",
     },

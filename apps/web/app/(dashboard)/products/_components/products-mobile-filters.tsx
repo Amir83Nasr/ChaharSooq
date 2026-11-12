@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { ListFilter, X } from "lucide-react"
 
 import { Button } from "@workspace/ui/primitives/button"
@@ -39,6 +39,8 @@ interface Props {
   onMinPrice: (v: string) => void
   onMaxPrice: (v: string) => void
   onClear: () => void
+  /** Compact export trigger shown beside the filter button. */
+  exportMenu?: ReactNode
 }
 
 export function ProductsMobileFilters(props: Props) {
@@ -137,6 +139,7 @@ export function ProductsMobileFilters(props: Props) {
             </DrawerFooter>
           </DrawerContent>
         </Drawer>
+        {props.exportMenu}
       </div>
     </div>
   )

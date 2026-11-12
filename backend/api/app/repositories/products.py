@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast
 
 from sqlalchemy import ColumnElement, and_, case, exists, func, not_, or_, select, update
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.sql import Select
 from sqlalchemy.sql.elements import Case
 
 from app.models import CompetitorListing, Product
@@ -16,6 +18,25 @@ if TYPE_CHECKING:
     from sqlalchemy.engine import CursorResult
 
 ProductSort = Literal["newest", "cheapest", "most_expensive"]
+
+
+class ProductFilters(NamedTuple):
+    """Every product filter, shared by the paged list and the CSV export."""
+
+    query: str
+    category_id: int | None
+    top_group: str | None
+    main_group: str | None
+    min_price: int | None
+    max_price: int | None
+    competitor_store: str | None
+    min_competitor_price: int | None
+    max_competitor_price: int | None
+    competitor_price_since: datetime
+    min_stock: int | None
+    max_stock: int | None
+    in_stock: bool | None
+
 
 # Safety cap for the "show all" path (page_size=0): never serialize an
 # unbounded result set — the UI windows rows but the API still builds them.
@@ -57,6 +78,83 @@ def effective_competitor_price(since: datetime) -> Case:
         (fetched_fresh, fetched_toman),
         else_=None,
     )
+
+
+def product_base_criteria(filters: ProductFilters) -> list[ColumnElement[bool]]:
+    """Product WHERE clauses without competitor-price EXISTS checks.
+
+    Competitor export joins `competitor_listings` itself, so a correlated
+    price EXISTS would resolve against the wrong table there.
+    """
+    criteria: list[ColumnElement[bool]] = [Product.is_active.is_(True)]
+    if filters.query:
+        like = f"%{filters.query}%"
+        criteria.append(
+            or_(
+                Product.name.ilike(like),
+                Product.sku.ilike(like),
+                Product.main_group_name.ilike(like),
+                Product.sub_group_name.ilike(like),
+            )
+        )
+    if filters.category_id is not None:
+        criteria.append(Product.category_id == filters.category_id)
+    if filters.main_group:
+        criteria.append(Product.main_group_name == filters.main_group)
+    if filters.top_group:
+        if filters.top_group == "فرش":
+            criteria.append(Product.main_group_name.ilike("فرش%"))
+        elif filters.top_group == "مبلمان":
+            criteria.append(Product.main_group_name.ilike("مبلمان%"))
+        elif filters.top_group == "لوازم خانگی":
+            criteria.append(Product.main_group_name.is_not(None))
+            criteria.append(not_(Product.main_group_name.ilike("فرش%")))
+            criteria.append(not_(Product.main_group_name.ilike("مبلمان%")))
+    if filters.min_price is not None:
+        criteria.append(Product.price >= filters.min_price)
+    if filters.max_price is not None:
+        criteria.append(Product.price <= filters.max_price)
+    if filters.in_stock is True:
+        criteria.append(Product.stock > 0)
+    elif filters.in_stock is False:
+        criteria.append(Product.stock <= 0)
+    if filters.min_stock is not None:
+        criteria.append(Product.stock >= filters.min_stock)
+    if filters.max_stock is not None:
+        criteria.append(Product.stock <= filters.max_stock)
+    return criteria
+
+
+def product_criteria(filters: ProductFilters) -> list[ColumnElement[bool]]:
+    """WHERE clauses for one product list query (list + export share these)."""
+    criteria = product_base_criteria(filters)
+    if (
+        filters.competitor_store
+        or filters.min_competitor_price is not None
+        or filters.max_competitor_price is not None
+    ):
+        current_price = effective_competitor_price(filters.competitor_price_since)
+        price_criteria: list[ColumnElement[bool]] = [
+            CompetitorListing.product_id == Product.id,
+            CompetitorListing.is_active.is_(True),
+            current_price.is_not(None),
+        ]
+        if filters.competitor_store:
+            price_criteria.append(CompetitorListing.store == filters.competitor_store)
+        if filters.min_competitor_price is not None:
+            price_criteria.append(current_price >= filters.min_competitor_price)
+        if filters.max_competitor_price is not None:
+            price_criteria.append(current_price <= filters.max_competitor_price)
+        criteria.append(exists(select(1).where(*price_criteria)))
+    return criteria
+
+
+def product_order(sort: ProductSort) -> ColumnElement[Any]:
+    return {
+        "newest": Product.id.desc(),
+        "cheapest": Product.price.asc(),
+        "most_expensive": Product.price.desc(),
+    }[sort]
 
 
 class ProductRepository:
@@ -254,96 +352,63 @@ class ProductRepository:
         row = self._session.execute(select(coverage_sq, appliance_sq)).one()
         return int(row[0] or 0), int(row[1] or 0)
 
+    def _filtered(self, filters: ProductFilters) -> tuple[Select[Product], Select[int]]:
+        base = select(Product).options(joinedload(Product.category))
+        count_stmt = select(func.count()).select_from(Product)
+        for criterion in product_criteria(filters):
+            base = base.where(criterion)
+            count_stmt = count_stmt.where(criterion)
+        return base, count_stmt
+
+    def count(self, *, filters: ProductFilters) -> int:
+        _, count_stmt = self._filtered(filters)
+        return int(self._session.execute(count_stmt).scalar_one())
+
     def list(
         self,
         *,
-        query: str,
-        category_id: int | None,
-        top_group: str | None,
-        main_group: str | None,
-        min_price: int | None,
-        max_price: int | None,
-        competitor_store: str | None,
-        min_competitor_price: int | None,
-        max_competitor_price: int | None,
-        competitor_price_since: datetime,
-        min_stock: int | None,
-        max_stock: int | None,
-        in_stock: bool | None,
+        filters: ProductFilters,
         sort: ProductSort,
         page: int,
         page_size: int,
     ) -> tuple[list[Product], int]:
-        base = select(Product).options(joinedload(Product.category))
-        count_stmt = select(func.count()).select_from(Product)
-        criteria: list[ColumnElement[bool]] = [Product.is_active.is_(True)]
-        if query:
-            like = f"%{query}%"
-            criteria.append(
-                or_(
-                    Product.name.ilike(like),
-                    Product.sku.ilike(like),
-                    Product.main_group_name.ilike(like),
-                    Product.sub_group_name.ilike(like),
-                )
-            )
-        if category_id is not None:
-            criteria.append(Product.category_id == category_id)
-        if main_group:
-            criteria.append(Product.main_group_name == main_group)
-        if top_group:
-            if top_group == "فرش":
-                criteria.append(Product.main_group_name.ilike("فرش%"))
-            elif top_group == "مبلمان":
-                criteria.append(Product.main_group_name.ilike("مبلمان%"))
-            elif top_group == "لوازم خانگی":
-                criteria.append(Product.main_group_name.is_not(None))
-                criteria.append(not_(Product.main_group_name.ilike("فرش%")))
-                criteria.append(not_(Product.main_group_name.ilike("مبلمان%")))
-        if min_price is not None:
-            criteria.append(Product.price >= min_price)
-        if max_price is not None:
-            criteria.append(Product.price <= max_price)
-        if competitor_store or min_competitor_price is not None or max_competitor_price is not None:
-            current_price = effective_competitor_price(competitor_price_since)
-            price_criteria: list[ColumnElement[bool]] = [
-                CompetitorListing.product_id == Product.id,
-                CompetitorListing.is_active.is_(True),
-                current_price.is_not(None),
-            ]
-            if competitor_store:
-                price_criteria.append(CompetitorListing.store == competitor_store)
-            if min_competitor_price is not None:
-                price_criteria.append(current_price >= min_competitor_price)
-            if max_competitor_price is not None:
-                price_criteria.append(current_price <= max_competitor_price)
-            criteria.append(exists(select(1).where(*price_criteria)))
-        if in_stock is True:
-            criteria.append(Product.stock > 0)
-        elif in_stock is False:
-            criteria.append(Product.stock <= 0)
-        if min_stock is not None:
-            criteria.append(Product.stock >= min_stock)
-        if max_stock is not None:
-            criteria.append(Product.stock <= max_stock)
-        for criterion in criteria:
-            base = base.where(criterion)
-            count_stmt = count_stmt.where(criterion)
-        total = self._session.execute(count_stmt).scalar_one()
-        order = {
-            "newest": Product.id.desc(),
-            "cheapest": Product.price.asc(),
-            "most_expensive": Product.price.desc(),
-        }[sort]
+        base, count_stmt = self._filtered(filters)
+        total = int(self._session.execute(count_stmt).scalar_one())
+        stmt = base.order_by(product_order(sort))
         # `page_size=0` means "show all": capped (never unbounded) with no
         # offset so the table truly shows the whole filtered list up to the cap.
         if page_size and page_size > 0:
-            start = (page - 1) * page_size
-            stmt = base.order_by(order).offset(start).limit(page_size)
+            stmt = stmt.offset((page - 1) * page_size).limit(page_size)
         else:
-            stmt = base.order_by(order).limit(SHOW_ALL_MAX)
+            stmt = stmt.limit(SHOW_ALL_MAX)
         rows = self._session.execute(stmt).unique().scalars().all()
         return list(rows), total
+
+    def iter_batches(
+        self,
+        *,
+        filters: ProductFilters,
+        sort: ProductSort,
+        batch_size: int = 500,
+    ) -> Iterator[list[Product]]:
+        """Stream every matching product for CSV export (no show-all cap).
+
+        The caller applies the export ceiling; batching keeps competitor-price
+        lookups and CSV buffers bounded for a large catalog.
+        """
+        stmt = (
+            self._filtered(filters)[0]
+            .order_by(product_order(sort))
+            .execution_options(yield_per=batch_size)
+        )
+        batch: list[Product] = []
+        for product in self._session.scalars(stmt):
+            batch.append(product)
+            if len(batch) >= batch_size:
+                yield batch
+                batch = []
+        if batch:
+            yield batch
 
     def add(self, product: Product) -> Product:
         self._session.add(product)

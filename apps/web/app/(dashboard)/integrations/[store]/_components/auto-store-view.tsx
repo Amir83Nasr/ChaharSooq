@@ -27,6 +27,7 @@ import {
   type SuggestedPriceWeights,
 } from "@/lib/suggested-price"
 import { CompetitorSyncPanel } from "@/components/data/competitor-sync-panel"
+import { ExportCsvMenu } from "@/components/data/export-csv-menu"
 import { useSession } from "@/components/auth/session-provider"
 import {
   DataTableToolbar,
@@ -199,12 +200,31 @@ export function AutoStoreView({
         title={`اتصال ${storeName}`}
         subtitle={description}
         actions={
-          canManage ? (
-            <CompetitorSyncPanel
-              onSynced={refreshData}
+          <>
+            {canManage ? (
+              <CompetitorSyncPanel
+                onSynced={refreshData}
+                onUnauthorized={goLogin}
+              />
+            ) : null}
+            <ExportCsvMenu
+              options={[
+                {
+                  label: `لینک‌های ${storeName}`,
+                  description: "همهٔ لینک‌های ثبت‌شده در این فروشگاه",
+                  buildUrl: () =>
+                    api.competitorListingsExportUrl(
+                      {
+                        q: debouncedQ || undefined,
+                        top_group: "لوازم خانگی",
+                      },
+                      { store }
+                    ),
+                },
+              ]}
               onUnauthorized={goLogin}
             />
-          ) : null
+          </>
         }
       />
 

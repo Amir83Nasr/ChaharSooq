@@ -1,9 +1,15 @@
-# Local stack only: the secrets below are placeholders. Set real values
-# through the environment for any shared or production-like deployment.
+# Local development stack only: the values below are placeholders. Set real
+# values through the environment for any shared or production-like deployment.
+#
+# APP_ENV=production here exercises production application behavior locally;
+# DEPLOYMENT_ENV=development keeps this stack from being treated as the real
+# Production environment (dotenv/config validation requires both together).
 x-api-env: &api-env
   APP_ENV: production
+  DEPLOYMENT_ENV: development
   DATABASE_URL: postgresql+psycopg://charsooq:charsooq@postgres:5432/charsooq
   SESSION_SECRET: ${SESSION_SECRET:-local-dev-placeholder-secret-min-32B}
+  OWNER_PASSWORD: ${OWNER_PASSWORD:-local-dev-owner-password}
   REDIS_URL: ${REDIS_URL:-}
 
 x-api-image: &api-image
@@ -35,13 +41,13 @@ services:
           cpus: "1"
           memory: 512M
 
-  # One-shot schema upgrade. `api` starts only after this exits successfully,
+  # One-shot schema upgrade through the locked project runner (never a bare
+  # `alembic upgrade head`). `api` starts only after this exits successfully,
   # so a fresh volume never serves an empty database. Belt and suspenders:
-  # the API also runs `upgrade head` in its lifespan on every boot, which is
-  # what migrates FastAPI Cloud and any `api`-only run without this service.
+  # the API also runs the same locked path in its lifespan on every boot.
   migrate:
     <<: *api-image
-    command: ["sh", "-c", "cd backend/api && alembic upgrade head"]
+    command: ["python", "backend/api/scripts/migrate.py"]
     environment: *api-env
     restart: "no"
     depends_on:

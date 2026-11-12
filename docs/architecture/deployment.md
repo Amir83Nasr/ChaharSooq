@@ -9,12 +9,12 @@ decision and its rationale.
 |                  | Development                                      | Staging                                     | Production                                           |
 | ---------------- | ------------------------------------------------ | ------------------------------------------- | ---------------------------------------------------- |
 | Runs on          | Developer MacBook                                | Cloud services                              | Internal Ubuntu server `market-linux` (`172.30.2.2`) |
-| Frontend         | Next.js dev server                               | Vercel                                      | Next.js in Docker                                    |
-| Backend          | FastAPI dev server                               | FastAPI Cloud                               | FastAPI in Docker                                    |
-| Database         | Local PostgreSQL (compose, host `:5433`)         | Neon                                        | PostgreSQL managed on `market-linux`                 |
+| Frontend         | Next.js dev server                               | Vercel                                      | Next.js in Docker (`web`)                            |
+| Backend          | FastAPI dev server                               | FastAPI Cloud                               | FastAPI in Docker (`api`)                            |
+| Database         | Local PostgreSQL (compose, host `:5433`)         | Neon                                        | PostgreSQL 18.6 in Docker (`db`)                     |
 | Purpose          | Daily development, tests, debugging              | Integration checks and release approval     | Live operational data                                |
-| Configuration    | `backend/api/.env.local` + `apps/web/.env.local` | Staging variables in Vercel / FastAPI Cloud | Server-side secret source (mechanism open)           |
-| Application mode | `APP_ENV=development`                            | `APP_ENV=production`                        | `APP_ENV=production`                                 |
+| Configuration    | `backend/api/.env.local` + `apps/web/.env.local` | Staging variables in Vercel / FastAPI Cloud | `/etc/charsooq/secrets` (file-backed) + compose file |
+| Application mode | `APP_ENV=development`                            | `APP_ENV=production`                        | `APP_ENV=production`, `DEPLOYMENT_ENV=production`    |
 | Release          | Local working tree                               | Built from an approved commit               | Controlled promotion after Staging approval          |
 
 `APP_ENV` is application behavior, not environment identity. It has three values
@@ -73,7 +73,7 @@ Development → GitHub / CI → Staging → approval → Production
 
 ### Artifacts and version traceability
 
-Staging runs on Vercel/FastAPI Cloud; Production will run Docker Compose on `market-linux`. Their
+Staging runs on Vercel/FastAPI Cloud; Production runs Docker Compose on `market-linux`. Their
 build systems are different, so **do not assume one Docker image digest is usable in both**.
 Until that is proven, the release process must still make the version auditable:
 
@@ -108,10 +108,11 @@ cp backend/api/.env.example backend/api/.env.local
 cp apps/web/.env.example apps/web/.env.local
 ```
 
-`compose.yml` is the **development/local stack** (`migrate` + `api` + `web` + `postgres`). Its
-`APP_ENV: production` and placeholder `SESSION_SECRET` exist to exercise production-mode behavior
-locally; they are not Production configuration. Do not change `compose.yml` for Production and do
-not deploy real secrets through it.
+`compose.yml` is the **development/local stack** (`migrate` + `api` + `web` + `postgres`). It sets
+`APP_ENV=production` to exercise production application behavior locally and
+`DEPLOYMENT_ENV=development` so runtime configuration and migration scripts never treat it as
+Production. Its session and owner values are development placeholders, not Production
+configuration. Do not change `compose.yml` for Production and do not deploy real secrets through it.
 
 ```bash
 make docker-up   # build + start web (:3000) + api (:8000) + postgres (:5433)
@@ -119,8 +120,8 @@ make docker-logs # follow logs
 make docker-down # stop
 ```
 
-The one-shot `migrate` service applies Alembic before `api` starts. Native `pnpm dev` remains the
-default development path.
+The one-shot `migrate` service runs the locked `scripts/migrate.py` before `api` starts. Native
+`pnpm dev` remains the default development path.
 
 ## Staging
 
@@ -180,116 +181,197 @@ Both read `backend/api/.env.staging` and never delete products or links. The Mak
 ## Production — `market-linux`
 
 Production runs on the internal Ubuntu server `market-linux` (`172.30.2.2`) with Docker Engine
-and Docker Compose. The production database is independent and managed on that server. The
-`172.30.2.2` address is an internal address; do not assume it is publicly reachable.
+and Docker Compose. The production database is a PostgreSQL container on that host with its own
+persistent volume. The `172.30.2.2` address is an internal address; do not assume it is publicly
+reachable.
 
-Production is **not implemented in this repository yet**. The following is the required design;
-anything marked _open_ is an unresolved decision, not an instruction to guess.
+The stack is **implemented as code** in [compose.production.yml](../../compose.production.yml) and
+is **not deployed**. No command in this repository connects to `market-linux`; deployment,
+registry promotion, TLS, and backups remain separate work.
 
-### Required topology
+### Production services
 
-- Services: Next.js (`web`), FastAPI (`api`), PostgreSQL, a one-shot migration job, and a reverse
-  proxy.
-- Use a **separate** `compose.prod.yml` (or an equivalent production compose file). Do not
-  repurpose or modify the development `compose.yml` for Production.
-- Only the reverse proxy publishes `80`/`443`. PostgreSQL and the API stay on the internal Docker
-  network without public host ports. The browser reaches Next.js, and Next.js proxies `/api/*`
-  same-origin as in Staging.
-- Configuration comes from a server-side secret source. It is independent of Development and
-  Staging and is never baked into images, committed, or copied from another environment.
-- Keep resource limits and health checks in the production compose file; deploy by immutable
-  image digest.
+| Service   | Image / build                     | Runtime identity | Exposure / purpose                                                |
+| --------- | --------------------------------- | ---------------- | ----------------------------------------------------------------- |
+| `db`      | `postgres:18.6-trixie`            | `999:999`        | Internal only; persistent volume at `/var/lib/postgresql`         |
+| `migrate` | `Dockerfile.api` (`charsooq-api`) | `10001:10001`    | One-shot locked migration runner; exits 0 at `head`               |
+| `api`     | `Dockerfile.api` (`charsooq-api`) | `10001:10001`    | Internal only on `backend` + `edge`; FastAPI on port `8000`       |
+| `web`     | `Dockerfile.web` (`charsooq-web`) | `1000:1000`      | Internal only on `edge`; Next.js standalone server on port `3000` |
 
-### Migrations
+`db`, `migrate`, `api`, and `web` are the only services. Redis is not part of this stack: login
+rate limiting is in-memory for the current single-host deployment, and adding Redis without a
+measured need would add another stateful service. The Compose project name is
+`charsooq-production`, so its networks and volume are separate from the development stack.
 
-Production migrations must be controlled and ordered:
+All API-side services set:
 
-1. Run the migration as a dedicated one-shot job **before** the new API version starts.
-2. Guarantee a single migration runner (a database advisory lock or an equivalent single-flight
-   mechanism). Several workers must not race each other.
-3. Keep migrations backward compatible with the currently running API during rollout, so a failed
-   release can roll back the application.
-4. Take a verified backup before destructive or irreversible schema changes.
-
-The repository now implements steps 1–2 as infrastructure, but **does not** yet wire them into a
-Production compose file or deployment workflow. The runner is
-`backend/api/scripts/migrate.py`:
-
-```bash
-DEPLOYMENT_ENV=production uv run --project backend/api \
-  python backend/api/scripts/migrate.py
+```text
+APP_ENV=production
+DEPLOYMENT_ENV=production
+RUN_MIGRATIONS_ON_STARTUP=false
+RUN_OWNER_BOOTSTRAP_ON_STARTUP=false
+SECRETS_DIR=/run/secrets
 ```
 
-It resolves the database through `DatabaseSettings` only, applies Alembic to `head` under the
-PostgreSQL session-level advisory lock, and exits non-zero on failure or lock timeout. The same
-lock is used by a plain `alembic upgrade head`, because `migrations/env.py` acquires it when it
-opens its own connection. When a caller supplies a connection through
-`config.attributes["connection"]`, Alembic reuses that exact connection, so the lock and the
-migration cannot run on different sessions. See
-[database.md](database.md#migrations-and-the-single-runner-lock).
+Nothing is inherited from `compose.yml` or from repo env files.
 
-The API still runs `upgrade head` in its own lifespan on every boot in Development and Staging,
-and `compose.yml` also has a one-shot `migrate` service. That is convenient there but is **not**
-sufficient as the Production control: boot-time migration on multiple replicas couples schema
-change to process start. Production sets `RUN_MIGRATIONS_ON_STARTUP=false` (the Production
-default) and runs the standalone runner as the ordered pre-start step.
-
-`RUN_MIGRATIONS_ON_STARTUP` and `RUN_OWNER_BOOTSTRAP_ON_STARTUP` are independent and default to
-`true` in Development/Staging and `false` in Production. Production **rejects** an explicit `true`
-for either flag, so an API boot can never change the schema or provision the owner there. The
-explicit owner command is:
+### Build and run
 
 ```bash
-DEPLOYMENT_ENV=production uv run --project backend/api \
-  python backend/api/scripts/bootstrap_owner.py
+make prod-config   # structure only; does not read secret files
+make prod-build    # build pinned API + web images
+make prod-migrate  # run the locked migration runner once (needs secrets)
+make prod-bootstrap-owner # explicit owner CLI (needs secrets)
+make prod-up       # build and start the stack in dependency order
+make prod-ps       # status and health
+make prod-logs     # follow logs
+make prod-down     # stop; volumes and data are kept
 ```
 
-That command requires the `admins` table to exist, never calls `create_all`, and is idempotent.
-The default owner-on-boot behavior is preserved for Development and Staging. The Production
-deployment workflow (who runs these commands, order, and approvals) is still proposed, not
-implemented.
+Equivalent direct commands:
 
-### Required Production order
+```bash
+docker compose -f compose.production.yml config
+docker compose -f compose.production.yml build
+docker compose -f compose.production.yml up -d --build
+docker compose -f compose.production.yml ps
+```
 
-This is the official order for a Production release. It is a policy contract; the compose/release
-wiring is still the open item below.
+Image references are configurable with `CHARSOOQ_API_IMAGE` / `CHARSOOQ_WEB_IMAGE`. The compose file
+builds from this checkout by default; a registry-based promotion should replace those references
+with immutable digests (still open).
 
-1. Prepare the Production secrets and configuration in the Production-only secret source.
-2. Verify the database is reachable from the deployment host.
-3. Run `scripts/migrate.py` with `DEPLOYMENT_ENV=production` and the Production secret source.
-   Stop the rollout on a non-zero exit, including a lock timeout.
-4. Verify the migration succeeded and the database reports the expected revision (`head`).
-5. Run `scripts/bootstrap_owner.py` explicitly when the owner needs provisioning or rotation; stop
-   on a non-zero exit.
-6. Start the API with `RUN_MIGRATIONS_ON_STARTUP=false` and
-   `RUN_OWNER_BOOTSTRAP_ON_STARTUP=false` (also the Production defaults).
-7. Check `/health` and `/ready` before routing traffic; roll back to the previous image if the
-   application check fails. Schema rollback still follows the backup policy.
+### Startup order and health
 
-**The API must never start before the schema is at `head`.** A boot with either startup step
-enabled is rejected by configuration, not merely discouraged.
+Compose enforces this order:
 
-This is the approved ordering for the future Production compose/workflow; it is not an implemented
-deploy path yet.
+1. `db` starts and becomes healthy (`pg_isready` against the local socket/TCP port).
+2. `migrate` runs only after `db` is healthy.
+3. `migrate` must complete with exit code 0. A failed migration, lock timeout, or bad configuration
+   leaves it failed and `api` is never started.
+4. `api` starts after `migrate` completed successfully and `db` is healthy. Its healthcheck calls
+   `/ready`, which executes `SELECT 1` against the database.
+5. `web` starts only after `api` is healthy. Its healthcheck requests `/login` from the Next server.
 
-### Secrets, network, TLS, backups
+`migrate` uses `restart: "no"` so a one-shot failure does not loop; `db`, `api`, and `web` use
+`unless-stopped`. API and web healthchecks are real requests, not process checks. The API keeps
+Uvicorn at two workers (the existing single-host sizing); no worker count is raised in this task.
 
-- **Secrets:** choose one server-appropriate mechanism (Docker secrets, a root-owned
-  `0600` environment file consumed by systemd/compose, or an external secret manager) and document
-  it. Never commit secrets; never place them in the repository or in an image. _Mechanism open._
-- **Reverse proxy / TLS:** terminate HTTPS at a reverse proxy, redirect HTTP to HTTPS, and use a
-  valid certificate for the production domain. Proxy choice, domain, DNS, and certificate
-  issuance are _open_.
-- **Network exposure:** expose only what Production needs. PostgreSQL is not reachable from
-  outside the server. API access is internal behind the proxy unless a concrete requirement says
-  otherwise.
-- **Backups and recovery:** schedule encrypted backups, store them off the host, define retention,
-  and rehearse a restore. RPO/RTO, tooling, retention, and off-site target are _open_.
-- **Rollback:** keep the previous image digest available, deploy by digest so rollback is a
-  redeploy, and pair schema changes with a database restore policy. Avoid destructive migrations
-  without a verified backup.
-- **Host access:** restrict SSH and deployment credentials to the people/systems that need them;
-  the CI/CD access method (self-hosted runner vs. SSH) is _open_.
+### Production secrets
+
+Production uses **file-backed Docker Compose secrets**, mounted read-only at `/run/secrets`.
+The host directory defaults to `/etc/charsooq/secrets` and can be overridden with
+`CHARSOOQ_SECRETS_DIR`. The directory must not be inside the repository.
+
+| Secret file         | Delivered to     | Required content                                            |
+| ------------------- | ---------------- | ----------------------------------------------------------- |
+| `postgres_password` | `db`             | Password for the `charsooq` PostgreSQL role                 |
+| `database_url`      | `migrate`, `api` | `postgresql+psycopg://charsooq:<password>@db:5432/charsooq` |
+| `session_secret`    | `api`            | Session configuration secret, at least 32 bytes             |
+| `owner_password`    | `api`            | Owner bootstrap password, at least 8 characters             |
+| `parsina_password`  | `api`            | Parsina password when the integration is configured         |
+
+Only the services that need a secret receive it. In particular, the API never mounts
+`postgres_password`; that file belongs to the database container only. The API and migration
+runner use `database_url` instead. `parsina_password` must exist for the stack to start; when
+Parsina is intentionally disabled, an empty file keeps `ParsinaSettings.is_configured` false.
+
+Compose file-backed secrets are bind-mounted files. Their host ownership and mode are what the
+container sees; `uid`, `gid`, and `mode` in the Compose file apply to Swarm secrets and are
+deliberately not used here. Make each file unreadable by other host users and readable by the
+container identity that consumes it:
+
+```bash
+# Run as root on the Production host. This changes ownership/mode only.
+sudo install -d -m 0700 -o root -g root /etc/charsooq/secrets
+sudo chown 999:999 /etc/charsooq/secrets/postgres_password
+sudo chown 10001:10001 /etc/charsooq/secrets/database_url \
+  /etc/charsooq/secrets/session_secret /etc/charsooq/secrets/owner_password \
+  /etc/charsooq/secrets/parsina_password
+sudo chmod 0400 /etc/charsooq/secrets/postgres_password /etc/charsooq/secrets/database_url \
+  /etc/charsooq/secrets/session_secret /etc/charsooq/secrets/owner_password \
+  /etc/charsooq/secrets/parsina_password
+```
+
+The file values are never printed by the API or the migration runner, and configuration errors
+exclude URLs, hosts, usernames, and passwords. Secret values must not appear in Compose, Dockerfiles,
+docs, logs, or images.
+
+### Database role and least privilege
+
+The current stack creates the `charsooq` role through `POSTGRES_USER`; in the official PostgreSQL
+image that role is a **superuser**, and the API's `database_url` authenticates as it. This is the
+existing single-role architecture, not a least-privilege end state. The API does not receive the
+`postgres_password` file, but it still holds credentials for a powerful role.
+
+Role separation is deliberately not guessed or partially implemented here because it needs a
+database initialization path and grants that match the existing migrations:
+
+1. Keep `postgres`/`postgres_password` for container administration only.
+2. Create a migration role that owns the schema and has the DDL rights Alembic needs.
+3. Create an application role with `CONNECT`, schema `USAGE`, and table/sequence `SELECT`,
+   `INSERT`, `UPDATE`, and `DELETE` only.
+4. Give `migrate` a migrator `database_url`; give `api` the application `database_url`.
+5. Define default privileges for future tables and verify the owner bootstrap still works.
+
+Until that is implemented and tested, do not describe the current `charsooq` role as
+least-privilege. No migration was changed for this task.
+
+### Networking and exposure
+
+```text
+browser -> (future reverse proxy) -> web:3000 -> /api/* rewrite -> api:8000 -> db:5432
+```
+
+- `backend` is an internal Compose network for `db`, `migrate`, and `api`. PostgreSQL is not
+  published to the host and has no external route on that network.
+- `edge` connects `api` and `web`. It also gives the API outbound access to Parsina; no internal
+  Parsina network link is created in this task.
+- `web` does not join `backend` and cannot reach the database directly.
+- No service publishes a host port. `web:3000`, `api:8000`, and `db:5432` are reachable only inside
+  the Compose project. Port publishing and TLS belong to the reverse-proxy task.
+- Browser API calls stay same-origin: Next rewrites `/api/*` to `http://api:8000`. No server-only
+  secret is passed to the browser bundle, and `NEXT_PUBLIC_API_URL` is not set in Production.
+
+### Images
+
+- `Dockerfile.api` is multi-stage. The builder installs the locked uv workspace with
+  `uv sync --frozen --no-dev`; the runtime copies only the virtualenv, `app/`, `migrations/`,
+  `scripts/`, and `alembic.ini`. It runs as UID/GID `10001:10001`, and app code is read-only to
+  that user. Base images are pinned: `python:3.12.16-slim-bookworm` and `uv:0.12.0`.
+- `Dockerfile.web` installs with `pnpm install --frozen-lockfile`, builds Next.js, and copies only
+  the traced `standalone` output plus static assets and `public/`. It runs as the image's `node`
+  user (UID/GID `1000:1000`). Base image: `node:22.23.5-bookworm-slim`.
+- `.dockerignore` excludes `.env*`, `secrets`, local data, docs, git metadata, caches, and Compose
+  files. No secret or local env file enters an image.
+
+### Backups and recovery (next task)
+
+Backups are **not implemented** in this task. The persistent volume is
+`charsooq-production_pgdata`; `make prod-down` stops containers and keeps it, and no default target
+removes volumes. The next task must define scheduled `pg_dump`/base backups, encryption, off-host
+retention, and a rehearsed restore. Take a verified backup before any destructive or irreversible
+migration.
+
+### TLS and reverse proxy (out of scope)
+
+No reverse proxy and no TLS certificate are configured, and no host port is published. The API
+already sends HSTS in production application mode and the session cookie is `Secure` there, so the
+browser-facing endpoint must be HTTPS when the proxy is added. Proxy choice, domain/DNS,
+certificate issuance, and the decision to publish only `80`/`443` remain open. Do not expose
+`db`, `api`, or `web` directly while waiting for that work.
+
+### Remaining before a real server deployment
+
+- Provision the five secret files on the host and verify their ownership/modes as the consuming
+  UIDs; `make prod-config` only proves the compose structure.
+- Choose the image registry and promotion mechanism; build once from the approved commit and deploy
+  by digest. The current Compose file can build locally, but Production must not rebuild ad hoc.
+- Add the reverse proxy/TLS layer and publish only its ports.
+- Implement and rehearse backup/restore.
+- Split database roles as described above.
+- Verify Docker Engine/Compose versions and resource limits on `market-linux`, then perform the
+  controlled first deployment. No such deployment has been performed or validated in this task.
 
 ### Legacy assumptions that must not leak into Production
 
@@ -303,10 +385,9 @@ that stack is **Staging**. In particular:
 - `DEV_DATABASE_URL` exists so a production-mode app can simulate Parsina from a dev mirror. It
   is acceptable for Staging/Development simulation, but Production must never point it at a
   non-Production database.
-- `compose.yml` is a development stack even though it sets `APP_ENV: production`. Because runtime
-  configuration now requires `DEPLOYMENT_ENV` whenever `APP_ENV=production`, the local container
-  stack must also receive `DEPLOYMENT_ENV=development`; wiring that into the compose services is
-  pending compose work and is intentionally unchanged in this task.
+- `compose.yml` is a development stack even though it sets `APP_ENV: production`. It also sets
+  `DEPLOYMENT_ENV=development`, so the local container stack exercises production application
+  behavior without being mistaken for Production.
 - The API's boot-time auto-migration is acceptable for Staging, not for Production.
 
 ## Protected database commands (Phase 0 quarantine)
@@ -326,6 +407,7 @@ The Make targets set the identity for the scripts they call:
 | ---------------------------------------------------------------------------------------------------------- | ------------- | -------- |
 | `make db-migrate`, `db-bootstrap-owner`, `db-seed`, `db-seed-parsina`, `db-seed-demo`, `db-clear-products` | `development` | Allowed  |
 | `make db-sync-dev-to-staging`, `db-seed-demo-staging`                                                      | `staging`     | Allowed  |
+| `make prod-migrate`, `prod-bootstrap-owner` (compose services)                                             | `production`  | Allowed  |
 | `make db-migrate-prod`                                                                                     | —             | Disabled |
 | `make db-seed-prod`                                                                                        | —             | Disabled |
 | `make db-sync-dev-to-prod` (and the `sync-prod` / `dev-to-prod` aliases)                                   | —             | Disabled |
@@ -354,23 +436,23 @@ DEPLOYMENT_ENV=development uv run --project backend/api \
 
 ### Approved Production paths
 
-There are none yet in the sense of an implemented deployment workflow. In particular:
+The code path exists; the human release workflow does not. In particular:
 
-- The migration **mechanism** exists: `scripts/migrate.py` and the advisory lock. It is not yet
-  wired into a Production compose file or a release job; `make db-migrate-prod` remains the
-  disabled Neon-era target and is not that step.
-- The explicit owner **command** exists: `scripts/bootstrap_owner.py`. Production still needs an
-  approved deployment workflow that decides who runs it, when, and with which secret source.
+- The migration **mechanism** and compose wiring exist: `scripts/migrate.py`, the advisory lock, and
+  the `migrate` service in `compose.production.yml`. `make db-migrate-prod` remains the disabled
+  Neon-era target and is not that step. Deploying the stack is still a manual, open decision.
+- The explicit owner **command** exists and is wired as `make prod-bootstrap-owner`. Production
+  still needs an approved release workflow that decides who runs it, when, and with which secret
+  source.
 - No data-sync command from Development or Staging into Production is approved.
 
-Until that workflow is approved, Production writes stay blocked rather than relying on an operator
-to choose the right database.
+Until a deployment workflow is approved, Production writes stay blocked rather than relying on an
+operator to choose the right database.
 
 ## Configuration foundation (implemented)
 
-The repository now contains the configuration primitives Production needs, without implementing
-a Production deployment. This section describes implemented behavior; it does not approve a
-Production release, migration path, or secret mechanism.
+The repository contains the configuration primitives and the Production compose definition. This
+section describes implemented behavior; it does not approve a Production release or deployment.
 
 ### Settings split
 
@@ -390,12 +472,12 @@ Production release, migration path, or secret mechanism.
 When `SECRETS_DIR` is set, settings read one value per file from that directory. Expected file
 names:
 
-| Secret file        | Setting            | Required in Production?                              |
-| ------------------ | ------------------ | ---------------------------------------------------- |
-| `database_url`     | `DATABASE_URL`     | Yes, must be explicit, PostgreSQL, and non-loopback. |
-| `session_secret`   | `SESSION_SECRET`   | Yes (existing production rule).                      |
-| `owner_password`   | `OWNER_PASSWORD`   | Yes (existing production rule, minimum 8 chars).     |
-| `parsina_password` | `PARSINA_PASSWORD` | No; only when Parsina is configured.                 |
+| Secret file        | Setting            | Required in Production?                                              |
+| ------------------ | ------------------ | -------------------------------------------------------------------- |
+| `database_url`     | `DATABASE_URL`     | Yes, must be explicit, PostgreSQL, and non-loopback.                 |
+| `session_secret`   | `SESSION_SECRET`   | Yes (existing production rule).                                      |
+| `owner_password`   | `OWNER_PASSWORD`   | Yes (existing production rule, minimum 8 chars).                     |
+| `parsina_password` | `PARSINA_PASSWORD` | No for settings; the Production Compose file still expects the file. |
 
 Precedence, highest first:
 
@@ -406,8 +488,9 @@ Precedence, highest first:
 
 Environment variables therefore keep their documented precedence. Secret values are not logged or
 included in configuration errors. An explicitly set `SECRETS_DIR` must be an existing directory in
-every environment; a missing directory fails fast. The planned Production mount location is
-`/run/secrets`, but this repository does not create or mount it yet.
+every environment; a missing directory fails fast. Production sets it to `/run/secrets`, where
+Compose mounts the file-backed secrets described above. `postgres_password` is consumed directly by
+the PostgreSQL image and is not read by `Settings`.
 
 When `DEPLOYMENT_ENV=production` is explicit, configuration fails closed if:
 
@@ -482,14 +565,14 @@ this document.
 
 | Area                    | Open question                                                                                                               |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Hosting details         | Is PostgreSQL containerized by Compose or a host-managed service on `market-linux`?                                         |
 | Reverse proxy           | Which proxy (Caddy, Nginx, Traefik, …), and who terminates TLS?                                                             |
 | DNS / TLS               | Production domain(s), DNS ownership, certificate issuance and renewal.                                                      |
-| Secrets                 | Which secret mechanism on Ubuntu, and who can read/rotate it?                                                               |
+| Secrets operations      | Who provisions and rotates the host secret files, and how are permissions audited?                                          |
 | Registry                | Which container registry, image retention, and access control?                                                              |
 | Artifact promotion      | Can Staging and Production share one artifact, or only a commit SHA mapping?                                                |
 | Deploy access           | Self-hosted runner or SSH from CI? Which account and approvals?                                                             |
-| Migration control       | Production compose/release integration of the locked runner, rollout order, backup gate, and approvals.                     |
+| Migration control       | Who approves and triggers the Production compose release, and what backup gate applies before destructive migrations?       |
+| Database roles          | When to implement the migrator/application role split described above, including grants and default privileges.             |
 | Backup / DR             | Tooling, schedule, retention, off-site storage, RPO/RTO, restore drills.                                                    |
 | Observability           | Logs, metrics, uptime checks, alerting, and error tracking for each environment.                                            |
 | Staging identity        | Staging frontend/API domains, Vercel environment scope, and whether Staging tracks `main` or an explicit release candidate. |

@@ -30,9 +30,9 @@ Charsooq has exactly three independent deployment environments:
 
 Each has its own configuration, secrets, and database. `APP_ENV` is application behavior
 (Development runs `development`; Staging and Production run `production`), not environment
-identity. Protected database scripts use the explicit `DEPLOYMENT_ENV` and fail closed when it is
-missing or unknown. Staging is verified before Production; a push to `main` is not a Production
-release. See [deployment.md](deployment.md) and
+identity. `APP_ENV=production` requires an explicit `DEPLOYMENT_ENV`; protected database scripts
+use the same identity and fail closed when it is missing or unknown. Staging is verified before
+Production; a push to `main` is not a Production release. See [deployment.md](deployment.md) and
 [ADR 011](../adr/011-three-environment-architecture.md).
 
 Related: [frontend.md](frontend.md), [backend.md](backend.md), [database.md](database.md), [authentication.md](authentication.md), [api.md](api.md), [deployment.md](deployment.md), [testing.md](testing.md).

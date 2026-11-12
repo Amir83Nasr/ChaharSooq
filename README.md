@@ -8,7 +8,7 @@ Three independent environments: Development (local), Staging (Vercel + FastAPI C
 
 - Frontend: Next.js 16, React 19, TypeScript (strict), Tailwind CSS 4, shadcn/ui, pnpm
 - Backend: FastAPI, SQLAlchemy 2.x, Alembic, Pydantic, uv
-- Database: PostgreSQL (compose pins postgres:18)
+- Database: PostgreSQL (Production pins `postgres:18.6-trixie`)
 
 See [docs/architecture/overview.md](docs/architecture/overview.md) for architecture and [AGENTS.md](AGENTS.md) for agent rules.
 
@@ -86,10 +86,10 @@ Each app owns its env file: [backend/api/.env.example](backend/api/.env.example)
 
 | Variable                         | Purpose                                                                                                                                                                                                                                                                                                                                           |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `APP_ENV`                        | `development` / `test` / `production`. Staging and Production both run `production` app behavior (Secure cookies, strict secret checks); the deployment identity comes from `DEPLOYMENT_ENV`.                                                                                                                                                     |
+| `APP_ENV`                        | `development` / `test` / `production`. Staging and Production both run `production` app behavior (Secure cookies, strict secret checks); the environment is identified by the explicit `DEPLOYMENT_ENV`.                                                                                                                                          |
 | `DEPLOYMENT_ENV`                 | Explicit environment identity: `development`, `staging`, `production`. Mandatory whenever `APP_ENV=production`; a missing or unknown value fails configuration before any database connection. It also gates protected scripts (the Development/Staging Make targets set it). `APP_ENV` cannot replace it because Staging also uses `production`. |
 | `DATABASE_URL`                   | SQLAlchemy URL, e.g. `postgresql+psycopg://charsooq:charsooq@localhost:5433/charsooq`. In an explicitly identified Production deployment it must be PostgreSQL and must not target localhost or any loopback address.                                                                                                                             |
-| `SECRETS_DIR`                    | Optional directory of one-value secret files: `database_url`, `session_secret`, `owner_password`, `parsina_password`. Environment variables take precedence; Production is planned to mount it at `/run/secrets`.                                                                                                                                 |
+| `SECRETS_DIR`                    | Optional directory of one-value secret files: `database_url`, `session_secret`, `owner_password`, `parsina_password`. Environment variables take precedence; the Production stack mounts it at `/run/secrets`.                                                                                                                                    |
 | `SESSION_SECRET`                 | Validated in production (minimum 32 bytes); the current opaque-token sessions do not sign cookies with it                                                                                                                                                                                                                                         |
 | `SESSION_SAMESITE`               | `lax` (same-site dev) / `none` (split frontend/API hosts, e.g. Staging)                                                                                                                                                                                                                                                                           |
 | `RUN_MIGRATIONS_ON_STARTUP`      | Defaults: `true` in Development/Staging, `false` in Production. `true` runs Alembic in the API lifespan under the advisory lock; Production rejects an explicit `true` so the standalone migration runner must apply schema first.                                                                                                                |
@@ -250,10 +250,56 @@ The frontend client (`apps/web/lib/api.ts`) mirrors these shapes; see [docs/api/
 make build
 ```
 
+## Production Docker stack
+
+Production uses a separate file, [compose.production.yml](compose.production.yml); it does not read
+or extend [compose.yml](compose.yml). The stack is built for a Docker Engine host such as
+`market-linux` but this repository does not deploy it and the stack is not live yet.
+
+```bash
+make prod-config   # validate compose structure; no secret files needed
+make prod-build    # build pinned API + web production images
+make prod-up       # build and start db -> migrate -> api -> web
+make prod-ps       # service status and health
+make prod-logs     # follow logs
+make prod-down     # stop services; volumes and data are kept
+```
+
+`make prod-migrate` runs the locked migration runner as a one-off, and
+`make prod-bootstrap-owner` runs the explicit owner CLI. Both need real Production secrets and are
+deliberately not part of `prod-up` (owner bootstrap stays an explicit step).
+
+### Production secrets
+
+Secrets are file-backed Docker Compose secrets, sourced from outside the repository. The default
+host directory is `/etc/charsooq/secrets`; override it with `CHARSOOQ_SECRETS_DIR=...`.
+
+| Secret file         | Used by          | Content                                                     |
+| ------------------- | ---------------- | ----------------------------------------------------------- |
+| `postgres_password` | `db`             | PostgreSQL password for the `charsooq` database role        |
+| `database_url`      | `migrate`, `api` | `postgresql+psycopg://charsooq:<password>@db:5432/charsooq` |
+| `session_secret`    | `api`            | Session configuration secret, at least 32 bytes             |
+| `owner_password`    | `api`            | Owner bootstrap password, at least 8 characters             |
+| `parsina_password`  | `api`            | Parsina password when the integration is configured         |
+
+Compose file-backed secrets are bind-mounted read-only into `/run/secrets`; host ownership and mode
+are what the container sees. `uid`, `gid`, and `mode` in the Compose file only apply to Swarm
+secrets and are intentionally not set. Make `postgres_password` readable by the PostgreSQL image
+user (`999:999`) and the other files readable by the API runtime user (`10001:10001`), for example
+with mode `0400` and matching ownership. Never commit these files or place them in an image.
+See [docs/architecture/deployment.md](docs/architecture/deployment.md#production-secrets) for the
+exact commands and verification steps.
+
+No host port is published by this stack. `db`, `api`, and `web` listen only on internal Compose
+networks (`web:3000`, `api:8000`, `db:5432`). TLS termination and the reverse proxy are a separate
+task; backup tooling and restore drills are not implemented yet. PostgreSQL data lives in the
+`charsooq-production_pgdata` volume at `/var/lib/postgresql` (the PostgreSQL 18 image path), and
+`make prod-down` never removes it.
+
 ## Deployment
 
 Charsooq has three independent environments — Development, Staging, and Production. Each has its own secrets, `DATABASE_URL`, and configuration; no Production data is copied automatically to Staging or Development. A push to `main` is not a Production release. See [docs/architecture/deployment.md](docs/architecture/deployment.md) for the source of truth.
 
-- Development: local Next.js + FastAPI + PostgreSQL; `make docker-up` runs `web` + `api` + `postgres` from [compose.yml](compose.yml), with a one-shot `migrate` service applying Alembic before the API starts. `compose.yml` is the development stack, not a Production file.
+- Development: local Next.js + FastAPI + PostgreSQL; `make docker-up` runs `web` + `api` + `postgres` from [compose.yml](compose.yml), with a one-shot `migrate` service running the locked migration runner before the API starts. The development stack sets `APP_ENV=production` to exercise production behavior locally and `DEPLOYMENT_ENV=development` so it is never mistaken for Production. `compose.yml` is the development stack, not a Production file.
 - Staging: Vercel frontend (`vercel.json` pins pnpm install/build for the monorepo) + FastAPI Cloud backend (`make deploy-api`) + Neon database. Set `API_URL_INTERNAL` + `NEXT_PUBLIC_API_URL` to the Staging API origin in Vercel — the build fails fast if they still point at localhost. Browser calls same-origin `/api/*`; Next rewrites to the API origin, so the session cookie stays first-party. The API auto-migrates on boot in Staging.
-- Production: Docker Engine + Docker Compose on Ubuntu `market-linux` (`172.30.2.2`): Next.js, FastAPI, and a PostgreSQL database managed on that server. A separate production compose file, controlled pre-deploy migrations, TLS/reverse proxy, secret management, and backups are required and still open. Production is not live yet; see the deployment document.
+- Production: Docker Engine + Docker Compose on Ubuntu `market-linux` (`172.30.2.2`): Next.js, FastAPI, and PostgreSQL 18.6. [compose.production.yml](compose.production.yml) encodes the service order, file-backed secrets, internal networks, and health checks. TLS/reverse proxy, backups, image registry/promotion, and the actual server deployment remain separate open work. Production is not live yet; see the deployment document.

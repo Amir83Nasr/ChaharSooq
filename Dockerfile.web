@@ -1,5 +1,6 @@
-FROM node:22-slim AS base
+FROM node:22.23.5-bookworm-slim AS base
 WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
 RUN corepack enable
 
 FROM base AS deps
@@ -9,34 +10,33 @@ COPY packages/ui/package.json packages/ui/
 COPY packages/eslint-config/package.json packages/eslint-config/
 COPY packages/typescript-config/package.json packages/typescript-config/
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
-  pnpm install --frozen-lockfile
+  npm_config_fetch_retries=5 \
+  pnpm install --frozen-lockfile --network-concurrency=2 \
+    --fetch-timeout=600000 --config.fetch-min-speed-ki-bps=1
 
 # next.config.ts reads API_URL_INTERNAL when it builds the /api/* rewrite,
-# so the value must be present at build time as well as at runtime.
+# so the value must be present at build time as well as at runtime. Next also
+# serializes it into the standalone server output.
 FROM deps AS web-build
 ARG API_URL_INTERNAL=http://localhost:8000
-ENV API_URL_INTERNAL=${API_URL_INTERNAL}
+ENV API_URL_INTERNAL=${API_URL_INTERNAL} NEXT_OUTPUT_STANDALONE=1
 COPY . .
 RUN --mount=type=cache,target=/app/apps/web/.next/cache \
   pnpm --filter web build
 
-FROM base AS web
-ARG API_URL_INTERNAL=http://localhost:8000
-ENV NODE_ENV=production API_URL_INTERNAL=${API_URL_INTERNAL}
-COPY --from=deps /app/node_modules /app/node_modules
-COPY --from=deps /app/apps/web/node_modules /app/apps/web/node_modules
-COPY --from=deps /app/packages /app/packages
-COPY --from=web-build /app/apps/web/.next /app/apps/web/.next
-COPY apps/web/package.json apps/web/next.config.ts /app/apps/web/
-COPY apps/web/scripts /app/apps/web/scripts
-COPY apps/web/app /app/apps/web/app
-COPY apps/web/components /app/apps/web/components
-COPY apps/web/lib /app/apps/web/lib
-COPY apps/web/public /app/apps/web/public
-COPY package.json pnpm-workspace.yaml turbo.json /app/
-# Run as non-root (base image ships a `node` user).
+# Standalone output contains only the traced runtime files (including the
+# monorepo workspace packages), so the runtime image never installs dev
+# dependencies or ships the Next.js build toolchain.
+FROM node:22.23.5-bookworm-slim AS web
+WORKDIR /app
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 \
+  HOSTNAME=0.0.0.0 PORT=3000
+COPY --from=web-build --chown=node:node /app/apps/web/.next/standalone ./
+COPY --from=web-build --chown=node:node /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=web-build --chown=node:node /app/apps/web/public ./apps/web/public
+# Run as non-root (the base image ships a `node` user, UID/GID 1000).
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD node -e "fetch('http://localhost:3000/login').then((r)=>{if(r.status>=500)process.exit(1)}).catch(()=>process.exit(1))"
-CMD ["pnpm", "--filter", "web", "start"]
+  CMD node -e "fetch('http://127.0.0.1:3000/login').then((r)=>{if(r.status>=500)process.exit(1)}).catch(()=>process.exit(1))"
+CMD ["node", "apps/web/server.js"]

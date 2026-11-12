@@ -5,8 +5,11 @@
 .claude
 docs
 data
+Makefile
 **/.env
 **/.env.*
+**/secrets
+**/.DS_Store
 **/node_modules
 **/.next
 **/.turbo
@@ -22,3 +25,4 @@ data
 **/*.tsbuildinfo
 Dockerfile*
 compose.yml
+compose.production.yml

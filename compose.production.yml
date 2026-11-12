@@ -1,0 +1,178 @@
+# Production stack for market-linux. Development lives in compose.yml and the
+# two files are intentionally independent: nothing here is inherited from the
+# development file or from .env files.
+#
+# Secrets are file-backed and live outside this repository. Set
+# CHARSOOQ_SECRETS_DIR to the directory that holds them (default:
+# /etc/charsooq/secrets) and see docs/architecture/deployment.md for the
+# required names, ownership, and permissions. No secret value belongs here.
+name: charsooq-production
+
+x-api-image: &api-image
+  image: ${CHARSOOQ_API_IMAGE:-charsooq-api:production}
+  build:
+    context: .
+    dockerfile: Dockerfile.api
+
+x-api-env: &api-env
+  APP_ENV: production
+  DEPLOYMENT_ENV: production
+  SECRETS_DIR: /run/secrets
+  # The ordered one-shot steps below are the only supported path in Production.
+  RUN_MIGRATIONS_ON_STARTUP: "false"
+  RUN_OWNER_BOOTSTRAP_ON_STARTUP: "false"
+  # Browser traffic is same-origin through Next's /api/* rewrite, so no
+  # cross-origin browser requests are allowed.
+  CORS_ORIGINS: ""
+  SESSION_SAMESITE: lax
+
+services:
+  db:
+    image: postgres:18.6-trixie
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: charsooq
+      POSTGRES_USER: charsooq
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    # PostgreSQL 18 changed PGDATA to /var/lib/postgresql/18/docker and the
+    # image's declared volume is the /var/lib/postgresql parent. Mounting the
+    # old /var/lib/postgresql/data path would persist an empty directory.
+    volumes:
+      - pgdata:/var/lib/postgresql
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U charsooq -d charsooq -h 127.0.0.1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+
+  # One-shot schema upgrade. It exits 0 only when the database is at head, and
+  # `api` is not created until this service completes successfully. A failure
+  # therefore stops the release with the database untouched by the new API.
+  migrate:
+    <<: *api-image
+    command: ["python", "backend/api/scripts/migrate.py"]
+    environment: *api-env
+    secrets:
+      - database_url
+    restart: "no"
+    networks:
+      - backend
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+
+  api:
+    <<: *api-image
+    restart: unless-stopped
+    environment: *api-env
+    secrets:
+      - database_url
+      - session_secret
+      - owner_password
+      - parsina_password
+    expose:
+      - "8000"
+    networks:
+      - backend
+      - edge
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready')",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+
+  web:
+    image: ${CHARSOOQ_WEB_IMAGE:-charsooq-web:production}
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        API_URL_INTERNAL: http://api:8000
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      API_URL_INTERNAL: http://api:8000
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+    expose:
+      - "3000"
+    networks:
+      - edge
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/login').then((r)=>{if(r.status>=500)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+
+networks:
+  # Database-only network: PostgreSQL has no route to the outside world.
+  backend:
+    internal: true
+  # API <-> web only. A future reverse proxy attaches here.
+  edge:
+    driver: bridge
+
+volumes:
+  pgdata:
+
+secrets:
+  # File-backed Compose secrets are bind-mounted read-only into /run/secrets.
+  # Host owner/mode are what the container sees; `uid`/`gid`/`mode` here would
+  # only apply to Swarm secrets, so they are deliberately not set.
+  postgres_password:
+    file: ${CHARSOOQ_SECRETS_DIR:-/etc/charsooq/secrets}/postgres_password
+  database_url:
+    file: ${CHARSOOQ_SECRETS_DIR:-/etc/charsooq/secrets}/database_url
+  session_secret:
+    file: ${CHARSOOQ_SECRETS_DIR:-/etc/charsooq/secrets}/session_secret
+  owner_password:
+    file: ${CHARSOOQ_SECRETS_DIR:-/etc/charsooq/secrets}/owner_password
+  parsina_password:
+    file: ${CHARSOOQ_SECRETS_DIR:-/etc/charsooq/secrets}/parsina_password

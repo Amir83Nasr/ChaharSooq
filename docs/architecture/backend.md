@@ -121,7 +121,28 @@ The owner CLI, `backend/api/scripts/bootstrap_owner.py`, is the explicit Product
 It refuses `APP_ENV=test`, requires the `admins` table to already exist, never calls `create_all`,
 and is idempotent. Disabling either startup step does not affect the other. See
 [database.md](database.md#migrations-and-the-single-runner-lock) and
-[deployment.md](deployment.md#migrations).
+[deployment.md](deployment.md#startup-order-and-health).
+
+## Container runtime (Production)
+
+The Production backend image is built by `Dockerfile.api` and used by both the `api` and one-shot
+`migrate` services in `compose.production.yml`:
+
+- Multi-stage build: `uv sync --frozen --no-dev` runs in a builder stage; the runtime image copies
+  only the virtualenv, app code, migrations, scripts, and `alembic.ini`. Base images are pinned
+  (`python:3.12.16-slim-bookworm`, `uv:0.12.0`).
+- Runtime identity is `api` UID/GID `10001:10001` (non-root). App code is root-owned and read-only
+  to that user. Secret files under `SECRETS_DIR=/run/secrets` are mounted by Compose and must be
+  readable by UID `10001`; the API never receives the PostgreSQL admin password file.
+- `migrate` runs `python backend/api/scripts/migrate.py` with `DEPLOYMENT_ENV=production`,
+  `RUN_MIGRATIONS_ON_STARTUP=false`, and `RUN_OWNER_BOOTSTRAP_ON_STARTUP=false`. It depends on a
+  healthy database, and `api` depends on `migrate` completing successfully.
+- The API serves on internal port `8000` only; no host port is published. Uvicorn keeps two workers
+  and the existing `--proxy-headers --no-server-header` flags. `/ready` (database `SELECT 1`) is the
+  container healthcheck.
+- `scripts/bootstrap_owner.py` is a manual one-off (`make prod-bootstrap-owner`), not a startup
+  step. See [deployment.md](deployment.md#production-services) for secrets, networks, and the
+  full startup order.
 
 ## Product data and sync
 

@@ -1,3 +1,5 @@
+import path from "node:path"
+
 import type { NextConfig } from "next"
 
 import { loadSharedEnv } from "./scripts/load-env.mjs"
@@ -18,6 +20,15 @@ const API_BASE = (
 ).replace(/\/+$/, "")
 
 const nextConfig: NextConfig = {
+  // The Docker runtime enables the traced standalone output; local, CI, and
+  // Vercel builds keep the default output. Trace from the monorepo root so
+  // workspace packages are included.
+  ...(process.env.NEXT_OUTPUT_STANDALONE === "1"
+    ? {
+        output: "standalone" as const,
+        outputFileTracingRoot: path.resolve(process.cwd(), "../.."),
+      }
+    : {}),
   transpilePackages: ["@workspace/ui"],
   poweredByHeader: false,
   // LAN/mobile dev: set ALLOWED_DEV_ORIGINS=a,b (root or apps/web .env.local).

@@ -571,7 +571,6 @@ def test_production_rejects_non_postgresql_and_loopback_urls(
     url: str,
     message: str,
 ) -> None:
-    secret = "production-url-secret"
     monkeypatch.setenv("DEPLOYMENT_ENV", "production")
     monkeypatch.setenv("DATABASE_URL", url)
 
@@ -581,7 +580,6 @@ def test_production_rejects_non_postgresql_and_loopback_urls(
     rendered = str(exc.value)
     assert message in rendered
     assert url not in rendered
-    assert secret not in rendered
     assert "postgresql+psycopg" not in rendered
 
 

@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-.PHONY: build check clean-build clean-cache db-bootstrap-owner db-clear-products db-migrate db-migrate-prod db-seed db-seed-demo db-seed-demo-staging db-seed-parsina db-seed-prod db-sync-dev-to-prod db-sync-dev-to-staging sync-dev-to-prod sync-dev-to-staging sync-prod sync-staging dev-to-prod dev-to-staging db-up db-validate db-wait deploy-api dev-all dev-api dev-web docker-build docker-down docker-logs docker-up doctor help install lint openapi-check test test-e2e typecheck
+.PHONY: build check clean-build clean-cache db-bootstrap-owner db-clear-products db-migrate db-migrate-prod db-seed db-seed-demo db-seed-demo-staging db-seed-parsina db-seed-prod db-sync-dev-to-prod db-sync-dev-to-staging sync-dev-to-prod sync-dev-to-staging sync-prod sync-staging dev-to-prod dev-to-staging db-up db-validate db-wait deploy-api dev-all dev-api dev-web docker-build docker-down docker-logs docker-up doctor help install lint openapi-check test test-e2e typecheck prod-bootstrap-owner prod-build prod-config prod-down prod-logs prod-migrate prod-ps prod-up
 
 # ─── HELP ─────────────────────────────────────────────────
 help: ## Show this help message
@@ -19,6 +19,8 @@ help: ## Show this help message
 
 # ─── CONFIG / VARIABLES ───────────────────────────────────
 COMPOSE_FILE ?= compose.yml ## Compose file used by up/down/logs
+COMPOSE_PROD_FILE ?= compose.production.yml ## Production compose file (separate from development)
+CHARSOOQ_SECRETS_DIR ?= /etc/charsooq/secrets ## Host directory of production secret files (never committed)
 DB_PORT ?= 5433 ## Host port of the dev postgres db-wait/dev-api expect
 YES ?= 0 ## Set YES=1 to skip the confirmation prompt for db-sync-dev-to-{prod,staging}
 
@@ -145,6 +147,34 @@ docker-down: ## Stop Docker Compose services
 
 docker-logs: ## Follow Docker Compose logs
 	docker compose -f $(COMPOSE_FILE) logs -f
+
+# ─── DOCKER: PRODUCTION ───────────────────────────────────
+# Structural validation does not read secret files, so it works on a machine
+# without production secrets. Only the run targets need the real files.
+prod-config: ## Validate the production compose file (no secrets needed)
+	docker compose -f $(COMPOSE_PROD_FILE) config --quiet
+	@echo "production compose: structure valid"
+
+prod-build: ## Build production API and web images from this commit
+	docker compose -f $(COMPOSE_PROD_FILE) build
+
+prod-migrate: ## Run the production migration runner once (needs real secrets)
+	docker compose -f $(COMPOSE_PROD_FILE) run --rm migrate
+
+prod-bootstrap-owner: ## Run the explicit production owner bootstrap once (needs real secrets)
+	docker compose -f $(COMPOSE_PROD_FILE) run --rm api python backend/api/scripts/bootstrap_owner.py
+
+prod-up: ## Build and start the production stack (needs real secrets; no host ports)
+	docker compose -f $(COMPOSE_PROD_FILE) up -d --build
+
+prod-ps: ## Show production service status
+	docker compose -f $(COMPOSE_PROD_FILE) ps
+
+prod-logs: ## Follow production logs
+	docker compose -f $(COMPOSE_PROD_FILE) logs -f
+
+prod-down: ## Stop production services (keeps volumes and data)
+	docker compose -f $(COMPOSE_PROD_FILE) down
 
 # ─── DEPLOY ───────────────────────────────────────────────
 deploy-api: ## Deploy backend API to FastAPI Cloud (run from backend/api)

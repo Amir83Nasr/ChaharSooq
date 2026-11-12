@@ -18,4 +18,19 @@ Routes → Services → Repositories → Database
 Persian rule: backend/API/DB carry machine-readable numerics and tz-aware datetimes.
 UI converts at render time: Persian digits, `٬` (U+066C) grouping, Jalali dates with `٫` (U+066B), Toman glyph via `<Price/>`.
 
+## Environments
+
+Charsooq has exactly three independent deployment environments:
+
+| Environment | Where                                       | Main services                                  |
+| ----------- | ------------------------------------------- | ---------------------------------------------- |
+| Development | Developer MacBook                           | Next.js + FastAPI + local PostgreSQL           |
+| Staging     | Cloud                                       | Vercel + FastAPI Cloud + Neon                  |
+| Production  | Ubuntu server `market-linux` (`172.30.2.2`) | Docker Compose: Next.js + FastAPI + PostgreSQL |
+
+Each has its own configuration, secrets, and database. `APP_ENV` is application behavior
+(Development runs `development`; Staging and Production run `production`), not environment
+identity. Staging is verified before Production; a push to `main` is not a Production release.
+See [deployment.md](deployment.md) and [ADR 011](../adr/011-three-environment-architecture.md).
+
 Related: [frontend.md](frontend.md), [backend.md](backend.md), [database.md](database.md), [authentication.md](authentication.md), [api.md](api.md), [deployment.md](deployment.md), [testing.md](testing.md).

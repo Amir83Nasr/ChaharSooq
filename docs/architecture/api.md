@@ -106,10 +106,10 @@ is clamped to `[Pb × (1 − m/100), Pb × (1 + n/100)]`; null disables that sid
 
 Both sync jobs take their own database lock across manual and scheduled runs, so two runs of the
 same job never overlap. Manual runs return immediately; poll the status endpoint until `running`
-is false, then refresh the table. Production syncs Parsina (or the dev mirror when
-`DEV_DATABASE_URL` is set); development re-imports `data/parsina.csv`. A complete listing is
-authoritative: rows missing from it are deactivated, never hard-deleted. A failed or partial fetch
-leaves the last successful data untouched.
+is false, then refresh the table. Staging and Production (`APP_ENV=production`) sync Parsina (or
+the dev mirror on Staging when `DEV_DATABASE_URL` is set); development re-imports
+`data/parsina.csv`. A complete listing is authoritative: rows missing from it are deactivated,
+never hard-deleted. A failed or partial fetch leaves the last successful data untouched.
 
 ## Settings
 

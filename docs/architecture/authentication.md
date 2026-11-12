@@ -4,7 +4,7 @@ Password flow: `POST /api/v1/auth/login` → HttpOnly session cookie → `GET /a
 
 - Passwords: Argon2id (`argon2-cffi`), never plaintext, never logged.
 - Sessions: server-side rows (`admin_sessions`), opaque `secrets.token_urlsafe(48)` tokens, SHA-256 stored, TTL 12h default.
-- Cookie: `HttpOnly`, `Secure` in production, `SameSite=Lax`, path `/`.
+- Cookie: `HttpOnly`, `Secure` in production mode (Staging and Production), `SameSite=Lax`, path `/`.
 - Brute force: 10 login attempts / IP / minute → `429 rate_limited` (Persian message).
 - Errors: non-sensitive Persian messages (`نام کاربری یا گذرواژه نادرست است`, `نیاز به ورود است`, `دسترسی ندارید`); validation → `validation_error` envelope.
 - Frontend: no `localStorage` tokens; `credentials: "include"` fetch client; login form with labels, field errors, and `role="alert"`. `(dashboard)` routes are server-guarded via `lib/auth.ts` (`GET /api/v1/auth/me` with forwarded cookies, redirect to `/login` on failure); logout requires dialog confirmation before `POST /api/v1/auth/logout`.

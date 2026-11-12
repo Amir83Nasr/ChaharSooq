@@ -2,6 +2,8 @@
 
 Persian, RTL-first admin web application. Monorepo: Next.js frontend + FastAPI backend + PostgreSQL.
 
+Three independent environments: Development (local), Staging (Vercel + FastAPI Cloud + Neon), and Production (Docker Compose on `market-linux`). See [docs/architecture/deployment.md](docs/architecture/deployment.md).
+
 ## Tech stack
 
 - Frontend: Next.js 16, React 19, TypeScript (strict), Tailwind CSS 4, shadcn/ui, pnpm
@@ -80,14 +82,14 @@ cache copy; `make clean-build` removes `.next` and Playwright artifacts.
 
 ## Environment variables
 
-Each app owns its env file: [backend/api/.env.example](backend/api/.env.example) (copy to `backend/api/.env.local`) and [apps/web/.env.example](apps/web/.env.example) (copy to `apps/web/.env.local`). Never commit real secrets. The backend reads its env file by absolute path, so the API, Alembic, and the seed scripts always target the same configuration. A shared root `.env.local` (or `.env`) is also loaded by both apps as a fallback, which is convenient for LAN/mobile dev (e.g. whitelisting device IPs in `ALLOWED_DEV_ORIGINS` / `CORS_ORIGINS`); per-app values take precedence.
+Each app owns its env file: [backend/api/.env.example](backend/api/.env.example) (copy to `backend/api/.env.local`) and [apps/web/.env.example](apps/web/.env.example) (copy to `apps/web/.env.local`). Never commit real secrets. Values are environment-specific: never share secrets or `DATABASE_URL` between Development, Staging, and Production. Deployed environments get their variables from their own platform or server secret source, not from env files shipped with the repository. The backend reads its env file by absolute path, so the API, Alembic, and the seed scripts always target the same configuration. A shared root `.env.local` (or `.env`) is also loaded by both apps as a fallback, which is convenient for LAN/mobile dev (e.g. whitelisting device IPs in `ALLOWED_DEV_ORIGINS` / `CORS_ORIGINS`); per-app values take precedence.
 
 | Variable              | Purpose                                                                                                                                                                                                                                                   |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `APP_ENV`             | `development` / `test` / `production` (Secure cookies only in production)                                                                                                                                                                                 |
+| `APP_ENV`             | `development` / `test` / `production`. Staging and Production both run `production` app behavior (Secure cookies, strict secret checks); the deployment platform identifies the environment.                                                              |
 | `DATABASE_URL`        | SQLAlchemy URL, e.g. `postgresql+psycopg://charsooq:charsooq@localhost:5433/charsooq`                                                                                                                                                                     |
 | `SESSION_SECRET`      | Session signing secret; change the dev default in production                                                                                                                                                                                              |
-| `SESSION_SAMESITE`    | `lax` (same-site dev) / `none` (Vercel frontend + separate API host)                                                                                                                                                                                      |
+| `SESSION_SAMESITE`    | `lax` (same-site dev) / `none` (split frontend/API hosts, e.g. Staging)                                                                                                                                                                                   |
 | `API_URL_INTERNAL`    | Server-side API origin for Next `/api/*` rewrites; falls back to `NEXT_PUBLIC_API_URL`                                                                                                                                                                    |
 | `NEXT_PUBLIC_API_URL` | API origin fallback for rewrites (browser always calls same-origin `/api/*`)                                                                                                                                                                              |
 | `CORS_ORIGINS`        | Backend CORS allowlist, comma-separated                                                                                                                                                                                                                   |
@@ -135,19 +137,24 @@ make db-migrate        # dev: start postgres + `alembic upgrade head`
 make db-seed            # ensure the owner account from OWNER_USERNAME/OWNER_PASSWORD
 make db-seed-parsina    # upsert dev product catalog from data/parsina.csv
 make db-seed-demo       # demo competitor prices + daily changes for the products table
-make db-sync-dev-to-prod # upsert dev data into prod; never deletes products or links
+make db-sync-dev-to-prod # upsert dev data into the production target; never deletes products or links
 make db-sync-dev-to-staging # upsert dev data into staging Neon + demo prices (reads backend/api/.env.staging)
 make db-seed-demo-staging # only refresh staging demo competitor prices (reads backend/api/.env.staging)
 
-make db-migrate-prod                          # prod Neon: migrations (reads .env.production)
-make db-seed-prod                             # prod Neon: ensure owner (OWNER_PASSWORD required)
+make db-migrate-prod                          # production database migrations (reads .env.production)
+make db-seed-prod                             # production owner account (OWNER_PASSWORD required)
 ```
+
+The `*-prod` targets read `.env.production` and were written when Production ran on Neon. They
+are not yet validated for the `market-linux` Docker deployment; confirm the target before running
+them. Staging is the environment for verifying a release. See
+[docs/architecture/deployment.md](docs/architecture/deployment.md).
 
 ## Migrations
 
 Schema changes require an Alembic migration under `backend/api/migrations/`. Autogenerate from models, review, then apply (`make db-migrate`).
 
-- The API runs `upgrade head` on every boot (except tests), so deploys never need a manual migration — locally, in Docker, or on FastAPI Cloud.
+- The API runs `upgrade head` on every boot (except tests), so Development and Staging deploys never need a manual migration. Production requires a controlled migration step before the new API version starts (see the deployment document).
 - CI proves it: fresh `upgrade head`, idempotent re-upgrade, single-head assertion, `alembic check` drift detection, and a downgrade/upgrade round-trip.
 - `make db-validate` runs the offline part locally (no database needed); `make check` includes it.
 
@@ -166,7 +173,7 @@ The frontend client (`apps/web/lib/api.ts`) mirrors these shapes; see [docs/api/
 - Frontend unit tests: `packages/ui/src/lib/*.test.ts` (vitest) — Persian digits, `٬` grouping, `٫` dates
 - Frontend e2e: `apps/web/e2e/` (playwright) — unauthenticated redirects, Persian login form, RTL shell, mobile layout; runs against the production build without a backend — `pnpm --filter web test:e2e`
 - Backend tests: `backend/api/tests/` (pytest) — auth flow, roles and user management, product CRUD, validation envelope
-- CI runs lint, format check, typecheck, both test suites, the production build, and the Playwright e2e suite; deploy happens only after CI succeeds.
+- CI runs lint, format check, typecheck, both test suites, the production build, and the Playwright e2e suite. The repository has no deploy workflow: Staging deploys through the Vercel/FastAPI Cloud Git integration, and Production promotion is a separate explicit step.
 
 ## Build
 
@@ -176,7 +183,8 @@ make build
 
 ## Deployment
 
-- Frontend: Vercel (`vercel.json` pins pnpm install/build for the monorepo). Set `API_URL_INTERNAL` + `NEXT_PUBLIC_API_URL` to the API origin in Vercel Production env — the build fails fast if they still point at localhost. Browser calls same-origin `/api/*`; Next rewrites to the API origin, so the session cookie stays first-party.
-- Backend: FastAPI Cloud (`make deploy-api`). Set `APP_ENV=production`, real `DATABASE_URL`, strong `SESSION_SECRET`. Migrations run automatically on boot — no manual step.
-- Docker: `make docker-up` runs `web` + `api` + `postgres` from [compose.yml](compose.yml); a one-shot `migrate` service applies Alembic before the API starts.
-- See [docs/architecture/deployment.md](docs/architecture/deployment.md).
+Charsooq has three independent environments — Development, Staging, and Production. Each has its own secrets, `DATABASE_URL`, and configuration; no Production data is copied automatically to Staging or Development. A push to `main` is not a Production release. See [docs/architecture/deployment.md](docs/architecture/deployment.md) for the source of truth.
+
+- Development: local Next.js + FastAPI + PostgreSQL; `make docker-up` runs `web` + `api` + `postgres` from [compose.yml](compose.yml), with a one-shot `migrate` service applying Alembic before the API starts. `compose.yml` is the development stack, not a Production file.
+- Staging: Vercel frontend (`vercel.json` pins pnpm install/build for the monorepo) + FastAPI Cloud backend (`make deploy-api`) + Neon database. Set `API_URL_INTERNAL` + `NEXT_PUBLIC_API_URL` to the Staging API origin in Vercel — the build fails fast if they still point at localhost. Browser calls same-origin `/api/*`; Next rewrites to the API origin, so the session cookie stays first-party. The API auto-migrates on boot in Staging.
+- Production: Docker Engine + Docker Compose on Ubuntu `market-linux` (`172.30.2.2`): Next.js, FastAPI, and a PostgreSQL database managed on that server. A separate production compose file, controlled pre-deploy migrations, TLS/reverse proxy, secret management, and backups are required and still open. Production is not live yet; see the deployment document.

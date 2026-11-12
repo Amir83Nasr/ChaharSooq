@@ -45,6 +45,33 @@ Dependency flow: `api/routes → services → repositories → database`.
 - `apps/web/lib/` holds the API client, auth helpers, and app domain helpers.
 - Keep data fetching out of presentational components.
 
+### Environments
+
+Charsooq has exactly three independent environments. Full operational detail lives in
+[docs/architecture/deployment.md](docs/architecture/deployment.md); the decision is
+[ADR 011](docs/adr/011-three-environment-architecture.md).
+
+| Environment | Host                                 | Frontend / Backend / Database            |
+| ----------- | ------------------------------------ | ---------------------------------------- |
+| Development | Developer MacBook                    | Next.js / FastAPI / local PostgreSQL     |
+| Staging     | Cloud                                | Vercel / FastAPI Cloud / Neon            |
+| Production  | Ubuntu `market-linux` (`172.30.2.2`) | Next.js / FastAPI / PostgreSQL in Docker |
+
+- Staging is a verification environment, not production. The Vercel/FastAPI Cloud/Neon stack is
+  preserved for Staging until an approved replacement exists.
+- Every environment owns its variables, secrets, and `DATABASE_URL`. Never share them; never put
+  real values in Git, docs, or `.env.example` files.
+- Migrations run only against their own environment's database. Production migrations are
+  controlled, run before the new API version, and never race between workers.
+- No Production data flows automatically into Staging or Development. Real data outside
+  Production requires a controlled, sanitized process.
+- Do not modify `compose.yml` for Production; it is the development stack. Production uses a
+  separate compose file (planned).
+- A push to `main` is not a Production release. Production promotion is explicit, after Staging
+  approval.
+- Unknown infrastructure details are open decisions, not guesses (registry, TLS, secrets
+  mechanism, backups, deploy access). See deployment.md.
+
 ## 4. UI system
 
 - shadcn/ui is the UI system. Use official components and Blocks before writing custom ones. Style with Tailwind CSS 4.
@@ -92,7 +119,8 @@ This is an admin panel with password login.
 - Do not store auth tokens in `localStorage` or `sessionStorage`.
 - Never log passwords, session IDs, API keys, secrets, or Authorization headers.
 - Never commit secrets. Only the per-app `.env.example` files (`backend/api/`, `apps/web/`) are tracked. Docker builds must not receive `.env*` files (see `.dockerignore`).
-- Dev-only default credentials may exist in dev targets. Production seeding must receive `ADMIN_PASSWORD` explicitly.
+- Keep secrets and `DATABASE_URL` per environment (Development, Staging, Production); never reuse them across environments, and never load Production data into a non-production environment automatically.
+- Dev-only default credentials may exist in dev targets. Production seeding must receive `OWNER_PASSWORD` explicitly (the legacy `ADMIN_PASSWORD` alias is accepted).
 
 ## 8. Coding standards
 

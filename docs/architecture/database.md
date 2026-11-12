@@ -17,3 +17,23 @@ Rules:
 - Indexes follow query patterns (`expires_at`, `created_at`); FKs/constraints added as the domain grows.
 - Transactions: one commit per request in `get_session()` (commit on success, rollback on error).
 - Tests use in-memory SQLite via `DATABASE_URL` override; CI runs Postgres service for integration parity.
+
+## Environments
+
+Each environment owns a separate database and a separate `DATABASE_URL`:
+
+| Environment | Database                                               |
+| ----------- | ------------------------------------------------------ |
+| Development | Local PostgreSQL (compose, host `:5433`)               |
+| Staging     | Neon                                                   |
+| Production  | PostgreSQL managed on the Ubuntu server `market-linux` |
+
+- Migrations run only against the database of the environment being deployed.
+- Production migrations are ordered before the new API version and use a single runner; they must
+  not race between workers.
+- No automatic Production → Staging/Development data transfer is allowed. Real data used outside
+  Production requires a controlled, sanitized process.
+- The existing dev-to-staging and dev-to-prod sync scripts are explicit manual helpers. The
+  `*-prod` targets still describe the Neon-era production database and are not yet validated for
+  `market-linux`. See [deployment.md](deployment.md) and
+  [ADR 011](../adr/011-three-environment-architecture.md).

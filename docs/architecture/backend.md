@@ -82,6 +82,12 @@ chosen by environment in `app/integrations/sources.py`:
 | `development` | `data/parsina.csv` (a Parsina export, same field names).                     |
 | `test`        | No scheduler; tests inject sources and transports.                           |
 
+`production` is the application mode used by both Staging and Production, so that row covers both
+environments. Staging may use the `DEV_DATABASE_URL` mirror to exercise the flow without Parsina
+credentials; Production must use the live source and must never point at a non-Production
+database. Environment identity and secrets come from the deployment platform, not `APP_ENV`.
+See [deployment.md](deployment.md).
+
 Rules shared by every source:
 
 - Identity is Parsina `goodId`; re-runs update instead of duplicating.

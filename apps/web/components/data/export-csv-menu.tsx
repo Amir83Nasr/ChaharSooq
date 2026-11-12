@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Download } from "lucide-react"
 
-import { BusyLabel } from "@workspace/ui/primitives/busy-label"
+import { cn } from "@workspace/ui/lib/utils"
 import { Button } from "@workspace/ui/primitives/button"
 import {
   DropdownMenu,
@@ -73,7 +73,7 @@ export function ExportCsvMenu({
       className={
         compact
           ? "relative shrink-0"
-          : "relative flex flex-col items-stretch gap-1"
+          : "flex w-full flex-col gap-2 sm:w-56 sm:shrink-0"
       }
     >
       <DropdownMenu>
@@ -98,15 +98,32 @@ export function ExportCsvMenu({
           </DropdownMenuTrigger>
         ) : (
           <DropdownMenuTrigger
-            render={<Button type="button" variant="outline" disabled={busy} />}
+            render={
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy}
+                className="h-11 w-full justify-center gap-2 rounded-2xl sm:h-9"
+              />
+            }
           >
-            <Download className="size-4" aria-hidden="true" />
-            <BusyLabel
-              busy={busy}
-              idle={label}
-              busyLabel={busyLabel ?? label}
-              spinner
-            />
+            {/* Same icon box as the sync panels: the download glyph crossfades
+                into a spinner without resizing, so the icon-to-label gap never
+                changes and the label keeps its idle width. */}
+            <span
+              data-icon="inline-start"
+              aria-hidden="true"
+              className="relative inline-flex size-4 shrink-0"
+            >
+              <Download
+                className={cn(
+                  "absolute inset-0 size-4 transition-opacity duration-200 ease-out motion-reduce:transition-none",
+                  busy ? "opacity-0" : "opacity-100"
+                )}
+              />
+              <Spinner active={busy} className="absolute inset-0" />
+            </span>
+            <span>{label}</span>
           </DropdownMenuTrigger>
         )}
         <DropdownMenuContent align="end" className="w-64">
@@ -133,13 +150,20 @@ export function ExportCsvMenu({
           </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>
+      {compact ? null : (
+        // Same two-line reserve as the sync panels, so the export button column
+        // matches their height and the row never shifts when a download starts.
+        <div className="hidden min-h-8 w-full text-start text-xs leading-4 text-muted-foreground sm:block">
+          {busy ? "در حال آماده‌سازی خروجی…" : "دریافت داده‌ها در قالب CSV"}
+        </div>
+      )}
       {error ? (
         <p
           role="alert"
           className={
             compact
               ? "absolute end-0 top-full z-20 mt-1 w-52 rounded-xl border bg-popover px-2 py-1.5 text-xs text-destructive shadow-sm"
-              : "max-w-64 text-xs text-destructive"
+              : "w-full text-xs text-destructive"
           }
         >
           {error}

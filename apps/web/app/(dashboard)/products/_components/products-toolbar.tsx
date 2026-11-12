@@ -13,7 +13,6 @@ import {
   formatPersianNumber,
   parsePriceFilterInput,
 } from "@workspace/ui/lib/number"
-import type { ReactNode } from "react"
 import {
   DataTableToolbar,
   SearchInput,
@@ -52,8 +51,6 @@ interface ToolbarProps {
   onMinPrice: (v: string) => void
   onMaxPrice: (v: string) => void
   onClear: () => void
-  /** Table-level actions rendered at the end of the filter row. */
-  exportMenu?: ReactNode
 }
 
 export function ProductsToolbar(props: ToolbarProps) {
@@ -74,7 +71,6 @@ export function ProductsToolbar(props: ToolbarProps) {
     onMinPrice,
     onMaxPrice,
     onClear,
-    exportMenu,
   } = props
   return (
     <DataTableToolbar>
@@ -212,7 +208,6 @@ export function ProductsToolbar(props: ToolbarProps) {
           پاک‌سازی فیلترها
         </Button>
       ) : null}
-      {exportMenu ? <div className="sm:ms-auto">{exportMenu}</div> : null}
     </DataTableToolbar>
   )
 }

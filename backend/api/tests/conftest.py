@@ -19,6 +19,61 @@ from app.core.security import hash_password
 from app.main import create_app
 from app.models import Admin
 
+_ISOLATED_SETTINGS_ENV = frozenset(
+    {
+        "APP_ENV",
+        "DEPLOYMENT_ENV",
+        "DATABASE_URL",
+        "SECRETS_DIR",
+        "SESSION_SECRET",
+        "SESSION_COOKIE_NAME",
+        "SESSION_TTL_HOURS",
+        "SESSION_SAMESITE",
+        "OWNER_USERNAME",
+        "OWNER_PASSWORD",
+        "ADMIN_USER",
+        "ADMIN_PASSWORD",
+        "REDIS_URL",
+        "CORS_ORIGINS",
+        "PRODUCTS_CSV_PATH",
+        "DEV_DATABASE_URL",
+        "RUN_MIGRATIONS_ON_STARTUP",
+        "RUN_OWNER_BOOTSTRAP_ON_STARTUP",
+        "MIGRATION_LOCK_TIMEOUT_SECONDS",
+    }
+)
+
+
+@pytest.fixture()
+def isolated_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Hermetic settings: no real env files, secrets, or unrelated variables."""
+    from app.core import config
+
+    for name in _ISOLATED_SETTINGS_ENV:
+        monkeypatch.delenv(name, raising=False)
+    for name in list(os.environ):
+        if name.startswith("PARSINA_") or name.startswith("COMPETITOR_"):
+            monkeypatch.delenv(name, raising=False)
+    for model in (
+        config.SecretFileSettings,
+        config.DatabaseSettings,
+        config.Settings,
+        config.ParsinaSettings,
+    ):
+        monkeypatch.setitem(model.model_config, "env_file", ())
+
+    # Capture the originals: a test may monkeypatch the cached accessor itself.
+    clear_database_settings = config.get_database_settings.cache_clear
+    clear_settings = config.get_settings.cache_clear
+    clear_parsina_settings = config.get_parsina_settings.cache_clear
+    clear_database_settings()
+    clear_settings()
+    clear_parsina_settings()
+    yield
+    clear_database_settings()
+    clear_settings()
+    clear_parsina_settings()
+
 
 @pytest.fixture()
 def client() -> Iterator[TestClient]:

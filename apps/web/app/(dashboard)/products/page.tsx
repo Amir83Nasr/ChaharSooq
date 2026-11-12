@@ -231,22 +231,32 @@ function ProductsPageContent() {
         title="محصولات"
         subtitle="مدیریت کالاهای فروشگاه"
         actions={
-          canManage ? (
+          !isMobile || canManage ? (
             <>
-              <ParsinaSyncPanel
-                initialLastSuccess={syncBaseline.parsina}
-                onStatus={(value) => setSyncBaseline("parsina", value)}
-                onSynced={refreshProducts}
-                onUnauthorized={goLogin}
-              />
-              <CompetitorSyncPanel
-                initialLastSuccess={syncBaseline.competitor}
-                onStatus={(value) => setSyncBaseline("competitor", value)}
-                onSynced={refreshProducts}
-                onUnauthorized={goLogin}
-              />
+              {isMobile ? null : (
+                <ExportCsvMenu
+                  options={exportOptions}
+                  onUnauthorized={goLogin}
+                />
+              )}
+              {canManage ? (
+                <>
+                  <ParsinaSyncPanel
+                    initialLastSuccess={syncBaseline.parsina}
+                    onStatus={(value) => setSyncBaseline("parsina", value)}
+                    onSynced={refreshProducts}
+                    onUnauthorized={goLogin}
+                  />
+                  <CompetitorSyncPanel
+                    initialLastSuccess={syncBaseline.competitor}
+                    onStatus={(value) => setSyncBaseline("competitor", value)}
+                    onSynced={refreshProducts}
+                    onUnauthorized={goLogin}
+                  />
+                </>
+              ) : null}
             </>
-          ) : null
+          ) : undefined
         }
       />
 
@@ -263,12 +273,7 @@ function ProductsPageContent() {
           }
         />
       ) : (
-        <ProductsToolbar
-          {...filterProps}
-          exportMenu={
-            <ExportCsvMenu options={exportOptions} onUnauthorized={goLogin} />
-          }
-        />
+        <ProductsToolbar {...filterProps} />
       )}
 
       {refreshFailed ? (

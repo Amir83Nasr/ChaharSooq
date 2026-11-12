@@ -159,7 +159,9 @@ def test_real_fixture_parses_completely() -> None:
 # ── SELECTION ────────────────────────────────────────────────
 
 
-def test_source_selection_by_environment(tmp_path: Path) -> None:
+def test_source_selection_by_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # APP_ENV=production is application behavior; the identity says Staging.
+    monkeypatch.setenv("DEPLOYMENT_ENV", "staging")
     assert isinstance(
         build_commodity_source(
             app_settings=Settings(app_env="development"),

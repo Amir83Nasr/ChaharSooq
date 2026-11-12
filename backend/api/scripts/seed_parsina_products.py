@@ -4,7 +4,9 @@ Development only. Upserts the CSV catalog into the dev product mirror so the
 dev UI shows the same shaped data as production without Parsina credentials.
 Existing product rows keep their ids; rows absent from the CSV are deactivated
 (never deleted), so competitor links and other product-bound data survive.
-Run via `make db-seed-parsina` (which applies migrations first).
+Run via `make db-seed-parsina` (which applies migrations first). The script
+requires `DEPLOYMENT_ENV=development` and refuses Staging, Production, and
+unknown identities.
 
 The CSV path defaults to `<repo>/data/parsina.csv` and can be
 overridden with `PRODUCTS_CSV_PATH`.
@@ -21,15 +23,17 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.database import get_engine
+from app.core.deployment import DEVELOPMENT, enforce_deployment_env
 from app.integrations.parsina_csv import CsvCommoditySource
 from app.services.sync import ProductSyncService
 
 
 def main() -> int:
+    enforce_deployment_env("seed_parsina_products", (DEVELOPMENT,))
     settings = get_settings()
     if settings.is_production:
         print(
-            "refusing to load the CSV fixture into a production database",
+            "refusing to load the CSV fixture into a production-mode database",
             file=sys.stderr,
         )
         return 1

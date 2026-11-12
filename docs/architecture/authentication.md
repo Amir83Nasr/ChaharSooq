@@ -3,7 +3,7 @@
 Password flow: `POST /api/v1/auth/login` → HttpOnly session cookie → `GET /api/v1/auth/me` → dashboard; `POST /api/v1/auth/logout` clears.
 
 - Passwords: Argon2id (`argon2-cffi`), never plaintext, never logged.
-- Sessions: server-side rows (`admin_sessions`), opaque `secrets.token_urlsafe(48)` tokens, SHA-256 stored, TTL 12h default.
+- Sessions: server-side rows (`admin_sessions`), opaque `secrets.token_urlsafe(48)` tokens, SHA-256 stored, TTL 12h default. `SESSION_SECRET` is validated in production mode but is not used to sign or encrypt these opaque tokens; removing it would be a separate design decision.
 - Cookie: `HttpOnly`, `Secure` in production mode (Staging and Production), `SameSite=Lax`, path `/`.
 - Brute force: 10 login attempts / IP / minute → `429 rate_limited` (Persian message).
 - Errors: non-sensitive Persian messages (`نام کاربری یا گذرواژه نادرست است`, `نیاز به ورود است`, `دسترسی ندارید`); validation → `validation_error` envelope.

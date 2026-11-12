@@ -154,16 +154,17 @@ cookie stays first-party.
 Deploy with `make deploy-api` (runs `fastapi deploy` from `backend/api`). Set in the FastAPI Cloud
 dashboard for the Staging environment, never shared with Production:
 
-- `APP_ENV=production` (production behavior; Staging identity comes from the platform config)
+- `APP_ENV=production` (production behavior)
+- `DEPLOYMENT_ENV=staging` (explicit identity; Staging and Production share `APP_ENV=production`)
 - the Staging Neon `DATABASE_URL`
 - a Staging-only `SESSION_SECRET` (at least 32 characters)
 - the Staging `CORS_ORIGINS`
 - `SESSION_SAMESITE=none` for the split frontend/API hosts
 
 **Migrations are automatic in Staging.** `app/core/migrations.py::upgrade_to_head` runs in the
-FastAPI lifespan on every boot (except `APP_ENV=test`), with a short retry for multi-replica
-deploy races. This is acceptable for Staging only; it does not satisfy the Production migration
-requirements below.
+FastAPI lifespan on every boot (except `APP_ENV=test`), under the ChaharSooq PostgreSQL advisory
+lock. The lock makes concurrent replicas single-flight; a waiting replica applies a no-op upgrade
+after the first one finishes. This is still a Staging convenience, not the Production process.
 
 Staging data is demo/staging data. Do not load a Production dump into Staging. The current
 controlled helpers for staging are:
@@ -173,7 +174,8 @@ make db-sync-dev-to-staging # upsert dev data into staging Neon + demo prices (m
 make db-seed-demo-staging   # refresh staging demo competitor prices
 ```
 
-Both read `backend/api/.env.staging` and never delete products or links.
+Both read `backend/api/.env.staging` and never delete products or links. The Make targets set
+`DEPLOYMENT_ENV=staging`; the scripts refuse to run with Production or an unknown identity.
 
 ## Production — `market-linux`
 
@@ -209,11 +211,66 @@ Production migrations must be controlled and ordered:
    release can roll back the application.
 4. Take a verified backup before destructive or irreversible schema changes.
 
-The current application runs `upgrade head` in its own lifespan on every boot, and `compose.yml`
-also has a one-shot `migrate` service. That is convenient for Development and Staging but is
-**not** sufficient as the Production control: boot-time migration on multiple replicas can run
-concurrently and it couples schema change to process start. Production release stays blocked
-until a controlled migration path exists.
+The repository now implements steps 1–2 as infrastructure, but **does not** yet wire them into a
+Production compose file or deployment workflow. The runner is
+`backend/api/scripts/migrate.py`:
+
+```bash
+DEPLOYMENT_ENV=production uv run --project backend/api \
+  python backend/api/scripts/migrate.py
+```
+
+It resolves the database through `DatabaseSettings` only, applies Alembic to `head` under the
+PostgreSQL session-level advisory lock, and exits non-zero on failure or lock timeout. The same
+lock is used by a plain `alembic upgrade head`, because `migrations/env.py` acquires it when it
+opens its own connection. When a caller supplies a connection through
+`config.attributes["connection"]`, Alembic reuses that exact connection, so the lock and the
+migration cannot run on different sessions. See
+[database.md](database.md#migrations-and-the-single-runner-lock).
+
+The API still runs `upgrade head` in its own lifespan on every boot in Development and Staging,
+and `compose.yml` also has a one-shot `migrate` service. That is convenient there but is **not**
+sufficient as the Production control: boot-time migration on multiple replicas couples schema
+change to process start. Production sets `RUN_MIGRATIONS_ON_STARTUP=false` (the Production
+default) and runs the standalone runner as the ordered pre-start step.
+
+`RUN_MIGRATIONS_ON_STARTUP` and `RUN_OWNER_BOOTSTRAP_ON_STARTUP` are independent and default to
+`true` in Development/Staging and `false` in Production. Production **rejects** an explicit `true`
+for either flag, so an API boot can never change the schema or provision the owner there. The
+explicit owner command is:
+
+```bash
+DEPLOYMENT_ENV=production uv run --project backend/api \
+  python backend/api/scripts/bootstrap_owner.py
+```
+
+That command requires the `admins` table to exist, never calls `create_all`, and is idempotent.
+The default owner-on-boot behavior is preserved for Development and Staging. The Production
+deployment workflow (who runs these commands, order, and approvals) is still proposed, not
+implemented.
+
+### Required Production order
+
+This is the official order for a Production release. It is a policy contract; the compose/release
+wiring is still the open item below.
+
+1. Prepare the Production secrets and configuration in the Production-only secret source.
+2. Verify the database is reachable from the deployment host.
+3. Run `scripts/migrate.py` with `DEPLOYMENT_ENV=production` and the Production secret source.
+   Stop the rollout on a non-zero exit, including a lock timeout.
+4. Verify the migration succeeded and the database reports the expected revision (`head`).
+5. Run `scripts/bootstrap_owner.py` explicitly when the owner needs provisioning or rotation; stop
+   on a non-zero exit.
+6. Start the API with `RUN_MIGRATIONS_ON_STARTUP=false` and
+   `RUN_OWNER_BOOTSTRAP_ON_STARTUP=false` (also the Production defaults).
+7. Check `/health` and `/ready` before routing traffic; roll back to the previous image if the
+   application check fails. Schema rollback still follows the backup policy.
+
+**The API must never start before the schema is at `head`.** A boot with either startup step
+enabled is rejected by configuration, not merely discouraged.
+
+This is the approved ordering for the future Production compose/workflow; it is not an implemented
+deploy path yet.
 
 ### Secrets, network, TLS, backups
 
@@ -240,14 +297,183 @@ Previous documentation called Vercel + FastAPI Cloud + Neon "Production". Under 
 that stack is **Staging**. In particular:
 
 - `make db-migrate-prod`, `make db-seed-prod`, `make db-sync-dev-to-prod`, and `.env.production`
-  were written for the Neon-era production database. They are **not** validated for the
-  `market-linux` deployment and must not be run against it until their target and safety are
-  reworked. Keep using them only for the environment they actually point at.
+  were written for the Neon-era production database. Those targets are now disabled and fail
+  closed (see [Protected database commands](#protected-database-commands-phase-0-quarantine)).
+  `.env.production` must not be reused for `market-linux`.
 - `DEV_DATABASE_URL` exists so a production-mode app can simulate Parsina from a dev mirror. It
   is acceptable for Staging/Development simulation, but Production must never point it at a
   non-Production database.
-- `compose.yml` is a development stack even though it sets `APP_ENV: production`.
+- `compose.yml` is a development stack even though it sets `APP_ENV: production`. Because runtime
+  configuration now requires `DEPLOYMENT_ENV` whenever `APP_ENV=production`, the local container
+  stack must also receive `DEPLOYMENT_ENV=development`; wiring that into the compose services is
+  pending compose work and is intentionally unchanged in this task.
 - The API's boot-time auto-migration is acceptable for Staging, not for Production.
+
+## Protected database commands (Phase 0 quarantine)
+
+Legacy production write paths are blocked until a controlled Production path exists. Environment
+identity comes from `DEPLOYMENT_ENV`, not `APP_ENV`: Staging and Production both run
+`APP_ENV=production`, so `APP_ENV` cannot distinguish them.
+
+Accepted `DEPLOYMENT_ENV` values are `development`, `staging`, and `production`. The guard lives in
+`backend/api/app/core/deployment.py`. It is fail-closed: a missing, empty, or unrecognised value
+raises an error, the CLI exits non-zero, and it does so before reading `DATABASE_URL` or opening a
+connection. Unknown is never treated as Development.
+
+The Make targets set the identity for the scripts they call:
+
+| Command                                                                                                    | Identity      | Status   |
+| ---------------------------------------------------------------------------------------------------------- | ------------- | -------- |
+| `make db-migrate`, `db-bootstrap-owner`, `db-seed`, `db-seed-parsina`, `db-seed-demo`, `db-clear-products` | `development` | Allowed  |
+| `make db-sync-dev-to-staging`, `db-seed-demo-staging`                                                      | `staging`     | Allowed  |
+| `make db-migrate-prod`                                                                                     | —             | Disabled |
+| `make db-seed-prod`                                                                                        | —             | Disabled |
+| `make db-sync-dev-to-prod` (and the `sync-prod` / `dev-to-prod` aliases)                                   | —             | Disabled |
+
+Disabled targets print the reason and exit non-zero before running any tool. They do not fall back
+to a different database.
+
+Script-level rules (these also apply when a script is invoked directly):
+
+| Script                     | Allowed `DEPLOYMENT_ENV` | Reason                                                                                                           |
+| -------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `migrate.py`               | all three (explicit)     | Standalone locked migration runner; no `create_all`. Production use requires the approved deployment workflow.   |
+| `bootstrap_owner.py`       | all three (explicit)     | Explicit owner path; requires a migrated `admins` table; no `create_all`.                                        |
+| `seed_admin.py`            | `development`, `staging` | Also runs `create_all`; Production owner provisioning is an open decision.                                       |
+| `seed_parsina_products.py` | `development`            | Loads the development CSV fixture.                                                                               |
+| `seed_demo_competitors.py` | `development`, `staging` | Demo data only; Staging additionally requires `--staging`.                                                       |
+| `clear_products.py`        | `development`            | Destructive; never Staging or Production.                                                                        |
+| `sync_dev_to_prod.py`      | `staging` (destination)  | Called by `db-sync-dev-to-staging`; the historical name and `--prod-url` flag remain, but Production is refused. |
+
+Running a script directly requires the identity explicitly:
+
+```bash
+DEPLOYMENT_ENV=development uv run --project backend/api \
+  python backend/api/scripts/seed_admin.py
+```
+
+### Approved Production paths
+
+There are none yet in the sense of an implemented deployment workflow. In particular:
+
+- The migration **mechanism** exists: `scripts/migrate.py` and the advisory lock. It is not yet
+  wired into a Production compose file or a release job; `make db-migrate-prod` remains the
+  disabled Neon-era target and is not that step.
+- The explicit owner **command** exists: `scripts/bootstrap_owner.py`. Production still needs an
+  approved deployment workflow that decides who runs it, when, and with which secret source.
+- No data-sync command from Development or Staging into Production is approved.
+
+Until that workflow is approved, Production writes stay blocked rather than relying on an operator
+to choose the right database.
+
+## Configuration foundation (implemented)
+
+The repository now contains the configuration primitives Production needs, without implementing
+a Production deployment. This section describes implemented behavior; it does not approve a
+Production release, migration path, or secret mechanism.
+
+### Settings split
+
+- `DatabaseSettings` (`backend/api/app/core/config.py`) contains `database_url` and
+  `migration_lock_timeout_seconds`. The SQLAlchemy engine, `app/core/migrations.py`, and
+  `migrations/env.py` use `get_database_settings()`; they no longer instantiate the full
+  application model. Database and migration configuration therefore works without authentication
+  secrets.
+- `Settings` inherits `DatabaseSettings` and adds application behavior: `APP_ENV`, session, owner,
+  CORS, sync, `RUN_MIGRATIONS_ON_STARTUP`, and `RUN_OWNER_BOOTSTRAP_ON_STARTUP`. Its public fields
+  and consumers are unchanged apart from the new startup switch.
+- `ParsinaSettings` remains separate and optional. Its password can come from the environment or a
+  secret file and it is not required to boot the API.
+
+### Secret files (`SECRETS_DIR`)
+
+When `SECRETS_DIR` is set, settings read one value per file from that directory. Expected file
+names:
+
+| Secret file        | Setting            | Required in Production?                              |
+| ------------------ | ------------------ | ---------------------------------------------------- |
+| `database_url`     | `DATABASE_URL`     | Yes, must be explicit, PostgreSQL, and non-loopback. |
+| `session_secret`   | `SESSION_SECRET`   | Yes (existing production rule).                      |
+| `owner_password`   | `OWNER_PASSWORD`   | Yes (existing production rule, minimum 8 chars).     |
+| `parsina_password` | `PARSINA_PASSWORD` | No; only when Parsina is configured.                 |
+
+Precedence, highest first:
+
+1. constructor arguments,
+2. environment variables,
+3. env files (`backend/api/.env.local`, `backend/api/.env`, ...),
+4. files under `SECRETS_DIR`.
+
+Environment variables therefore keep their documented precedence. Secret values are not logged or
+included in configuration errors. An explicitly set `SECRETS_DIR` must be an existing directory in
+every environment; a missing directory fails fast. The planned Production mount location is
+`/run/secrets`, but this repository does not create or mount it yet.
+
+When `DEPLOYMENT_ENV=production` is explicit, configuration fails closed if:
+
+- `DATABASE_URL` is missing, resolves to the committed localhost development default, is not a
+  PostgreSQL URL, has no explicit host, or targets `localhost`, `127.0.0.0/8`, `::1`, or an
+  IPv4-mapped loopback address — including when Alembic runs in offline SQL mode;
+- `SESSION_SECRET` is the development default or shorter than 32 bytes;
+- `OWNER_PASSWORD` is shorter than 8 characters;
+- `RUN_MIGRATIONS_ON_STARTUP` or `RUN_OWNER_BOOTSTRAP_ON_STARTUP` is explicitly `true`.
+
+Database URL validation uses SQLAlchemy's URL parser and inspects libpq-style `host`/`hostaddr`
+query parameters; it is not substring matching. Error messages never contain the URL, host,
+username, or password. Development and Staging keep their previous compatibility.
+
+A value may come from either the environment or a secret file. If neither supplies it, the error
+names the missing setting; a missing file is never mistaken for an intentional Development value.
+`parsina_password` stays optional, so a disabled Parsina integration does not block boot.
+
+`DEPLOYMENT_ENV` is mandatory whenever `APP_ENV=production`: Staging and Production share that
+application mode, so the process cannot identify itself without it. A missing, empty, or unknown
+value raises a configuration error before the database is opened. Development keeps the previous
+lenient behavior. Protected database commands continue to require and validate the identity as
+described above.
+
+### Startup migrations and owner bootstrap
+
+| Environment | `RUN_MIGRATIONS_ON_STARTUP` | `RUN_OWNER_BOOTSTRAP_ON_STARTUP` |
+| ----------- | --------------------------- | -------------------------------- |
+| Development | `true`                      | `true`                           |
+| Staging     | `true`                      | `true`                           |
+| Production  | `false`                     | `false`                          |
+
+An operator's explicit value is preserved, except in Production: an explicit `true` is a
+configuration error. The two switches remain independent, and neither weakens the existing
+`SESSION_SECRET` and `OWNER_PASSWORD` validation.
+
+Production starts the API only after `scripts/migrate.py` and, when needed,
+`scripts/bootstrap_owner.py` succeed, with both flags at `false`. In Development/Staging the
+automatic behavior is unchanged: the account is created when missing, re-hashed when the env
+password changes, and kept as the only `owner`.
+
+### Advisory lock and single runner
+
+`app/core/migration_lock.py` implements a PostgreSQL **session-level** advisory lock with the fixed
+key `int.from_bytes(b"charsooq", "big")` (documented in the module). The lock is held for the whole
+Alembic run, released in `finally`, and also released by PostgreSQL when the connection closes if
+the process dies. Transaction-level locking is deliberately not used because Alembic commits
+between revisions.
+
+`scripts/migrate.py` and the lifespan share the same `apply_migrations()` path. It opens a
+short-lived engine, connects, acquires the lock, and passes that connection to Alembic through
+`config.attributes["connection"]`. `migrations/env.py` reuses the supplied connection instead of
+creating its own; a direct `alembic upgrade head` creates one connection and acquires the same
+lock before running. `MIGRATION_LOCK_TIMEOUT_SECONDS` (default 60) bounds the wait, and a timeout
+is reported as a clear non-zero failure.
+
+SQLite keeps the previous no-lock Development behavior. An explicitly identified Production
+deployment using a non-PostgreSQL dialect fails closed instead of migrating without the lock.
+
+### `SESSION_SECRET` status
+
+`SESSION_SECRET` is validated in production mode but is not currently used to sign or encrypt
+session cookies. Sessions are opaque random tokens stored as SHA-256 hashes (`app/core/security.py`
+and the auth service). The value is not required by current runtime behavior, but it remains part
+of the production security checks. Removing or repurposing it is a separate authentication design
+decision; this configuration foundation does not change it.
 
 ## Open decisions
 
@@ -263,7 +489,7 @@ this document.
 | Registry                | Which container registry, image retention, and access control?                                                              |
 | Artifact promotion      | Can Staging and Production share one artifact, or only a commit SHA mapping?                                                |
 | Deploy access           | Self-hosted runner or SSH from CI? Which account and approvals?                                                             |
-| Migration control       | Dedicated migration job, advisory lock, and rollout order — plus code changes needed.                                       |
+| Migration control       | Production compose/release integration of the locked runner, rollout order, backup gate, and approvals.                     |
 | Backup / DR             | Tooling, schedule, retention, off-site storage, RPO/RTO, restore drills.                                                    |
 | Observability           | Logs, metrics, uptime checks, alerting, and error tracking for each environment.                                            |
 | Staging identity        | Staging frontend/API domains, Vercel environment scope, and whether Staging tracks `main` or an explicit release candidate. |

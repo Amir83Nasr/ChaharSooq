@@ -1,12 +1,21 @@
-"""Copy data from the local dev Postgres into the production (Neon) database.
+"""Copy data from the local dev Postgres into a Staging database.
+
+The historical name is kept because `make db-sync-dev-to-staging` and the
+existing runbook still call this module. It no longer targets Production:
+the CLI requires `DEPLOYMENT_ENV=staging` and refuses Production and unknown
+identities before it opens a connection or reads a destination URL.
 
 Usage (from repo root):
-    make db-sync-dev-to-prod            # prompts for confirmation
-    make db-sync-dev-to-prod YES=1      # non-interactive
+    make db-sync-dev-to-staging                # prompts for confirmation
+    make db-sync-dev-to-staging YES=1          # non-interactive
 
 Or directly:
-    uv run --project backend/api --env-file .env.production \\
+    DEPLOYMENT_ENV=staging uv run --project backend/api \\
+        --env-file backend/api/.env.staging \\
         python backend/api/scripts/sync_dev_to_prod.py [--dev-url ...] [--prod-url ...] [--yes]
+
+`--prod-url` is the legacy flag name for the destination database URL. Only a
+Staging destination is allowed.
 
 The sync is non-destructive and upsert-based:
 
@@ -39,6 +48,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import Session
 
+from app.core.deployment import STAGING, enforce_deployment_env
 from app.models import Category, CompetitorListing, ParsinaSyncState, Product, Setting
 from app.models.parsina import SYNC_STATE_ID
 from scripts.common import is_demo_competitor_url
@@ -240,12 +250,22 @@ def sync(dev_url: str, prod_url: str) -> dict[str, int]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Sync dev DB data into a destination DB (staging/prod) without deleting rows."
+        description=(
+            "Sync dev DB data into a Staging database without deleting rows. "
+            "Production destinations are refused."
+        )
     )
     parser.add_argument("--dev-url", default=os.environ.get("DEV_DATABASE_URL", DEFAULT_DEV_URL))
-    parser.add_argument("--prod-url", default=None, help="Destination database URL.")
+    parser.add_argument(
+        "--prod-url",
+        default=None,
+        help="Destination (Staging) database URL; the legacy flag name is kept.",
+    )
     parser.add_argument("--yes", action="store_true", help="Skip confirmation prompt.")
     args = parser.parse_args()
+
+    # Fail closed before reading a destination URL or opening a connection.
+    enforce_deployment_env("sync_dev_to_prod", (STAGING,))
 
     if args.prod_url is None:
         from app.core.config import get_settings

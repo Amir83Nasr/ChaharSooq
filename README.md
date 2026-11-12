@@ -84,20 +84,60 @@ cache copy; `make clean-build` removes `.next` and Playwright artifacts.
 
 Each app owns its env file: [backend/api/.env.example](backend/api/.env.example) (copy to `backend/api/.env.local`) and [apps/web/.env.example](apps/web/.env.example) (copy to `apps/web/.env.local`). Never commit real secrets. Values are environment-specific: never share secrets or `DATABASE_URL` between Development, Staging, and Production. Deployed environments get their variables from their own platform or server secret source, not from env files shipped with the repository. The backend reads its env file by absolute path, so the API, Alembic, and the seed scripts always target the same configuration. A shared root `.env.local` (or `.env`) is also loaded by both apps as a fallback, which is convenient for LAN/mobile dev (e.g. whitelisting device IPs in `ALLOWED_DEV_ORIGINS` / `CORS_ORIGINS`); per-app values take precedence.
 
-| Variable              | Purpose                                                                                                                                                                                                                                                   |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `APP_ENV`             | `development` / `test` / `production`. Staging and Production both run `production` app behavior (Secure cookies, strict secret checks); the deployment platform identifies the environment.                                                              |
-| `DATABASE_URL`        | SQLAlchemy URL, e.g. `postgresql+psycopg://charsooq:charsooq@localhost:5433/charsooq`                                                                                                                                                                     |
-| `SESSION_SECRET`      | Session signing secret; change the dev default in production                                                                                                                                                                                              |
-| `SESSION_SAMESITE`    | `lax` (same-site dev) / `none` (split frontend/API hosts, e.g. Staging)                                                                                                                                                                                   |
-| `API_URL_INTERNAL`    | Server-side API origin for Next `/api/*` rewrites; falls back to `NEXT_PUBLIC_API_URL`                                                                                                                                                                    |
-| `NEXT_PUBLIC_API_URL` | API origin fallback for rewrites (browser always calls same-origin `/api/*`)                                                                                                                                                                              |
-| `CORS_ORIGINS`        | Backend CORS allowlist, comma-separated                                                                                                                                                                                                                   |
-| `ALLOWED_DEV_ORIGINS` | Extra Next.js dev origins, comma-separated                                                                                                                                                                                                                |
-| `OWNER_USERNAME`      | Highest-privilege `owner` login. Defaults to `superadmin`. The API creates this account on boot and keeps it in sync with the env.                                                                                                                        |
-| `OWNER_PASSWORD`      | Owner password. Required in production (minimum 8 characters). Changing it re-hashes the account and revokes its sessions on the next boot.                                                                                                               |
-| `PARSINA_*`           | Parsina accounting API (URL, credentials, org, year, optional warehouse/sale-type). Empty = integration off. `PARSINA_SYNC_INTERVAL_MINUTES` (default 1440) seeds the initial auto-sync interval and `PARSINA_SYNC_ENABLED` toggles the backend scheduler |
-| `PRODUCTS_CSV_PATH`   | Development-only product CSV; defaults to `<repo>/data/parsina.csv`                                                                                                                                                                                       |
+| Variable                         | Purpose                                                                                                                                                                                                                                                                                                                                           |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `APP_ENV`                        | `development` / `test` / `production`. Staging and Production both run `production` app behavior (Secure cookies, strict secret checks); the deployment identity comes from `DEPLOYMENT_ENV`.                                                                                                                                                     |
+| `DEPLOYMENT_ENV`                 | Explicit environment identity: `development`, `staging`, `production`. Mandatory whenever `APP_ENV=production`; a missing or unknown value fails configuration before any database connection. It also gates protected scripts (the Development/Staging Make targets set it). `APP_ENV` cannot replace it because Staging also uses `production`. |
+| `DATABASE_URL`                   | SQLAlchemy URL, e.g. `postgresql+psycopg://charsooq:charsooq@localhost:5433/charsooq`. In an explicitly identified Production deployment it must be PostgreSQL and must not target localhost or any loopback address.                                                                                                                             |
+| `SECRETS_DIR`                    | Optional directory of one-value secret files: `database_url`, `session_secret`, `owner_password`, `parsina_password`. Environment variables take precedence; Production is planned to mount it at `/run/secrets`.                                                                                                                                 |
+| `SESSION_SECRET`                 | Validated in production (minimum 32 bytes); the current opaque-token sessions do not sign cookies with it                                                                                                                                                                                                                                         |
+| `SESSION_SAMESITE`               | `lax` (same-site dev) / `none` (split frontend/API hosts, e.g. Staging)                                                                                                                                                                                                                                                                           |
+| `RUN_MIGRATIONS_ON_STARTUP`      | Defaults: `true` in Development/Staging, `false` in Production. `true` runs Alembic in the API lifespan under the advisory lock; Production rejects an explicit `true` so the standalone migration runner must apply schema first.                                                                                                                |
+| `RUN_OWNER_BOOTSTRAP_ON_STARTUP` | Defaults: `true` in Development/Staging, `false` in Production. `true` ensures the env-managed owner in the API lifespan; Production rejects an explicit `true` so `bootstrap_owner.py` is the explicit step (independent of migrations).                                                                                                         |
+| `MIGRATION_LOCK_TIMEOUT_SECONDS` | Seconds to wait for the PostgreSQL migration advisory lock (default `60`, `0` fails immediately). Applies to startup migrations and the standalone runner                                                                                                                                                                                         |
+| `API_URL_INTERNAL`               | Server-side API origin for Next `/api/*` rewrites; falls back to `NEXT_PUBLIC_API_URL`                                                                                                                                                                                                                                                            |
+| `NEXT_PUBLIC_API_URL`            | API origin fallback for rewrites (browser always calls same-origin `/api/*`)                                                                                                                                                                                                                                                                      |
+| `CORS_ORIGINS`                   | Backend CORS allowlist, comma-separated                                                                                                                                                                                                                                                                                                           |
+| `ALLOWED_DEV_ORIGINS`            | Extra Next.js dev origins, comma-separated                                                                                                                                                                                                                                                                                                        |
+| `OWNER_USERNAME`                 | Highest-privilege `owner` login. Defaults to `superadmin`. The API creates this account on boot unless `RUN_OWNER_BOOTSTRAP_ON_STARTUP=false`; `bootstrap_owner.py` is the explicit path.                                                                                                                                                         |
+| `OWNER_PASSWORD`                 | Owner password. Required in production (minimum 8 characters). Changing it re-hashes the account and revokes its sessions on the next boot or explicit owner bootstrap.                                                                                                                                                                           |
+| `PARSINA_*`                      | Parsina accounting API (URL, credentials, org, year, optional warehouse/sale-type). Empty = integration off. `PARSINA_SYNC_INTERVAL_MINUTES` (default 1440) seeds the initial auto-sync interval and `PARSINA_SYNC_ENABLED` toggles the backend scheduler                                                                                         |
+| `PRODUCTS_CSV_PATH`              | Development-only product CSV; defaults to `<repo>/data/parsina.csv`                                                                                                                                                                                                                                                                               |
+
+### Environment examples
+
+`APP_ENV=production` is application behavior, not environment identity: Staging and Production
+both use it. When it is set, an explicit `DEPLOYMENT_ENV` is mandatory and an unknown value fails
+configuration before the database is opened. Development keeps the previous lenient behavior.
+
+```bash
+# Development (local)
+APP_ENV=development
+DEPLOYMENT_ENV=development          # optional for the API, required by protected CLIs
+DATABASE_URL=postgresql+psycopg://charsooq:charsooq@localhost:5433/charsooq
+RUN_MIGRATIONS_ON_STARTUP=true
+RUN_OWNER_BOOTSTRAP_ON_STARTUP=true
+
+# Staging (production behavior, staging identity)
+APP_ENV=production
+DEPLOYMENT_ENV=staging
+DATABASE_URL=<staging PostgreSQL URL>
+RUN_MIGRATIONS_ON_STARTUP=true
+RUN_OWNER_BOOTSTRAP_ON_STARTUP=true
+
+# Production (explicit identity; startup steps are separate commands)
+APP_ENV=production
+DEPLOYMENT_ENV=production
+DATABASE_URL=<production PostgreSQL URL, not localhost/loopback>
+RUN_MIGRATIONS_ON_STARTUP=false
+RUN_OWNER_BOOTSTRAP_ON_STARTUP=false
+```
+
+Production rejects a non-PostgreSQL URL, a URL without a host, and any `localhost` or loopback
+host (`127.0.0.0/8`, `::1`, IPv4-mapped loopback). The error never prints the URL, host, or
+credentials. Explicitly enabling either startup step in Production is also rejected; use the
+ordered commands in [Migrations](#migrations) instead. Values shown above are placeholders, not
+secrets.
 
 ## Roles and users
 
@@ -132,31 +172,60 @@ Competitor links and observations are stored separately from the Parsina catalog
 
 ## Database setup
 
+Development commands (the Make targets set `DEPLOYMENT_ENV=development` for the scripts):
+
 ```bash
-make db-migrate        # dev: start postgres + `alembic upgrade head`
+make db-migrate        # dev: start postgres + locked standalone migration runner
+make db-bootstrap-owner # ensure the owner via the explicit no-create_all CLI
 make db-seed            # ensure the owner account from OWNER_USERNAME/OWNER_PASSWORD
 make db-seed-parsina    # upsert dev product catalog from data/parsina.csv
 make db-seed-demo       # demo competitor prices + daily changes for the products table
-make db-sync-dev-to-prod # upsert dev data into the production target; never deletes products or links
-make db-sync-dev-to-staging # upsert dev data into staging Neon + demo prices (reads backend/api/.env.staging)
-make db-seed-demo-staging # only refresh staging demo competitor prices (reads backend/api/.env.staging)
-
-make db-migrate-prod                          # production database migrations (reads .env.production)
-make db-seed-prod                             # production owner account (OWNER_PASSWORD required)
+make db-clear-products  # delete all products + competitor links (development only)
 ```
 
-The `*-prod` targets read `.env.production` and were written when Production ran on Neon. They
-are not yet validated for the `market-linux` Docker deployment; confirm the target before running
-them. Staging is the environment for verifying a release. See
-[docs/architecture/deployment.md](docs/architecture/deployment.md).
+Staging helpers (they set `DEPLOYMENT_ENV=staging` and read `backend/api/.env.staging`):
+
+```bash
+make db-sync-dev-to-staging # upsert dev data into staging Neon + demo competitor prices
+make db-seed-demo-staging   # only refresh staging demo competitor prices
+```
+
+Protected scripts read `DEPLOYMENT_ENV`, not `APP_ENV`: Staging and Production both run
+`APP_ENV=production`, so `APP_ENV` cannot identify the target. A missing or unrecognised
+`DEPLOYMENT_ENV`, or an environment the script does not allow, makes it exit non-zero before it
+reads `DATABASE_URL` or opens a connection. Running a script directly therefore needs the identity:
+
+```bash
+DEPLOYMENT_ENV=development uv run --project backend/api python backend/api/scripts/migrate.py
+DEPLOYMENT_ENV=development uv run --project backend/api python backend/api/scripts/bootstrap_owner.py
+DEPLOYMENT_ENV=development uv run --project backend/api python backend/api/scripts/seed_admin.py
+```
+
+`migrate.py` and `bootstrap_owner.py` accept all three identities because they are the explicit
+paths a controlled deployment can use. `seed_admin.py` stays Development/Staging only: it also
+runs `create_all` and predates the separated owner CLI.
+
+The Neon-era production targets are disabled and fail closed with migration guidance:
+`make db-migrate-prod`, `make db-seed-prod`, `make db-sync-dev-to-prod`, plus the
+`make sync-prod` / `make dev-to-prod` aliases. No Production deployment workflow is approved yet;
+the locked standalone migration runner and explicit owner CLI are the building blocks it must use.
+See [docs/architecture/deployment.md](docs/architecture/deployment.md).
 
 ## Migrations
 
 Schema changes require an Alembic migration under `backend/api/migrations/`. Autogenerate from models, review, then apply (`make db-migrate`).
 
-- The API runs `upgrade head` on every boot (except tests), so Development and Staging deploys never need a manual migration. Production requires a controlled migration step before the new API version starts (see the deployment document).
+- Migration is now a separate, controlled step: `backend/api/scripts/migrate.py` applies `head` under a PostgreSQL session-level advisory lock. The API lifespan runs the same locked path by default only in Development and Staging (`RUN_MIGRATIONS_ON_STARTUP=true`); Production defaults it to `false`.
+- A plain `alembic upgrade head` also takes the same lock. The lock and the Alembic upgrade share one connection, so they cannot drift onto different sessions.
+- The lock key is fixed and documented (`app/core/migration_lock.py`, ASCII `charsooq`). A second runner waits up to `MIGRATION_LOCK_TIMEOUT_SECONDS` (default 60), then fails with a clear timeout instead of racing. On success or failure the lock is released; closing the connection or killing the process is the final PostgreSQL-side safety net.
+- PostgreSQL is required for the lock. SQLite keeps the previous development behavior; an explicitly identified Production deployment fails closed if the URL is not PostgreSQL or targets a loopback host.
+- The standalone runner never calls `create_all`, never creates a revision, and never prints the database URL or a password. A failed migration or lock timeout exits non-zero.
+- `RUN_MIGRATIONS_ON_STARTUP=false` skips only the lifespan migration. `RUN_OWNER_BOOTSTRAP_ON_STARTUP=false` skips only the env-managed owner; the two switches are independent. Production defaults both to `false` and rejects an explicit `true`.
+- The env owner can also be ensured explicitly after the schema is ready: `python backend/api/scripts/bootstrap_owner.py`. It never creates tables, is idempotent, and keeps the single-owner invariant. Production must use this explicit path with the startup flag `false`.
+- Production order is fixed: secrets/configuration → database reachability → `scripts/migrate.py` → verify the migration succeeded → explicit `scripts/bootstrap_owner.py` when owner provisioning is needed → start the API with both startup flags `false` → check `/health` and `/ready`. Never start the API before the schema is at `head`.
 - CI proves it: fresh `upgrade head`, idempotent re-upgrade, single-head assertion, `alembic check` drift detection, and a downgrade/upgrade round-trip.
 - `make db-validate` runs the offline part locally (no database needed); `make check` includes it.
+- `make db-migrate-prod` is disabled: the Neon-era path is not approved for Production. Production deployments must use the standalone runner as the ordered pre-start step described in [docs/architecture/deployment.md](docs/architecture/deployment.md).
 
 ## API contract
 

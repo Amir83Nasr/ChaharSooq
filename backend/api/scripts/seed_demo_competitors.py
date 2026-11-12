@@ -23,6 +23,9 @@ refreshed, while real/manual links and their observations are never touched
 (products that already have a real link are skipped). Run via
 `make db-seed-demo` (which imports `data/parsina.csv` first) or, against a
 staging database explicitly, `make db-seed-demo-staging` (passes `--staging`).
+The script requires an explicit `DEPLOYMENT_ENV`; Development is allowed
+directly, Staging additionally requires `--staging`, and Production or an
+unknown identity is refused before a connection is opened.
 """
 
 from __future__ import annotations
@@ -42,6 +45,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.database import get_engine
+from app.core.deployment import NON_PRODUCTION_ENVS, STAGING, enforce_deployment_env
 from app.models import (
     CompetitorListing,
     CompetitorPriceObservation,
@@ -356,20 +360,29 @@ def main() -> int:
         "--staging",
         action="store_true",
         help=(
-            "Allow writing demo data to a database flagged APP_ENV=production. "
-            "Only use this against a staging database, never production."
+            "Required when DEPLOYMENT_ENV=staging. It allows writing demo data "
+            "to the Staging database, which also runs APP_ENV=production. "
+            "Never use it for Production."
         ),
     )
     args = parser.parse_args()
 
+    env = enforce_deployment_env("seed_demo_competitors", NON_PRODUCTION_ENVS)
     settings = get_settings()
     if settings.is_production and not args.staging:
         print(
-            "refusing to seed demo competitor prices into a production database",
+            "refusing to seed demo competitor prices into a production-mode database "
+            "(pass --staging only for the Staging environment)",
             file=sys.stderr,
         )
         return 1
-    if settings.is_production:
+    if env == STAGING and not args.staging:
+        print(
+            "refusing to seed demo competitor prices with DEPLOYMENT_ENV=staging without --staging",
+            file=sys.stderr,
+        )
+        return 1
+    if env == STAGING:
         print("staging mode: writing demo competitor prices to the staging database")
 
     with Session(get_engine()) as session:

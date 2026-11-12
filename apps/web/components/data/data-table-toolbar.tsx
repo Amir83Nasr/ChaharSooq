@@ -19,8 +19,12 @@ export function SearchInput({
   className,
   ...props
 }: SearchInputProps) {
+  // The flex basis is 0, so without a real min-width the row's fixed filters
+  // squeeze this box down to nothing (the input then spills out of it). A
+  // minimum width also makes the box take part in line breaking, so the
+  // filters wrap instead of crushing the search field.
   return (
-    <div className="relative min-w-0 flex-1">
+    <div className="relative min-w-44 flex-1 sm:min-w-56">
       <Search className="absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
       <InputPrimitive
         placeholder={placeholder}

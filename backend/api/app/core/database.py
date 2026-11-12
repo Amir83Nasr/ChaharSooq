@@ -29,9 +29,9 @@ def _ensure_pg_extensions(_target: MetaData, connection: Connection, **_kw: Any)
 
 
 def _build_engine() -> Engine:
-    from app.core.config import get_settings
+    from app.core.config import get_database_settings
 
-    url = get_settings().database_url
+    url = get_database_settings().database_url
     if url.startswith("sqlite"):
         return create_engine(
             url,

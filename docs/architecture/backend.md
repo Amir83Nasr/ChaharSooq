@@ -19,7 +19,7 @@ app/api/routes  →  app/services  →  app/repositories  →  app/core/database
 | `schemas`          | Pydantic boundary types for requests and responses.                                          |
 | `models`           | SQLAlchemy ORM models.                                                                       |
 | `integrations`     | External systems: Parsina, the dev mirror, the CSV fixture, competitor pages.                |
-| `core`             | Config, engine/session, security, rate limiting, migrations, scheduler, errors.              |
+| `core`             | Config, engine/session, security, rate limiting, migration lock/runner, scheduler, errors.   |
 
 Shared `__init__.py` files re-export the public names, so handlers import from the package
 (`from app.services import ProductService`). Standalone ops scripts live in `scripts/`;
@@ -65,11 +65,63 @@ Tests create the app through the same factory, so middleware and handlers stay c
   `Content-Security-Policy: frame-ancestors 'none'`, and a restrictive `Permissions-Policy`;
   production adds HSTS.
 - CORS uses an explicit origin allowlist and limited methods/headers.
-- Configuration loads repo-root env files first, then `backend/api/.env*`; production fails fast
-  when `SESSION_SECRET` is the dev default or shorter than 32 bytes.
+- Configuration loads repo-root env files first, then `backend/api/.env*`. `DatabaseSettings`
+  provides database and migration configuration for the engine, the migration runner, and Alembic;
+  the full `Settings` model inherits it and adds authentication, session, CORS, and sync behavior.
+  With `SECRETS_DIR` set, settings can also read `database_url`, `session_secret`, `owner_password`,
+  and `parsina_password` files, with environment variables taking precedence.
+- `APP_ENV=production` requires an explicit, recognised `DEPLOYMENT_ENV` (`development`,
+  `staging`, or `production`). A missing or unknown identity fails configuration before any
+  database connection; Development keeps the previous lenient behavior. `DEPLOYMENT_ENV` alone
+  decides whether Production-only rules apply.
+- In an explicitly identified Production deployment, `DATABASE_URL` must be a PostgreSQL URL with
+  an explicit host and must not target `localhost` or a loopback address (including `127.0.0.0/8`,
+  `::1`, and IPv4-mapped loopback). Validation uses SQLAlchemy's URL parser and never prints the
+  URL, host, or credentials.
+- `MIGRATION_LOCK_TIMEOUT_SECONDS` (default 60) bounds the wait for the PostgreSQL advisory lock.
+- `RUN_MIGRATIONS_ON_STARTUP` and `RUN_OWNER_BOOTSTRAP_ON_STARTUP` default to `true` in
+  Development/Staging and `false` in Production. Production rejects an explicit `true` for either
+  flag; the ordered CLI steps are the only supported path there.
+- Production fails fast when `SESSION_SECRET` is the dev default or shorter than 32 bytes, when
+  `OWNER_PASSWORD` is shorter than 8 characters, or when an explicitly identified Production
+  deployment has no explicit, non-loopback PostgreSQL database URL.
+- `SESSION_SECRET` is currently validated but not used by the opaque-token session implementation:
+  sessions are random tokens stored as SHA-256 hashes, not signed cookies. Removing it would be a
+  separate authentication design decision.
 
 See [authentication.md](authentication.md), [ADR 002](../adr/002-authentication.md), and
-[ADR 009](../adr/009-role-based-access.md).
+[ADR 009](../adr/009-role-based-access.md). Configuration and secret-file details are in
+[deployment.md](deployment.md#configuration-foundation-implemented).
+
+## Startup, migrations, and owner bootstrap
+
+The lifespan has two independent steps, with environment-specific defaults:
+
+| Environment | `RUN_MIGRATIONS_ON_STARTUP` | `RUN_OWNER_BOOTSTRAP_ON_STARTUP` |
+| ----------- | --------------------------- | -------------------------------- |
+| Development | `true`                      | `true`                           |
+| Staging     | `true`                      | `true`                           |
+| Production  | `false`                     | `false`                          |
+
+1. `upgrade_to_head()` when `RUN_MIGRATIONS_ON_STARTUP=true`.
+2. `bootstrap_owner()` when `RUN_OWNER_BOOTSTRAP_ON_STARTUP=true`.
+
+An explicit operator value is preserved, except that Production rejects an explicit `true` for
+either flag: the API may not change the schema or provision the owner there. Production runs the
+two CLI steps in the documented order, then starts the API with both flags `false`.
+
+Migrations are also available as a standalone command, `backend/api/scripts/migrate.py`. It and
+the lifespan call the same `apply_migrations()` path: `DatabaseSettings` for the URL, a
+short-lived engine, a PostgreSQL session-level advisory lock, and Alembic on that same connection
+through `config.attributes["connection"]`. The lock makes concurrent runners single-flight and is
+released on success, failure, or connection close. SQLite keeps the previous Development behavior;
+an explicit Production identity on a non-PostgreSQL dialect fails closed.
+
+The owner CLI, `backend/api/scripts/bootstrap_owner.py`, is the explicit Production-friendly path.
+It refuses `APP_ENV=test`, requires the `admins` table to already exist, never calls `create_all`,
+and is idempotent. Disabling either startup step does not affect the other. See
+[database.md](database.md#migrations-and-the-single-runner-lock) and
+[deployment.md](deployment.md#migrations).
 
 ## Product data and sync
 
@@ -86,7 +138,8 @@ chosen by environment in `app/integrations/sources.py`:
 environments. Staging may use the `DEV_DATABASE_URL` mirror to exercise the flow without Parsina
 credentials; Production must use the live source and must never point at a non-Production
 database. Environment identity and secrets come from the deployment platform, not `APP_ENV`.
-See [deployment.md](deployment.md).
+Protected database scripts read the explicit `DEPLOYMENT_ENV` and fail closed when it is missing
+or unknown. See [deployment.md](deployment.md#protected-database-commands-phase-0-quarantine).
 
 Rules shared by every source:
 

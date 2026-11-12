@@ -95,8 +95,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     settings = get_settings()
     if settings.app_env != "test":
-        upgrade_to_head()
-        bootstrap_owner()
+        if settings.run_migrations_on_startup:
+            upgrade_to_head()
+        if settings.run_owner_bootstrap_on_startup:
+            bootstrap_owner()
     scheduler = None if settings.app_env == "test" else build_scheduler()
     if scheduler is not None:
         scheduler.start()

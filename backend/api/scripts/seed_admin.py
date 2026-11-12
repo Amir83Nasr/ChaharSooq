@@ -2,7 +2,10 @@
 
 Reads OWNER_USERNAME / OWNER_PASSWORD (legacy ADMIN_USER / ADMIN_PASSWORD are
 accepted aliases) through the shared settings, so the seed script and API boot
-always agree. Run via `make db-seed` / `make db-seed-prod`.
+always agree. Run via `make db-seed` (Development); a direct run may use the
+Staging identity. Production owner provisioning is still an open decision, so
+this script refuses a Production identity. It also runs `create_all`, which is
+another reason it must never touch Production.
 """
 
 from __future__ import annotations
@@ -14,11 +17,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.core.config import get_settings
 from app.core.database import Base, get_engine
+from app.core.deployment import NON_PRODUCTION_ENVS, enforce_deployment_env
 from app.services.owner import OwnerBootstrapService
 from scripts.common import session_scope
 
 
 def main() -> None:
+    enforce_deployment_env("seed_admin", NON_PRODUCTION_ENVS)
     settings = get_settings()
     if not settings.owner_password:
         raise SystemExit("OWNER_PASSWORD must be set")

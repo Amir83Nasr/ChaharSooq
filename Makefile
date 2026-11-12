@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-.PHONY: build check clean-build clean-cache db-clear-products db-migrate db-migrate-prod db-seed db-seed-demo db-seed-demo-staging db-seed-parsina db-seed-prod db-sync-dev-to-prod db-sync-dev-to-staging sync-dev-to-prod sync-dev-to-staging sync-prod sync-staging dev-to-prod dev-to-staging db-up db-validate db-wait deploy-api dev-all dev-api dev-web docker-build docker-down docker-logs docker-up doctor help install lint openapi-check test test-e2e typecheck
+.PHONY: build check clean-build clean-cache db-bootstrap-owner db-clear-products db-migrate db-migrate-prod db-seed db-seed-demo db-seed-demo-staging db-seed-parsina db-seed-prod db-sync-dev-to-prod db-sync-dev-to-staging sync-dev-to-prod sync-dev-to-staging sync-prod sync-staging dev-to-prod dev-to-staging db-up db-validate db-wait deploy-api dev-all dev-api dev-web docker-build docker-down docker-logs docker-up doctor help install lint openapi-check test test-e2e typecheck
 
 # ─── HELP ─────────────────────────────────────────────────
 help: ## Show this help message
@@ -65,48 +65,56 @@ db-wait: ## Wait up to 20s for dev postgres to accept connections (no DB needed 
 	done; \
 	echo "postgres is not reachable on 127.0.0.1:$(DB_PORT) - run make db-up" >&2; exit 1
 
-db-migrate: db-up ## Apply Alembic migrations to dev database
-	cd backend/api && uv run --no-sync alembic upgrade head
+db-migrate: db-up ## Apply Alembic migrations to dev database (single advisory-locked runner)
+	DEPLOYMENT_ENV=development uv run --no-sync --project backend/api python backend/api/scripts/migrate.py
+
+db-bootstrap-owner: db-migrate ## Ensure the env-managed owner via the explicit CLI (no create_all)
+	DEPLOYMENT_ENV=development uv run --no-sync --project backend/api python backend/api/scripts/bootstrap_owner.py
 
 db-seed: db-migrate ## Ensure the env-managed owner (OWNER_USERNAME, OWNER_PASSWORD)
-	uv run --no-sync --project backend/api python backend/api/scripts/seed_admin.py
+	DEPLOYMENT_ENV=development uv run --no-sync --project backend/api python backend/api/scripts/seed_admin.py
 
 db-seed-parsina: db-migrate ## Upsert data/parsina.csv into dev DB (keeps product ids + links)
-	uv run --no-sync --project backend/api python backend/api/scripts/seed_parsina_products.py
+	DEPLOYMENT_ENV=development uv run --no-sync --project backend/api python backend/api/scripts/seed_parsina_products.py
 
 db-seed-demo: db-seed-parsina ## Fill dev demo competitor prices, daily changes, weights and price bounds
-	uv run --no-sync --project backend/api python backend/api/scripts/seed_demo_competitors.py
+	DEPLOYMENT_ENV=development uv run --no-sync --project backend/api python backend/api/scripts/seed_demo_competitors.py
 
-db-clear-products: db-migrate ## Delete all products + competitor listings from dev DB (refuses production)
-	uv run --no-sync --project backend/api python backend/api/scripts/clear_products.py
+db-clear-products: db-migrate ## Delete all products + competitor listings from dev DB (dev only)
+	DEPLOYMENT_ENV=development uv run --no-sync --project backend/api python backend/api/scripts/clear_products.py
 
-# ─── DATABASE: PROD (NEON) ────────────────────────────────
-# NOTE: never `set -a; . .env` here — DATABASE_URL contains `&` and shell
-# sourcing dies with `parse error near '&'`, silently falling back to the
-# local dev database. `uv --env-file` parses dotenv safely instead.
-db-migrate-prod: ## Manually apply migrations to prod Neon (fallback; deploys auto-migrate on boot)
-	cd backend/api && uv run --no-sync --env-file $(CURDIR)/.env.production alembic upgrade head
+# ─── DATABASE: LEGACY PROD (DISABLED) ─────────────────────
+# These targets were written for the Neon-era production database. Production is
+# now `market-linux` and has no approved migration, owner-seeding, or data-sync
+# path yet, so every legacy production write target fails closed instead of
+# guessing a target. See docs/architecture/deployment.md.
+db-migrate-prod: ## DISABLED — legacy Neon-era migration path (see deployment docs)
+	@echo "db-migrate-prod is disabled: no Production migration path is approved yet." >&2
+	@echo "Migrations remain Alembic-based; Production needs the controlled single-runner step." >&2
+	@echo "See docs/architecture/deployment.md." >&2
+	@exit 1
 
-db-seed-prod: ## Ensure the prod owner (reads OWNER_PASSWORD from .env.production)
-	@test -f $(CURDIR)/.env.production || { echo ".env.production is required" >&2; exit 1; }
-	uv run --no-sync --project backend/api --env-file $(CURDIR)/.env.production python backend/api/scripts/seed_admin.py
+db-seed-prod: ## DISABLED — legacy Neon-era owner bootstrap (see deployment docs)
+	@echo "db-seed-prod is disabled: Production owner provisioning is still an open decision." >&2
+	@echo "Never reuse the Neon-era .env.production file. See docs/architecture/deployment.md." >&2
+	@exit 1
 
-# ─── DATABASE: SYNC DEV → PROD ─────────────────────────────
-db-sync-dev-to-prod: ## Upsert dev data + missing competitor links into prod Neon (never deletes; reads .env.production)
-	@test -f $(CURDIR)/.env.production || { echo ".env.production is required" >&2; exit 1; }
-	uv run --no-sync --project backend/api --env-file $(CURDIR)/.env.production python backend/api/scripts/sync_dev_to_prod.py $(if $(filter 1,$(YES)),--yes,)
+db-sync-dev-to-prod: ## DISABLED — legacy dev → Neon production sync (see deployment docs)
+	@echo "db-sync-dev-to-prod is disabled: there is no approved dev → Production data path." >&2
+	@echo "Use 'make db-sync-dev-to-staging' for Staging. See docs/architecture/deployment.md." >&2
+	@exit 1
 
 db-sync-dev-to-staging: ## Upsert dev data into staging Neon, then fill demo competitor prices (reads backend/api/.env.staging)
 	@test -f $(CURDIR)/backend/api/.env.staging || { echo "backend/api/.env.staging is required" >&2; exit 1; }
-	uv run --no-sync --project backend/api --env-file $(CURDIR)/backend/api/.env.staging python backend/api/scripts/sync_dev_to_prod.py $(if $(filter 1,$(YES)),--yes,)
-	uv run --no-sync --project backend/api --env-file $(CURDIR)/backend/api/.env.staging python backend/api/scripts/seed_demo_competitors.py --staging
+	DEPLOYMENT_ENV=staging uv run --no-sync --project backend/api --env-file $(CURDIR)/backend/api/.env.staging python backend/api/scripts/sync_dev_to_prod.py $(if $(filter 1,$(YES)),--yes,)
+	DEPLOYMENT_ENV=staging uv run --no-sync --project backend/api --env-file $(CURDIR)/backend/api/.env.staging python backend/api/scripts/seed_demo_competitors.py --staging
 
 db-seed-demo-staging: ## Fill staging Neon with demo competitor prices (reads backend/api/.env.staging)
 	@test -f $(CURDIR)/backend/api/.env.staging || { echo "backend/api/.env.staging is required" >&2; exit 1; }
-	uv run --no-sync --project backend/api --env-file $(CURDIR)/backend/api/.env.staging python backend/api/scripts/seed_demo_competitors.py --staging
+	DEPLOYMENT_ENV=staging uv run --no-sync --project backend/api --env-file $(CURDIR)/backend/api/.env.staging python backend/api/scripts/seed_demo_competitors.py --staging
 
-# ─── Aliases (dev → prod/staging sync) ───────────────────
-sync-dev-to-prod sync-prod dev-to-prod: db-sync-dev-to-prod ## Alias for db-sync-dev-to-prod
+# ─── Aliases (legacy prod sync — disabled) ───────────────
+sync-dev-to-prod sync-prod dev-to-prod: db-sync-dev-to-prod ## DISABLED alias for db-sync-dev-to-prod
 sync-dev-to-staging sync-staging dev-to-staging: db-sync-dev-to-staging ## Alias for db-sync-dev-to-staging
 
 # ─── DATABASE: VALIDATE (NO DB NEEDED) ───────────────────

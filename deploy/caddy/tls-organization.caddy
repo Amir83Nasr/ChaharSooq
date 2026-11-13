@@ -3,13 +3,22 @@
 # compose.production.yml. Files live outside the repository (CHARSOOQ_TLS_DIR,
 # default /etc/charsooq/tls) and must be readable by the Caddy container only.
 #
-# Required names and content by default:
-#   /etc/caddy/certs/fullchain.pem  leaf certificate + issuing intermediates
-#   /etc/caddy/certs/privkey.pem    matching private key, mode 0600 on the host
+# Required layout by default (the host directory is CHARSOOQ_TLS_DIR, default
+# /etc/charsooq/tls; see docs/operations/tls-certificate-lifecycle.md):
+#   current -> versions/<stamp>            one atomic symlink, the only pointer
+#   versions/<stamp>/fullchain.pem         leaf certificate + intermediates
+#   versions/<stamp>/privkey.pem           matching private key, mode 0600
+#
+# `activate_certificate.py` validates a staged pair and switches `current` with
+# a single rename, so Caddy can never start from a half-switched pair. Keep old
+# version directories for rollback; never edit an active version in place.
 #
 # Both paths can be overridden (CHARSOOQ_TLS_CERT_FILE / CHARSOOQ_TLS_KEY_FILE)
-# so the same file can be validated on a workstation with temporary material.
+# so a staged pair can be validated before activation. Compose does not forward
+# these variables by default: an empty value would leave the tls directive
+# without arguments. Supply them with `docker compose run -e` (see the lifecycle
+# runbook), not as an empty default.
 #
 # This mode also covers the IP SAN case: the certificate must contain the exact
 # address used in CHARSOOQ_SITE_HOST when that value is an IP.
-tls {$CHARSOOQ_TLS_CERT_FILE:/etc/caddy/certs/fullchain.pem} {$CHARSOOQ_TLS_KEY_FILE:/etc/caddy/certs/privkey.pem}
+tls {$CHARSOOQ_TLS_CERT_FILE:/etc/caddy/certs/current/fullchain.pem} {$CHARSOOQ_TLS_KEY_FILE:/etc/caddy/certs/current/privkey.pem}

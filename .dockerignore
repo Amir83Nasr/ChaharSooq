@@ -28,3 +28,11 @@ compose.yml
 compose.production.yml
 # Reverse-proxy configuration is runtime material for the host, not image input.
 deploy
+# Defense in depth: TLS material must never enter an image even if someone puts
+# it in the build context. Certificates and keys live outside the repository.
+**/*.pem
+**/*.key
+**/*.crt
+**/*.cer
+**/*.p12
+**/*.pfx

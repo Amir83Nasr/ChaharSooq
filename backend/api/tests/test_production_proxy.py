@@ -97,8 +97,8 @@ def test_no_certificate_material_or_private_key_is_committed() -> None:
 def test_organization_tls_defaults_to_the_container_mount_and_is_overridable() -> None:
     tls = _code("tls-organization.caddy")
 
-    assert "{$CHARSOOQ_TLS_CERT_FILE:/etc/caddy/certs/fullchain.pem}" in tls
-    assert "{$CHARSOOQ_TLS_KEY_FILE:/etc/caddy/certs/privkey.pem}" in tls
+    assert "{$CHARSOOQ_TLS_CERT_FILE:/etc/caddy/certs/current/fullchain.pem}" in tls
+    assert "{$CHARSOOQ_TLS_KEY_FILE:/etc/caddy/certs/current/privkey.pem}" in tls
 
 
 def test_http3_is_not_advertised() -> None:

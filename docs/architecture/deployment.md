@@ -449,15 +449,15 @@ so Caddy cannot reconfigure itself or manage other containers.
 
 These have no default in `compose.production.yml`; Compose refuses to start without them.
 
-| Variable                               | Meaning                                                                                                          |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `CHARSOOQ_PROXY_BIND_IP`               | Approved internal IP that Caddy binds `80` and `443` to (the reported `172.30.2.2` is **not** approved)          |
-| `CHARSOOQ_SITE_HOST`                   | Internal DNS name or IP users open, without scheme or port; the site is always `https://` plus this value        |
-| `CHARSOOQ_EDGE_SUBNET`                 | Conflict-checked CIDR for the `web` ↔ `api` network                                                              |
-| `CHARSOOQ_WEB_EDGE_IP`                 | `web`'s fixed address inside that CIDR; also the API's only trusted proxy                                        |
-| `CHARSOOQ_TLS_MODE`                    | Optional, default `organization`; the other supported value is `internal-ca`                                     |
-| `CHARSOOQ_TLS_DIR`                     | Optional, default `/etc/charsooq/tls`; host directory with certificate files                                     |
-| `CHARSOOQ_TLS_CERT_FILE` / `_KEY_FILE` | Optional; certificate/key paths inside the container, default `/etc/caddy/certs/fullchain.pem` and `privkey.pem` |
+| Variable                               | Meaning                                                                                                                                                                                                                                                     |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CHARSOOQ_PROXY_BIND_IP`               | Approved internal IP that Caddy binds `80` and `443` to (the reported `172.30.2.2` is **not** approved)                                                                                                                                                     |
+| `CHARSOOQ_SITE_HOST`                   | Internal DNS name or IP users open, without scheme or port; the site is always `https://` plus this value                                                                                                                                                   |
+| `CHARSOOQ_EDGE_SUBNET`                 | Conflict-checked CIDR for the `web` ↔ `api` network                                                                                                                                                                                                         |
+| `CHARSOOQ_WEB_EDGE_IP`                 | `web`'s fixed address inside that CIDR; also the API's only trusted proxy                                                                                                                                                                                   |
+| `CHARSOOQ_TLS_MODE`                    | Optional, default `organization`; the other supported value is `internal-ca`                                                                                                                                                                                |
+| `CHARSOOQ_TLS_DIR`                     | Optional, default `/etc/charsooq/tls`; host directory with `current` (symlink) and `versions/<stamp>/`                                                                                                                                                      |
+| `CHARSOOQ_TLS_CERT_FILE` / `_KEY_FILE` | Optional container-path overrides read by the Caddyfile. Compose does not forward them by default (an empty value would break the `tls` directive); use `docker compose run -e` via `make prod-caddy-validate CERT_FILE=… KEY_FILE=…` for staged validation |
 
 `make prod-config` substitutes RFC 5737 documentation addresses (`192.0.2.0/24`) to validate the
 file structure. That run proves the Compose file is well formed; it does **not** prove a valid
@@ -497,7 +497,8 @@ repository.
   documented fallback, with `CHARSOOQ_SITE_HOST` set to exactly that address.
 - **Organization CA.** Provide the leaf certificate **with its issuing intermediates** in
   `fullchain.pem`. The private key must be mode `0600` on the host, readable by the Caddy
-  container, and never in Git. Material lives in `CHARSOOQ_TLS_DIR` (outside the repository).
+  container, and never in Git. Material lives in `CHARSOOQ_TLS_DIR` (outside the repository) under
+  `versions/<stamp>/`, and Caddy reads it through the single `current` symlink.
 - **Caddy local CA.** This is not a temporary self-signed leaf: the local CA is persistent state in
   the `caddy_data` volume (`charsooq-production_caddy_data`). Its root certificate is at
   `/data/caddy/pki/authorities/local/root.crt` inside the container. Extract it read-only and hand
@@ -555,14 +556,31 @@ The real chain and what each hop is allowed to assert:
 
 #### Certificate and Root CA operations
 
+The full procedure — intake, installation, validation, rotation, rollback, backup/restore, expiry
+checks, and the first-deployment checklist — is
+[operations/tls-certificate-lifecycle.md](../operations/tls-certificate-lifecycle.md). The policy is
+[ADR 013](../adr/013-tls-certificate-lifecycle.md).
+
 - Certificate material and CA private keys are never stored in this repository. `.gitignore` also
-  blocks `*.pem`, `*.key`, `*.crt`, `*.cer`, `*.der`, `*.p12`, and `*.pfx` so an accidental copy
-  cannot be committed.
-- Replace certificate files on the host, then restart the proxy:
+  blocks `*.pem`, `*.key`, `*.crt`, `*.cer`, `*.der`, `*.p12`, `*.pfx`, `*.csr`, and `*.srl` so an
+  accidental copy cannot be committed.
+- Validate before installing: `make tls-validate CERT=… KEY=… HOST=… CA_FILE=…` runs
+  `deploy/tls/validate_certificate.py` offline (files, key match, chain, expiry, SAN, permissions)
+  and prints no key material. `make prod-caddy-validate` then runs the pinned image's
+  `caddy validate`, which fails on missing files or a key mismatch.
+- Activate with `activate_certificate.py` (`make tls-activate`): it installs the pair into a new
+  `versions/<stamp>/`, validates it, and swaps the single `current` symlink with one atomic
+  `os.replace`. Caddy reads `current/fullchain.pem` and `current/privkey.pem`, so it can never start
+  with a mismatched pair. Then restart the proxy:
   `docker compose -f compose.production.yml restart caddy`. The admin API is off, so there is no
-  hot reload.
+  `caddy reload`. A `SIGUSR1` signal can reload in-process; it is verified with the 2.11.9 binary but
+  is not the approved path until rehearsed against the container in Staging.
+- Keep previous version directories; rollback repoints `current` through `make tls-rollback` and does
+  not copy files by hand.
+- Back up `caddy_data` and `caddy_config` (encrypted, off-host, key held separately) and rehearse a
+  restore. Losing the `internal-ca` root key is a security incident, not a routine CA replacement.
 - Treat renewal as an operational task with an owner and a calendar entry; renewal policy is an open
-  decision (see below).
+  decision (see below). No CA automation is assumed.
 
 #### Future setup steps
 
@@ -573,7 +591,10 @@ Nothing below has been run against `market-linux`. The order is the intended run
    root-CA distribution to clients.
 3. Set `CHARSOOQ_PROXY_BIND_IP`, `CHARSOOQ_SITE_HOST`, `CHARSOOQ_EDGE_SUBNET`, and
    `CHARSOOQ_WEB_EDGE_IP` in the deployment environment (not in Git) and run
-   `make prod-config` with the real values.
+   `make prod-config` with the real values. Install the certificate material and run
+   `make tls-validate` plus `make prod-caddy-validate` as described in
+   [tls-certificate-lifecycle.md](../operations/tls-certificate-lifecycle.md); do not start with
+   unvalidated material or a placeholder certificate.
 4. Verify the `edge` subnet against the host routing table and Docker address pools; adjust before
    the first start, not after. Changing the CIDR on an existing stack requires recreating that
    network (`docker compose down` keeps the named volumes).
@@ -584,7 +605,8 @@ Nothing below has been run against `market-linux`. The order is the intended run
    the Compose networks must fail.
 6. Confirm `docker compose -f compose.production.yml ps` shows `caddy` as the only service with
    published ports. Whenever `web` is recreated, restart `caddy` so it resolves the new address.
-7. Only after that: backups, monitoring, and the controlled release flow.
+7. Only after that: the TLS backup schedule, expiry checks, and the controlled release flow from
+   [tls-certificate-lifecycle.md](../operations/tls-certificate-lifecycle.md).
 
 #### Current limitations
 
@@ -598,6 +620,9 @@ Nothing below has been run against `market-linux`. The order is the intended run
   headers but omits `Cookie`, `Set-Cookie`, `Authorization`, and `Proxy-Authorization` unless
   `log_credentials` is enabled. No snippet enables it; a static test guards this.
 - A single Caddy instance: no HA pair, and no zero-downtime config reload (admin API off).
+- Caddy runs as the image default user (root inside the container). Non-root is technically feasible
+  but needs a UID decision, a verified low-port sysctl, and a rehearsed chown of the CA volumes; see
+  [the non-root evaluation](../operations/tls-certificate-lifecycle.md#101-non-root-evaluation-not-implemented).
 - Caddy resolves `web` when its configuration loads. Recreating `web` (for example after an image
   update) can give it a new address on `proxy`, so `caddy` must be restarted afterwards:
   `docker compose -f compose.production.yml restart caddy`. Switching to a `dynamic a` upstream is
@@ -605,7 +630,10 @@ Nothing below has been run against `market-linux`. The order is the intended run
 - No IPv6, no HTTP/3, no OCSP stapling policy, and no WAF/rate limiting at the proxy. API login rate
   limiting remains in-process per worker unless `REDIS_URL` is configured.
 - No automatic certificate renewal is implemented for organization-issued certificates; Caddy's
-  local CA renews its own leaf certificates automatically.
+  local CA renews its own leaf certificates automatically. Rotation is manual and documented in
+  [tls-certificate-lifecycle.md](../operations/tls-certificate-lifecycle.md).
+- A certificate change needs a proxy restart (admin API off). A `SIGUSR1` reload is verified with the
+  pinned binary but not yet rehearsed inside the container; until then, expect a short outage.
 - Parsina connectivity is unchanged and is not routed through the proxy.
 
 ### Images
@@ -622,11 +650,16 @@ Nothing below has been run against `market-linux`. The order is the intended run
 
 ### Backups and recovery (next task)
 
-Backups are **not implemented** in this task. The persistent volume is
+Database backups are **not implemented** in this task. The persistent volume is
 `charsooq-production_pgdata`; `make prod-down` stops containers and keeps it, and no default target
 removes volumes. The next task must define scheduled `pg_dump`/base backups, encryption, off-host
 retention, and a rehearsed restore. Take a verified backup before any destructive or irreversible
 migration.
+
+TLS-specific backup and restore (the `caddy_data`/`caddy_config` volumes and organization
+certificate material) is designed and rehearsed offline in
+[tls-certificate-lifecycle.md](../operations/tls-certificate-lifecycle.md). It is not a database
+backup and does not satisfy the requirement above.
 
 ### TLS status
 
@@ -634,7 +667,9 @@ The reverse proxy and TLS foundation is configured but **not enabled**: no certi
 installed, no DNS name is approved, and nothing is deployed. The API no longer sends HSTS (Caddy
 owns it), the session cookie is already `Secure` in production application mode, and the only
 published ports belong to Caddy. Do not expose `db`, `api`, or `web` directly, and do not start
-Production without deciding the TLS shape described above.
+Production without deciding the TLS shape described above. The lifecycle — install, rotation,
+rollback, backup/restore, expiry checks, and the first-deployment verification matrix — is
+[operations/tls-certificate-lifecycle.md](../operations/tls-certificate-lifecycle.md).
 
 ### Remaining before a real server deployment
 
@@ -647,7 +682,10 @@ Production without deciding the TLS shape described above.
   certificate material (or decide `internal-ca` and distribute the root CA).
 - Verify that ports `80`/`443` are free and that the approved bind address is the correct internal
   interface; confirm the `edge` subnet does not collide with the organization's routes.
-- Implement and rehearse backup/restore.
+- Rehearse rotation and rollback on the host with temporary material, record the served
+  fingerprints, and put the encrypted TLS backup/expiry-check schedule in place.
+- Implement and rehearse **database** backup/restore; TLS backup/restore is specified and was
+  rehearsed offline but is not a database backup.
 - Verify Docker Engine/Compose versions and resource limits on `market-linux`, then perform the
   controlled first deployment. No such deployment has been performed or validated in this task.
 

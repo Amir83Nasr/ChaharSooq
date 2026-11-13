@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-.PHONY: build check clean-build clean-cache db-bootstrap-owner db-clear-products db-migrate db-migrate-prod db-seed db-seed-demo db-seed-demo-staging db-seed-parsina db-seed-prod db-sync-dev-to-prod db-sync-dev-to-staging sync-dev-to-prod sync-dev-to-staging sync-prod sync-staging dev-to-prod dev-to-staging db-up db-validate db-wait deploy-api dev-all dev-api dev-web docker-build docker-down docker-logs docker-up doctor help install lint openapi-check test test-e2e typecheck prod-bootstrap-owner prod-build prod-config prod-down prod-logs prod-migrate prod-provision prod-ps prod-up
+.PHONY: build check clean-build clean-cache db-bootstrap-owner db-clear-products db-migrate db-migrate-prod db-seed db-seed-demo db-seed-demo-staging db-seed-parsina db-seed-prod db-sync-dev-to-prod db-sync-dev-to-staging sync-dev-to-prod sync-dev-to-staging sync-prod sync-staging dev-to-prod dev-to-staging db-up db-validate db-wait deploy-api dev-all dev-api dev-web docker-build docker-down docker-logs docker-up doctor help install lint openapi-check test test-e2e typecheck prod-bootstrap-owner prod-build prod-caddy-validate prod-config prod-down prod-logs prod-migrate prod-provision prod-ps prod-up tls-activate tls-rollback tls-validate
 
 # ─── HELP ─────────────────────────────────────────────────
 help: ## Show this help message
@@ -21,6 +21,7 @@ help: ## Show this help message
 COMPOSE_FILE ?= compose.yml ## Compose file used by up/down/logs
 COMPOSE_PROD_FILE ?= compose.production.yml ## Production compose file (separate from development)
 CHARSOOQ_SECRETS_DIR ?= /etc/charsooq/secrets ## Host directory of production secret files (never committed)
+CHARSOOQ_TLS_DIR ?= /etc/charsooq/tls ## Host directory of organization TLS material (never committed)
 DB_PORT ?= 5433 ## Host port of the dev postgres db-wait/dev-api expect
 YES ?= 0 ## Set YES=1 to skip the confirmation prompt for db-sync-dev-to-{prod,staging}
 
@@ -166,6 +167,60 @@ PROD_STRUCTURAL_ENV = \
 prod-config: ## Validate the production compose file (no secrets needed)
 	$(PROD_STRUCTURAL_ENV) docker compose -f $(COMPOSE_PROD_FILE) config --quiet
 	@echo "production compose: structure valid (documentation values only)"
+
+# Offline certificate validation. Reads local files only: no network, no key
+# material printed, no issuance. Supply the host that must appear in the leaf
+# SAN and, to verify the chain to the organization root, CA_FILE.
+tls-validate: ## Validate a certificate/key pair offline (CERT= KEY= HOST= [CA_FILE=] [MIN_DAYS=])
+	@test -n "$(CERT)" && test -n "$(KEY)" && test -n "$(HOST)" || { \
+		echo "usage: make tls-validate CERT=<fullchain.pem> KEY=<privkey.pem> HOST=<name-or-ip> [CA_FILE=<root.crt>] [MIN_DAYS=30]"; \
+		exit 2; \
+	}
+	python3 deploy/tls/validate_certificate.py --cert "$(CERT)" --key "$(KEY)" --host "$(HOST)" \
+		$(if $(CA_FILE),--ca-file "$(CA_FILE)") $(if $(MIN_DAYS),--min-remaining-days "$(MIN_DAYS)")
+
+# Stages the pair under versions/<stamp>, validates it, then switches the single
+# `current` symlink atomically. Run with sudo; restart caddy afterwards.
+tls-activate: ## Validate and atomically activate a certificate pair (CERT= KEY= HOST= [STAMP=] [CA_FILE=])
+	@test -n "$(CERT)" && test -n "$(KEY)" && test -n "$(HOST)" || { \
+		echo "usage: make tls-activate CERT=<fullchain.pem> KEY=<privkey.pem> HOST=<name-or-ip> [STAMP=<version>] [CA_FILE=<root.crt>] [MIN_DAYS=30] [CHARSOOQ_TLS_DIR=/etc/charsooq/tls]"; \
+		exit 2; \
+	}
+	@set --; \
+	if [ -n "$(STAMP)" ]; then set -- "$$@" --stamp "$(STAMP)"; fi; \
+	if [ -n "$(CA_FILE)" ]; then set -- "$$@" --ca-file "$(CA_FILE)"; fi; \
+	if [ -n "$(MIN_DAYS)" ]; then set -- "$$@" --min-remaining-days "$(MIN_DAYS)"; fi; \
+	python3 deploy/tls/activate_certificate.py \
+		--tls-dir "$(strip $(CHARSOOQ_TLS_DIR))" \
+		--cert "$(CERT)" --key "$(KEY)" --host "$(HOST)" "$$@"
+
+tls-rollback: ## Atomically point current back to a kept version (STAMP= HOST= [CA_FILE=])
+	@test -n "$(STAMP)" && test -n "$(HOST)" || { \
+		echo "usage: make tls-rollback STAMP=<version> HOST=<name-or-ip> [CA_FILE=<root.crt>] [CHARSOOQ_TLS_DIR=/etc/charsooq/tls]"; \
+		exit 2; \
+	}
+	@set --; \
+	if [ -n "$(CA_FILE)" ]; then set -- "$$@" --ca-file "$(CA_FILE)"; fi; \
+	python3 deploy/tls/activate_certificate.py \
+		--tls-dir "$(strip $(CHARSOOQ_TLS_DIR))" \
+		--rollback-to "$(STAMP)" --host "$(HOST)" "$$@"
+
+# Runs the pinned image's own binary against the committed config, with the
+# deployment environment's site host, TLS mode, and certificate mount. Pass
+# CERT_FILE/KEY_FILE as container paths to validate a staged pair before it
+# replaces the live one (compose does not forward these variables by default;
+# an empty value would leave the tls directive with too few arguments).
+prod-caddy-validate: ## Validate the Caddyfile in the pinned Caddy image (needs real TLS material)
+	@if { [ -n "$(CERT_FILE)" ] && [ -z "$(KEY_FILE)" ]; } || { [ -z "$(CERT_FILE)" ] && [ -n "$(KEY_FILE)" ]; }; then \
+		echo "CERT_FILE and KEY_FILE must be provided together"; \
+		exit 2; \
+	fi
+	@flags=""; \
+	if [ -n "$(CERT_FILE)" ]; then \
+		flags="-e CHARSOOQ_TLS_CERT_FILE=$(CERT_FILE) -e CHARSOOQ_TLS_KEY_FILE=$(KEY_FILE)"; \
+	fi; \
+	docker compose -f $(COMPOSE_PROD_FILE) run --rm --no-deps $$flags caddy \
+		caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 
 prod-build: ## Build production API and web images from this commit
 	docker compose -f $(COMPOSE_PROD_FILE) build

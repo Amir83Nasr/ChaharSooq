@@ -60,6 +60,8 @@ venv/
 *.der
 *.p12
 *.pfx
+*.csr
+*.srl
 
 # ─── OS / EDITOR CLUTTER ──────────────────────────────────
 .DS_Store

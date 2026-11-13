@@ -151,9 +151,21 @@ docker-logs: ## Follow Docker Compose logs
 # ─── DOCKER: PRODUCTION ───────────────────────────────────
 # Structural validation does not read secret files, so it works on a machine
 # without production secrets. Only the run targets need the real files.
+#
+# Production deployment values have no defaults on purpose (a wrong bind address
+# or trusted proxy must not be guessable), so structure validation supplies
+# RFC 5737 documentation addresses. They prove the file is well formed; they are
+# not a Production configuration. Set the real values in the deployment
+# environment before any run target.
+PROD_STRUCTURAL_ENV = \
+	CHARSOOQ_PROXY_BIND_IP=192.0.2.10 \
+	CHARSOOQ_SITE_HOST=charsooq.example.test \
+	CHARSOOQ_EDGE_SUBNET=192.0.2.0/24 \
+	CHARSOOQ_WEB_EDGE_IP=192.0.2.11
+
 prod-config: ## Validate the production compose file (no secrets needed)
-	docker compose -f $(COMPOSE_PROD_FILE) config --quiet
-	@echo "production compose: structure valid"
+	$(PROD_STRUCTURAL_ENV) docker compose -f $(COMPOSE_PROD_FILE) config --quiet
+	@echo "production compose: structure valid (documentation values only)"
 
 prod-build: ## Build production API and web images from this commit
 	docker compose -f $(COMPOSE_PROD_FILE) build

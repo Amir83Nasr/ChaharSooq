@@ -26,3 +26,5 @@ Makefile
 Dockerfile*
 compose.yml
 compose.production.yml
+# Reverse-proxy configuration is runtime material for the host, not image input.
+deploy

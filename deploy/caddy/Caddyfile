@@ -1,0 +1,31 @@
+# Production Caddyfile — internal reverse proxy and TLS terminator.
+#
+# One site, one upstream: the Next.js container. There is deliberately no route
+# to the API or PostgreSQL, so browsers never talk to FastAPI directly.
+#
+# TLS mode is selected when the container starts, with CHARSOOQ_TLS_MODE:
+#   organization  certificate files issued by the organization (or a public CA)
+#   internal-ca   certificate from Caddy's local CA; every client must trust
+#                 Caddy's root CA first (see docs/architecture/deployment.md)
+#
+# The site address is always https:// plus CHARSOOQ_SITE_HOST, so an HTTP-only
+# Production is not expressible here. Caddy also listens on :80 and redirects to
+# HTTPS (automatic HTTPS); only that listener is plain HTTP.
+{
+	# No admin API: configuration changes go through this file and a restart.
+	admin off
+	# Never try to install a CA into the container trust store. Client trust is
+	# managed by IT on the clients, not inside a read-only container.
+	skip_install_trust
+	servers {
+		# No HTTP/3: compose publishes only TCP 80/443, and QUIC/IPv6 are open
+		# decisions. Without this, Caddy advertises alt-svc h3 on a UDP port that
+		# nothing is listening on.
+		protocols h1 h2
+	}
+}
+
+https://{$CHARSOOQ_SITE_HOST} {
+	import tls-{$CHARSOOQ_TLS_MODE}.caddy
+	import site.caddy
+}

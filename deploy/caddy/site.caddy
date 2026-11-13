@@ -1,0 +1,38 @@
+# Shared site body, imported into the single HTTPS site in ./Caddyfile.
+# Keep the upstream list limited to the Next.js container. Do not add the API or
+# PostgreSQL here: the request path is Caddy -> web -> /api/* rewrite -> api.
+
+encode zstd gzip
+
+# HSTS has exactly one owner: this proxy. The API no longer sets it.
+# includeSubDomains and preload stay off until every subdomain and the DNS/TLS
+# policy are confirmed by IT (see the open decisions in the deployment doc).
+header {
+	Strict-Transport-Security "max-age=31536000"
+	-Server
+}
+
+# Access and error logs go to stdout and are collected by `docker compose logs`.
+log {
+	output stdout
+}
+
+reverse_proxy web:3000 {
+	# Never forward client-supplied forwarding values. Caddy already ignores
+	# incoming X-Forwarded-* by default (no trusted_proxies is configured), and
+	# these lines make the rewrite explicit. They also drop the RFC 7239
+	# `Forwarded` header and other IP hints that Caddy would otherwise pass
+	# through untouched, so Next.js and FastAPI only ever see Caddy's values.
+	# Caddy warns that the X-Forwarded-* sets duplicate its defaults; they stay
+	# because a future global `trusted_proxies` would otherwise change behaviour
+	# to "augment the client's header" without any visible config change here.
+	header_up X-Forwarded-For {remote_host}
+	header_up X-Forwarded-Proto {scheme}
+	header_up X-Forwarded-Host {host}
+	# The published HTTPS port is fixed (443:443); Next.js would otherwise fill
+	# this header with its own internal port (3000).
+	header_up X-Forwarded-Port 443
+	header_up -Forwarded
+	header_up -X-Real-IP
+	header_up -X-Forwarded-Server
+}

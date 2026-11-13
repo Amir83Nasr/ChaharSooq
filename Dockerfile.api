@@ -36,8 +36,11 @@ USER api
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready')"
-# Multi-worker uvicorn behind the compose network: --proxy-headers trusts the
-# platform proxy for client IPs (rate limiting), --no-server-header hides the
-# version banner. Workers are capped at 2 — the sync lock is DB-backed so
-# workers never double-run, and memory stays small on a single host.
+# Multi-worker uvicorn behind the compose network: --proxy-headers trusts client
+# identity headers only from the peer named by FORWARDED_ALLOW_IPS (uvicorn's own
+# default is 127.0.0.1,::1, i.e. no container peer). Production sets it to the
+# web container's fixed address; a wildcard is never allowed, because the login
+# rate limiter keys on the client address. --no-server-header hides the version
+# banner. Workers are capped at 2 — the sync lock is DB-backed so workers never
+# double-run, and memory stays small on a single host.
 CMD ["uvicorn", "app.main:app", "--app-dir", "backend/api", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--proxy-headers", "--no-server-header"]

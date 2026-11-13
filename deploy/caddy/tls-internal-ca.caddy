@@ -1,0 +1,13 @@
+# TLS mode `internal-ca`: Caddy issues the site certificate from its local CA.
+#
+# This is the fallback when the organization has no internal CA. It is not a
+# temporary self-signed leaf: the local CA is persistent state in the
+# `caddy_data` volume, and every client must trust its root certificate before
+# the site is usable. The root CA private key never leaves that volume and must
+# never be copied into this repository or an image.
+#
+# Root certificate path inside the container:
+#   /data/caddy/pki/authorities/local/root.crt
+# Distribution to clients is an IT decision (for example Group Policy). Do not
+# enable strict certificate validation in a browser fleet until it is installed.
+tls internal

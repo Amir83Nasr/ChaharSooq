@@ -78,11 +78,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # Never allow this admin panel to be framed elsewhere.
         response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-        # HSTS is only meaningful behind TLS; only send in production so
-        # local HTTP dev never caches a sticky HTTPS upgrade. max-age stays
-        # at the recommended one year (31536000).
-        if get_settings().is_production:
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        # HSTS is not set here. The TLS terminator owns it (Caddy, see
+        # deploy/caddy/site.caddy), because only that layer knows whether the
+        # browser connection is really HTTPS. A second HSTS header from the API
+        # would duplicate and could contradict the proxy's policy.
         return response
 
 

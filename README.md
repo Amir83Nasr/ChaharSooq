@@ -311,11 +311,15 @@ with mode `0400`. Never commit these files or place them in an image.
 See [docs/architecture/deployment.md](docs/architecture/deployment.md#production-secrets) for the
 exact commands, rotation steps, and verification.
 
-No host port is published by this stack. `db`, `provision`, `migrate`, `api`, and `web` listen only on
-internal Compose networks (`web:3000`, `api:8000`, `db:5432`). TLS termination and the reverse proxy
-are a separate task; backup tooling and restore drills are not implemented yet. PostgreSQL data
-lives in the `charsooq-production_pgdata` volume at `/var/lib/postgresql` (the PostgreSQL 18 image
-path), and `make prod-down` never removes it.
+Only the reverse proxy publishes a host port, and only on one approved internal IP: `caddy` binds
+`80`/`443` (`${CHARSOOQ_PROXY_BIND_IP}`), while `db`, `provision`, `migrate`, `api`, and `web` listen
+only on internal Compose networks (`web:3000`, `api:8000`, `db:5432`). Caddy reaches `web` through a
+dedicated `proxy` network and has no route to the API or PostgreSQL. TLS termination, forwarded
+headers, and HSTS are implemented in [`deploy/caddy`](deploy/caddy) and documented in
+[docs/architecture/deployment.md](docs/architecture/deployment.md#reverse-proxy-tls-and-exposure);
+no certificate is installed and the proxy is not deployed yet. Backup tooling and restore drills are
+not implemented yet. PostgreSQL data lives in the `charsooq-production_pgdata` volume at
+`/var/lib/postgresql` (the PostgreSQL 18 image path), and `make prod-down` never removes it.
 
 ## Deployment
 
@@ -323,4 +327,4 @@ Charsooq has three independent environments — Development, Staging, and Produc
 
 - Development: local Next.js + FastAPI + PostgreSQL; `make docker-up` runs `web` + `api` + `postgres` from [compose.yml](compose.yml), with a one-shot `migrate` service running the locked migration runner before the API starts. The development stack sets `APP_ENV=production` to exercise production behavior locally and `DEPLOYMENT_ENV=development` so it is never mistaken for Production. `compose.yml` is the development stack, not a Production file.
 - Staging: Vercel frontend (`vercel.json` pins pnpm install/build for the monorepo) + FastAPI Cloud backend (`make deploy-api`) + Neon database. Set `API_URL_INTERNAL` + `NEXT_PUBLIC_API_URL` to the Staging API origin in Vercel — the build fails fast if they still point at localhost. Browser calls same-origin `/api/*`; Next rewrites to the API origin, so the session cookie stays first-party. The API auto-migrates on boot in Staging.
-- Production: Docker Engine + Docker Compose on Ubuntu `market-linux` (`172.30.2.2`): Next.js, FastAPI, and PostgreSQL 18.6, with separate administrative, migration, and application database roles. [compose.production.yml](compose.production.yml) encodes the service order (`db` → `provision` → `migrate` → `api` → `web`), file-backed secrets, internal networks, and health checks. TLS/reverse proxy, backups, image registry/promotion, and the actual server deployment remain separate open work. Production is not live yet; see the deployment document.
+- Production: Docker Engine + Docker Compose on Ubuntu `market-linux` (`172.30.2.2`): Next.js, FastAPI, and PostgreSQL 18.6, with separate administrative, migration, and application database roles. [compose.production.yml](compose.production.yml) encodes the service order (`db` → `provision` → `migrate` → `api` → `web` → `caddy`), file-backed secrets, internal networks, and health checks. The Caddy reverse proxy, TLS modes, and trusted-proxy design are implemented in [deploy/caddy](deploy/caddy) and [ADR 012](docs/adr/012-internal-reverse-proxy-and-tls.md) but not enabled against a real certificate. Backup tooling, image registry/promotion, the IT-owned DNS/CA/IP decisions, and the actual server deployment remain open. Production is not live yet; see the deployment document.

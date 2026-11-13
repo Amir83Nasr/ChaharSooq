@@ -55,6 +55,11 @@ venv/
 .env.*
 *.pem
 *.key
+*.crt
+*.cer
+*.der
+*.p12
+*.pfx
 
 # ─── OS / EDITOR CLUTTER ──────────────────────────────────
 .DS_Store

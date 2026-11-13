@@ -1,0 +1,15 @@
+# TLS mode `organization`: a certificate issued by the organization's CA (or a
+# public CA), loaded from the read-only mount configured in
+# compose.production.yml. Files live outside the repository (CHARSOOQ_TLS_DIR,
+# default /etc/charsooq/tls) and must be readable by the Caddy container only.
+#
+# Required names and content by default:
+#   /etc/caddy/certs/fullchain.pem  leaf certificate + issuing intermediates
+#   /etc/caddy/certs/privkey.pem    matching private key, mode 0600 on the host
+#
+# Both paths can be overridden (CHARSOOQ_TLS_CERT_FILE / CHARSOOQ_TLS_KEY_FILE)
+# so the same file can be validated on a workstation with temporary material.
+#
+# This mode also covers the IP SAN case: the certificate must contain the exact
+# address used in CHARSOOQ_SITE_HOST when that value is an IP.
+tls {$CHARSOOQ_TLS_CERT_FILE:/etc/caddy/certs/fullchain.pem} {$CHARSOOQ_TLS_KEY_FILE:/etc/caddy/certs/privkey.pem}

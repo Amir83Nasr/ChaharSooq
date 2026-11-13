@@ -62,8 +62,9 @@ Tests create the app through the same factory, so middleware and handlers stay c
 - Login is limited to 10 attempts per minute per IP and username. The limiter is in-memory by
   default and shared across replicas when `REDIS_URL` is set.
 - Every response carries `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`,
-  `Content-Security-Policy: frame-ancestors 'none'`, and a restrictive `Permissions-Policy`;
-  production adds HSTS.
+  `Content-Security-Policy: frame-ancestors 'none'`, and a restrictive `Permissions-Policy`.
+  HSTS is **not** set by the API: the TLS terminator owns it (Caddy in Production, see
+  [ADR 012](../adr/012-internal-reverse-proxy-and-tls.md)).
 - CORS uses an explicit origin allowlist and limited methods/headers.
 - Configuration loads repo-root env files first, then `backend/api/.env*`. `DatabaseSettings`
   provides the API engine's `DATABASE_URL` (application role); `MigrationSettings` provides
@@ -151,8 +152,9 @@ The Production backend image is built by `Dockerfile.api` and used by the `api` 
   `migration_database_url`. It depends on a healthy database and successful provisioning; `api`
   depends on `migrate` completing successfully.
 - The API serves on internal port `8000` only; no host port is published. Uvicorn keeps two workers
-  and the existing `--proxy-headers --no-server-header` flags. `/ready` (database `SELECT 1`) is the
-  container healthcheck.
+  and the existing `--proxy-headers --no-server-header` flags. `--proxy-headers` trusts forwarded
+  headers only from `FORWARDED_ALLOW_IPS`, which Production sets to the fixed address of the `web`
+  container; a wildcard is never used. `/ready` (database `SELECT 1`) is the container healthcheck.
 - `scripts/bootstrap_owner.py` is a manual one-off (`make prod-bootstrap-owner`), not a startup
   step. See [deployment.md](deployment.md#production-services) for secrets, networks, and the
   full startup order.

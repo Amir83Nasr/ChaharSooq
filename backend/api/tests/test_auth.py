@@ -18,6 +18,9 @@ def test_security_headers_present(client: TestClient) -> None:
     assert r.headers["X-Content-Type-Options"] == "nosniff"
     assert r.headers["X-Frame-Options"] == "DENY"
     assert r.headers["Content-Security-Policy"] == "frame-ancestors 'none'"
+    # HSTS belongs to the TLS terminator (Caddy in Production), which is the only
+    # layer that knows the browser connection is HTTPS. See ADR 012.
+    assert "strict-transport-security" not in r.headers
 
 
 def test_login_wrong_password_is_401_without_token(client: TestClient) -> None:

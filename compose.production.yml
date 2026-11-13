@@ -6,6 +6,16 @@
 # CHARSOOQ_SECRETS_DIR to the directory that holds them (default:
 # /etc/charsooq/secrets) and see docs/architecture/deployment.md for the
 # required names, ownership, and permissions. No secret value belongs here.
+#
+# Four deployment values are required and deliberately have no default, so an
+# unconfigured stack fails to start instead of publishing a port on every
+# interface, guessing an internal subnet, or trusting an unverified proxy:
+#   CHARSOOQ_PROXY_BIND_IP  approved internal IP that Caddy binds 80/443 to
+#   CHARSOOQ_SITE_HOST      internal DNS name or IP that users open
+#   CHARSOOQ_EDGE_SUBNET    CIDR for the web<->api network (conflict-checked)
+#   CHARSOOQ_WEB_EDGE_IP    web's fixed address in that CIDR; the API's only
+#                           trusted proxy
+# See docs/architecture/deployment.md#reverse-proxy-tls-and-exposure.
 name: charsooq-production
 
 x-api-image: &api-image
@@ -121,7 +131,13 @@ services:
   api:
     <<: *api-image
     restart: unless-stopped
-    environment: *api-env
+    environment:
+      <<: *api-env
+      # Uvicorn's --proxy-headers (Dockerfile.api) trusts forwarded headers only
+      # from this peer. It is web's fixed address on `edge`, never a wildcard:
+      # FORWARDED_ALLOW_IPS=* would let any caller spoof the client address that
+      # the login rate limiter keys on. Caddy never talks to the API directly.
+      FORWARDED_ALLOW_IPS: ${CHARSOOQ_WEB_EDGE_IP:?set CHARSOOQ_WEB_EDGE_IP to web's fixed address on the edge network}
     secrets:
       - database_url
       - session_secret
@@ -171,7 +187,12 @@ services:
     expose:
       - "3000"
     networks:
-      - edge
+      edge:
+        # Fixed address: Uvicorn matches its trusted proxy by IP only, and a
+        # dynamic Docker address would make the trust list unknowable at start.
+        ipv4_address: ${CHARSOOQ_WEB_EDGE_IP:?set CHARSOOQ_WEB_EDGE_IP to web's fixed address on the edge network}
+      # Caddy reaches web through this network; web keeps `edge` for the API.
+      proxy: {}
     depends_on:
       api:
         condition: service_healthy
@@ -193,16 +214,79 @@ services:
           cpus: "1"
           memory: 512M
 
+  # Internal reverse proxy and TLS terminator. It is attached to `proxy` only,
+  # so it has no route to `api`, `db`, `provision`, or `migrate`. It publishes
+  # 80/443 bound to one approved internal IP and nothing else; no Docker socket
+  # and no host filesystem beyond the read-only config directories below.
+  caddy:
+    image: caddy:2.11.9-alpine
+    restart: unless-stopped
+    environment:
+      # `{$VAR}` in the Caddyfile reads these. The site address is built as
+      # https:// plus the host, so plain-HTTP serving is not configurable.
+      CHARSOOQ_SITE_HOST: ${CHARSOOQ_SITE_HOST:?set CHARSOOQ_SITE_HOST to the approved internal DNS name or IP}
+      # organization (files from the organization CA) or internal-ca (Caddy's
+      # local CA). The selected snippet is imported by the Caddyfile.
+      CHARSOOQ_TLS_MODE: ${CHARSOOQ_TLS_MODE:-organization}
+    ports:
+      # host_ip:host_port:container_port. Binding an explicit IP is required:
+      # a bare "80:80" would publish on every interface. IPv6 is not configured.
+      - "${CHARSOOQ_PROXY_BIND_IP:?set CHARSOOQ_PROXY_BIND_IP to the approved internal IP}:80:80"
+      - "${CHARSOOQ_PROXY_BIND_IP:?set CHARSOOQ_PROXY_BIND_IP to the approved internal IP}:443:443"
+    volumes:
+      # Read-only Caddyfile, snippets, and (for organization certificates) the
+      # mounted certificate directory. Never writable from the container.
+      - ./deploy/caddy:/etc/caddy:ro
+      # Certificate material stays outside the repository. Unused in
+      # `internal-ca` mode; the directory may be empty.
+      - ${CHARSOOQ_TLS_DIR:-/etc/charsooq/tls}:/etc/caddy/certs:ro
+      # Certificate authority, issued certificates, and OCSP state. Losing this
+      # volume rotates Caddy's internal CA and breaks every trusting client.
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - proxy
+    depends_on:
+      web:
+        condition: service_healthy
+    # Caddy binds low ports, so it keeps NET_BIND_SERVICE and drops the rest.
+    # The root filesystem is read-only; /data, /config, and /tmp are writable.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 256M
+
 networks:
+  # Caddy <-> web only. Deliberately has no explicit subnet: Docker's address
+  # pool may still collide with the organization's routes, so a subnet is only
+  # assigned after the conflict check recorded in deployment.md.
+  proxy:
+    driver: bridge
   # Database-only network: PostgreSQL has no route to the outside world.
   backend:
     internal: true
-  # API <-> web only. A future reverse proxy attaches here.
+  # API <-> web only. The subnet comes from the operator because a guessed CIDR
+  # can collide with the internal network of the organization.
   edge:
     driver: bridge
+    ipam:
+      config:
+        - subnet: ${CHARSOOQ_EDGE_SUBNET:?set CHARSOOQ_EDGE_SUBNET to an approved, conflict-free CIDR}
 
 volumes:
   pgdata:
+  caddy_data:
+  caddy_config:
 
 secrets:
   # File-backed Compose secrets are bind-mounted read-only into /run/secrets.

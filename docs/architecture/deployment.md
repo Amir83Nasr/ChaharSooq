@@ -153,6 +153,16 @@ already invalidates the build).
 Browser calls always hit same-origin `/api/*`; Next rewrites to the API origin, so the session
 cookie stays first-party.
 
+### Browser-facing security headers in Staging
+
+Staging's browser-facing edge is Vercel, not the API. Vercel serves every deployment over HTTPS,
+redirects HTTP with `308`, and sends
+`Strict-Transport-Security: max-age=63072000` (`includeSubDomains; preload` on `*.vercel.app`;
+custom domains get the `max-age` only). The API does not send HSTS in any environment (see
+[ADR 012](../adr/012-internal-reverse-proxy-and-tls.md)), so Staging keeps HSTS from the platform
+edge — a single owner, with no second, weaker header travelling through the Next rewrite. If a custom
+HSTS policy is ever required, change it in the Vercel project's response headers, not in the API.
+
 ### Backend — FastAPI Cloud (`backend/api`)
 
 Deploy with `make deploy-api` (runs `fastapi deploy` from `backend/api`). Set in the FastAPI Cloud
@@ -193,19 +203,23 @@ reachable.
 
 The stack is **implemented as code** in [compose.production.yml](../../compose.production.yml) and
 is **not deployed**. No command in this repository connects to `market-linux`; deployment,
-registry promotion, TLS, and backups remain separate work.
+registry promotion, real TLS material, and backups remain separate work. The reverse proxy and TLS
+foundation (Caddy, the `proxy` network, TLS modes, forwarded headers, HSTS) is implemented and
+documented here but is **not enabled against a real certificate** yet — see
+[ADR 012](../adr/012-internal-reverse-proxy-and-tls.md).
 
 ### Production services
 
-| Service     | Image / build                     | Runtime identity | Exposure / purpose                                                            |
-| ----------- | --------------------------------- | ---------------- | ----------------------------------------------------------------------------- |
-| `db`        | `postgres:18.6-trixie`            | `999:999`        | Internal only; persistent volume at `/var/lib/postgresql`                     |
-| `provision` | `Dockerfile.api` (`charsooq-api`) | `10001:10001`    | One-shot idempotent role/grant provisioning; exits 0 when the roles are ready |
-| `migrate`   | `Dockerfile.api` (`charsooq-api`) | `10001:10001`    | One-shot locked migration runner; exits 0 at `head`                           |
-| `api`       | `Dockerfile.api` (`charsooq-api`) | `10001:10001`    | Internal only on `backend` + `edge`; FastAPI on port `8000`                   |
-| `web`       | `Dockerfile.web` (`charsooq-web`) | `1000:1000`      | Internal only on `edge`; Next.js standalone server on port `3000`             |
+| Service     | Image / build                     | Runtime identity | Exposure / purpose                                                             |
+| ----------- | --------------------------------- | ---------------- | ------------------------------------------------------------------------------ |
+| `db`        | `postgres:18.6-trixie`            | `999:999`        | Internal only; persistent volume at `/var/lib/postgresql`                      |
+| `provision` | `Dockerfile.api` (`charsooq-api`) | `10001:10001`    | One-shot idempotent role/grant provisioning; exits 0 when the roles are ready  |
+| `migrate`   | `Dockerfile.api` (`charsooq-api`) | `10001:10001`    | One-shot locked migration runner; exits 0 at `head`                            |
+| `api`       | `Dockerfile.api` (`charsooq-api`) | `10001:10001`    | Internal only on `backend` + `edge`; FastAPI on port `8000`                    |
+| `web`       | `Dockerfile.web` (`charsooq-web`) | `1000:1000`      | Internal only on `edge` + `proxy`; Next.js standalone server on port `3000`    |
+| `caddy`     | `caddy:2.11.9-alpine`             | image default    | `proxy` only; publishes `80`/`443` on one approved internal IP; TLS terminator |
 
-`db`, `provision`, `migrate`, `api`, and `web` are the only services. Redis is not part of this
+`db`, `provision`, `migrate`, `api`, `web`, and `caddy` are the only services. Redis is not part of this
 stack: login rate limiting is in-memory for the current single-host deployment, and adding Redis
 without a measured need would add another stateful service. The Compose project name is
 `charsooq-production`, so its networks and volume are separate from the development stack.
@@ -249,6 +263,12 @@ Image references are configurable with `CHARSOOQ_API_IMAGE` / `CHARSOOQ_WEB_IMAG
 builds from this checkout by default; a registry-based promotion should replace those references
 with immutable digests (still open).
 
+Four deployment values are required by the file and have no defaults: `CHARSOOQ_PROXY_BIND_IP`,
+`CHARSOOQ_SITE_HOST`, `CHARSOOQ_EDGE_SUBNET`, and `CHARSOOQ_WEB_EDGE_IP` (see
+[Reverse proxy, TLS and exposure](#reverse-proxy-tls-and-exposure)). `make prod-config` supplies
+RFC 5737 documentation addresses to prove the structure only; every run target needs the real
+values from the deployment environment.
+
 ### Startup order and health
 
 Compose enforces this order:
@@ -266,12 +286,14 @@ Compose enforces this order:
 6. `api` starts after `migrate` completed successfully and `db` is healthy. Its healthcheck calls
    `/ready`, which executes `SELECT 1` against the database as the application role.
 7. `web` starts only after `api` is healthy. Its healthcheck requests `/login` from the Next server.
+8. `caddy` starts only after `web` is healthy and serves the single `https://CHARSOOQ_SITE_HOST`
+   site. It is the only service with published ports.
 
-`provision` and `migrate` use `restart: "no"` so a one-shot failure does not loop; `db`, `api`, and
-`web` use `unless-stopped`. API and web healthchecks are real requests, not process checks. The API
-keeps Uvicorn at two workers (the existing single-host sizing); no worker count is raised in this
-task. Provisioning and migration are serialized by their own locks, so a manual one-off cannot race
-a stack start.
+`provision` and `migrate` use `restart: "no"` so a one-shot failure does not loop; `db`, `api`,
+`web`, and `caddy` use `unless-stopped`. API and web healthchecks are real requests, not process
+checks. The API keeps Uvicorn at two workers (the existing single-host sizing); no worker count is
+raised in this task. Provisioning and migration are serialized by their own locks, so a manual
+one-off cannot race a stack start.
 
 ### Production secrets
 
@@ -367,18 +389,224 @@ configuration and provisioning both fail.
 ### Networking and exposure
 
 ```text
-browser -> (future reverse proxy) -> web:3000 -> /api/* rewrite -> api:8000 -> db:5432
+client --HTTPS--> caddy:443 (bound to CHARSOOQ_PROXY_BIND_IP)
+                    │ proxy network
+                    ▼
+                  web:3000 (Next.js, standalone)
+                    │ edge network, /api/* rewrite (server-side)
+                    ▼
+                  api:8000 (FastAPI)
+                    │ backend network
+                    ▼
+                  db:5432 (PostgreSQL)
 ```
 
-- `backend` is an internal Compose network for `db`, `provision`, `migrate`, and `api`. PostgreSQL
-  is not published to the host and has no external route on that network.
-- `edge` connects `api` and `web`. It also gives the API outbound access to Parsina; no internal
-  Parsina network link is created in this task.
-- `web` does not join `backend` and cannot reach the database directly.
-- No service publishes a host port. `web:3000`, `api:8000`, and `db:5432` are reachable only inside
-  the Compose project. Port publishing and TLS belong to the reverse-proxy task.
+| Network   | Members                             | Purpose                                                           | Subnet                                               |
+| --------- | ----------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------- |
+| `proxy`   | `caddy`, `web`                      | Browser-facing hop: Caddy reaches the Next server only            | none set; Docker's pool until IT confirms            |
+| `edge`    | `web`, `api`                        | Server-side `/api/*` rewrite and API egress (for example Parsina) | required, operator-supplied (`CHARSOOQ_EDGE_SUBNET`) |
+| `backend` | `db`, `provision`, `migrate`, `api` | Database traffic only; `internal: true`                           | Docker default                                       |
+
+- `backend` is internal: PostgreSQL is not published and has no outbound route on that network.
+  `web` does not join `backend` and cannot reach the database directly.
+- `caddy` joins `proxy` only. It has no route to `api`, `db`, `provision`, or `migrate`, so a proxy
+  misconfiguration cannot reach the API or the database.
+- `web` is the only service on both `proxy` and `edge`. It reaches the API as a server-side client;
+  the browser never talks to `api` directly.
+- The `proxy` network deliberately carries **no** subnet: Docker's address pool may collide with
+  the organization's routes, and the conflict check has not happened. Resolve a later conflict by
+  adding an approved `ipam.config.subnet` (or by setting the daemon's `default-address-pools`), not
+  by guessing here.
+- `edge` needs an explicit subnet because `web` gets a **fixed** address (`CHARSOOQ_WEB_EDGE_IP`):
+  Uvicorn matches its trusted proxy by IP address only, so a dynamic Docker address would make the
+  trust list unknowable. The same value is used for `web`'s address and the API's
+  `FORWARDED_ALLOW_IPS`, so the two cannot drift. The chosen CIDR must be confirmed against the
+  organization's routing table and Docker address pools first.
+- No service except `caddy` publishes a host port. `web:3000`, `api:8000`, and `db:5432` are
+  reachable only inside the Compose project.
 - Browser API calls stay same-origin: Next rewrites `/api/*` to `http://api:8000`. No server-only
   secret is passed to the browser bundle, and `NEXT_PUBLIC_API_URL` is not set in Production.
+
+### Reverse proxy, TLS and exposure
+
+Caddy is the only published service and the only TLS terminator. Its configuration is committed
+under [`deploy/caddy/`](../../deploy/caddy/):
+
+| File                     | Purpose                                                                                          |
+| ------------------------ | ------------------------------------------------------------------------------------------------ |
+| `Caddyfile`              | Global options (admin off, h1/h2 only), the single `https://{$CHARSOOQ_SITE_HOST}` site, imports |
+| `site.caddy`             | HSTS, access log, and the only `reverse_proxy` (`web:3000`) with header rules                    |
+| `tls-organization.caddy` | `tls` from organization-issued certificate files (`CHARSOOQ_TLS_MODE=organization`)              |
+| `tls-internal-ca.caddy`  | `tls internal` from Caddy's local CA (`CHARSOOQ_TLS_MODE=internal-ca`)                           |
+
+The proxy container runs the official `caddy:2.11.9-alpine` image with `read_only: true`,
+`cap_drop: [ALL]`, `cap_add: [NET_BIND_SERVICE]`, `security_opt: [no-new-privileges:true]`, a
+read-only configuration mount, a read-only certificate mount, and persistent `caddy_data` /
+`caddy_config` volumes. The admin API is off (`admin off`) and the Docker socket is never mounted,
+so Caddy cannot reconfigure itself or manage other containers.
+
+#### Required deployment values
+
+These have no default in `compose.production.yml`; Compose refuses to start without them.
+
+| Variable                               | Meaning                                                                                                          |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `CHARSOOQ_PROXY_BIND_IP`               | Approved internal IP that Caddy binds `80` and `443` to (the reported `172.30.2.2` is **not** approved)          |
+| `CHARSOOQ_SITE_HOST`                   | Internal DNS name or IP users open, without scheme or port; the site is always `https://` plus this value        |
+| `CHARSOOQ_EDGE_SUBNET`                 | Conflict-checked CIDR for the `web` ↔ `api` network                                                              |
+| `CHARSOOQ_WEB_EDGE_IP`                 | `web`'s fixed address inside that CIDR; also the API's only trusted proxy                                        |
+| `CHARSOOQ_TLS_MODE`                    | Optional, default `organization`; the other supported value is `internal-ca`                                     |
+| `CHARSOOQ_TLS_DIR`                     | Optional, default `/etc/charsooq/tls`; host directory with certificate files                                     |
+| `CHARSOOQ_TLS_CERT_FILE` / `_KEY_FILE` | Optional; certificate/key paths inside the container, default `/etc/caddy/certs/fullchain.pem` and `privkey.pem` |
+
+`make prod-config` substitutes RFC 5737 documentation addresses (`192.0.2.0/24`) to validate the
+file structure. That run proves the Compose file is well formed; it does **not** prove a valid
+Production configuration.
+
+#### Port publishing
+
+| Host binding                                  | Purpose                              |
+| --------------------------------------------- | ------------------------------------ |
+| `${CHARSOOQ_PROXY_BIND_IP}:80` → `caddy:80`   | Automatic HTTP → HTTPS redirect only |
+| `${CHARSOOQ_PROXY_BIND_IP}:443` → `caddy:443` | HTTPS (TLS terminator)               |
+
+- There is no bare `"80:80"`, so nothing is published on `0.0.0.0` or on an interface nobody
+  approved.
+- IPv6 is not configured: no `[::]` binding and no AAAA assumption. IPv6 remains an open decision.
+- HTTP/3 (`443/udp`) is not published. QUIC over UDP is deliberately absent until IPv6 and the
+  firewall policy are decided.
+- `api`, `db`, `provision`, `migrate`, and `web` publish nothing. They are reachable only inside
+  their Compose networks.
+
+#### TLS models
+
+Three shapes are supported. Which one applies depends on the organization's decisions, not on this
+repository.
+
+| Shape                                              | `CHARSOOQ_TLS_MODE` | Material                                                      | Client trust                                      | Priority           |
+| -------------------------------------------------- | ------------------- | ------------------------------------------------------------- | ------------------------------------------------- | ------------------ |
+| Organization CA, certificate with a **DNS SAN**    | `organization`      | `fullchain.pem` + `privkey.pem` issued by the organization CA | The organization CA is already distributed        | first              |
+| Organization-issued certificate with an **IP SAN** | `organization`      | the same files, but the certificate contains the literal IP   | The organization CA is already distributed        | if no internal DNS |
+| Caddy local CA                                     | `internal-ca`       | generated and stored in `caddy_data`                          | Caddy's root CA must be installed on every client | fallback           |
+
+- **DNS SAN vs IP SAN.** A DNS SAN binds the certificate to a hostname (`https://charsooq.<org>`);
+  an IP SAN binds it to a literal address (`https://<approved-ip>`). IP SANs work without internal
+  DNS, but the browser URL must be the exact address in the certificate, the certificate has to be
+  reissued whenever the address changes, and every internal service that validates the certificate
+  has to accept an IP identity. Prefer DNS when internal DNS exists; use IP SAN only as a
+  documented fallback, with `CHARSOOQ_SITE_HOST` set to exactly that address.
+- **Organization CA.** Provide the leaf certificate **with its issuing intermediates** in
+  `fullchain.pem`. The private key must be mode `0600` on the host, readable by the Caddy
+  container, and never in Git. Material lives in `CHARSOOQ_TLS_DIR` (outside the repository).
+- **Caddy local CA.** This is not a temporary self-signed leaf: the local CA is persistent state in
+  the `caddy_data` volume (`charsooq-production_caddy_data`). Its root certificate is at
+  `/data/caddy/pki/authorities/local/root.crt` inside the container. Extract it read-only and hand
+  it to IT for distribution (for example by Group Policy); never commit it. Losing the volume
+  replaces the CA and breaks every trusting client.
+- **No certificate is issued, trusted, or committed in this task.** TLS is configured but not
+  enabled against a real certificate. Production must not run with HTTP, with an unverified
+  certificate, or with a placeholder certificate.
+
+#### HSTS and HTTP redirect
+
+- **Owner:** Caddy. It sends `Strict-Transport-Security: max-age=31536000` on HTTPS responses from
+  the `https://` site block only. `includeSubDomains` and `preload` stay **off** until every
+  subdomain is HTTPS-verified and the DNS/TLS policy is confirmed.
+- **Not duplicated:** the API does not set HSTS in **any** environment, and Next.js does not set it.
+  A regression test (`backend/api/tests/test_hsts_ownership.py`) fails if an environment-conditional
+  header is reintroduced. One layer owns the policy per environment: Caddy in Production, the Vercel
+  edge in Staging (see [Staging](#browser-facing-security-headers-in-staging)).
+- **HTTP redirect:** the `:80` listener exists only because Caddy's automatic HTTPS creates it; it
+  responds with a redirect to HTTPS and never serves the application. Plain-HTTP Production is not
+  expressible in the committed configuration.
+- **HTTP/3:** not advertised. The global block restricts listeners to `h1 h2`; otherwise Caddy sends
+  `alt-svc: h3=":443"` for a UDP port that compose does not publish.
+- HSTS is only meaningful once TLS is real, which is why it is emitted by the site block rather
+  than by the application. Nothing is deployed or cached by a client in this task.
+
+#### Forwarded headers and trusted proxies
+
+The real chain and what each hop is allowed to assert:
+
+| Hop                 | Forwarding data                                                                                                                                                                                | Trust rule                                                                                       |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Client → Caddy      | Any `X-Forwarded-*`, `Forwarded`, `X-Real-IP` the client sends                                                                                                                                 | Ignored. Caddy has no `trusted_proxies` configured, so incoming values are never accepted        |
+| Caddy → web         | `X-Forwarded-For = {remote_host}`, `-Proto = {scheme}`, `-Host = {host}`, `-Port = 443`; `Forwarded`, `X-Real-IP`, `X-Forwarded-Server` removed                                                | Values are rewritten from the direct connection, never copied from the client                    |
+| web → api (rewrite) | Next.js preserves existing `x-forwarded-*` and only fills gaps from its own socket (`??=`), then the rewrite forwards request headers unchanged and sets `x-forwarded-host` to the client Host | The web container is the only peer the API trusts; Next.js adds no unvalidated client value      |
+| api                 | Uvicorn `ProxyHeadersMiddleware` uses `X-Forwarded-For` only when the direct peer is trusted                                                                                                   | `FORWARDED_ALLOW_IPS` = `CHARSOOQ_WEB_EDGE_IP`, a single fixed address. Never `*`, never a range |
+
+- **Server-side calls:** Next also calls the API directly from the server (for example the session
+  check with forwarded cookies). Those requests carry no client identity and no proxy headers; they
+  are internal calls and the API's rate limiter never sees them as browser traffic.
+- The API never treats Caddy as its proxy: Caddy does not talk to the API, so Caddy's address is not
+  in the trust list.
+- If `FORWARDED_ALLOW_IPS` is missing or wrong, Uvicorn fails closed: forwarded headers are ignored
+  and the client address becomes the direct peer (`web`). The login rate limiter then keys on the
+  web container instead of the real client; it never trusts a spoofed address.
+- The login rate limiter (`request.client.host`) and access logs therefore use the real client
+  address once the trusted-proxy value is correct.
+- **Host header:** Caddy serves only the configured `CHARSOOQ_SITE_HOST` and answers other Host
+  values itself, so FastAPI needs no `TrustedHostMiddleware` while Caddy is the only ingress. If
+  another ingress path is added later, host validation must be revisited with it.
+- **Trust boundary:** a process that can open a connection to `web:3000` can assert an arbitrary
+  `X-Forwarded-For`, because the API trusts `web`. Only `web` and `api` are members of `edge`, and
+  the host itself is already outside the application's trust boundary. Any new service on `edge`
+  must be treated as able to spoof a client address.
+
+#### Certificate and Root CA operations
+
+- Certificate material and CA private keys are never stored in this repository. `.gitignore` also
+  blocks `*.pem`, `*.key`, `*.crt`, `*.cer`, `*.der`, `*.p12`, and `*.pfx` so an accidental copy
+  cannot be committed.
+- Replace certificate files on the host, then restart the proxy:
+  `docker compose -f compose.production.yml restart caddy`. The admin API is off, so there is no
+  hot reload.
+- Treat renewal as an operational task with an owner and a calendar entry; renewal policy is an open
+  decision (see below).
+
+#### Future setup steps
+
+Nothing below has been run against `market-linux`. The order is the intended runbook:
+
+1. IT answers the open decisions (DNS, CA, fixed IP, ports, IPv6, address pools, firewall, renewal).
+2. Choose the TLS shape and obtain the certificate material, **or** decide `internal-ca` and plan
+   root-CA distribution to clients.
+3. Set `CHARSOOQ_PROXY_BIND_IP`, `CHARSOOQ_SITE_HOST`, `CHARSOOQ_EDGE_SUBNET`, and
+   `CHARSOOQ_WEB_EDGE_IP` in the deployment environment (not in Git) and run
+   `make prod-config` with the real values.
+4. Verify the `edge` subnet against the host routing table and Docker address pools; adjust before
+   the first start, not after. Changing the CIDR on an existing stack requires recreating that
+   network (`docker compose down` keeps the named volumes).
+5. Start the stack, then verify the proxy surface read-only:
+   `curl -sSI https://<site-host>/login` (security headers, HSTS, no `Server` version),
+   `curl -sSI http://<site-host>/` (redirect to HTTPS), and `curl -sS https://<site-host>/api/v1/health`
+   (same-origin API through the rewrite). A direct request to `api:8000` or `db:5432` from outside
+   the Compose networks must fail.
+6. Confirm `docker compose -f compose.production.yml ps` shows `caddy` as the only service with
+   published ports. Whenever `web` is recreated, restart `caddy` so it resolves the new address.
+7. Only after that: backups, monitoring, and the controlled release flow.
+
+#### Current limitations
+
+- The proxy and TLS foundation is **not deployed** and has not been exercised on `market-linux`.
+  No real certificate, DNS name, or approved IP exists in this repository.
+- The configuration is validated with the official Caddy `2.11.9` binary (`caddy adapt` and
+  `caddy validate` for both TLS modes, plus a local run-through of the redirect, HSTS, forwarded
+  headers, and log redaction). The container itself has not been started, so the first real container
+  start remains a validation step.
+- Access logging uses Caddy's default JSON encoder, which records request metadata and non-sensitive
+  headers but omits `Cookie`, `Set-Cookie`, `Authorization`, and `Proxy-Authorization` unless
+  `log_credentials` is enabled. No snippet enables it; a static test guards this.
+- A single Caddy instance: no HA pair, and no zero-downtime config reload (admin API off).
+- Caddy resolves `web` when its configuration loads. Recreating `web` (for example after an image
+  update) can give it a new address on `proxy`, so `caddy` must be restarted afterwards:
+  `docker compose -f compose.production.yml restart caddy`. Switching to a `dynamic a` upstream is
+  a possible improvement once it has been verified against the pinned image.
+- No IPv6, no HTTP/3, no OCSP stapling policy, and no WAF/rate limiting at the proxy. API login rate
+  limiting remains in-process per worker unless `REDIS_URL` is configured.
+- No automatic certificate renewal is implemented for organization-issued certificates; Caddy's
+  local CA renews its own leaf certificates automatically.
+- Parsina connectivity is unchanged and is not routed through the proxy.
 
 ### Images
 
@@ -400,13 +628,13 @@ removes volumes. The next task must define scheduled `pg_dump`/base backups, enc
 retention, and a rehearsed restore. Take a verified backup before any destructive or irreversible
 migration.
 
-### TLS and reverse proxy (out of scope)
+### TLS status
 
-No reverse proxy and no TLS certificate are configured, and no host port is published. The API
-already sends HSTS in production application mode and the session cookie is `Secure` there, so the
-browser-facing endpoint must be HTTPS when the proxy is added. Proxy choice, domain/DNS,
-certificate issuance, and the decision to publish only `80`/`443` remain open. Do not expose
-`db`, `api`, or `web` directly while waiting for that work.
+The reverse proxy and TLS foundation is configured but **not enabled**: no certificate is
+installed, no DNS name is approved, and nothing is deployed. The API no longer sends HSTS (Caddy
+owns it), the session cookie is already `Secure` in production application mode, and the only
+published ports belong to Caddy. Do not expose `db`, `api`, or `web` directly, and do not start
+Production without deciding the TLS shape described above.
 
 ### Remaining before a real server deployment
 
@@ -415,7 +643,10 @@ certificate issuance, and the decision to publish only `80`/`443` remain open. D
   ownership/modes as the consuming UIDs; `make prod-config` only proves the compose structure.
 - Choose the image registry and promotion mechanism; build once from the approved commit and deploy
   by digest. The current Compose file can build locally, but Production must not rebuild ad hoc.
-- Add the reverse proxy/TLS layer and publish only its ports.
+- Resolve the IT-owned decisions below, then set the four required deployment values and install
+  certificate material (or decide `internal-ca` and distribute the root CA).
+- Verify that ports `80`/`443` are free and that the approved bind address is the correct internal
+  interface; confirm the `edge` subnet does not collide with the organization's routes.
 - Implement and rehearse backup/restore.
 - Verify Docker Engine/Compose versions and resource limits on `market-linux`, then perform the
   controlled first deployment. No such deployment has been performed or validated in this task.
@@ -624,8 +855,6 @@ this document.
 
 | Area                    | Open question                                                                                                               |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Reverse proxy           | Which proxy (Caddy, Nginx, Traefik, …), and who terminates TLS?                                                             |
-| DNS / TLS               | Production domain(s), DNS ownership, certificate issuance and renewal.                                                      |
 | Secrets operations      | Who provisions and rotates the host secret files, and how are permissions audited?                                          |
 | Registry                | Which container registry, image retention, and access control?                                                              |
 | Artifact promotion      | Can Staging and Production share one artifact, or only a commit SHA mapping?                                                |
@@ -638,5 +867,25 @@ this document.
 | Data policy             | Exact approval and sanitization process for any real data used outside Production.                                          |
 | Production data seeding | How the owner account and initial catalog are provisioned without sharing secrets.                                          |
 
-See also [overview.md](overview.md), [backend.md](backend.md), [database.md](database.md), and
-[ADR 011](../adr/011-three-environment-architecture.md).
+### Open decisions owned by IT
+
+The reverse-proxy architecture (Caddy, `proxy` network, TLS modes, forwarded headers, HSTS) is
+decided in [ADR 012](../adr/012-internal-reverse-proxy-and-tls.md). The values that make it run are
+not known and must not be guessed. Each item blocks or changes the configuration:
+
+| #   | Decision                                                             | Effect if unknown / guessed                                                  |
+| --- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| 1   | Is there an internal DNS service for the panel?                      | Decides DNS SAN vs IP SAN; guessing breaks certificate validation            |
+| 2   | What is the final internal DNS name?                                 | `CHARSOOQ_SITE_HOST` and the certificate SAN must match it                   |
+| 3   | Does the organization have an internal CA?                           | Selects `organization` vs `internal-ca`; priority is the organization CA     |
+| 4   | Can the CA/root certificate be installed by Group Policy?            | Decides whether `internal-ca` is usable at all                               |
+| 5   | What is the fixed, approved internal IP of the server?               | `CHARSOOQ_PROXY_BIND_IP`; the reported `172.30.2.2` is not assumed           |
+| 6   | Are ports `80` and `443` free and permitted inbound?                 | Redirect and TLS cannot work; a nonstandard port changes the redirect design |
+| 7   | What is the IPv6 status of the host and the LAN?                     | No IPv6 binding is configured; enabling it needs firewall and cert decisions |
+| 8   | What are the Docker address pools, and does `edge` collide?          | `CHARSOOQ_EDGE_SUBNET`; a collision breaks routing to internal services      |
+| 9   | What is the firewall/VLAN policy for the panel?                      | Client reachability and whether anything besides `443` is permissible        |
+| 10  | What is the certificate policy: issuer, SAN type, validity, renewal? | Renewal is manual; the policy defines the owner and the calendar             |
+
+See also [overview.md](overview.md), [backend.md](backend.md), [database.md](database.md),
+[ADR 011](../adr/011-three-environment-architecture.md), and
+[ADR 012](../adr/012-internal-reverse-proxy-and-tls.md).

@@ -18,11 +18,31 @@
 # See docs/architecture/deployment.md#reverse-proxy-tls-and-exposure.
 name: charsooq-production
 
+# OCI metadata for a locally built image. `make prod-build` fills these in
+# from the checkout, so even the host-build fallback carries the commit it
+# came from. A manual `docker compose build` leaves them at their defaults,
+# which mark the image as not release-tracked.
+x-build-args: &build-args
+  VCS_REF: ${CHARSOOQ_BUILD_REVISION:-unknown}
+  BUILD_DATE: ${CHARSOOQ_BUILD_DATE:-unknown}
+  VERSION: ${CHARSOOQ_BUILD_VERSION:-unknown}
+  SOURCE: ${CHARSOOQ_BUILD_SOURCE:-unknown}
+
 x-api-image: &api-image
-  image: ${CHARSOOQ_API_IMAGE:-charsooq-api:production}
+  # Production runs published images, never an ad-hoc host build. The
+  # reference is required and has no default: an unset or moving reference
+  # must fail closed instead of silently running whatever happens to sit in
+  # the local image cache. Select a release by digest:
+  #   export CHARSOOQ_API_IMAGE='ghcr.io/<namespace>/charsooq-api@sha256:<digest>'
+  # See docs/operations/release-management.md.
+  image: ${CHARSOOQ_API_IMAGE:?set CHARSOOQ_API_IMAGE to the released image reference, for example ghcr.io/<namespace>/charsooq-api@sha256:<digest>}
+  # Pull the published image when it is not in the local cache. With a digest
+  # reference this is what makes the deployed bytes the released bytes.
+  pull_policy: missing
   build:
     context: .
     dockerfile: Dockerfile.api
+    args: *build-args
 
 x-service-env: &service-env
   APP_ENV: production
@@ -185,11 +205,16 @@ services:
           memory: 512M
 
   web:
-    image: ${CHARSOOQ_WEB_IMAGE:-charsooq-web:production}
+    # Same contract as the API image: an explicit, immutable reference and no
+    # default. `CHARSOOQ_WEB_IMAGE` must come from the same release as
+    # `CHARSOOQ_API_IMAGE`.
+    image: ${CHARSOOQ_WEB_IMAGE:?set CHARSOOQ_WEB_IMAGE to the released image reference, for example ghcr.io/<namespace>/charsooq-web@sha256:<digest>}
+    pull_policy: missing
     build:
       context: .
       dockerfile: Dockerfile.web
       args:
+        <<: *build-args
         API_URL_INTERNAL: http://api:8000
     restart: unless-stopped
     logging: *default-logging

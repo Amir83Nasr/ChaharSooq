@@ -55,7 +55,7 @@ The questions to IT, with the stage each answer is needed for, are in
 | 10  | Healthcheck and readiness                    | Ready   | Real readiness checks per service, enforced by `depends_on`                       |
 | 11  | Logging and log rotation                     | Partial | Per-container rotation is enforced; host rotation and collection are IT decisions |
 | 12  | Makefile and operational commands            | Ready   | Complete production target set; no target removes a volume                        |
-| 13  | CI/CD and image publishing                   | Partial | CI verifies code; no image build/publish or deploy workflow exists                |
+| 13  | CI/CD and image publishing                   | Partial | Publishing workflow exists and is untested; no deploy workflow                    |
 | 14  | Deployment and troubleshooting documentation | Ready   | Architecture, runbook, troubleshooting, backup, TLS, and ADR set                  |
 
 ### 2.2 Evidence per item
@@ -180,10 +180,21 @@ target with a description. No target runs `docker compose down -v`, prunes volum
 [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) runs `frontend`, `backend`,
 `migrations`, and `build` jobs — lint, format, typecheck, both test suites, the migration
 idempotency/drift/round-trip checks, the OpenAPI freshness check, the production build, and the
-Playwright e2e suite. There is **no** image build or publish job, no registry integration, and no
-deploy workflow: `grep` for `ghcr`, `docker/login-action`, and `docker/build-push-action` in
-`.github/` returns nothing. Until a registry exists, the only release path is a host build from a
-clean approved commit, which the runbook records as a temporary fallback, not the target.
+Playwright e2e suite. It is now also **reusable** (`workflow_call`), so the release workflow can run
+the same checks against the exact release commit.
+
+[`.github/workflows/release.yml`](../../.github/workflows/release.yml) publishes `charsooq-api` and
+`charsooq-web` from a published GitHub Release: it checks out the release tag, verifies the commit,
+runs the checks, builds both images from that one checkout, tags them with the version and the commit
+SHA, attaches provenance and an SBOM, verifies the published `revision` label against the release
+commit, and records both digests in the release body. It uses `GITHUB_TOKEN` only, so no new secret
+is needed. The decision is [ADR 015](../adr/015-container-image-release-and-publishing.md) and the
+procedure is [release-management.md](release-management.md).
+
+What is still missing: the workflow has **never been executed** — no release exists, no registry
+package has been created, and the registry itself is an open IT decision (question 4.6). There is
+still **no deploy workflow**: publishing an image does not deploy it, and the promotion from Staging
+to Production stays a manual, explicit step.
 
 **14 — Deployment and troubleshooting documentation: Ready.**
 Architecture and environment boundaries: [`docs/architecture/deployment.md`](../architecture/deployment.md).
@@ -310,17 +321,18 @@ gate before destructive migrations.
 
 ## 6. Image and release management
 
-| Item                                           | Status  | Evidence / gap                                                                                                                           |
-| ---------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Build the image                                | Ready   | `make prod-build` builds `Dockerfile.api` and `Dockerfile.web` from the current checkout                                                 |
-| Publish to GitHub Container Registry           | Missing | No registry workflow exists; `grep` for `ghcr` and `docker/build-push-action` in `.github/` finds nothing                                |
-| Tag and versioning                             | Partial | Compose defaults are the mutable tags `charsooq-api:production` / `charsooq-web:production`; `latest` is never used                      |
-| Use an immutable digest                        | Partial | `CHARSOOQ_API_IMAGE` / `CHARSOOQ_WEB_IMAGE` can carry a `repo@sha256:…` reference, but nothing produces one                              |
-| Detect a stale image                           | Partial | The runbook warns that a cached local image can predate the release; there is no `revision` label to check against                       |
-| Promote Staging to Production                  | Blocked | Staging runs on Vercel/FastAPI Cloud and Production on Docker; a shared artifact is not proven, and the mapping is a documented decision |
-| Run the migration before updating the API      | Ready   | `make prod-migrate` runs first; `api` depends on `service_completed_successfully`, so a failed migration stops the release               |
-| Rollback plan                                  | Ready   | Code-only rollback by previous digest is documented; an incompatible migration requires a restore, not `alembic downgrade`               |
-| Migration compatible with the previous version | Partial | The expand/contract rule is documented, but each migration still needs an explicit classification at release time                        |
+| Item                                           | Status  | Evidence / gap                                                                                                                                                |
+| ---------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Build the image                                | Ready   | `make prod-build` builds `Dockerfile.api` and `Dockerfile.web` from the current checkout, tagged by commit and stamped with the commit SHA                    |
+| Publish to GitHub Container Registry           | Partial | The release workflow exists and is reviewed, but it has never run: no release, no registry package, and the registry is an open IT decision                   |
+| Tag and versioning                             | Ready   | Two immutable tags per image — the release version and `sha-<full-sha>`; the workflow refuses to publish a version tag twice, and `latest` is never used      |
+| Use an immutable digest                        | Ready   | The workflow records both digests in the release body, the run summary, and an artifact; `CHARSOOQ_API_IMAGE` / `CHARSOOQ_WEB_IMAGE` take `repo@sha256:…`     |
+| Detect a stale image                           | Ready   | Both images carry `org.opencontainers.image.revision`; the workflow reads it back from the registry, and `make prod-image-revision` checks the deployed image |
+| Provenance and SBOM                            | Ready   | BuildKit provenance and SBOM attestations travel inside the published image index, plus a GitHub build provenance attestation for each digest                 |
+| Promote Staging to Production                  | Blocked | Staging runs on Vercel/FastAPI Cloud and Production on Docker; a shared artifact is not proven, and the mapping is a documented decision                      |
+| Run the migration before updating the API      | Ready   | `make prod-migrate` runs first; `api` depends on `service_completed_successfully`, so a failed migration stops the release                                    |
+| Rollback plan                                  | Ready   | Code-only rollback by previous digest is documented; an incompatible migration requires a restore, not `alembic downgrade`                                    |
+| Migration compatible with the previous version | Partial | The expand/contract rule is documented, but each migration still needs an explicit classification at release time                                             |
 
 ### 6.1 The baseline for the first deployment
 
@@ -330,21 +342,22 @@ For the first deployment the approved baseline is:
 
 - the commit SHA that the organization approves, which must be a commit whose CI jobs `frontend`,
   `backend`, `migrations`, and `build` are green, and which has been exercised in Staging;
-- the images built from that exact commit — either a registry digest, or, until a registry exists,
-  a host build from a clean checkout of that commit, with the image IDs recorded;
+- the images built from that exact commit — published by the release workflow, selected by digest,
+  or, until a registry exists, a host build from a clean checkout of that commit, with the image IDs
+  recorded;
 - the database revision that ships with it, recorded from `alembic_version` before and after the
   release.
 
 Concretely, for the first deployment the baseline is the **tip commit of `main` at the moment of
-approval**, built as `charsooq-api` and `charsooq-web` from that checkout, with the SHA and both
-image IDs recorded in the release log. At the time of this audit the `main` tip was `b1a59b7`
-("docs(deploy,ops): add production runbook, troubleshooting, backup/recovery, log rotation"), which
-sits on top of the TLS-lifecycle and reverse-proxy work; re-read the tip at approval time rather
-than relying on that value. Two conditions attach: the working tree on the deployment host must be
-clean at the approved SHA (`git status --porcelain` empty, `git describe` not `-dirty`), and the
-image must be built from that checkout rather than pulled from a stale local cache. If the
-organization approves a different SHA, that SHA is the baseline instead — the point is that the SHA
-is explicit, not implied.
+approval**, published as one release, with the SHA and both digests recorded in the release body.
+At the time of this audit the `main` tip was `dadb614` ("docs(ops): add infrastructure readiness
+audit and IT requirements checklist"), which sits on top of the TLS-lifecycle, reverse-proxy, and
+backup work; re-read the tip at approval time rather than relying on that value. Two conditions
+attach: the working tree on the deployment host must be clean at the approved SHA
+(`git status --porcelain` empty, `git describe` not `-dirty`), and the image must be pulled from the
+published digest rather than taken from a stale local cache. If the organization approves a
+different SHA, that SHA is the baseline instead — the point is that the SHA is explicit, not
+implied.
 
 ## 7. Deployment readiness matrix
 
@@ -370,9 +383,9 @@ is explicit, not implied.
 | PITR and WAL archiving                     | Missing | A separate ADR plus storage, tooling, and a drill                                                                                                             | Team + IT             | No                                               |
 | Container health and readiness             | Ready   | None beyond the stack                                                                                                                                         | Team                  | No                                               |
 | Log rotation on the host                   | Partial | Host-level logrotate or a log collector                                                                                                                       | IT                    | No                                               |
-| Registry and image publishing              | Missing | A registry, credentials, and retention rules                                                                                                                  | IT                    | No — a host build is the recorded fallback       |
+| Registry and image publishing              | Partial | A registry IT accepts, credentials if it is not GitHub Container Registry, retention rules, and pull access from the Production host                          | IT                    | No — a host build is the recorded fallback       |
 | CI deploy workflow                         | Missing | Self-hosted runner or an approved SSH deployment path                                                                                                         | IT                    | No                                               |
-| Image `revision` label                     | Missing | An OCI label carrying the commit SHA                                                                                                                          | Team                  | No                                               |
+| Image `revision` label                     | Ready   | None — both images carry the commit SHA and the release workflow verifies it against the published bytes                                                      | Team                  | No                                               |
 | Firewall / VLAN for client access          | Blocked | Inbound `443` from the approved client segment                                                                                                                | IT                    | **Yes** for user access                          |
 | Root CA distribution to clients            | Blocked | Group Policy or an equivalent mechanism, in `internal-ca` mode                                                                                                | IT                    | **Yes** for user access in `internal-ca`         |
 | Monitoring and alert channel               | Blocked | A paging channel and an owner                                                                                                                                 | IT                    | No for start; **yes** for go-live                |
@@ -423,8 +436,9 @@ These do not depend on an organizational answer:
 - Improve the offline TLS tooling and rehearse rotation and rollback with throwaway material.
 - Rehearse the backup and restore procedure against a scratch PostgreSQL container with synthetic
   data, as ADR 014 already does.
-- Add the OCI `revision` label to both Dockerfiles so the deployed image carries its commit SHA.
-- Add an image build and publish workflow once a registry is chosen.
+- Rehearse the release workflow end to end once IT accepts a registry: publish a test release,
+  pull it on a non-Production host, and verify the digests, the `revision` label, the provenance, and
+  the SBOM.
 - Draft the client-facing and operator-facing documentation for the panel.
 
 ## 9. Work that must wait for IT
@@ -444,16 +458,21 @@ These stop at the question in [it-requirements.md](it-requirements.md):
 
 ## 10. Verification performed for this audit
 
-Every check below was offline and read-only.
+Every check below was offline and read-only, except the local image build, which ran on the
+developer's machine and produced no Production artifact.
 
-| Check                                                                                                                                                                     | Result                                                                                         |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `make prod-config`                                                                                                                                                        | Pass — structure valid with RFC 5737 documentation values only                                 |
-| Backend infrastructure test suite (`test_production_compose`, `test_production_proxy`, `test_production_config`, `test_tls_certificate_tooling`, `test_deployment_guard`) | 187 passed                                                                                     |
-| Repository review of `compose.production.yml`, `Dockerfile.api`, `Dockerfile.web`, `deploy/caddy/`, `deploy/tls/`, `Makefile`, `.github/workflows/ci.yml`                 | Every claim in section 2 traced to a file and line                                             |
-| Review of `docs/architecture/deployment.md`, `docs/operations/*`, ADR 011–014                                                                                             | Open decisions confirmed as open; no decision was inferred from a document that leaves it open |
-| `git diff --check`                                                                                                                                                        | Clean                                                                                          |
-| Secret exposure scan of this document                                                                                                                                     | No secret value, real IP, DNS name, or certificate data; placeholders only                     |
+| Check                                                                                                                                                                                              | Result                                                                                         |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `make prod-config`                                                                                                                                                                                 | Pass — structure valid with RFC 5737 documentation values only                                 |
+| `make prod-build`                                                                                                                                                                                  | Pass — both images built from this checkout; the `revision` label equals the commit            |
+| `docker image inspect` on both built images                                                                                                                                                        | The OCI metadata carries the commit SHA, version, date, and source                             |
+| `docker compose config` with the image variables unset                                                                                                                                             | Fails closed with a named error                                                                |
+| Backend infrastructure test suite (`test_production_compose`, `test_release_workflow`, `test_production_proxy`, `test_production_config`, `test_tls_certificate_tooling`, `test_deployment_guard`) | All passed                                                                                     |
+| Workflow YAML parsed; every `run:` script checked with `bash -n`                                                                                                                                   | No syntax error                                                                                |
+| Repository review of `compose.production.yml`, `Dockerfile.api`, `Dockerfile.web`, `deploy/caddy/`, `deploy/tls/`, `Makefile`, `.github/workflows/ci.yml`, `.github/workflows/release.yml`         | Every claim in section 2 traced to a file and line                                             |
+| Review of `docs/architecture/deployment.md`, `docs/operations/*`, ADR 011–015                                                                                                                      | Open decisions confirmed as open; no decision was inferred from a document that leaves it open |
+| `git diff --check`                                                                                                                                                                                 | Clean                                                                                          |
+| Secret exposure scan of this document                                                                                                                                                              | No secret value, real IP, DNS name, or certificate data; placeholders only                     |
 
 Deliberately **not** run, and why:
 
@@ -465,3 +484,5 @@ Deliberately **not** run, and why:
   never contacted.
 - Any inspection of `.env` or `.env.*` files, or of any secret value.
 - `docker compose up` against `compose.production.yml` — no Production stack was started.
+- Publishing a release, pushing an image, or creating a registry package — the release workflow was
+  never executed, and no image was pushed anywhere.

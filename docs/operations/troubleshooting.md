@@ -437,8 +437,8 @@ docker compose -f compose.production.yml ps -a
 docker compose -f compose.production.yml logs --since 30m "$SERVICE"
 CID=$(docker compose -f compose.production.yml ps -q "$SERVICE")
 docker inspect --format '{{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$CID"
-docker image inspect "${CHARSOOQ_API_IMAGE:-charsooq-api:production}" >/dev/null && echo api-image-present
-docker image inspect "${CHARSOOQ_WEB_IMAGE:-charsooq-web:production}" >/dev/null && echo web-image-present
+docker image inspect "$CHARSOOQ_API_IMAGE" >/dev/null && echo api-image-present
+docker image inspect "$CHARSOOQ_WEB_IMAGE" >/dev/null && echo web-image-present
 ```
 
 Healthy: `db` becomes `healthy`; `provision`/`migrate` exit 0; `api` becomes `healthy`; `web` becomes

@@ -439,7 +439,7 @@ data, separate from Production. The rehearsal:
 
 The rehearsal used only synthetic rows and was destroyed afterwards. It used the locally available
 `postgres:18` image (PostgreSQL 18.6) and a `charsooq-api:rehearsal` image rebuilt from the current
-checkout, because the pre-existing local `charsooq-api:production` image predates
+checkout, because the pre-existing local image predates
 `provision_database_roles.py`. Production must use the approved, pinned image/digest built from the
 release commit, not a stale local image.
 

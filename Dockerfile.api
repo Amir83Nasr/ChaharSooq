@@ -16,6 +16,23 @@ WORKDIR /srv/api
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
   PATH="/srv/api/.venv/bin:${PATH}"
 
+# OCI image metadata. The release workflow passes the real values as build
+# arguments; the defaults mark an image that was built outside the release
+# pipeline. `revision` is the link from a published image back to a commit,
+# so it must never be left at its default in a released image.
+ARG VCS_REF=unknown
+ARG BUILD_DATE=unknown
+ARG VERSION=unknown
+ARG SOURCE=unknown
+LABEL org.opencontainers.image.title="charsooq-api" \
+  org.opencontainers.image.description="ChaharSooq FastAPI admin API" \
+  org.opencontainers.image.vendor="ChaharSooq" \
+  org.opencontainers.image.licenses="MIT" \
+  org.opencontainers.image.revision="${VCS_REF}" \
+  org.opencontainers.image.version="${VERSION}" \
+  org.opencontainers.image.created="${BUILD_DATE}" \
+  org.opencontainers.image.source="${SOURCE}"
+
 # Deterministic non-root runtime identity (group and user share UID/GID 10001).
 # Secret files are consumed read-only from SECRETS_DIR=/run/secrets; the host
 # must make each file readable by this UID (see docs/architecture/deployment.md).

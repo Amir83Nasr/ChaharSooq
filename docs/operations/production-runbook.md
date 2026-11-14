@@ -248,24 +248,35 @@ exit 0 from the direct command with the real environment. The Make target is a s
 not proof that the real values are correct. Neither check reads secret file contents or proves the
 stack can start.
 
+The direct command also needs `CHARSOOQ_API_IMAGE` and `CHARSOOQ_WEB_IMAGE`, because the Compose
+file requires them: an unset image reference is an error, not a default. The Make target supplies
+documentation-only digests.
+
 ### 3.9 Release images exist and match the approved commit
 
 ```bash
-# Temporary host-build fallback, only from a clean approved commit:
-make prod-build
+# The release path: both images come from one published release and are
+# selected by digest. The digests are in the release body.
+export CHARSOOQ_API_IMAGE='<registry>/charsooq-api@sha256:<digest>'
+export CHARSOOQ_WEB_IMAGE='<registry>/charsooq-web@sha256:<digest>'
 
-# Target path once a registry exists (set both to immutable digests):
-# export CHARSOOQ_API_IMAGE='<registry>/charsooq-api@sha256:<digest>'
-# export CHARSOOQ_WEB_IMAGE='<registry>/charsooq-web@sha256:<digest>'
-# docker compose -f compose.production.yml pull api web
-docker image inspect "${CHARSOOQ_API_IMAGE:-charsooq-api:production}" --format '{{.Id}}'
-docker image inspect "${CHARSOOQ_WEB_IMAGE:-charsooq-web:production}" --format '{{.Id}}'
+# Temporary host-build fallback, only from a clean approved commit:
+# make prod-build
+
+docker compose -f compose.production.yml pull api web
+docker image inspect "$CHARSOOQ_API_IMAGE" --format '{{.Id}}'
+docker image inspect "$CHARSOOQ_WEB_IMAGE" --format '{{.Id}}'
+
+# Which commit each image was built from:
+make prod-image-revision
 ```
 
-Host/operator, state-changing (build artifacts only). The first-start commands below use
-`--no-build`, so both images must exist before step 3. Record the image IDs/digests and the commit
-SHA. If you cannot prove which commit produced an image, rebuild it from the clean checkout; do not
-deploy an untracked image.
+Host/operator, state-changing (a pull or a build). The first-start commands below use
+`--no-build`, so both images must exist before step 3. `CHARSOOQ_API_IMAGE` and `CHARSOOQ_WEB_IMAGE`
+are required and have no default: an unset reference stops the stack instead of deploying whatever
+is in the local cache. Record the digests and the commit SHA. If you cannot prove which commit
+produced an image, pull the released digest; do not deploy an untracked image. The full procedure is
+in [release-management.md](release-management.md).
 
 ## 4. First startup sequence
 
@@ -560,36 +571,40 @@ clean approved commit is a temporary, recorded fallback, not the target.
 
 Do not start an update unless all gates pass:
 
-| Gate            | Evidence                                                                                       |
-| --------------- | ---------------------------------------------------------------------------------------------- |
-| Approved commit | Git SHA `/release` tag; `git status --porcelain` empty in the deployment checkout              |
-| CI              | GitHub Actions `frontend`, `backend`, `migrations`, and `build` jobs green for that SHA        |
-| Staging         | The same SHA exercised in Staging, including frontend ↔ API integration and login              |
-| Image identity  | Registry digest recorded for API and web; image `revision` label or equivalent matches the SHA |
-| Database review | Migration classified as none/additive/expand-contract; backup gate decided                     |
-| Backup          | A verified, encrypted, off-host dump from before the change; restore path known                |
-| Rollback        | Previous API/web digests and the previous release record are available                         |
-| TLS             | Valid certificate for the site host; no expiry inside the change window                        |
-| Capacity        | Disk, memory, and database size checked; no active incident                                    |
-| Window          | Approved maintenance window and an operator who can roll back                                  |
+| Gate            | Evidence                                                                                                          |
+| --------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Approved commit | Git SHA `/release` tag; `git status --porcelain` empty in the deployment checkout                                 |
+| CI              | GitHub Actions `frontend`, `backend`, `migrations`, and `build` jobs green for that SHA                           |
+| Staging         | The same SHA exercised in Staging, including frontend ↔ API integration and login                                 |
+| Image identity  | Registry digest recorded for API and web; the image `revision` label matches the SHA (`make prod-image-revision`) |
+| Database review | Migration classified as none/additive/expand-contract; backup gate decided                                        |
+| Backup          | A verified, encrypted, off-host dump from before the change; restore path known                                   |
+| Rollback        | Previous API/web digests and the previous release record are available                                            |
+| TLS             | Valid certificate for the site host; no expiry inside the change window                                           |
+| Capacity        | Disk, memory, and database size checked; no active incident                                                       |
+| Window          | Approved maintenance window and an operator who can roll back                                                     |
 
 ### 6.2 Build and record the artifact
+
+The target path is the publishing workflow: publish a GitHub Release, and it builds both images from
+that commit and records both digests in the release body. See
+[release-management.md](release-management.md).
 
 On the approved builder, from the release commit:
 
 ```bash
 git rev-parse HEAD
+# The fallback, only from a clean approved commit, when no registry is reachable:
 make prod-build
-docker image inspect charsooq-api:production --format '{{.Id}}'
-docker image inspect charsooq-web:production --format '{{.Id}}'
+docker image inspect "charsooq-api:<short-sha>" --format '{{.Id}}'
+docker image inspect "charsooq-web:<short-sha>" --format '{{.Id}}'
 ```
 
-Host/operator, state-changing (build artifacts only). The current Compose defaults are mutable tags;
-once a registry exists, push and record the digest instead. Record: commit SHA, build time, both
-digests, base image versions, and the operator. Do not build on the Production host from a dirty
-checkout. A tag is not a commit identity: the isolated rehearsal found a pre-existing local
-`charsooq-api:production` image that predated `provision_database_roles.py`. Rebuild or pull the
-approved digest before the first start; never assume a cached image matches the release.
+Host/operator, state-changing (build artifacts only). Record: commit SHA, build time, both digests,
+base image versions, and the operator. Do not build on the Production host from a dirty checkout. A
+tag is not a commit identity: the isolated rehearsal found a pre-existing local image that predated
+`provision_database_roles.py`. Pull the approved digest before the first start; never assume a
+cached image matches the release.
 
 ### 6.3 Pre-change backup
 
@@ -608,11 +623,12 @@ If the backup cannot be verified, do not proceed.
 docker compose -f compose.production.yml pull api web
 docker image inspect "$CHARSOOQ_API_IMAGE" --format '{{index .RepoDigests 0}}'
 docker image inspect "$CHARSOOQ_WEB_IMAGE" --format '{{index .RepoDigests 0}}'
+make prod-image-revision
 ```
 
 Host/operator, read-only after the pull. With registry digests, the inspect output must match the
-release record. If the registry requires authentication, use the approved credential helper; never put
-a token on a command line or in Git.
+release record, and the `revision` label must equal the approved commit SHA. If the registry requires
+authentication, use the approved credential helper; never put a token on a command line or in Git.
 
 ### 6.5 Choose the migration path
 
@@ -1017,7 +1033,9 @@ with an old web build.
 | `clean-cache`, `clean-build`                                                              | Remove local build/test caches                                         | Not applicable         | On the Production host unless the path is understood         |
 | `prod-config`                                                                             | Compose structure check; no secret contents read                       | Yes                    | —                                                            |
 | `prod-build`                                                                              | Builds API/web images from the current checkout                        | Only from approved SHA | Dirty tree, unapproved branch, or ad-hoc rebuild             |
-| `prod-up`                                                                                 | Builds and starts the full stack; runs provision/migrate               | Controlled window      | Without a backup, without real values, during an incident    |
+| `prod-pull`                                                                               | Pulls the released API/web images by digest                            | Controlled window      | Without the release digests recorded                         |
+| `prod-image-revision`                                                                     | Prints the commit in each image's `revision` label                     | Yes (read-only)        | —                                                            |
+| `prod-up`                                                                                 | Starts the full stack from the released images; runs provision/migrate | Controlled window      | Without a backup, without real values, during an incident    |
 | `prod-provision`                                                                          | Idempotent roles/grants; may rotate role passwords                     | Controlled window      | API traffic if a URL changed and consumers are not recreated |
 | `prod-migrate`                                                                            | Applies pending schema/data migrations                                 | Controlled window      | Without a verified backup for non-additive changes           |
 | `prod-bootstrap-owner`                                                                    | Creates/updates the owner; may start `db`/`migrate` dependencies       | Controlled window      | An unmigrated database; an unreviewed owner password change  |
@@ -1044,8 +1062,9 @@ change adds one, it needs an explicit approval and a backup/restore runbook upda
   `0600`; secret files are `0400`/`0440`. Backups live outside the repository, encrypted, `0700`/`0600`.
 - **Images:** base images are pinned (`python:3.12.16-slim-bookworm`, `uv:0.12.0`,
   `node:22.23.5-bookworm-slim`, `postgres:18.6-trixie`, `caddy:2.11.9-alpine`). The application image
-  defaults (`charsooq-api:production`, `charsooq-web:production`) are mutable tags; Production
-  releases must set `CHARSOOQ_API_IMAGE`/`CHARSOOQ_WEB_IMAGE` to registry digests. Never `latest`.
+  references have **no default**: `CHARSOOQ_API_IMAGE`/`CHARSOOQ_WEB_IMAGE` must be set to the
+  released digests, and an unset value stops the stack. Never `latest`, and never a moving tag as a
+  deployment reference.
 - **Non-root:** `api`, `provision`, and `migrate` run as `10001:10001`; `web` as `1000:1000`; `db` as
   the PostgreSQL image user (`999:999`). `caddy` runs as the image default (container root) with a
   read-only root filesystem, `cap_drop: ALL`, `NET_BIND_SERVICE`, and `no-new-privileges`; the non-root
@@ -1184,6 +1203,17 @@ was started, no database was opened, and no secret or `.env` file was read.
 | Secret exposure scan of new docs                          | No secret values; placeholders only                                                                                                   |
 | Dangerous-command scan                                    | No routine `down -v`, prune, or volume removal; only the clearly gated drill cleanup and the incident-only corrupt-volume path        |
 
+Release-specific checks (see [release-management.md](release-management.md)):
+
+| Check                                                  | Result                                                                                          |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| `make prod-build`                                      | Pass: both images built from this checkout and stamped with the commit SHA                      |
+| `docker image inspect` on both built images            | The `revision` label equals the commit that built them; `make prod-image-revision` prints it    |
+| `docker compose config` with the image variables unset | Fails closed with a named error instead of defaulting to a mutable local tag                    |
+| `docker compose config` with digest references         | API, `provision`, `migrate`, and web resolve to the same published image                        |
+| Release-path build with `--provenance=mode=max --sbom` | Both images carry the SLSA provenance and SPDX SBOM attestations inside the published index     |
+| Workflow YAML parsed; every `run:` script checked      | No syntax error; the release-body update was exercised against a stubbed `gh` and is idempotent |
+
 Not run, and why:
 
 - `make prod-up`, `prod-provision`, `prod-migrate`, `prod-bootstrap-owner`, `prod-caddy-validate`: would
@@ -1191,3 +1221,5 @@ Not run, and why:
 - `make tls-validate`/`tls-activate`: would read real certificate/private-key material.
 - Any `docker compose` command against `market-linux`: the host was not contacted.
 - A live login, HTTPS handshake, or database query: no real environment exists in this task.
+- Publishing a release or pushing an image: the release workflow was never executed, and no image
+  was pushed to any registry.

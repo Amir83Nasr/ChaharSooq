@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-.PHONY: build check clean-build clean-cache db-bootstrap-owner db-clear-products db-migrate db-migrate-prod db-seed db-seed-demo db-seed-demo-staging db-seed-parsina db-seed-prod db-sync-dev-to-prod db-sync-dev-to-staging sync-dev-to-prod sync-dev-to-staging sync-prod sync-staging dev-to-prod dev-to-staging db-up db-validate db-wait deploy-api dev-all dev-api dev-web docker-build docker-down docker-logs docker-up doctor help install lint openapi-check test test-e2e typecheck prod-bootstrap-owner prod-build prod-caddy-validate prod-config prod-down prod-logs prod-migrate prod-provision prod-ps prod-up tls-activate tls-rollback tls-validate
+.PHONY: build check clean-build clean-cache db-bootstrap-owner db-clear-products db-migrate db-migrate-prod db-seed db-seed-demo db-seed-demo-staging db-seed-parsina db-seed-prod db-sync-dev-to-prod db-sync-dev-to-staging sync-dev-to-prod sync-dev-to-staging sync-prod sync-staging dev-to-prod dev-to-staging db-up db-validate db-wait deploy-api dev-all dev-api dev-web docker-build docker-down docker-logs docker-up doctor help install lint openapi-check test test-e2e typecheck prod-bootstrap-owner prod-build prod-caddy-validate prod-config prod-down prod-image-revision prod-logs prod-migrate prod-provision prod-ps prod-pull prod-up tls-activate tls-rollback tls-validate
 
 # ─── HELP ─────────────────────────────────────────────────
 help: ## Show this help message
@@ -158,11 +158,37 @@ docker-logs: ## Follow Docker Compose logs
 # RFC 5737 documentation addresses. They prove the file is well formed; they are
 # not a Production configuration. Set the real values in the deployment
 # environment before any run target.
-PROD_STRUCTURAL_ENV = \
+#
+# The two image references are required as well, with a documentation-only
+# digest: an unset image reference must fail the stack instead of running a
+# stale local build. See docs/operations/release-management.md.
+PROD_DEPLOYMENT_ENV = \
 	CHARSOOQ_PROXY_BIND_IP=192.0.2.10 \
 	CHARSOOQ_SITE_HOST=charsooq.example.test \
 	CHARSOOQ_EDGE_SUBNET=192.0.2.0/24 \
 	CHARSOOQ_WEB_EDGE_IP=192.0.2.11
+
+PROD_IMAGE_ENV = \
+	CHARSOOQ_API_IMAGE=ghcr.io/example/charsooq-api@sha256:0000000000000000000000000000000000000000000000000000000000000000 \
+	CHARSOOQ_WEB_IMAGE=ghcr.io/example/charsooq-web@sha256:0000000000000000000000000000000000000000000000000000000000000000
+
+PROD_STRUCTURAL_ENV = $(PROD_DEPLOYMENT_ENV) $(PROD_IMAGE_ENV)
+
+# Local build identity. Every value is derived from the checkout, so a local
+# build carries the same OCI metadata a published image carries and the same
+# commit always names the same image tag.
+PROD_BUILD_REVISION ?= $(shell git rev-parse HEAD 2>/dev/null)
+PROD_BUILD_TAG ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null)
+PROD_BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+PROD_BUILD_VERSION ?= $(PROD_BUILD_TAG)
+PROD_BUILD_SOURCE ?= $(shell git config --get remote.origin.url 2>/dev/null | sed -e 's|\.git$$||' -e 's|^git@github.com:|https://github.com/|')
+PROD_BUILD_ENV = \
+	CHARSOOQ_API_IMAGE=charsooq-api:$(PROD_BUILD_TAG) \
+	CHARSOOQ_WEB_IMAGE=charsooq-web:$(PROD_BUILD_TAG) \
+	CHARSOOQ_BUILD_REVISION=$(PROD_BUILD_REVISION) \
+	CHARSOOQ_BUILD_DATE=$(PROD_BUILD_DATE) \
+	CHARSOOQ_BUILD_VERSION=$(PROD_BUILD_VERSION) \
+	CHARSOOQ_BUILD_SOURCE=$(PROD_BUILD_SOURCE)
 
 prod-config: ## Validate the production compose file (no secrets needed)
 	$(PROD_STRUCTURAL_ENV) docker compose -f $(COMPOSE_PROD_FILE) config --quiet
@@ -222,8 +248,22 @@ prod-caddy-validate: ## Validate the Caddyfile in the pinned Caddy image (needs 
 	docker compose -f $(COMPOSE_PROD_FILE) run --rm --no-deps $$flags caddy \
 		caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 
-prod-build: ## Build production API and web images from this commit
-	docker compose -f $(COMPOSE_PROD_FILE) build
+prod-build: ## Build production API and web images from this commit (host-build fallback)
+	# The deployment values are documentation placeholders: Compose interpolates
+	# the whole file before building, and none of them affect the image bytes.
+	$(PROD_DEPLOYMENT_ENV) $(PROD_BUILD_ENV) docker compose -f $(COMPOSE_PROD_FILE) build
+	@echo "built charsooq-api:$(PROD_BUILD_TAG) and charsooq-web:$(PROD_BUILD_TAG) from $(PROD_BUILD_REVISION)"
+
+prod-pull: ## Pull the released API and web images (needs CHARSOOQ_API_IMAGE and CHARSOOQ_WEB_IMAGE)
+	docker compose -f $(COMPOSE_PROD_FILE) pull api web
+
+prod-image-revision: ## Print the release commit recorded in the deployed images (needs the image variables)
+	@test -n "$(CHARSOOQ_API_IMAGE)" && test -n "$(CHARSOOQ_WEB_IMAGE)" || { \
+		echo "usage: CHARSOOQ_API_IMAGE=<ref> CHARSOOQ_WEB_IMAGE=<ref> make prod-image-revision"; \
+		exit 2; \
+	}
+	docker image inspect "$(CHARSOOQ_API_IMAGE)" --format 'api revision {{index .Config.Labels "org.opencontainers.image.revision"}}'
+	docker image inspect "$(CHARSOOQ_WEB_IMAGE)" --format 'web revision {{index .Config.Labels "org.opencontainers.image.revision"}}'
 
 prod-provision: ## Run idempotent database role provisioning once (needs real secrets)
 	docker compose -f $(COMPOSE_PROD_FILE) run --rm provision
@@ -234,8 +274,8 @@ prod-migrate: ## Run the production migration runner once (needs real secrets)
 prod-bootstrap-owner: ## Run the explicit production owner bootstrap once (needs real secrets)
 	docker compose -f $(COMPOSE_PROD_FILE) run --rm api python backend/api/scripts/bootstrap_owner.py
 
-prod-up: ## Build and start the production stack (needs real secrets; only Caddy publishes ports)
-	docker compose -f $(COMPOSE_PROD_FILE) up -d --build
+prod-up: ## Start the production stack from the released images (needs real secrets; only Caddy publishes ports)
+	docker compose -f $(COMPOSE_PROD_FILE) up -d --no-build
 
 prod-ps: ## Show production service status
 	docker compose -f $(COMPOSE_PROD_FILE) ps

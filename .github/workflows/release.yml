@@ -1,0 +1,357 @@
+name: Release Images
+
+# Images are published only from a published GitHub Release. There is
+# deliberately no `push` trigger: a push to `main` is never a Production
+# release (docs/architecture/deployment.md#release-flow-and-cicd).
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag of an existing published release (for example v1.0.0)."
+        required: true
+        type: string
+
+concurrency:
+  # One release publishes once. A queued run waits for the running one
+  # instead of racing it.
+  group: release-images-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify the release commit
+    # The whole check suite runs against the exact release commit before any
+    # image is published. ci.yml is reusable for that purpose.
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: Publish the API and web images
+    needs: [verify]
+    runs-on: ubuntu-latest
+    permissions:
+      # `contents: write` records the image digests in the release body.
+      # `packages: write` is the registry. `id-token: write` and
+      # `attestations: write` back the build provenance attestation.
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+    env:
+      REGISTRY: ghcr.io
+      API_IMAGE_NAME: charsooq-api
+      WEB_IMAGE_NAME: charsooq-web
+      # The web image bakes the internal API address into the Next.js rewrite
+      # at build time. It must stay identical to compose.production.yml; a
+      # mismatch is a wrong rewrite in the released image.
+      API_URL_INTERNAL: http://api:8000
+    steps:
+      - name: Resolve the release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_TAG: ${{ github.event.release.tag_name }}
+          EVENT_RELEASE_ID: ${{ github.event.release.id }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "release" ]; then
+            tag="$EVENT_TAG"
+            release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/${EVENT_RELEASE_ID}")"
+          else
+            tag="$INPUT_TAG"
+            # A manual run is not a second authorization: it still has to name
+            # a release that exists and is published.
+            release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}")" || {
+              echo "::error::no release exists for tag ${tag}; publish the release first"
+              exit 1
+            }
+          fi
+          if [ "$(jq -r '.draft' <<<"$release_json")" = "true" ] ||
+            [ "$(jq -r '.prerelease' <<<"$release_json")" = "true" ]; then
+            echo "::error::release ${tag} is a draft or a prerelease; only a stable published release may publish images"
+            exit 1
+          fi
+          # The version tag is the release tag without its leading "v". It must
+          # be a legal Docker tag: [A-Za-z0-9_][A-Za-z0-9._-]{0,127}.
+          version="${tag#v}"
+          if ! printf '%s' "$version" | grep -Eq '^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$'; then
+            echo "::error::release tag ${tag} does not map to a legal image tag"
+            exit 1
+          fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "release_id=$(jq -r '.id' <<<"$release_json")" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the release commit
+        uses: actions/checkout@v5
+        with:
+          # The tag, not the branch: the image must come from the released
+          # commit, never from whatever `main` happens to point at.
+          ref: ${{ steps.release.outputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Resolve the build metadata
+        id: meta
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD^{commit})"
+          tag_sha="$(git rev-parse "${TAG}^{commit}")"
+          if [ "$sha" != "$tag_sha" ]; then
+            echo "::error::checked out ${sha} does not match ${TAG} (${tag_sha})"
+            exit 1
+          fi
+          namespace="$(printf '%s' "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+          echo "source=https://github.com/${GITHUB_REPOSITORY}" >> "$GITHUB_OUTPUT"
+          echo "build_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+          echo "api_image=${REGISTRY}/${namespace}/${API_IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "web_image=${REGISTRY}/${namespace}/${WEB_IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to the container registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          # The repository token is the only credential: no new secret is
+          # created for publishing.
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Refuse to overwrite an existing release tag
+        id: guard
+        env:
+          API_IMAGE: ${{ steps.meta.outputs.api_image }}
+          WEB_IMAGE: ${{ steps.meta.outputs.web_image }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          # A version tag is the release identity. Overwriting it would make
+          # the tag point at different bytes than the recorded digest, so an
+          # existing tag stops the run before anything is pushed.
+          for image in "$API_IMAGE" "$WEB_IMAGE"; do
+            if docker buildx imagetools inspect "${image}:${VERSION}" >/dev/null 2>&1; then
+              echo "::error::${image}:${VERSION} already exists; release tags are immutable, publish a new version instead"
+              exit 1
+            fi
+          done
+
+      - name: Build and push the API image
+        id: build_api
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.api
+          push: true
+          # Two immutable tags: the release version and the commit SHA. There
+          # is no `latest` and no moving tag.
+          tags: |
+            ${{ steps.meta.outputs.api_image }}:${{ steps.release.outputs.version }}
+            ${{ steps.meta.outputs.api_image }}:sha-${{ steps.meta.outputs.sha }}
+          build-args: |
+            VCS_REF=${{ steps.meta.outputs.sha }}
+            BUILD_DATE=${{ steps.meta.outputs.build_date }}
+            VERSION=${{ steps.release.outputs.version }}
+            SOURCE=${{ steps.meta.outputs.source }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+          # BuildKit attaches a provenance attestation and an SBOM to the
+          # published image.
+          provenance: mode=max
+          sbom: true
+
+      - name: Build and push the web image
+        id: build_web
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.web
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.web_image }}:${{ steps.release.outputs.version }}
+            ${{ steps.meta.outputs.web_image }}:sha-${{ steps.meta.outputs.sha }}
+          build-args: |
+            API_URL_INTERNAL=${{ env.API_URL_INTERNAL }}
+            VCS_REF=${{ steps.meta.outputs.sha }}
+            BUILD_DATE=${{ steps.meta.outputs.build_date }}
+            VERSION=${{ steps.release.outputs.version }}
+            SOURCE=${{ steps.meta.outputs.source }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+          provenance: mode=max
+          sbom: true
+
+      - name: Attest the API image provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ steps.meta.outputs.api_image }}
+          subject-digest: ${{ steps.build_api.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest the web image provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ steps.meta.outputs.web_image }}
+          subject-digest: ${{ steps.build_web.outputs.digest }}
+          push-to-registry: true
+
+      - name: Verify the published images
+        id: verify
+        env:
+          API_IMAGE: ${{ steps.meta.outputs.api_image }}
+          WEB_IMAGE: ${{ steps.meta.outputs.web_image }}
+          VERSION: ${{ steps.release.outputs.version }}
+          SHA: ${{ steps.meta.outputs.sha }}
+        run: |
+          set -euo pipefail
+          for image in "$API_IMAGE" "$WEB_IMAGE"; do
+            # The published bytes must name the release commit. The revision
+            # label is the only link from an image back to a commit, so it is
+            # read back from the registry instead of trusted.
+            revisions="$(docker buildx imagetools inspect "${image}:${VERSION}" \
+              --format '{{json .Image}}' \
+              | jq -r '.. | objects | select(has("config")) | .config.Labels?["org.opencontainers.image.revision"]? // empty' \
+              | sort -u)"
+            if [ "$revisions" != "$SHA" ]; then
+              echo "::error::${image}:${VERSION} reports revision '${revisions}', expected ${SHA}"
+              exit 1
+            fi
+            # Provenance and SBOM travel with the image as an attestation
+            # manifest inside the published index.
+            attestations="$(docker buildx imagetools inspect "${image}:${VERSION}" \
+              --format '{{json .Manifest}}' \
+              | jq -r '[.manifests[]?.annotations["vnd.docker.reference.type"] // ""] | map(select(. == "attestation-manifest")) | length')"
+            if [ "$attestations" -lt 1 ]; then
+              echo "::error::${image}:${VERSION} carries no attestation manifest"
+              exit 1
+            fi
+          done
+
+      - name: Record the release images
+        id: record
+        env:
+          API_IMAGE: ${{ steps.meta.outputs.api_image }}
+          WEB_IMAGE: ${{ steps.meta.outputs.web_image }}
+          API_DIGEST: ${{ steps.build_api.outputs.digest }}
+          WEB_DIGEST: ${{ steps.build_web.outputs.digest }}
+          VERSION: ${{ steps.release.outputs.version }}
+          TAG: ${{ steps.release.outputs.tag }}
+          SHA: ${{ steps.meta.outputs.sha }}
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg release "$TAG" \
+            --arg version "$VERSION" \
+            --arg sha "$SHA" \
+            --arg api_image "$API_IMAGE" \
+            --arg api_digest "$API_DIGEST" \
+            --arg web_image "$WEB_IMAGE" \
+            --arg web_digest "$WEB_DIGEST" \
+            '{release: $release, version: $version, commit: $sha,
+              images: [
+                {name: "api", repository: $api_image, tag: $version, digest: $api_digest},
+                {name: "web", repository: $web_image, tag: $version, digest: $web_digest}
+              ]}' > release-images.json
+          {
+            echo "### Released container images"
+            echo
+            echo "| Image | Reference | Digest |"
+            echo "| --- | --- | --- |"
+            echo "| API | \`${API_IMAGE}:${VERSION}\` | \`${API_DIGEST}\` |"
+            echo "| Web | \`${WEB_IMAGE}:${VERSION}\` | \`${WEB_DIGEST}\` |"
+            echo
+            echo "Commit: \`${SHA}\`"
+            echo
+            echo "Deploy by digest, never by the tag:"
+            echo
+            echo '```bash'
+            echo "export CHARSOOQ_API_IMAGE='${API_IMAGE}@${API_DIGEST}'"
+            echo "export CHARSOOQ_WEB_IMAGE='${WEB_IMAGE}@${WEB_DIGEST}'"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Record the digests in the release
+        id: release_body
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ steps.release.outputs.release_id }}
+          API_IMAGE: ${{ steps.meta.outputs.api_image }}
+          WEB_IMAGE: ${{ steps.meta.outputs.web_image }}
+          API_DIGEST: ${{ steps.build_api.outputs.digest }}
+          WEB_DIGEST: ${{ steps.build_web.outputs.digest }}
+          VERSION: ${{ steps.release.outputs.version }}
+          SHA: ${{ steps.meta.outputs.sha }}
+        run: |
+          set -euo pipefail
+          # The release body is the release report: the digests are written
+          # there so the published artifact can be identified later without
+          # reading the workflow log.
+          section="$(cat <<SECTION
+          <!-- charsooq:image-digests:start -->
+          ### Released container images
+
+          | Image | Reference | Digest |
+          | --- | --- | --- |
+          | API | \`${API_IMAGE}:${VERSION}\` | \`${API_DIGEST}\` |
+          | Web | \`${WEB_IMAGE}:${VERSION}\` | \`${WEB_DIGEST}\` |
+
+          Commit: \`${SHA}\`
+
+          Production selects the images by digest:
+          \`CHARSOOQ_API_IMAGE='${API_IMAGE}@${API_DIGEST}'\` and
+          \`CHARSOOQ_WEB_IMAGE='${WEB_IMAGE}@${WEB_DIGEST}'\`.
+          <!-- charsooq:image-digests:end -->
+          SECTION
+          )"
+          SECTION="$section" python3 <<'PY'
+          import os
+          import re
+          import subprocess
+
+          start = "<!-- charsooq:image-digests:start -->"
+          end = "<!-- charsooq:image-digests:end -->"
+          pattern = re.compile(re.escape(start) + r".*?" + re.escape(end) + r"\n?", re.S)
+
+          body = subprocess.run(
+              [
+                  "gh",
+                  "api",
+                  f"repos/{os.environ['GITHUB_REPOSITORY']}/releases/{os.environ['RELEASE_ID']}",
+                  "--jq",
+                  ".body // \"\"",
+              ],
+              check=True,
+              capture_output=True,
+              text=True,
+          ).stdout
+
+          body = pattern.sub("", body).rstrip()
+          body = f"{body}\n\n{os.environ['SECTION']}\n" if body else os.environ["SECTION"]
+
+          subprocess.run(
+              [
+                  "gh",
+                  "api",
+                  "--method",
+                  "PATCH",
+                  f"repos/{os.environ['GITHUB_REPOSITORY']}/releases/{os.environ['RELEASE_ID']}",
+                  "-f",
+                  f"body={body}",
+              ],
+              check=True,
+          )
+          PY
+
+      - name: Upload the release record
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-images
+          path: release-images.json
+          retention-days: 90

@@ -70,6 +70,12 @@ Development → GitHub / CI → Staging → approval → Production
 - Production has no pipeline yet. Building one is a required part of making Production live.
 - **A push to `main` must never be assumed to be a Production release.** Production promotion is
   a separate, explicit step.
+- **Image publishing exists.** [`.github/workflows/release.yml`](../../.github/workflows/release.yml)
+  publishes `charsooq-api` and `charsooq-web` from a published GitHub Release, with immutable
+  version and commit-SHA tags, OCI metadata, provenance, an SBOM, and recorded digests. It has not
+  been executed against a real release. The decision is
+  [ADR 015](../adr/015-container-image-release-and-publishing.md) and the procedure is
+  [release-management.md](../operations/release-management.md).
 
 ### Artifacts and version traceability
 
@@ -88,6 +94,17 @@ Until that is proven, the release process must still make the version auditable:
   `revision` label or an equivalent build metadata field).
 - If a single artifact cannot be shared across the two infrastructures, document the exact
   commit-to-artifact mapping rather than implying digest parity.
+
+**How this repository implements that:**
+
+| Requirement                      | Implementation                                                                                     |
+| -------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Release identity                 | The Git commit SHA, in the release body and in the image `revision` label                          |
+| Build once from the approved SHA | The release workflow checks out the release tag and builds both images from that one checkout      |
+| Immutable tags                   | `<version>` and `sha-<full-sha>`; the workflow refuses to publish a version tag twice              |
+| Deploy by digest                 | `CHARSOOQ_API_IMAGE` / `CHARSOOQ_WEB_IMAGE` take `repository@sha256:<digest>` and have no default  |
+| Traceability                     | The workflow reads the published `revision` label back and fails when it is not the release commit |
+| Provenance and SBOM              | BuildKit provenance and SBOM attestations travel inside the published image index                  |
 
 ## Development
 
@@ -247,11 +264,12 @@ Nothing is inherited from `compose.yml` or from repo env files.
 
 ```bash
 make prod-config    # structure only; does not read secret files
-make prod-build     # build pinned API + web images
+make prod-build     # build pinned API + web images from this checkout (host-build fallback)
+make prod-pull      # pull the released API and web images (needs the image references)
 make prod-provision # run idempotent role provisioning once (needs secrets)
 make prod-migrate   # run the locked migration runner once (needs secrets)
 make prod-bootstrap-owner # explicit owner CLI (needs secrets)
-make prod-up        # build and start the stack in dependency order
+make prod-up        # start the stack from the released images, in dependency order
 make prod-ps        # status and health
 make prod-logs      # follow logs
 make prod-down      # stop; volumes and data are kept
@@ -266,14 +284,23 @@ Equivalent direct commands:
 
 ```bash
 docker compose -f compose.production.yml config
-docker compose -f compose.production.yml build
-docker compose -f compose.production.yml up -d --build
+docker compose -f compose.production.yml pull api web
+docker compose -f compose.production.yml up -d --no-build
 docker compose -f compose.production.yml ps
 ```
 
-Image references are configurable with `CHARSOOQ_API_IMAGE` / `CHARSOOQ_WEB_IMAGE`. The compose file
-builds from this checkout by default; a registry-based promotion should replace those references
-with immutable digests (still open).
+Image references are set with `CHARSOOQ_API_IMAGE` / `CHARSOOQ_WEB_IMAGE`, and both are **required
+with no default**. A Production deployment points them at the released digests:
+
+```bash
+export CHARSOOQ_API_IMAGE='ghcr.io/<owner>/charsooq-api@sha256:<digest>'
+export CHARSOOQ_WEB_IMAGE='ghcr.io/<owner>/charsooq-web@sha256:<digest>'
+```
+
+The compose file keeps a `build:` section for the recorded host-build fallback, but `prod-up` uses
+`--no-build`: Production never rebuilds ad hoc. See
+[release-management.md](../operations/release-management.md) for how a release is published and how a
+digest is selected.
 
 Four deployment values are required by the file and have no defaults: `CHARSOOQ_PROXY_BIND_IP`,
 `CHARSOOQ_SITE_HOST`, `CHARSOOQ_EDGE_SUBNET`, and `CHARSOOQ_WEB_EDGE_IP` (see
@@ -667,6 +694,11 @@ Nothing below has been run against `market-linux`. The order is the intended run
   user (UID/GID `1000:1000`). Base image: `node:22.23.5-bookworm-slim`.
 - `.dockerignore` excludes `.env*`, `secrets`, local data, docs, git metadata, caches, and Compose
   files. No secret or local env file enters an image.
+- Both Dockerfiles declare OCI metadata: `org.opencontainers.image.revision` (the commit SHA),
+  `.version`, `.created`, and `.source`, plus title, description, vendor, and license. The published
+  images get the real values as build arguments from the release workflow, and the workflow reads the
+  `revision` label back from the registry to prove the image came from the release commit. See
+  [release-management.md](../operations/release-management.md).
 
 ### Backups and recovery
 
@@ -700,8 +732,10 @@ rollback, backup/restore, expiry checks, and the first-deployment verification m
 - Provision the six secret files on the host (`postgres_password`, `database_url`,
   `migration_database_url`, `session_secret`, `owner_password`, `parsina_password`) and verify their
   ownership/modes as the consuming UIDs; `make prod-config` only proves the compose structure.
-- Choose the image registry and promotion mechanism; build once from the approved commit and deploy
-  by digest. The current Compose file can build locally, but Production must not rebuild ad hoc.
+- Confirm the image registry with IT and publish the first release; the publishing workflow exists
+  but has never run. Production must deploy the published digest and must not rebuild ad hoc: the
+  Compose file now requires `CHARSOOQ_API_IMAGE` and `CHARSOOQ_WEB_IMAGE`, and `prod-up` runs with
+  `--no-build`. See [release-management.md](../operations/release-management.md).
 - Resolve the IT-owned decisions below, then set the four required deployment values and install
   certificate material (or decide `internal-ca` and distribute the root CA).
 - Verify that ports `80`/`443` are free and that the approved bind address is the correct internal
@@ -916,19 +950,19 @@ decision; this configuration foundation does not change it.
 These are unresolved and must be decided before Production goes live. Do not infer answers from
 this document.
 
-| Area                    | Open question                                                                                                               |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Secrets operations      | Who provisions and rotates the host secret files, and how are permissions audited?                                          |
-| Registry                | Which container registry, image retention, and access control?                                                              |
-| Artifact promotion      | Can Staging and Production share one artifact, or only a commit SHA mapping?                                                |
-| Deploy access           | Self-hosted runner or SSH from CI? Which account and approvals?                                                             |
-| Migration control       | Who approves and triggers the Production compose release, and what backup gate applies before destructive migrations?       |
-| Role password rotation  | Who rotates the application, migration, and administrative passwords, on what schedule, and how the backup gate applies.    |
-| Backup / DR             | Tooling, schedule, retention, off-site storage, RPO/RTO, restore drills.                                                    |
-| Observability           | Logs, metrics, uptime checks, alerting, and error tracking for each environment.                                            |
-| Staging identity        | Staging frontend/API domains, Vercel environment scope, and whether Staging tracks `main` or an explicit release candidate. |
-| Data policy             | Exact approval and sanitization process for any real data used outside Production.                                          |
-| Production data seeding | How the owner account and initial catalog are provisioned without sharing secrets.                                          |
+| Area                    | Open question                                                                                                                                                                                                                                                                                                        |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Secrets operations      | Who provisions and rotates the host secret files, and how are permissions audited?                                                                                                                                                                                                                                   |
+| Registry                | Which container registry, image retention, and access control? The release workflow defaults to GitHub Container Registry because `GITHUB_TOKEN` authenticates to it without a new secret; another registry needs IT approval and a credential. See [ADR 015](../adr/015-container-image-release-and-publishing.md). |
+| Artifact promotion      | Can Staging and Production share one artifact, or only a commit SHA mapping?                                                                                                                                                                                                                                         |
+| Deploy access           | Self-hosted runner or SSH from CI? Which account and approvals?                                                                                                                                                                                                                                                      |
+| Migration control       | Who approves and triggers the Production compose release, and what backup gate applies before destructive migrations?                                                                                                                                                                                                |
+| Role password rotation  | Who rotates the application, migration, and administrative passwords, on what schedule, and how the backup gate applies.                                                                                                                                                                                             |
+| Backup / DR             | Tooling, schedule, retention, off-site storage, RPO/RTO, restore drills.                                                                                                                                                                                                                                             |
+| Observability           | Logs, metrics, uptime checks, alerting, and error tracking for each environment.                                                                                                                                                                                                                                     |
+| Staging identity        | Staging frontend/API domains, Vercel environment scope, and whether Staging tracks `main` or an explicit release candidate.                                                                                                                                                                                          |
+| Data policy             | Exact approval and sanitization process for any real data used outside Production.                                                                                                                                                                                                                                   |
+| Production data seeding | How the owner account and initial catalog are provisioned without sharing secrets.                                                                                                                                                                                                                                   |
 
 ### Open decisions owned by IT
 

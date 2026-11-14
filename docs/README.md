@@ -15,11 +15,12 @@ Start with the [architecture overview](architecture/overview.md). Read the secti
 | [operations/infrastructure-readiness.md](operations/infrastructure-readiness.md)   | Pre-deployment readiness audit, blockers, readiness matrix                  |
 | [operations/it-requirements.md](operations/it-requirements.md)                     | Checklist of the values and decisions requested from IT                     |
 | [operations/production-runbook.md](operations/production-runbook.md)               | Preflight, first start, service lifecycle, release, incidents, monitoring   |
+| [operations/release-management.md](operations/release-management.md)               | Image build, publish, version, digest, promotion, and rollback              |
 | [operations/troubleshooting.md](operations/troubleshooting.md)                     | Production failure matrix, evidence collection, allowed/dangerous actions   |
 | [operations/backup-and-recovery.md](operations/backup-and-recovery.md)             | PostgreSQL dumps, encryption, off-host retention, restore drills, PITR gap  |
 | [operations/tls-certificate-lifecycle.md](operations/tls-certificate-lifecycle.md) | TLS install, rotation, rollback, backup/restore, expiry checks, first start |
 | [api/README.md](api/README.md)                                                     | Swagger usage, API conventions, OpenAPI snapshot                            |
 | [parsina-api.pdf](parsina-api.pdf)                                                 | Vendor document for the Parsina accounting API                              |
-| [adr/](adr/)                                                                       | Architecture decision records (`001` to `014`)                              |
+| [adr/](adr/)                                                                       | Architecture decision records (`001` to `015`)                              |
 
 New significant decisions get the next ADR number. Do not renumber existing ADRs.

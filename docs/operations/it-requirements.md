@@ -6,10 +6,12 @@ certificate data — those are what the answers are for.
 
 Related: [Infrastructure readiness audit](infrastructure-readiness.md) ·
 [Production runbook](production-runbook.md) ·
+[Release management](release-management.md) ·
 [Deployment](../architecture/deployment.md) ·
 [ADR 012](../adr/012-internal-reverse-proxy-and-tls.md) ·
 [ADR 013](../adr/013-tls-certificate-lifecycle.md) ·
-[ADR 014](../adr/014-production-backup-and-recovery.md)
+[ADR 014](../adr/014-production-backup-and-recovery.md) ·
+[ADR 015](../adr/015-container-image-release-and-publishing.md)
 
 ## 1. How to answer
 
@@ -68,17 +70,20 @@ approximated with a placeholder value.
 
 ## 5. Docker and registry
 
-| #   | Question                                                                                                                                                                                                     | Answer | Needed by |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ | --------- |
-| 4.1 | Is Docker Engine already installed on the server? If yes, which version?                                                                                                                                     |        | A         |
-| 4.2 | Is Docker Compose v2 (the `docker compose` subcommand) available? If yes, which version?                                                                                                                     |        | A         |
-| 4.3 | Does the Docker daemon start automatically after a host reboot, and is that configured?                                                                                                                      |        | A         |
-| 4.4 | Which named account may run deployments, and can it be added to the `docker` group? (Note: membership in that group is equivalent to root on the host.)                                                      |        | B         |
-| 4.5 | Does the server have outbound internet access, or does it require an HTTP/HTTPS proxy or an image mirror?                                                                                                    |        | B         |
-| 4.6 | Is there a container registry the organization uses (for example GitHub Container Registry, GitLab Registry, Harbor, or a Nexus instance)? Please give the hostname and how a service account authenticates. |        | B         |
-| 4.7 | If a registry exists, what image retention and access-control rules apply?                                                                                                                                   |        | D         |
-| 4.8 | Where may the deployment checkout live on the host, and which account should own it? (A path such as `/opt/charsooq` is expected.)                                                                           |        | A         |
-| 4.9 | Is there a policy for scanning images for vulnerabilities before they run?                                                                                                                                   |        | D         |
+| #    | Question                                                                                                                                                                                                     | Answer | Needed by |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ | --------- |
+| 4.1  | Is Docker Engine already installed on the server? If yes, which version?                                                                                                                                     |        | A         |
+| 4.2  | Is Docker Compose v2 (the `docker compose` subcommand) available? If yes, which version?                                                                                                                     |        | A         |
+| 4.3  | Does the Docker daemon start automatically after a host reboot, and is that configured?                                                                                                                      |        | A         |
+| 4.4  | Which named account may run deployments, and can it be added to the `docker` group? (Note: membership in that group is equivalent to root on the host.)                                                      |        | B         |
+| 4.5  | Does the server have outbound internet access, or does it require an HTTP/HTTPS proxy or an image mirror?                                                                                                    |        | B         |
+| 4.6  | Is there a container registry the organization uses (for example GitHub Container Registry, GitLab Registry, Harbor, or a Nexus instance)? Please give the hostname and how a service account authenticates. |        | B         |
+| 4.7  | If a registry exists, what image retention and access-control rules apply?                                                                                                                                   |        | D         |
+| 4.8  | Where may the deployment checkout live on the host, and which account should own it? (A path such as `/opt/charsooq` is expected.)                                                                           |        | A         |
+| 4.9  | Is there a policy for scanning images for vulnerabilities before they run?                                                                                                                                   |        | D         |
+| 4.10 | May the Production images be stored in GitHub Container Registry, that is, outside the organization's own infrastructure? If not, which private registry must be used?                                       |        | B         |
+| 4.11 | Can the Production host pull from the registry (DNS resolution, TLS trust, and any proxy)? If it cannot, the images must be transferred by another route, and the release procedure changes.                 |        | B         |
+| 4.12 | Must the published images be mirrored into an internal registry or an air-gapped artifact store before they may run in Production?                                                                           |        | B         |
 
 ## 6. TLS and certificate authority
 
@@ -132,6 +137,7 @@ approximated with a placeholder value.
 | 8.1  | Who may SSH to the server, and with which named accounts? (Root login and shared accounts are not to be used.)                                               |        | A         |
 | 8.2  | How is SSH access granted and revoked, and is it audited?                                                                                                    |        | D         |
 | 8.3  | Who owns the application release — that is, who approves a new version and who performs the deployment?                                                      |        | D         |
+| 8.11 | Who may create a GitHub Release for this repository, and who may approve its promotion to Production? The publishing workflow runs on a published release.   |        | B         |
 | 8.4  | What maintenance window applies to deployments and to any change that interrupts the service?                                                                |        | D         |
 | 8.5  | Who is the custodian of the application secret files (the database credentials, the session secret, and the owner password), and how often are they rotated? |        | C         |
 | 8.6  | Who approves a schema change that cannot be undone by reverting the application version, and what is the required backup before it?                          |        | D         |

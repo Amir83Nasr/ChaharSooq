@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Reusable so the release workflow can run the same checks against the exact
+  # release commit before any image is published.
+  workflow_call:
 
 concurrency:
   group: ci-${{ github.ref }}

@@ -248,6 +248,7 @@ The frontend client (`apps/web/lib/api.ts`) mirrors these shapes; see [docs/api/
 - Frontend e2e: `apps/web/e2e/` (playwright) — unauthenticated redirects, Persian login form, RTL shell, mobile layout; runs against the production build without a backend — `pnpm --filter web test:e2e`
 - Backend tests: `backend/api/tests/` (pytest) — auth flow, roles and user management, product CRUD, validation envelope
 - CI runs lint, format check, typecheck, both test suites, the production build, and the Playwright e2e suite. The repository has no deploy workflow: Staging deploys through the Vercel/FastAPI Cloud Git integration, and Production promotion is a separate explicit step.
+- A published GitHub Release triggers the image publishing workflow, which builds and pushes the API and web images for that commit. See [docs/operations/release-management.md](docs/operations/release-management.md).
 
 ## Build
 
@@ -263,7 +264,8 @@ or extend [compose.yml](compose.yml). The stack is built for a Docker Engine hos
 
 ```bash
 make prod-config    # validate compose structure; no secret files needed
-make prod-build     # build pinned API + web production images
+make prod-build     # build pinned API + web production images from this checkout
+make prod-pull      # pull the released API + web images by digest
 make prod-up        # start db -> provision -> migrate -> api -> web -> caddy
 make prod-provision # run idempotent role provisioning once (needs secrets)
 make prod-migrate   # run the locked migration runner once (needs secrets)
@@ -276,6 +278,24 @@ make prod-down      # stop services; volumes and data are kept
 created until both succeed. `make prod-provision` and `make prod-migrate` run those same steps
 manually as one-offs, and `make prod-bootstrap-owner` runs the explicit owner CLI. All of them need
 real Production secrets; owner bootstrap remains a separate explicit step.
+
+### Images and releases
+
+Production runs **published images**, not a local build. `CHARSOOQ_API_IMAGE` and
+`CHARSOOQ_WEB_IMAGE` are required and have no default, so an unset reference stops the stack
+instead of deploying whatever happens to be in the local image cache:
+
+```bash
+export CHARSOOQ_API_IMAGE='ghcr.io/<owner>/charsooq-api@sha256:<digest>'
+export CHARSOOQ_WEB_IMAGE='ghcr.io/<owner>/charsooq-web@sha256:<digest>'
+```
+
+Images are published by [`.github/workflows/release.yml`](.github/workflows/release.yml) when a
+GitHub Release is published: both images are built from that one commit, tagged with the version
+and the commit SHA, stamped with OCI metadata, and shipped with provenance and an SBOM. The digests
+are recorded in the release body, and the digest — not the tag — is the deployment reference. See
+[docs/operations/release-management.md](docs/operations/release-management.md) and
+[ADR 015](docs/adr/015-container-image-release-and-publishing.md).
 
 ### Database roles and production secrets
 

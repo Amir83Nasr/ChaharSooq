@@ -212,3 +212,47 @@ def test_provision_and_migration_commands_are_scripts_not_inline_sql() -> None:
         "backend/api/scripts/provision_database_roles.py",
     ]
     assert services["migrate"]["command"] == ["python", "backend/api/scripts/migrate.py"]
+
+
+def test_production_images_are_explicit_and_have_no_moving_default() -> None:
+    """An unset or moving image reference must fail the stack, not deploy a stale build."""
+
+    services = _services()
+
+    api_image = str(services["api"]["image"])
+    web_image = str(services["web"]["image"])
+    # Required, with no fallback value: the reference must be chosen explicitly.
+    assert api_image.startswith("${CHARSOOQ_API_IMAGE:?")
+    assert web_image.startswith("${CHARSOOQ_WEB_IMAGE:?")
+    assert ":-" not in api_image
+    assert ":-" not in web_image
+    # The one-shot services run the same image as the API.
+    assert services["provision"]["image"] == api_image
+    assert services["migrate"]["image"] == api_image
+    # `latest` is never a Production identity.
+    for name, service in services.items():
+        assert "latest" not in str(service.get("image", "")), name
+
+
+def test_production_images_are_pulled_rather_than_rebuilt() -> None:
+    services = _services()
+
+    for name in ("provision", "migrate", "api", "web"):
+        assert services[name].get("pull_policy") == "missing", name
+
+
+def test_local_builds_carry_the_oci_release_metadata() -> None:
+    """Even the host-build fallback must say which commit it came from."""
+
+    services = _services()
+
+    api_args = services["api"]["build"]["args"]
+    web_args = services["web"]["build"]["args"]
+    for args in (api_args, web_args):
+        assert args["VCS_REF"] == "${CHARSOOQ_BUILD_REVISION:-unknown}"
+        assert args["BUILD_DATE"] == "${CHARSOOQ_BUILD_DATE:-unknown}"
+        assert args["VERSION"] == "${CHARSOOQ_BUILD_VERSION:-unknown}"
+        assert args["SOURCE"] == "${CHARSOOQ_BUILD_SOURCE:-unknown}"
+    # The web image bakes the internal API address into the Next.js rewrite;
+    # the release workflow must build it with the same value.
+    assert web_args["API_URL_INTERNAL"] == "http://api:8000"

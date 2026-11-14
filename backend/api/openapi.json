@@ -1710,6 +1710,28 @@
               "title": "Market"
             },
             "description": "Selected competitor market for competitor/suggested columns."
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "filtered",
+                    "all"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Export mode hint for the default filename (filtered vs all).",
+              "title": "Scope"
+            },
+            "description": "Export mode hint for the default filename (filtered vs all)."
           }
         ],
         "responses": {

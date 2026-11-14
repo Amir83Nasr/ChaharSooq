@@ -24,6 +24,7 @@ ListingStatus = Literal[
 ]
 ProductSort = Literal["newest", "cheapest", "most_expensive"]
 MarketFilter = Literal["digikala", "technolife", "sofa", "digifresh"]
+ExportScope = Literal["filtered", "all"]
 
 _EXPORT_DESCRIPTION = (
     "Streams a UTF-8 CSV (with BOM, comma-separated) for Excel. Headers, "
@@ -85,6 +86,10 @@ def export_products_csv(
         default=None,
         description="Selected competitor market for competitor/suggested columns.",
     ),
+    scope: ExportScope | None = Query(  # noqa: B008
+        default=None,
+        description="Export mode hint for the default filename (filtered vs all).",
+    ),
     _user: Admin = Depends(require_user),  # noqa: B008
     session: Session = Depends(get_db_readonly),  # noqa: B008
 ) -> Response:
@@ -110,6 +115,7 @@ def export_products_csv(
             sort=sort,
             columns=column_ids,
             market=market,
+            scope=scope,
         )
     except ExportTooLargeError:
         return _too_large()

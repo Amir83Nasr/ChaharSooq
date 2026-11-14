@@ -20,6 +20,8 @@ export interface ProductExportOptions {
   columns?: readonly ProductTableColumn[]
   /** Selected competitor market for the competitor/suggested columns. */
   market?: string
+  /** Explicit filename scope so "current view" and "all" exports are distinct. */
+  scope?: "filtered" | "all"
 }
 
 function appendProductParams(
@@ -77,6 +79,7 @@ export function buildProductExportParams(
     search.set("columns", options.columns.join(","))
   }
   if (options.market) search.set("market", options.market)
+  if (options.scope) search.set("scope", options.scope)
   return suffix(search)
 }
 

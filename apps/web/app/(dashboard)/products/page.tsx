@@ -215,6 +215,7 @@ function ProductsPageContent() {
         api.productExportUrl(exportFilters, {
           columns: visibleColumns,
           market: view.market,
+          scope: "filtered",
         }),
     },
     {
@@ -223,7 +224,7 @@ function ProductsPageContent() {
       buildUrl: () =>
         api.productExportUrl(
           {},
-          { columns: visibleColumns, market: view.market }
+          { columns: visibleColumns, market: view.market, scope: "all" }
         ),
     },
   ]

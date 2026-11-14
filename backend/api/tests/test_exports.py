@@ -72,6 +72,11 @@ def test_products_csv_mirrors_visible_table_columns(client: TestClient) -> None:
     assert response.headers["content-disposition"].startswith('attachment; filename="products-')
     assert response.content.startswith(b"\xef\xbb\xbf\xe2\x80\x8f")
 
+    all_response = client.get("/api/v1/exports/products.csv", params={"scope": "all"})
+    assert all_response.headers["content-disposition"].startswith(
+        'attachment; filename="products-all-'
+    )
+
     rows = _rows(response)
     headers = rows[0]
     assert headers[0] == "ردیف"
@@ -150,6 +155,18 @@ def test_products_csv_respects_visible_columns_and_market(client: TestClient) ->
     assert row[headers.index("قیمت رقبا (دیجی‌کالا)")] == "۲۵۰۰۰۰۰۰"
     # Base price 100m vs 25m market price → 300% more expensive.
     assert row[headers.index("اختلاف درصد")] == "۳۰۰٪ گران‌تر"
+
+    scoped = client.get(
+        "/api/v1/exports/products.csv",
+        params={
+            "columns": "name,sku,price,competitor_price,price_diff,stock",
+            "market": "digikala",
+            "scope": "filtered",
+        },
+    )
+    assert scoped.headers["content-disposition"].startswith(
+        'attachment; filename="products-filtered-'
+    )
 
 
 def test_products_csv_escapes_commas_and_quotes(client: TestClient) -> None:

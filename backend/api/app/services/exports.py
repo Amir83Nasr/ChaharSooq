@@ -264,6 +264,7 @@ class ExportService:
         sort: ProductSort,
         columns: list[str] | None = None,
         market: str | None = None,
+        scope: str | None = None,
     ) -> StreamingResponse:
         if self._products.count(filters=filters) > EXPORT_MAX_ROWS:
             raise ExportTooLargeError
@@ -289,7 +290,12 @@ class ExportService:
             market=selected_market,
             columns=selected_columns,
         )
-        filename_kind = "products-filtered" if _has_filters(filters) else "products"
+        if scope == "filtered" or (scope is None and _has_filters(filters)):
+            filename_kind = "products-filtered"
+        elif scope == "all":
+            filename_kind = "products-all"
+        else:
+            filename_kind = "products"
         return csv_response(_filename(filename_kind), headers, rows)
 
     def _product_rows(

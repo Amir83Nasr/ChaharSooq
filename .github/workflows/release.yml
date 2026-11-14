@@ -15,7 +15,9 @@ on:
 
 concurrency:
   # One release publishes once. A queued run waits for the running one
-  # instead of racing it.
+  # instead of racing it. The group is keyed by the release tag, and the tag
+  # must be `v<version>`, so two different tags can never name the same image
+  # tag and race each other.
   group: release-images-${{ github.event.release.tag_name || inputs.tag }}
   cancel-in-progress: false
 
@@ -28,6 +30,11 @@ jobs:
     # The whole check suite runs against the exact release commit before any
     # image is published. ci.yml is reusable for that purpose.
     uses: ./.github/workflows/ci.yml
+    with:
+      # The release tag, not the branch: the checks must run against the very
+      # commit that is about to be published, not against whatever `main`
+      # happens to point at.
+      ref: ${{ github.event.release.tag_name || inputs.tag }}
 
   publish:
     name: Publish the API and web images
@@ -72,24 +79,34 @@ jobs:
               exit 1
             }
           fi
+          # The release the API returned must be the one that was asked for.
+          resolved_tag="$(jq -r '.tag_name' <<<"$release_json")"
+          if [ "$resolved_tag" != "$tag" ]; then
+            echo "::error::release '${resolved_tag}' does not match the requested tag '${tag}'"
+            exit 1
+          fi
           if [ "$(jq -r '.draft' <<<"$release_json")" = "true" ] ||
             [ "$(jq -r '.prerelease' <<<"$release_json")" = "true" ]; then
             echo "::error::release ${tag} is a draft or a prerelease; only a stable published release may publish images"
             exit 1
           fi
-          # The version tag is the release tag without its leading "v". It must
-          # be a legal Docker tag: [A-Za-z0-9_][A-Za-z0-9._-]{0,127}.
-          version="${tag#v}"
-          if ! printf '%s' "$version" | grep -Eq '^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$'; then
-            echo "::error::release tag ${tag} does not map to a legal image tag"
+          # The release tag must be `v<version>`. The leading `v` is stripped to
+          # form the image tag, and requiring it keeps the release tag and the
+          # image tag in a one-to-one relation, so two different release tags
+          # can never name the same image tag.
+          # `[[ ... =~ ... ]]` anchors the whole string, so an embedded
+          # newline cannot smuggle a second line past the check.
+          if ! [[ "$tag" =~ ^v([A-Za-z0-9_][A-Za-z0-9._-]{0,127})$ ]]; then
+            echo "::error::release tag '${tag}' is not a valid release tag; expected v<version>"
             exit 1
           fi
+          version="${BASH_REMATCH[1]}"
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "release_id=$(jq -r '.id' <<<"$release_json")" >> "$GITHUB_OUTPUT"
 
       - name: Check out the release commit
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           # The tag, not the branch: the image must come from the released
           # commit, never from whatever `main` happens to point at.
@@ -117,7 +134,7 @@ jobs:
           echo "web_image=${REGISTRY}/${namespace}/${WEB_IMAGE_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to the container registry
-        uses: docker/login-action@v4
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -131,27 +148,42 @@ jobs:
           API_IMAGE: ${{ steps.meta.outputs.api_image }}
           WEB_IMAGE: ${{ steps.meta.outputs.web_image }}
           VERSION: ${{ steps.release.outputs.version }}
+          SHA: ${{ steps.meta.outputs.sha }}
         run: |
           set -euo pipefail
-          # A version tag is the release identity. Overwriting it would make
-          # the tag point at different bytes than the recorded digest, so an
-          # existing tag stops the run before anything is pushed.
-          for image in "$API_IMAGE" "$WEB_IMAGE"; do
-            if docker buildx imagetools inspect "${image}:${VERSION}" >/dev/null 2>&1; then
-              echo "::error::${image}:${VERSION} already exists; release tags are immutable, publish a new version instead"
+          # The version tag is the release identity and the SHA tag is the
+          # commit alias. Both are written once: the registry does not
+          # guarantee immutable tags, so this check is what keeps a tag from
+          # being re-pointed at bytes other than the recorded digest.
+          # The window between this check and the push is a race that only a
+          # registry with immutable tags can close.
+          existing=""
+          for reference in "${API_IMAGE}:${VERSION}" "${WEB_IMAGE}:${VERSION}" \
+            "${API_IMAGE}:sha-${SHA}" "${WEB_IMAGE}:sha-${SHA}"; do
+            if output="$(docker buildx imagetools inspect "${reference}" 2>&1)"; then
+              existing="${existing} ${reference}"
+            elif ! printf '%s' "$output" | grep -qi 'not found'; then
+              # An unknown registry state is not an absent tag: fail closed
+              # rather than push over a tag that may exist.
+              echo "::error::could not determine whether ${reference} exists; refusing to publish"
+              printf '%s\n' "$output"
               exit 1
             fi
           done
+          if [ -n "$existing" ]; then
+            echo "::error::these release tags already exist:${existing}; a release tag is written once, publish a new version instead"
+            exit 1
+          fi
 
       - name: Build and push the API image
         id: build_api
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: Dockerfile.api
           push: true
-          # Two immutable tags: the release version and the commit SHA. There
-          # is no `latest` and no moving tag.
+          # Two tags, written once: the release version and the commit SHA.
+          # There is no `latest` and no moving tag.
           tags: |
             ${{ steps.meta.outputs.api_image }}:${{ steps.release.outputs.version }}
             ${{ steps.meta.outputs.api_image }}:sha-${{ steps.meta.outputs.sha }}
@@ -169,7 +201,7 @@ jobs:
 
       - name: Build and push the web image
         id: build_web
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: Dockerfile.web
@@ -189,14 +221,14 @@ jobs:
           sbom: true
 
       - name: Attest the API image provenance
-        uses: actions/attest-build-provenance@v4
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-name: ${{ steps.meta.outputs.api_image }}
           subject-digest: ${{ steps.build_api.outputs.digest }}
           push-to-registry: true
 
       - name: Attest the web image provenance
-        uses: actions/attest-build-provenance@v4
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-name: ${{ steps.meta.outputs.web_image }}
           subject-digest: ${{ steps.build_web.outputs.digest }}
@@ -350,7 +382,7 @@ jobs:
           PY
 
       - name: Upload the release record
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-images
           path: release-images.json

@@ -71,8 +71,8 @@ Development → GitHub / CI → Staging → approval → Production
 - **A push to `main` must never be assumed to be a Production release.** Production promotion is
   a separate, explicit step.
 - **Image publishing exists.** [`.github/workflows/release.yml`](../../.github/workflows/release.yml)
-  publishes `charsooq-api` and `charsooq-web` from a published GitHub Release, with immutable
-  version and commit-SHA tags, OCI metadata, provenance, an SBOM, and recorded digests. It has not
+  publishes `charsooq-api` and `charsooq-web` from a published GitHub Release, with version and
+  commit-SHA tags, OCI metadata, provenance, an SBOM, and recorded digests. It has not
   been executed against a real release. The decision is
   [ADR 015](../adr/015-container-image-release-and-publishing.md) and the procedure is
   [release-management.md](../operations/release-management.md).
@@ -97,14 +97,14 @@ Until that is proven, the release process must still make the version auditable:
 
 **How this repository implements that:**
 
-| Requirement                      | Implementation                                                                                     |
-| -------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Release identity                 | The Git commit SHA, in the release body and in the image `revision` label                          |
-| Build once from the approved SHA | The release workflow checks out the release tag and builds both images from that one checkout      |
-| Immutable tags                   | `<version>` and `sha-<full-sha>`; the workflow refuses to publish a version tag twice              |
-| Deploy by digest                 | `CHARSOOQ_API_IMAGE` / `CHARSOOQ_WEB_IMAGE` take `repository@sha256:<digest>` and have no default  |
-| Traceability                     | The workflow reads the published `revision` label back and fails when it is not the release commit |
-| Provenance and SBOM              | BuildKit provenance and SBOM attestations travel inside the published image index                  |
+| Requirement                      | Implementation                                                                                                                                                                |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Release identity                 | The Git commit SHA, in the release body and in the image `revision` label                                                                                                     |
+| Build once from the approved SHA | The release workflow checks out the release tag and builds both images from that one checkout                                                                                 |
+| Tags written once                | `<version>` and `sha-<full-sha>`; the workflow refuses to publish either of them twice. The registry does not enforce immutability, so the digest is the deployment reference |
+| Deploy by digest                 | `CHARSOOQ_API_IMAGE` / `CHARSOOQ_WEB_IMAGE` take `repository@sha256:<digest>` and have no default                                                                             |
+| Traceability                     | The workflow reads the published `revision` label back and fails when it is not the release commit                                                                            |
+| Provenance and SBOM              | BuildKit provenance and SBOM attestations travel inside the published image index                                                                                             |
 
 ## Development
 

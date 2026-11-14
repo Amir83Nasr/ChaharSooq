@@ -562,27 +562,29 @@ short outage into a restore.
 
 ## 6. Update and release workflow
 
-The target is: build once from an approved commit, tag immutably, push to the approved registry, and
-deploy that exact image **by digest**. `latest` is never a Production release identity. The registry,
-promotion mechanism, and deploy access are still open decisions; until they exist, a host build from a
-clean approved commit is a temporary, recorded fallback, not the target.
+The target is: build once from an approved commit, publish it under a version tag and a commit-SHA
+tag, push to the approved registry, and deploy that exact image **by digest**. `latest` is never a
+Production release identity, and a tag is never the deployment reference: the digest is the
+authoritative one. The registry, promotion mechanism, and deploy access are still open decisions;
+until they exist, a host build from a clean approved commit is a temporary, recorded fallback, not
+the target.
 
 ### 6.1 Release gates
 
 Do not start an update unless all gates pass:
 
-| Gate            | Evidence                                                                                                          |
-| --------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Approved commit | Git SHA `/release` tag; `git status --porcelain` empty in the deployment checkout                                 |
-| CI              | GitHub Actions `frontend`, `backend`, `migrations`, and `build` jobs green for that SHA                           |
-| Staging         | The same SHA exercised in Staging, including frontend ↔ API integration and login                                 |
-| Image identity  | Registry digest recorded for API and web; the image `revision` label matches the SHA (`make prod-image-revision`) |
-| Database review | Migration classified as none/additive/expand-contract; backup gate decided                                        |
-| Backup          | A verified, encrypted, off-host dump from before the change; restore path known                                   |
-| Rollback        | Previous API/web digests and the previous release record are available                                            |
-| TLS             | Valid certificate for the site host; no expiry inside the change window                                           |
-| Capacity        | Disk, memory, and database size checked; no active incident                                                       |
-| Window          | Approved maintenance window and an operator who can roll back                                                     |
+| Gate            | Evidence                                                                                                           |
+| --------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Approved commit | Git SHA; a published GitHub Release tagged `v<version>`; `git status --porcelain` empty in the deployment checkout |
+| CI              | GitHub Actions `frontend`, `backend`, `migrations`, and `build` jobs green for that SHA                            |
+| Staging         | The same SHA exercised in Staging, including frontend ↔ API integration and login                                  |
+| Image identity  | Registry digest recorded for API and web; the image `revision` label matches the SHA (`make prod-image-revision`)  |
+| Database review | Migration classified as none/additive/expand-contract; backup gate decided                                         |
+| Backup          | A verified, encrypted, off-host dump from before the change; restore path known                                    |
+| Rollback        | Previous API/web digests and the previous release record are available                                             |
+| TLS             | Valid certificate for the site host; no expiry inside the change window                                            |
+| Capacity        | Disk, memory, and database size checked; no active incident                                                        |
+| Window          | Approved maintenance window and an operator who can roll back                                                      |
 
 ### 6.2 Build and record the artifact
 
@@ -1205,14 +1207,14 @@ was started, no database was opened, and no secret or `.env` file was read.
 
 Release-specific checks (see [release-management.md](release-management.md)):
 
-| Check                                                  | Result                                                                                          |
-| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
-| `make prod-build`                                      | Pass: both images built from this checkout and stamped with the commit SHA                      |
-| `docker image inspect` on both built images            | The `revision` label equals the commit that built them; `make prod-image-revision` prints it    |
-| `docker compose config` with the image variables unset | Fails closed with a named error instead of defaulting to a mutable local tag                    |
-| `docker compose config` with digest references         | API, `provision`, `migrate`, and web resolve to the same published image                        |
-| Release-path build with `--provenance=mode=max --sbom` | Both images carry the SLSA provenance and SPDX SBOM attestations inside the published index     |
-| Workflow YAML parsed; every `run:` script checked      | No syntax error; the release-body update was exercised against a stubbed `gh` and is idempotent |
+| Check                                                  | Result                                                                                                                                                                                   |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `make prod-build`                                      | Pass: both images built from this checkout and stamped with the commit SHA                                                                                                               |
+| `docker image inspect` on both built images            | The `revision` label equals the commit that built them; `make prod-image-revision` prints it                                                                                             |
+| `docker compose config` with the image variables unset | Fails closed with a named error instead of defaulting to a mutable local tag                                                                                                             |
+| `docker compose config` with digest references         | API, `provision`, `migrate`, and web resolve to the same published image                                                                                                                 |
+| Release-path build with `--provenance=mode=max --sbom` | Both images are built with the provenance and SPDX SBOM attestations enabled. The attestations inside a _published_ index have not been observed yet, because nothing has been published |
+| Workflow YAML parsed; every `run:` script checked      | No syntax error; the release-body update was exercised against a stubbed `gh` and is idempotent                                                                                          |
 
 Not run, and why:
 

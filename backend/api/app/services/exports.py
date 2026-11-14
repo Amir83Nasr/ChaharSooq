@@ -230,6 +230,22 @@ def _normalize_columns(columns: list[str] | None) -> list[str]:
     return selected
 
 
+# Virtual output columns: for the full export, "competitor_price" expands to
+# show both appliance markets side by side (the filtered export keeps the
+# selected market only).
+_ALL_COMPETITOR_COLUMNS = ("competitor_price_digikala", "competitor_price_technolife")
+
+
+def _output_columns(selected: list[str], *, scope: str | None) -> list[str]:
+    out: list[str] = []
+    for col in selected:
+        if col == "competitor_price" and scope == "all":
+            out.extend(_ALL_COMPETITOR_COLUMNS)
+        else:
+            out.append(col)
+    return out
+
+
 def _header_for(column: str, market: str) -> str:
     market_label = MARKET_LABELS.get(market, MARKET_LABELS["digikala"])
     headers = {
@@ -241,6 +257,8 @@ def _header_for(column: str, market: str) -> str:
         "unit": "واحد",
         "price": "قیمت (تومان)",
         "competitor_price": f"قیمت رقبا ({market_label})",
+        "competitor_price_digikala": "قیمت رقبا (دیجی‌کالا)",
+        "competitor_price_technolife": "قیمت رقبا (تکنولایف)",
         "price_diff": "اختلاف درصد",
         "suggested_price": "قیمت پیشنهادی (تومان)",
         "suggested_price_change": "درصد تغییر",
@@ -281,14 +299,18 @@ class ExportService:
         if selected_market not in MARKET_LABELS:
             selected_market = "digikala"
         selected_columns = _normalize_columns(columns)
-        headers = tuple(_header_for(col, selected_market) for col in selected_columns)
+        output_columns = _output_columns(selected_columns, scope=scope)
+        # Persian output is RTL: columns are emitted right-to-left so the first
+        # logical column (ردیف) appears at the visual right edge.
+        rtl_columns = list(reversed(output_columns))
+        headers = tuple(_header_for(col, selected_market) for col in rtl_columns)
         rows = self._product_rows(
             filters=filters,
             sort=sort,
             threshold=threshold,
             weights=weights,
             market=selected_market,
-            columns=selected_columns,
+            columns=rtl_columns,
         )
         if scope == "filtered" or (scope is None and _has_filters(filters)):
             filename_kind = "products-filtered"
@@ -345,6 +367,20 @@ class ExportService:
             if is_appliance
             else ("sofa" if top == "مبلمان" else ("digifresh" if top == "فرش" else None))
         )
+
+        def competitor_text(store: str | None) -> str:
+            competitor = next((p for p in prices if p.store == store), None) if store else None
+            amount: float | None = None
+            if competitor and competitor.price is not None:
+                toman = _to_toman(competitor.price, competitor.currency)
+                if toman is not None:
+                    amount = float(toman)
+            fresh = bool(competitor and competitor.is_fresh and amount is not None)
+            if fresh and amount is not None:
+                return format_amount(amount)
+            status = competitor.status if competitor else None
+            return COMPETITOR_STATUS_LABELS.get(str(status) if status else "", "لینک ثبت نشده")
+
         competitor = (
             next((p for p in prices if p.store == tracked_store), None) if tracked_store else None
         )
@@ -358,7 +394,6 @@ class ExportService:
                 amount = float(toman)
         fresh = bool(competitor and competitor.is_fresh and amount is not None)
 
-        # competitor price cell
         if not show_competitor:
             competitor_price_text = "—"
         elif fresh and amount is not None:
@@ -369,7 +404,6 @@ class ExportService:
                 str(status) if status else "", "لینک ثبت نشده"
             )
 
-        # price diff (appliances, fresh)
         pct = _diff_percent(base_price, amount) if is_appliance and fresh else None
         if not is_appliance or pct is None:
             price_diff_text = "—"
@@ -381,7 +415,6 @@ class ExportService:
                 word = "گران‌تر" if pct > 0 else "ارزان‌تر"
                 price_diff_text = f"{_format_percent_magnitude(pct)} {word}"
 
-        # suggested price
         weight = weights.get(top) if top is not None else None
         if fresh:
             if is_appliance:
@@ -416,7 +449,6 @@ class ExportService:
                 word = "بیشتر" if suggested_change > 0 else "کمتر"
                 suggested_change_text = f"{_format_percent_magnitude(suggested_change)} {word}"
 
-        # brand cell: "brand - subgroup" when both, like table shows both
         brand_parts = [part for part in [brand, product.sub_group_name] if part]
         brand_text = " - ".join(brand_parts) if brand_parts else "—"
 
@@ -429,6 +461,8 @@ class ExportService:
             "unit": product.unit_name or "—",
             "price": format_amount(product.price),
             "competitor_price": competitor_price_text,
+            "competitor_price_digikala": competitor_text("digikala") if is_appliance else "—",
+            "competitor_price_technolife": competitor_text("technolife") if is_appliance else "—",
             "price_diff": price_diff_text,
             "suggested_price": suggested_text,
             "suggested_price_change": suggested_change_text,

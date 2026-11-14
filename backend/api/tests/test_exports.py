@@ -43,16 +43,23 @@ def _listing_export(client: TestClient, **params: str | bool) -> list[list[str]]
     return _rows(client.get("/api/v1/exports/competitor-listings.csv", params=params))
 
 
-def _add_manual_listing(client: TestClient, product_id: int) -> int:
+def _add_manual_listing(
+    client: TestClient,
+    product_id: int,
+    *,
+    store: str = "digikala",
+    url: str = "https://www.digikala.com/product/dkp-123456/",
+    price: int = 25_000_000,
+) -> int:
     created = client.post(
         f"/api/v1/products/{product_id}/competitors",
-        json={"store": "digikala", "url": "https://www.digikala.com/product/dkp-123456/"},
+        json={"store": store, "url": url},
     )
     assert created.status_code == 201, created.text
     listing_id = int(created.json()["id"])
     saved = client.patch(
         f"/api/v1/competitors/{listing_id}",
-        json={"manual_price": 25_000_000, "manual_currency": "IRT", "manual_in_stock": True},
+        json={"manual_price": price, "manual_currency": "IRT", "manual_in_stock": True},
     )
     assert saved.status_code == 200, saved.text
     return listing_id
@@ -79,7 +86,9 @@ def test_products_csv_mirrors_visible_table_columns(client: TestClient) -> None:
 
     rows = _rows(response)
     headers = rows[0]
-    assert headers[0] == "ردیف"
+    # RTL export: columns start from the right, so ردیف is the rightmost column.
+    assert headers[-1] == "ردیف"
+    assert headers[0] == "موجودی"
     assert "قیمت (تومان)" in headers
     assert "موجودی" in headers
     # Database/internal columns must not be exported.
@@ -139,15 +148,15 @@ def test_products_csv_respects_visible_columns_and_market(client: TestClient) ->
     assert response.status_code == 200, response.text
     rows = _rows(response)
     headers = rows[0]
-    # ردیف is always first; only requested visible columns follow.
+    # RTL export: ردیف is the rightmost column and the rest follow in RTL order.
     assert headers == [
-        "ردیف",
-        "نام",
-        "کد",
-        "قیمت (تومان)",
-        "قیمت رقبا (دیجی‌کالا)",
-        "اختلاف درصد",
         "موجودی",
+        "اختلاف درصد",
+        "قیمت رقبا (دیجی‌کالا)",
+        "قیمت (تومان)",
+        "کد",
+        "نام",
+        "ردیف",
     ]
     row = rows[1]
     assert row[headers.index("ردیف")] == "۱"
@@ -221,6 +230,59 @@ def test_export_rejects_results_above_the_cap(client: TestClient, monkeypatch: M
 
     listing = client.get("/api/v1/exports/competitor-listings.csv")
     assert listing.status_code == 200  # zero listings still exports fine
+
+
+def test_products_csv_all_export_shows_both_competitor_markets(client: TestClient) -> None:
+    from sqlalchemy.orm import Session
+
+    from app.core.database import get_engine
+    from app.models import Product
+
+    product_id = _product_id(client)
+    with Session(get_engine()) as db:
+        product = db.get(Product, product_id)
+        assert product is not None
+        product.main_group_name = "لوازم خانگی یخچال"
+        db.commit()
+
+    _add_manual_listing(client, product_id, store="digikala", price=25_000_000)
+    _add_manual_listing(
+        client,
+        product_id,
+        store="technolife",
+        url="https://www.technolife.com/product-123456",
+        price=26_000_000,
+    )
+
+    response = client.get(
+        "/api/v1/exports/products.csv",
+        params={
+            "columns": "name,sku,competitor_price,stock",
+            "scope": "all",
+        },
+    )
+    assert response.status_code == 200, response.text
+    rows = _rows(response)
+    headers = rows[0]
+    # Full export includes both appliance competitor markets side by side.
+    assert headers.index("قیمت رقبا (دیجی‌کالا)") > headers.index("قیمت رقبا (تکنولایف)")
+    assert headers[-1] == "ردیف"
+    row = rows[1]
+    assert row[headers.index("قیمت رقبا (دیجی‌کالا)")] == "۲۵۰۰۰۰۰۰"
+    assert row[headers.index("قیمت رقبا (تکنولایف)")] == "۲۶۰۰۰۰۰۰"
+
+    filtered = client.get(
+        "/api/v1/exports/products.csv",
+        params={
+            "columns": "name,sku,competitor_price,stock",
+            "market": "digikala",
+            "scope": "filtered",
+        },
+    )
+    assert filtered.status_code == 200, filtered.text
+    filtered_headers = _rows(filtered)[0]
+    assert "قیمت رقبا (دیجی‌کالا)" in filtered_headers
+    assert "قیمت رقبا (تکنولایف)" not in filtered_headers
 
 
 def test_persian_format_helpers() -> None:

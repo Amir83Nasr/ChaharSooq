@@ -268,6 +268,9 @@ services:
       # organization (files from the organization CA) or internal-ca (Caddy's
       # local CA). The selected snippet is imported by the Caddyfile.
       CHARSOOQ_TLS_MODE: ${CHARSOOQ_TLS_MODE:-organization}
+      # HSTS max-age in seconds. Keep 0 until clients trust the TLS root CA,
+      # then raise (e.g. 31536000). max-age=0 disables HSTS enforcement.
+      CHARSOOQ_HSTS_MAX_AGE: ${CHARSOOQ_HSTS_MAX_AGE:-31536000}
     ports:
       # host_ip:host_port:container_port. Binding an explicit IP is required:
       # a bare "80:80" would publish on every interface. IPv6 is not configured.

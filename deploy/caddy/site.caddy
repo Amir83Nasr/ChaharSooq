@@ -7,8 +7,10 @@ encode zstd gzip
 # HSTS has exactly one owner: this proxy. The API no longer sets it.
 # includeSubDomains and preload stay off until every subdomain and the DNS/TLS
 # policy are confirmed by IT (see the open decisions in the deployment doc).
+# Set CHARSOOQ_HSTS_MAX_AGE=0 to disable HSTS while clients are still trusting
+# the TLS root CA (max-age=0 tells browsers to stop enforcing it immediately).
 header {
-	Strict-Transport-Security "max-age=31536000"
+	Strict-Transport-Security "max-age={$CHARSOOQ_HSTS_MAX_AGE:31536000}"
 	-Server
 }
 

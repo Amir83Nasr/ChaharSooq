@@ -1,6 +1,7 @@
 """Parsina integration — client contract, sync rules, endpoints (mocked HTTP)."""
 
 import csv
+import logging
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -156,13 +157,33 @@ def test_client_rejects_failed_envelope() -> None:
             client.commodities()
 
 
-def test_client_maps_network_errors() -> None:
+def test_client_maps_network_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("app.integrations.parsina.TRANSIENT_REQUEST_BACKOFF_SECONDS", 0)
+    calls = {"count": 0}
+
     def handler(request: httpx.Request) -> httpx.Response:
+        calls["count"] += 1
         raise httpx.ConnectError("boom", request=request)
 
     with ParsinaClient(SETTINGS, transport=httpx.MockTransport(handler)) as client:
         with pytest.raises(ParsinaNetworkError):
             client.commodities()
+    # One auth attempt, retried up to the configured limit — never infinite.
+    assert calls["count"] == 3
+
+
+def test_client_retries_timeout_limited_times(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("app.integrations.parsina.TRANSIENT_REQUEST_BACKOFF_SECONDS", 0)
+    calls = {"count": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["count"] += 1
+        raise httpx.ReadTimeout("slow", request=request)
+
+    with ParsinaClient(SETTINGS, transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(ParsinaNetworkError, match="timeout"):
+            client.commodities()
+    assert calls["count"] == 3
 
 
 def test_client_refuses_unconfigured_settings() -> None:
@@ -217,6 +238,86 @@ def test_sync_rejects_payload_without_valid_ids(session: Session) -> None:
     assert session.execute(select(Product)).scalars().all() == []
 
 
+def test_sync_failure_leaves_no_partial_db_changes(session: Session) -> None:
+    # Establish a successful baseline.
+    _service(session, FakeParsina(_goods(_good(1, "A-1", "قدیم", sale=1000)))).run()
+    state_before = SyncStateRepository(session).get()
+    assert state_before.last_success_at is not None
+
+    class Boom(Exception):
+        pass
+
+    calls = {"n": 0}
+
+    def boom_assign(
+        self: ProductSyncService, product: Product, row: Any, units: dict[int, str]
+    ) -> None:
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise Boom("mid-apply")
+        # apply first row normally to mutate staged state before failure
+        ProductSyncService._assign(  # type: ignore[arg-type]  # pyright: ignore[reportPrivateUsage]
+            self, product, row, units
+        )
+
+    failing = _service(
+        session,
+        FakeParsina(_goods(_good(1, "A-1", "جدید", sale=9999), _good(2, "A-2", "نو"))),
+    )
+    original = ProductSyncService._assign  # pyright: ignore[reportPrivateUsage]
+    try:
+        ProductSyncService._assign = boom_assign  # type: ignore[assignment]  # pyright: ignore[reportPrivateUsage]
+        with pytest.raises(Boom):
+            failing.run()
+    finally:
+        ProductSyncService._assign = original  # type: ignore[assignment]  # pyright: ignore[reportPrivateUsage]
+
+    session.expire_all()
+    products = session.execute(select(Product).order_by(Product.external_id)).scalars().all()
+    assert len(products) == 1
+    assert products[0].name == "قدیم"
+    assert products[0].price == Decimal("1000")
+    state = SyncStateRepository(session).get()
+    assert state.last_success_at == state_before.last_success_at
+    assert state.last_error is not None
+    assert state.running_since is None
+
+
+def test_client_does_not_log_sensitive_credentials(
+    session: Session, caplog: pytest.LogCaptureFixture
+) -> None:
+    secret_password = "p@ssw0rd-SUPER-SECRET"
+    secret_token = "token-secret-abc123"
+    settings = ParsinaSettings(
+        parsina_base_url="http://parsina.test/Api/V1",
+        parsina_username="u",
+        parsina_password=secret_password,
+        parsina_org_id=1,
+        parsina_year=1400,
+        parsina_timeout_seconds=2,
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/Account"):
+            return httpx.Response(
+                200, json={"access_token": secret_token, "expires_in": 100, "userName": "admin"}
+            )
+        if request.url.path.endswith("/UnitCount/BaseInfo"):
+            return httpx.Response(500, json={"isSuccess": False})
+        return httpx.Response(200, json=_goods(_good(1, "A-1", "کالا")))
+
+    with caplog.at_level(logging.WARNING):
+        result = ProductSyncService(
+            session, settings=settings, transport=httpx.MockTransport(handler)
+        ).run()
+    assert result.processed == 1
+    combined = "\n".join(r.getMessage() for r in caplog.records)
+    assert secret_password not in combined
+    assert secret_token not in combined
+    assert "Bearer" not in combined
+    assert "Authorization" not in combined
+
+
 def test_sync_deactivates_rows_missing_from_listing(session: Session) -> None:
     _service(session, FakeParsina(_goods(_good(1, "A-1", "یک"), _good(2, "A-2", "دو")))).run()
     result = _service(session, FakeParsina(_goods(_good(1, "A-1", "یک")))).run()
@@ -225,6 +326,30 @@ def test_sync_deactivates_rows_missing_from_listing(session: Session) -> None:
     rows = {p.external_id: p for p in session.execute(select(Product)).scalars()}
     assert rows[1] is not None and rows[1].is_active
     assert rows[2] is not None and not rows[2].is_active
+
+
+def test_filtered_parsina_sync_does_not_deactivate_missing_products(session: Session) -> None:
+    # Seed full catalog first (both products active).
+    _service(session, FakeParsina(_goods(_good(1, "A-1", "یک"), _good(2, "A-2", "دو")))).run()
+    filtered = ParsinaSettings(
+        parsina_base_url="http://parsina.test/Api/V1",
+        parsina_username="u",
+        parsina_password="p",
+        parsina_org_id=1,
+        parsina_year=1400,
+        parsina_timeout_seconds=2,
+        parsina_ware_id=5,  # scoped/filtered listing
+    )
+    fake = FakeParsina(_goods(_good(1, "A-1", "یک")))
+    result = ProductSyncService(
+        session, settings=filtered, transport=httpx.MockTransport(fake)
+    ).run()
+    assert result.deactivated == 0
+    assert any("LoadByFilter" in req.url.path for req in fake.requests)
+    session.expire_all()
+    rows = {p.external_id: p for p in session.execute(select(Product)).scalars()}
+    assert rows[1] is not None and rows[1].is_active
+    assert rows[2] is not None and rows[2].is_active
 
 
 def test_sync_source_wins_over_manual_sku_collision(session: Session) -> None:

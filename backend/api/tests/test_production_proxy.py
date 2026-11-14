@@ -81,7 +81,11 @@ def test_client_forwarding_headers_are_overwritten_not_trusted() -> None:
 def test_hsts_is_owned_here_and_stays_conservative() -> None:
     site = _code("site.caddy")
 
-    assert 'Strict-Transport-Security "max-age=31536000"' in site
+    # HSTS is owned here, with a configurable max-age (0 disables enforcement
+    # while clients are still trusting the TLS root CA). Conservative by default.
+    assert "Strict-Transport-Security" in site
+    assert "CHARSOOQ_HSTS_MAX_AGE" in site
+    assert "max-age=" in site
     # includeSubDomains/preload wait for the DNS and TLS decisions owned by IT.
     assert "includeSubDomains" not in site
     assert "preload" not in site

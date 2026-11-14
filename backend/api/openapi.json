@@ -1668,6 +1668,48 @@
               "title": "Sort"
             },
             "description": "Row order in the file."
+          },
+          {
+            "name": "columns",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated visible table column ids, in display order.",
+              "title": "Columns"
+            },
+            "description": "Comma-separated visible table column ids, in display order."
+          },
+          {
+            "name": "market",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "digikala",
+                    "technolife",
+                    "sofa",
+                    "digifresh"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Selected competitor market for competitor/suggested columns.",
+              "title": "Market"
+            },
+            "description": "Selected competitor market for competitor/suggested columns."
           }
         ],
         "responses": {

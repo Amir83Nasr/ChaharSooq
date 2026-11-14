@@ -10,6 +10,7 @@ import {
   buildProductExportParams,
   buildProductParams,
   type CompetitorExportFilters,
+  type ProductExportOptions,
 } from "./api-params"
 import type {
   ApiError,
@@ -179,8 +180,11 @@ export const api = {
     return request<ProductPage>(`/api/v1/products${buildProductParams(params)}`)
   },
   /** CSV download URL — pass to `downloadFile`; never to `request`. */
-  productExportUrl(params: ProductFilters = {}) {
-    return `/api/v1/exports/products.csv${buildProductExportParams(params)}`
+  productExportUrl(
+    params: ProductFilters = {},
+    options: ProductExportOptions = {}
+  ) {
+    return `/api/v1/exports/products.csv${buildProductExportParams(params, options)}`
   },
   /** CSV download URL for competitor links; product filters narrow the rows. */
   competitorListingsExportUrl(

@@ -6,12 +6,20 @@ import type {
   CompetitorStatus,
   CompetitorStore,
   ProductFilters,
+  ProductTableColumn,
 } from "./api-types"
 
 export interface CompetitorExportFilters {
   store?: CompetitorStore
   status?: CompetitorStatus
   is_active?: boolean
+}
+
+export interface ProductExportOptions {
+  /** Visible table columns, in display order (export mirrors the table). */
+  columns?: readonly ProductTableColumn[]
+  /** Selected competitor market for the competitor/suggested columns. */
+  market?: string
 }
 
 function appendProductParams(
@@ -55,13 +63,20 @@ export function buildProductParams(params: ProductFilters): string {
 }
 
 /** Export endpoints accept the same filters, never paging. */
-export function buildProductExportParams(params: ProductFilters): string {
+export function buildProductExportParams(
+  params: ProductFilters,
+  options: ProductExportOptions = {}
+): string {
   const search = new URLSearchParams()
   appendProductParams(search, {
     ...params,
     page: undefined,
     page_size: undefined,
   })
+  if (options.columns && options.columns.length > 0) {
+    search.set("columns", options.columns.join(","))
+  }
+  if (options.market) search.set("market", options.market)
   return suffix(search)
 }
 

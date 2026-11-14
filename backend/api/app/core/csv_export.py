@@ -40,7 +40,8 @@ def csv_response(
 
     def body() -> Iterator[bytes]:
         # UTF-8 BOM: without it Excel opens Persian headers as mojibake.
-        yield b"\xef\xbb\xbf"
+        # U+200F (RLM) hints right-to-left direction for Persian readers.
+        yield b"\xef\xbb\xbf\xe2\x80\x8f"
         yield from _encode_rows(headers, rows)
 
     return StreamingResponse(

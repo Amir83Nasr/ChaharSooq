@@ -16,15 +16,25 @@ from tests.helpers import login, seed
 def _rows(response: object) -> list[list[str]]:
     content: bytes = response.content  # type: ignore[attr-defined]
     assert content.startswith(b"\xef\xbb\xbf"), "CSV must start with a UTF-8 BOM"
-    return list(csv.reader(io.StringIO(content.decode("utf-8-sig"))))
+    text = content.decode("utf-8-sig")
+    # RTL hint (U+200F) may follow the BOM.
+    if text.startswith("\u200f"):
+        text = text[1:]
+    return list(csv.reader(io.StringIO(text)))
 
 
-def _product_id(client: TestClient, *, name: str = "یخچال آزمایشی", sku: str = "FR-1") -> int:
+def _product_id(
+    client: TestClient,
+    *,
+    name: str = "یخچال آزمایشی",
+    sku: str = "FR-1",
+    main_group_name: str | None = "لوازم خانگی یخچال",
+) -> int:
     login(client)
-    response = client.post(
-        "/api/v1/products",
-        json={"name": name, "sku": sku, "price": 100_000_000, "stock": 3},
-    )
+    payload = {"name": name, "sku": sku, "price": 100_000_000, "stock": 3}
+    if main_group_name is not None:
+        payload["main_group_name"] = main_group_name
+    response = client.post("/api/v1/products", json=payload)
     assert response.status_code == 201, response.text
     return int(response.json()["id"])
 
@@ -53,38 +63,93 @@ def test_exports_require_auth(client: TestClient) -> None:
     assert client.get("/api/v1/exports/competitor-listings.csv").status_code == 401
 
 
-def test_products_csv_headers_values_and_jalali_dates(client: TestClient) -> None:
+def test_products_csv_mirrors_visible_table_columns(client: TestClient) -> None:
     seed(client)
     response = client.get("/api/v1/exports/products.csv")
 
     assert response.status_code == 200, response.text
     assert response.headers["content-type"].startswith("text/csv")
     assert response.headers["content-disposition"].startswith('attachment; filename="products-')
-    headers = _rows(response)[0]
-    assert headers[0] == "شناسه"
-    assert "قیمت (تومان)" in headers
-    # Operational noise stays out of the analysis file.
-    assert "تاریخ ایجاد" not in headers
-    assert "فعال" not in headers
+    assert response.content.startswith(b"\xef\xbb\xbf\xe2\x80\x8f")
 
     rows = _rows(response)
+    headers = rows[0]
+    assert headers[0] == "ردیف"
+    assert "قیمت (تومان)" in headers
+    assert "موجودی" in headers
+    # Database/internal columns must not be exported.
+    assert "شناسه" not in headers
+    assert "شناسه پارسینا" not in headers
+    assert "تاریخ ایجاد" not in headers
+    assert "فعال" not in headers
+    assert "وضعیت موجودی" not in headers
+
     assert len(rows) == 4  # header + the three seeded products
     by_sku = {row[headers.index("کد")]: row for row in rows[1:]}
     tea = by_sku["TEA-1"]
     assert tea[headers.index("قیمت (تومان)")] == "۱۰۰"
     assert tea[headers.index("موجودی")] == "۵"
-    # Default low-stock threshold is 5.
-    assert tea[headers.index("وضعیت موجودی")] == "موجودی کم"
-    assert by_sku["CHE-1"][headers.index("وضعیت موجودی")] == "ناموجود"
+    # Row numbers are sequential in export order (default sort newest: by id desc).
+    assert [row[headers.index("ردیف")] for row in rows[1:]] == ["۱", "۲", "۳"]
 
 
 def test_products_csv_applies_filters_and_sort(client: TestClient) -> None:
     seed(client)
-    filtered = _rows(client.get("/api/v1/exports/products.csv", params={"q": "CHE-1"}))
-    assert [row[2] for row in filtered[1:]] == ["CHE-1"]
+    response = client.get("/api/v1/exports/products.csv", params={"q": "CHE-1"})
+    assert response.headers["content-disposition"].startswith(
+        'attachment; filename="products-filtered-'
+    )
+    filtered = _rows(response)
+    headers = filtered[0]
+    assert [row[headers.index("کد")] for row in filtered[1:]] == ["CHE-1"]
 
     cheapest = _rows(client.get("/api/v1/exports/products.csv", params={"sort": "cheapest"}))
-    assert cheapest[1][2] == "TEA-1"
+    headers = cheapest[0]
+    assert cheapest[1][headers.index("کد")] == "TEA-1"
+
+
+def test_products_csv_respects_visible_columns_and_market(client: TestClient) -> None:
+    from sqlalchemy.orm import Session
+
+    from app.core.database import get_engine
+    from app.models import Product
+
+    product_id = _product_id(client)
+    # Appliance group so the selected competitor market is shown (matches table logic).
+    with Session(get_engine()) as db:
+        product = db.get(Product, product_id)
+        assert product is not None
+        product.main_group_name = "لوازم خانگی یخچال"
+        db.commit()
+
+    _add_manual_listing(client, product_id)
+
+    response = client.get(
+        "/api/v1/exports/products.csv",
+        params={
+            "columns": "name,sku,price,competitor_price,price_diff,stock",
+            "market": "digikala",
+        },
+    )
+    assert response.status_code == 200, response.text
+    rows = _rows(response)
+    headers = rows[0]
+    # ردیف is always first; only requested visible columns follow.
+    assert headers == [
+        "ردیف",
+        "نام",
+        "کد",
+        "قیمت (تومان)",
+        "قیمت رقبا (دیجی‌کالا)",
+        "اختلاف درصد",
+        "موجودی",
+    ]
+    row = rows[1]
+    assert row[headers.index("ردیف")] == "۱"
+    assert row[headers.index("نام")] == "یخچال آزمایشی"
+    assert row[headers.index("قیمت رقبا (دیجی‌کالا)")] == "۲۵۰۰۰۰۰۰"
+    # Base price 100m vs 25m market price → 300% more expensive.
+    assert row[headers.index("اختلاف درصد")] == "۳۰۰٪ گران‌تر"
 
 
 def test_products_csv_escapes_commas_and_quotes(client: TestClient) -> None:
@@ -93,21 +158,6 @@ def test_products_csv_escapes_commas_and_quotes(client: TestClient) -> None:
     rows = _rows(client.get("/api/v1/exports/products.csv", params={"q": "HP-9"}))
     assert len(rows) == 2
     assert rows[1][rows[0].index("نام")] == tricky
-
-
-def test_products_csv_includes_fresh_competitor_prices(client: TestClient) -> None:
-    product_id = _product_id(client)
-    _add_manual_listing(client, product_id)
-
-    response = client.get("/api/v1/exports/products.csv")
-    headers = _rows(response)[0]
-    row = _rows(response)[1]
-    assert row[headers.index("قیمت دیجی‌کالا")] == "۲۵۰۰۰۰۰۰"
-    assert row[headers.index("کمینه قیمت رقبا")] == "۲۵۰۰۰۰۰۰"
-    # Base price 100m vs the 25m market minimum → +300%.
-    assert row[headers.index("اختلاف با کمینه رقبا (٪)")] == "+۳۰۰٪"
-    # Stores without a fresh price stay empty rather than showing a stale one.
-    assert row[headers.index("قیمت تکنولایف")] == ""
 
 
 def test_competitor_listings_csv_filters_and_labels(client: TestClient) -> None:

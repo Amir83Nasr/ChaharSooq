@@ -23,6 +23,7 @@ ListingStatus = Literal[
     "pending", "success", "not_found", "unavailable", "blocked", "failed", "manual"
 ]
 ProductSort = Literal["newest", "cheapest", "most_expensive"]
+MarketFilter = Literal["digikala", "technolife", "sofa", "digifresh"]
 
 _EXPORT_DESCRIPTION = (
     "Streams a UTF-8 CSV (with BOM, comma-separated) for Excel. Headers, "
@@ -76,6 +77,14 @@ def export_products_csv(
     sort: ProductSort = Query(  # noqa: B008
         default="newest", description="Row order in the file."
     ),
+    columns: str | None = Query(  # noqa: B008
+        default=None,
+        description="Comma-separated visible table column ids, in display order.",
+    ),
+    market: MarketFilter | None = Query(  # noqa: B008
+        default=None,
+        description="Selected competitor market for competitor/suggested columns.",
+    ),
     _user: Admin = Depends(require_user),  # noqa: B008
     session: Session = Depends(get_db_readonly),  # noqa: B008
 ) -> Response:
@@ -94,8 +103,14 @@ def export_products_csv(
         max_stock=max_stock,
         in_stock=in_stock,
     )
+    column_ids = [part.strip() for part in columns.split(",")] if columns else None
     try:
-        return ExportService(session).products_csv(filters=filters, sort=sort)
+        return ExportService(session).products_csv(
+            filters=filters,
+            sort=sort,
+            columns=column_ids,
+            market=market,
+        )
     except ExportTooLargeError:
         return _too_large()
 

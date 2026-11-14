@@ -209,19 +209,22 @@ function ProductsPageContent() {
 
   const exportOptions: ExportCsvOption[] = [
     {
-      label: "خروجی محصولات (فیلترشده)",
-      description: "همهٔ ردیف‌های منطبق با فیلترهای فعلی",
-      buildUrl: () => api.productExportUrl(exportFilters),
+      label: "خروجی نمای فعلی جدول",
+      description: "ردیف‌های منطبق با فیلترها و ستون‌های نمایش‌داده‌شده",
+      buildUrl: () =>
+        api.productExportUrl(exportFilters, {
+          columns: visibleColumns,
+          market: view.market,
+        }),
     },
     {
-      label: "خروجی کامل محصولات",
-      description: "همهٔ کالاها، بدون فیلتر",
-      buildUrl: () => api.productExportUrl(),
-    },
-    {
-      label: "خروجی قیمت رقبا (فیلترشده)",
-      description: "لینک رقبای همین محصولات",
-      buildUrl: () => api.competitorListingsExportUrl(exportFilters),
+      label: "خروجی همه محصولات",
+      description: "همهٔ ردیف‌ها بدون فیلتر، با ستون‌های نمایش‌داده‌شده",
+      buildUrl: () =>
+        api.productExportUrl(
+          {},
+          { columns: visibleColumns, market: view.market }
+        ),
     },
   ]
 

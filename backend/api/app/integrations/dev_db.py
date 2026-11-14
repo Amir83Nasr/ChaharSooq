@@ -45,6 +45,11 @@ class DevDatabaseCommoditySource:
     def is_configured(self) -> bool:
         return bool(self._url)
 
+    @property
+    def is_full_catalog(self) -> bool:
+        # Mirrors the complete active dev catalog (see module docstring).
+        return True
+
     def fetch(self) -> tuple[list[dict[str, Any]], int | None, dict[int, str]]:
         """Raw Parsina-shaped rows + reported total + unit titles."""
         if not self._url:

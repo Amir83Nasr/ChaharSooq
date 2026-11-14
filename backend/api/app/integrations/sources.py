@@ -29,6 +29,15 @@ class CommoditySource(Protocol):
     @property
     def is_configured(self) -> bool: ...
 
+    @property
+    def is_full_catalog(self) -> bool:
+        """True only when a successful fetch represents the complete sync scope.
+
+        Missing-row deactivation is safe only for a complete listing of the same
+        scope; scoped/filtered sources must not trigger global deactivation.
+        """
+        ...
+
     def fetch(self) -> tuple[list[Any], int | None, dict[int, str]]: ...
 
 
@@ -46,6 +55,14 @@ class ParsinaCommoditySource:
     @property
     def is_configured(self) -> bool:
         return self._settings.is_configured
+
+    @property
+    def is_full_catalog(self) -> bool:
+        # LoadByFilter (Ware/Saletype) scopes results; deactivating products
+        # outside that scope from a scoped response would be unsafe.
+        return (
+            self._settings.parsina_ware_id is None and self._settings.parsina_sale_type_id is None
+        )
 
     def fetch(self) -> tuple[list[Any], int | None, dict[int, str]]:
         with ParsinaClient(self._settings, transport=self._transport) as client:

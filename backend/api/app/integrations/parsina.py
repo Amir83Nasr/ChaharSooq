@@ -27,6 +27,8 @@ log = logging.getLogger("charsooq.parsina")
 # (a 401 forces an immediate refresh and one retry).
 TOKEN_REFRESH_MARGIN_SECONDS = 300
 TOKEN_FALLBACK_TTL_SECONDS = 2 * 60 * 60
+TRANSIENT_REQUEST_ATTEMPTS = 3
+TRANSIENT_REQUEST_BACKOFF_SECONDS = 0.5
 
 
 class ParsinaError(Exception):
@@ -210,6 +212,7 @@ class ParsinaClient:
         json: dict[str, Any] | None = None,
         auth: bool = True,
         _retry: bool = True,
+        _network_attempt: int = 1,
     ) -> Any:
         headers = {"Accept": "application/json"}
         if auth:
@@ -217,8 +220,30 @@ class ParsinaClient:
         try:
             response = self._http.request(method, path, params=params, json=json, headers=headers)
         except httpx.TimeoutException as exc:
+            if _network_attempt < TRANSIENT_REQUEST_ATTEMPTS:
+                time.sleep(TRANSIENT_REQUEST_BACKOFF_SECONDS * _network_attempt)
+                return self._request(
+                    method,
+                    path,
+                    params=params,
+                    json=json,
+                    auth=auth,
+                    _retry=_retry,
+                    _network_attempt=_network_attempt + 1,
+                )
             raise ParsinaNetworkError("پاسخی از پارسینا دریافت نشد (timeout)") from exc
         except httpx.HTTPError as exc:
+            if _network_attempt < TRANSIENT_REQUEST_ATTEMPTS:
+                time.sleep(TRANSIENT_REQUEST_BACKOFF_SECONDS * _network_attempt)
+                return self._request(
+                    method,
+                    path,
+                    params=params,
+                    json=json,
+                    auth=auth,
+                    _retry=_retry,
+                    _network_attempt=_network_attempt + 1,
+                )
             raise ParsinaNetworkError("ارتباط با پارسینا برقرار نشد") from exc
 
         if response.status_code == 401:
@@ -287,8 +312,9 @@ class ParsinaClient:
         """Best-effort id → title map; a failure never aborts a product sync."""
         try:
             body = self._request("GET", "/UnitCount/BaseInfo")
-        except ParsinaError as exc:
-            log.warning("parsina units lookup failed: %s", exc)
+        except ParsinaError:
+            # Do not log request/URL details; credentials live in auth payloads.
+            log.warning("parsina units lookup failed")
             return {}
         out: dict[int, str] = {}
         for raw in self._data_list(body):

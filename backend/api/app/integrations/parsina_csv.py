@@ -75,6 +75,11 @@ class CsvCommoditySource:
     def is_configured(self) -> bool:
         return self._path.is_file()
 
+    @property
+    def is_full_catalog(self) -> bool:
+        # The CSV fixture is the complete development mirror.
+        return True
+
     def fetch(self) -> tuple[list[dict[str, Any]], int | None, dict[int, str]]:
         """Raw rows + reported total + unit titles (mocked, see module docstring)."""
         try:

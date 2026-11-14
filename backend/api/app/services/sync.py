@@ -221,7 +221,12 @@ class ProductSyncService:
             product.is_active = True
         self._session.flush()
         # Flush first so newly-created rows carry their external_id, then prune.
-        deactivated = self._products.deactivate_missing(ids)
+        # Deactivate missing rows only when the fetched listing is the complete
+        # catalog for the same sync scope; scoped/filtered listings must not mark
+        # out-of-scope products as missing.
+        deactivated = 0
+        if self._source.is_full_catalog:
+            deactivated = self._products.deactivate_missing(ids)
         self._session.commit()
         return SyncResult(
             processed=len(rows),

@@ -12,9 +12,12 @@ Start with the [architecture overview](architecture/overview.md). Read the secti
 | [architecture/authentication.md](architecture/authentication.md)                   | Admin login, sessions, and rate limiting                                    |
 | [architecture/testing.md](architecture/testing.md)                                 | Test layers and commands                                                    |
 | [architecture/deployment.md](architecture/deployment.md)                           | Development, Staging, Production, release flow, Docker                      |
+| [operations/production-runbook.md](operations/production-runbook.md)               | Preflight, first start, service lifecycle, release, incidents, monitoring   |
+| [operations/troubleshooting.md](operations/troubleshooting.md)                     | Production failure matrix, evidence collection, allowed/dangerous actions   |
+| [operations/backup-and-recovery.md](operations/backup-and-recovery.md)             | PostgreSQL dumps, encryption, off-host retention, restore drills, PITR gap  |
 | [operations/tls-certificate-lifecycle.md](operations/tls-certificate-lifecycle.md) | TLS install, rotation, rollback, backup/restore, expiry checks, first start |
 | [api/README.md](api/README.md)                                                     | Swagger usage, API conventions, OpenAPI snapshot                            |
-| [api/parsina-api.pdf](api/parsina-api.pdf)                                         | Vendor document for the Parsina accounting API                              |
-| [adr/](adr/)                                                                       | Architecture decision records (`001` to `013`)                              |
+| [parsina-api.pdf](parsina-api.pdf)                                                 | Vendor document for the Parsina accounting API                              |
+| [adr/](adr/)                                                                       | Architecture decision records (`001` to `014`)                              |
 
 New significant decisions get the next ADR number. Do not renumber existing ADRs.

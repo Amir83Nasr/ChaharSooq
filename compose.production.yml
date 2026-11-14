@@ -39,10 +39,20 @@ x-api-env: &api-env
   CORS_ORIGINS: ""
   SESSION_SAMESITE: lax
 
+# Docker's json-file driver has no size limit by default, so an unrotated
+# stdout stream can fill the host disk and take PostgreSQL with it. Bound every
+# service's log at the container level; see docs/operations/production-runbook.md.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   db:
     image: postgres:18.6-trixie
     restart: unless-stopped
+    logging: *default-logging
     environment:
       POSTGRES_DB: charsooq
       POSTGRES_USER: charsooq
@@ -75,6 +85,7 @@ services:
   provision:
     <<: *api-image
     command: ["python", "backend/api/scripts/provision_database_roles.py"]
+    logging: *default-logging
     environment:
       <<: *service-env
       # Name of the image-created administrative role, not a secret.
@@ -109,6 +120,7 @@ services:
   migrate:
     <<: *api-image
     command: ["python", "backend/api/scripts/migrate.py"]
+    logging: *default-logging
     environment: *api-env
     secrets:
       - migration_database_url
@@ -131,6 +143,7 @@ services:
   api:
     <<: *api-image
     restart: unless-stopped
+    logging: *default-logging
     environment:
       <<: *api-env
       # Uvicorn's --proxy-headers (Dockerfile.api) trusts forwarded headers only
@@ -179,6 +192,7 @@ services:
       args:
         API_URL_INTERNAL: http://api:8000
     restart: unless-stopped
+    logging: *default-logging
     environment:
       NODE_ENV: production
       API_URL_INTERNAL: http://api:8000
@@ -221,6 +235,7 @@ services:
   caddy:
     image: caddy:2.11.9-alpine
     restart: unless-stopped
+    logging: *default-logging
     environment:
       # `{$VAR}` in the Caddyfile reads these. The site address is built as
       # https:// plus the host, so plain-HTTP serving is not configurable.

@@ -234,7 +234,7 @@ prod-migrate: ## Run the production migration runner once (needs real secrets)
 prod-bootstrap-owner: ## Run the explicit production owner bootstrap once (needs real secrets)
 	docker compose -f $(COMPOSE_PROD_FILE) run --rm api python backend/api/scripts/bootstrap_owner.py
 
-prod-up: ## Build and start the production stack (needs real secrets; no host ports)
+prod-up: ## Build and start the production stack (needs real secrets; only Caddy publishes ports)
 	docker compose -f $(COMPOSE_PROD_FILE) up -d --build
 
 prod-ps: ## Show production service status

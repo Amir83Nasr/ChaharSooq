@@ -74,8 +74,10 @@ reachable only on the internal `backend` Compose network.
 - **Data safety:** `make prod-down` runs `docker compose down` without `-v`; the volume and data stay
   in place. No default target deletes the volume.
 - **Healthcheck:** `pg_isready -U charsooq -d charsooq -h 127.0.0.1`; `migrate` and `api` wait for it.
-- **Backups:** not implemented in this task. Backup/restore tooling, encryption, off-host retention,
-  and a restore drill are the next task. Take a verified backup before destructive migrations.
+- **Backups:** the design and isolated rehearsal are in
+  [backup-and-recovery.md](../operations/backup-and-recovery.md); scheduling, encryption/key custody,
+  off-host storage, retention, and PITR remain open. Take a verified backup before destructive
+  migrations.
 
 ### Roles and least privilege (implemented)
 
@@ -119,11 +121,17 @@ They are never passed as command arguments, written to Compose, or printed. The 
 does not log SQL and sets `log_statement=none` for its transaction so a server that logs statements
 does not capture the `ALTER ROLE ... PASSWORD` text.
 
-**Password rotation.** Change the password inside the role's URL secret (and, for the administrative
-role, `postgres_password`), then run `make prod-provision` (or let the next `make prod-up` run the
-`provision` service), then restart the service that uses it (`api` for `database_url`, `migrate`
-for `migration_database_url`). Rotation is a short window: the old credential keeps working until
-the provisioning transaction commits, and the new credential works immediately afterwards.
+**Password rotation.** For the application and migration roles, change the password inside the role's
+URL secret, then run `make prod-provision` (or let the next `make prod-up` run the `provision`
+service), then restart the service that uses it (`api` for `database_url`, `migrate` for
+`migration_database_url`). Rotation is a short window: the old credential keeps working until the
+provisioning transaction commits, and the new credential works immediately afterwards.
+
+The administrative role is different: `POSTGRES_PASSWORD_FILE` is read only when the image initializes
+an empty data directory, so changing `postgres_password` and restarting does not rotate it. Use the
+`psql \password` procedure in the
+[Production runbook](../operations/production-runbook.md#94-administrative-postgresql-password-rotation),
+verify the new credential over TCP, then replace the secret file.
 
 **Migrating an existing single-role volume.** Take a verified backup, write
 `migration_database_url` with the migration role/password, replace `database_url` with the

@@ -902,11 +902,13 @@ content never appears in Compose interpolation, logs, or `docker compose config`
 ### 9.5 Pre-flight validation
 
 ```bash
-make prod-config            # Compose structure with the real environment values
+make prod-config            # structure check with documentation addresses
+docker compose -f compose.production.yml config --quiet  # real exported values
 make prod-caddy-validate    # pinned Caddy binary against the committed config + material
 ```
 
-`make prod-config` with real values must pass, not only the documentation-address variant.
+`make prod-config` always substitutes RFC 5737 documentation addresses, so the direct command is the
+one that proves the real values interpolate. Both must pass.
 
 ### 9.6 Database provisioning and migration
 

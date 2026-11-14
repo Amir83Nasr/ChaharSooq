@@ -264,7 +264,7 @@ or extend [compose.yml](compose.yml). The stack is built for a Docker Engine hos
 ```bash
 make prod-config    # validate compose structure; no secret files needed
 make prod-build     # build pinned API + web production images
-make prod-up        # start db -> provision -> migrate -> api -> web
+make prod-up        # start db -> provision -> migrate -> api -> web -> caddy
 make prod-provision # run idempotent role provisioning once (needs secrets)
 make prod-migrate   # run the locked migration runner once (needs secrets)
 make prod-ps        # service status and health
@@ -317,9 +317,16 @@ only on internal Compose networks (`web:3000`, `api:8000`, `db:5432`). Caddy rea
 dedicated `proxy` network and has no route to the API or PostgreSQL. TLS termination, forwarded
 headers, and HSTS are implemented in [`deploy/caddy`](deploy/caddy) and documented in
 [docs/architecture/deployment.md](docs/architecture/deployment.md#reverse-proxy-tls-and-exposure);
-no certificate is installed and the proxy is not deployed yet. Backup tooling and restore drills are
-not implemented yet. PostgreSQL data lives in the `charsooq-production_pgdata` volume at
-`/var/lib/postgresql` (the PostgreSQL 18 image path), and `make prod-down` never removes it.
+no certificate is installed and the proxy is not deployed yet. Container logs are bounded
+(`json-file`, 10 MB × 5 per service) so an unrotated stream cannot fill the host disk. Backup tooling,
+scheduling, PITR, and restore drills are not implemented; the design is in
+[docs/operations/backup-and-recovery.md](docs/operations/backup-and-recovery.md). PostgreSQL data
+lives in the `charsooq-production_pgdata` volume at `/var/lib/postgresql` (the PostgreSQL 18 image
+path), and `make prod-down` never removes it.
+
+Operations documentation: [production runbook](docs/operations/production-runbook.md),
+[troubleshooting](docs/operations/troubleshooting.md), [backup and recovery](docs/operations/backup-and-recovery.md),
+and [TLS lifecycle](docs/operations/tls-certificate-lifecycle.md).
 
 ## Deployment
 

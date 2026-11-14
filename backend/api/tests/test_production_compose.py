@@ -105,6 +105,17 @@ def test_database_container_receives_only_the_admin_password() -> None:
     assert "database_url" not in _secrets(db)
 
 
+def test_every_service_has_bounded_container_logs() -> None:
+    """An unbounded json-file stream can fill the host disk and stop PostgreSQL."""
+
+    for name, service in _services().items():
+        logging = service.get("logging")
+        assert logging == {
+            "driver": "json-file",
+            "options": {"max-size": "10m", "max-file": "5"},
+        }, f"{name} must rotate its container logs"
+
+
 def test_one_shot_services_do_not_restart_and_only_the_proxy_publishes_ports() -> None:
     services = _services()
 

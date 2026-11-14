@@ -224,6 +224,13 @@ stack: login rate limiting is in-memory for the current single-host deployment, 
 without a measured need would add another stateful service. The Compose project name is
 `charsooq-production`, so its networks and volume are separate from the development stack.
 
+Container stdout/stderr is bounded per service with Docker's `json-file` driver (`max-size: 10m`,
+`max-file: 5`). An unbounded stream can fill the host disk and stop PostgreSQL, so this is part of the
+stack, not a host-only preference. Existing containers must be recreated once to adopt it. Startup,
+lifecycle, release, incident, and monitoring procedures are in the
+[Production runbook](../operations/production-runbook.md); failure diagnosis is in
+[troubleshooting](../operations/troubleshooting.md).
+
 The `api` and `migrate` services set:
 
 ```text
@@ -249,6 +256,11 @@ make prod-ps        # status and health
 make prod-logs      # follow logs
 make prod-down      # stop; volumes and data are kept
 ```
+
+The ordered first-start procedure, per-service lifecycle, release/rollback workflow, incident
+response, and monitoring checks are in the
+[Production runbook](../operations/production-runbook.md). Do not treat the short list above as the
+whole runbook: owner bootstrap, backup gates, TLS verification, and log rotation are separate steps.
 
 Equivalent direct commands:
 
@@ -374,10 +386,17 @@ stack start, is idempotent, and handles both cases:
 `migration_database_url` (migration role), keep the same role name and database, then run
 `make prod-provision` and restart the consuming service (`api` or `migrate`). The provisioning
 transaction updates the role password and converges grants; the old password stops working when the
-transaction commits. Rotating the administrative password means updating `postgres_password` and
-running the same provisioning step so the container and provisioning service agree; the container
-also needs a restart to read the file again. Secrets are read from files, never passed as Compose
-arguments, so rotation does not require editing `compose.production.yml`.
+transaction commits. Secrets are read from files, never passed as Compose arguments, so rotation does
+not require editing `compose.production.yml`.
+
+The **administrative** password is different: the PostgreSQL image applies `POSTGRES_PASSWORD_FILE`
+when it initializes an empty data directory, but it does not re-apply it to an existing volume on
+restart. Updating the file and restarting `db` is therefore not a password rotation and can lock
+provisioning out. Rotate the role with `psql`'s `\password` command (no inline SQL literal, no shell
+history), verify the new credential over TCP, then atomically replace the secret file and restart
+`db`. `provision` rotates only the application and migration role passwords from the two URLs; it
+cannot rotate the administrative password. The exact procedure and rollback are in the
+[Production runbook](../operations/production-runbook.md#94-administrative-postgresql-password-rotation).
 
 **Migrating from the previous single-URL deployment.** Take a verified backup first. Create both
 role URLs with the same host/database, replace the existing `database_url` value with the
@@ -590,9 +609,10 @@ Nothing below has been run against `market-linux`. The order is the intended run
 2. Choose the TLS shape and obtain the certificate material, **or** decide `internal-ca` and plan
    root-CA distribution to clients.
 3. Set `CHARSOOQ_PROXY_BIND_IP`, `CHARSOOQ_SITE_HOST`, `CHARSOOQ_EDGE_SUBNET`, and
-   `CHARSOOQ_WEB_EDGE_IP` in the deployment environment (not in Git) and run
-   `make prod-config` with the real values. Install the certificate material and run
-   `make tls-validate` plus `make prod-caddy-validate` as described in
+   `CHARSOOQ_WEB_EDGE_IP` in the deployment environment (not in Git), run `make prod-config` for the
+   structural check, and run `docker compose -f compose.production.yml config --quiet` with those real
+   values. Install the certificate material and run `make tls-validate` plus
+   `make prod-caddy-validate` as described in
    [tls-certificate-lifecycle.md](../operations/tls-certificate-lifecycle.md); do not start with
    unvalidated material or a placeholder certificate.
 4. Verify the `edge` subnet against the host routing table and Docker address pools; adjust before
@@ -648,16 +668,20 @@ Nothing below has been run against `market-linux`. The order is the intended run
 - `.dockerignore` excludes `.env*`, `secrets`, local data, docs, git metadata, caches, and Compose
   files. No secret or local env file enters an image.
 
-### Backups and recovery (next task)
+### Backups and recovery
 
-Database backups are **not implemented** in this task. The persistent volume is
+The database backup/recovery design is in [backup-and-recovery.md](../operations/backup-and-recovery.md)
+and [ADR 014](../adr/014-production-backup-and-recovery.md). It is **not automated and has not been
+rehearsed against Production**. The baseline is an encrypted, off-host logical `pg_dump` custom-format
+archive, verified by listing or a scratch restore. The persistent volume is
 `charsooq-production_pgdata`; `make prod-down` stops containers and keeps it, and no default target
-removes volumes. The next task must define scheduled `pg_dump`/base backups, encryption, off-host
-retention, and a rehearsed restore. Take a verified backup before any destructive or irreversible
-migration.
+removes volumes. Take a verified backup before any destructive or irreversible migration; a code
+rollback does not restore data.
 
-TLS-specific backup and restore (the `caddy_data`/`caddy_config` volumes and organization
-certificate material) is designed and rehearsed offline in
+PITR/WAL archiving, a dedicated backup role, a scheduler, retention enforcement, and backup alerting
+do **not** exist. The recovery point is the last verified dump, not the last transaction. Do not treat
+a volume snapshot as PITR. TLS-specific backup and restore (the `caddy_data`/`caddy_config` volumes and
+organization certificate material) is designed and rehearsed offline in
 [tls-certificate-lifecycle.md](../operations/tls-certificate-lifecycle.md). It is not a database
 backup and does not satisfy the requirement above.
 
@@ -684,8 +708,9 @@ rollback, backup/restore, expiry checks, and the first-deployment verification m
   interface; confirm the `edge` subnet does not collide with the organization's routes.
 - Rehearse rotation and rollback on the host with temporary material, record the served
   fingerprints, and put the encrypted TLS backup/expiry-check schedule in place.
-- Implement and rehearse **database** backup/restore; TLS backup/restore is specified and was
-  rehearsed offline but is not a database backup.
+- Implement a scheduler, encryption/key custody, off-host destination, retention, and a rehearsed
+  **database** restore per [backup-and-recovery.md](../operations/backup-and-recovery.md); TLS
+  backup/restore is specified and was rehearsed offline but is not a database backup.
 - Verify Docker Engine/Compose versions and resource limits on `market-linux`, then perform the
   controlled first deployment. No such deployment has been performed or validated in this task.
 

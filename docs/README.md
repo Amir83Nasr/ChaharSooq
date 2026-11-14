@@ -12,6 +12,8 @@ Start with the [architecture overview](architecture/overview.md). Read the secti
 | [architecture/authentication.md](architecture/authentication.md)                   | Admin login, sessions, and rate limiting                                    |
 | [architecture/testing.md](architecture/testing.md)                                 | Test layers and commands                                                    |
 | [architecture/deployment.md](architecture/deployment.md)                           | Development, Staging, Production, release flow, Docker                      |
+| [operations/infrastructure-readiness.md](operations/infrastructure-readiness.md)   | Pre-deployment readiness audit, blockers, readiness matrix                  |
+| [operations/it-requirements.md](operations/it-requirements.md)                     | Checklist of the values and decisions requested from IT                     |
 | [operations/production-runbook.md](operations/production-runbook.md)               | Preflight, first start, service lifecycle, release, incidents, monitoring   |
 | [operations/troubleshooting.md](operations/troubleshooting.md)                     | Production failure matrix, evidence collection, allowed/dangerous actions   |
 | [operations/backup-and-recovery.md](operations/backup-and-recovery.md)             | PostgreSQL dumps, encryption, off-host retention, restore drills, PITR gap  |

@@ -10,8 +10,7 @@ Related: [ADR 015](../adr/015-container-image-release-and-publishing.md) ·
 [IT requirements](it-requirements.md) ·
 [Troubleshooting](troubleshooting.md)
 
-Status: implemented in this repository. The workflow has **not** been executed against a real
-release: no image has been pushed, no registry package exists, and no Production stack was started.
+Status: implemented in this repository. The automatic tag-to-release and release-to-images workflows are configured; execution results depend on the specific release run. No Production stack is started by these workflows, and `market-linux` is never contacted.
 
 ## 1. The release identity
 
@@ -54,7 +53,57 @@ a tag is _written once by this workflow_, not _immutable by the registry_.
 
 ## 2. How a release is published
 
-### 2.1 Trigger
+### 2.0 Normal release process (automatic)
+
+The normal release flow is:
+
+1. Land and verify the release commit on `main` (and ensure Staging approval as required by policy).
+2. Create an **annotated** version tag in the strict format `vMAJOR.MINOR.PATCH` on that exact commit.
+3. Push only that tag to GitHub.
+4. [`.github/workflows/create-release.yml`](../../.github/workflows/create-release.yml) runs on the tag push, validates the tag, generates release notes from commits/merged pull requests since the previous `vMAJOR.MINOR.PATCH` tag (when available), and creates/publishes the GitHub Release if one does not already exist.
+5. Publishing that GitHub Release triggers [`.github/workflows/release.yml`](../../.github/workflows/release.yml) (`release: published`), which runs CI against the tagged commit, builds/publishes API and Web images, generates provenance/SBOM attestations, and updates the release body with the real image digests and commit.
+
+A push to `main` is never a Production release. The GitHub Release and image publication are created by workflows from the pushed tag; do not create or move tags in workflows, and do not manually create the release during the normal automated flow.
+
+Exact commands for the normal process:
+
+```bash
+# 1) On the validated release commit (example: HEAD of main)
+git checkout main
+git pull --ff-only origin main
+git rev-parse HEAD
+
+# 2) Choose the next version (must be vMAJOR.MINOR.PATCH and must not already exist)
+git tag --list 'v*' --sort=-v:refname | head
+git tag -a vX.Y.Z -m "Release vX.Y.Z" <commit-sha>
+
+# 3) Push only the new tag
+git push origin vX.Y.Z
+```
+
+After pushing the tag, monitor the automatic workflows and release:
+
+```bash
+gh run list --workflow "Create Release" --branch vX.Y.Z --limit 5
+gh run list --workflow "Release Images" --limit 10
+gh release view vX.Y.Z --json url,isDraft,publishedAt,body
+```
+
+Where to find API/Web digests:
+
+- In the GitHub Release body, inside the `<!-- charsooq:image-digests:start -->` / `<!-- charsooq:image-digests:end -->` section (authoritative release record once `Release Images` completes).
+- In the `Release Images` workflow run summary and in the `release-images.json` artifact uploaded by that run.
+
+### 2.1 Release-creation workflow (`create-release.yml`)
+
+- **Trigger:** `push` of tags matching `v*` (not branch pushes).
+- **Validation:** only `vMAJOR.MINOR.PATCH` tags are accepted; other `v*` tags fail fast.
+- **No duplicates / no overwrite:** if a GitHub Release for the tag already exists, the workflow exits without modifying the release body.
+- **Body template:** preserves the existing ChaharSooq release style and includes the exact image-digest marker block with safe placeholders (`Pending image publication` / `Pending`) and the tagged commit SHA. No digests are fabricated.
+- **Publishing:** creates and publishes the release (not a draft/prerelease), which is the event that triggers `Release Images`.
+- **Permissions:** least-privilege workflow/job permissions (`contents: read` at workflow level, `contents: write` and `pull-requests: read` only for the release-creation job).
+
+### 2.2 Image-publication workflow (`release.yml`)
 
 The publish workflow is [`.github/workflows/release.yml`](../../.github/workflows/release.yml). It
 runs on a **published GitHub Release** (`release: published`). There is no `push` trigger: a push to
@@ -68,7 +117,7 @@ code it builds and checks is always the release tag.
 Publishing a prerelease also starts the workflow — GitHub has no "published but not prerelease"
 event — and the run then stops at step 1. That is a fail-closed result, not a published image.
 
-### 2.2 What the workflow does, in order
+What the workflow does, in order:
 
 1. **Resolve the release.** A draft or prerelease is rejected, and the release the API returns must
    be the one that was asked for. The release tag must be `v<version>`: the leading `v` is stripped
@@ -96,6 +145,10 @@ event — and the run then stops at step 1. That is a fail-closed result, not a 
    the release commit. The published index must carry an attestation manifest.
 10. **Record the digests** in the release body, in the run summary, and in a `release-images.json`
     artifact.
+
+The image-digest markers in the release body (`<!-- charsooq:image-digests:start -->` and
+`<!-- charsooq:image-digests:end -->`) are preserved and replaced in-place by `release.yml`; the
+`Create Release` workflow must create the release with this exact marker structure and placeholders.
 
 #### Concurrency and the remaining race
 
@@ -304,14 +357,13 @@ The registry, the two image names, and the internal API address are workflow-lev
 - **The release body is the release record.** Commit SHA, both digests, and the operator's approval
   belong there.
 
-### 6.1 A failed publish
+### 6.1 Handling failed release workflows safely
 
-The guard refuses to publish over an existing tag, so a **re-run** of a release that already pushed
-one of its images fails instead of overwriting it. That is deliberate, but it means a half-finished
-publish cannot simply be retried: a registry administrator has to delete the half-published tag
-first, and the release must then be published under a new version.
-
-The cheapest recovery is therefore to publish a **new version** rather than to repair the old one.
+- **`Create Release` fails before publishing:** fix the issue on `main` if needed, then create and push a **new** `vMAJOR.MINOR.PATCH` tag. Do not move, delete, or reuse an existing tag. Do not manually create the GitHub Release as a workaround for the automated flow unless you intentionally abandon automation for that version and document it.
+- **`Create Release` reports that the release already exists:** this is a safe no-op. Do not overwrite the existing release body. If the release exists but image publication must be retried/repaired, follow the `Release Images` guidance below and use the documented manual `workflow_dispatch` only when appropriate.
+- **`Release Images` fails before pushing images:** inspect the workflow logs, fix the underlying issue in a new commit if code changes are required, and release a **new** version tag. Do not republish or overwrite existing image tags/digests.
+- **`Release Images` fails after partially publishing image tags:** the guard refuses to overwrite existing tags, so a simple re-run is unsafe/incomplete. A registry administrator must remove the half-published tags if repair of the same version is explicitly required; the safest path is usually to publish a **new** version. Never deploy partially published artifacts.
+- **Avoid duplicate tags/releases:** always check existing tags/releases before tagging (`git tag --list 'v*' --sort=-v:refname | head`, `gh release view vX.Y.Z`), use a unique next version, and push only that single new tag. Never modify or delete existing tags/releases (`v0.1.0`, `v0.1.1`, etc.). A push to `main` does not create a release.
 
 ## 7. What still needs an answer
 

@@ -1,0 +1,177 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: create-release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  create:
+    name: Create and publish GitHub Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Check out the tagged commit
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate tag and prepare release notes
+        id: prepare
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          if ! [[ "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "::error::tag '${TAG}' is not a valid release tag; expected vMAJOR.MINOR.PATCH"
+            exit 1
+          fi
+
+          sha="$(git rev-parse "${TAG}^{commit}")"
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+
+          existing=""
+          if gh release view "$TAG" --json tagName >/dev/null 2>&1; then
+            existing="true"
+          fi
+          echo "existing=${existing}" >> "$GITHUB_OUTPUT"
+          if [ "$existing" = "true" ]; then
+            echo "Release ${TAG} already exists; skipping creation."
+            exit 0
+          fi
+
+          previous_tag="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | awk -v tag="$TAG" '$0==tag{found=1; next} found && $0 ~ /^v[0-9]+\.[0-9]+\.[0-9]+$/{print; exit}')"
+
+          notes_file="$(mktemp)"
+          : > "$notes_file"
+          if [ -n "$previous_tag" ]; then
+            range="${previous_tag}..${TAG}"
+            echo "previous_tag=${previous_tag}" >> "$GITHUB_OUTPUT"
+            compare_url="https://github.com/${GITHUB_REPOSITORY}/compare/${previous_tag}...${TAG}"
+
+            mapfile -t subjects < <(git log --no-merges --format='%s' "${range}" 2>/dev/null || true)
+            fixes_file="$(mktemp)"
+            changes_file="$(mktemp)"
+            highlights_file="$(mktemp)"
+            : > "$fixes_file"; : > "$changes_file"; : > "$highlights_file"
+
+            # Prefer merged PR titles for highlights when available.
+            pr_numbers="$(git log --format=%s "${range}" | sed -nE 's/.*\(#([0-9]+)\).*/\1/p' | sort -u || true)"
+            if [ -n "$pr_numbers" ]; then
+              while IFS= read -r pr; do
+                [ -n "$pr" ] || continue
+                title="$(gh pr view "$pr" --json title --jq '.title' 2>/dev/null || true)"
+                if [ -n "$title" ]; then
+                  echo "- ${title} (#${pr})" >> "$highlights_file"
+                fi
+              done <<< "$pr_numbers"
+            fi
+
+            for s in "${subjects[@]}"; do
+              [ -n "$s" ] || continue
+              case "$s" in
+                fix*|Fix*|bugfix*|hotfix*) echo "- ${s}" >> "$fixes_file" ;;
+                feat*|Feat*) echo "- ${s}" >> "$highlights_file" ;;
+                *) echo "- ${s}" >> "$changes_file" ;;
+              esac
+            done
+
+            if [ -s "$highlights_file" ]; then
+              echo "## Highlights" >> "$notes_file"; echo >> "$notes_file"
+              awk '!seen[$0]++' "$highlights_file" | head -20 >> "$notes_file"
+              echo >> "$notes_file"
+            fi
+            if [ -s "$fixes_file" ]; then
+              echo "## Fixes" >> "$notes_file"; echo >> "$notes_file"
+              awk '!seen[$0]++' "$fixes_file" | head -20 >> "$notes_file"
+              echo >> "$notes_file"
+            fi
+            if [ -s "$changes_file" ]; then
+              echo "## Changes" >> "$notes_file"; echo >> "$notes_file"
+              awk '!seen[$0]++' "$changes_file" | head -30 >> "$notes_file"
+              echo >> "$notes_file"
+            fi
+            if [ ! -s "$notes_file" ]; then
+              echo "## Highlights" >> "$notes_file"; echo >> "$notes_file"
+              echo "- Release ${TAG}." >> "$notes_file"; echo >> "$notes_file"
+            fi
+
+            echo "## Deployment notes" >> "$notes_file"
+            echo >> "$notes_file"
+            echo "- CI-validated source revision for this release tag." >> "$notes_file"
+            echo "- API and Web container images will be published by the Release Images workflow after this release is published." >> "$notes_file"
+            echo "- Image digests and build attestations will be recorded in this release once publication completes." >> "$notes_file"
+            echo "- Full diff: ${compare_url}" >> "$notes_file"
+          else
+            echo "previous_tag=" >> "$GITHUB_OUTPUT"
+            cat > "$notes_file" <<'EOF'
+          ## Highlights
+
+          - Initial automated release publication for this version tag.
+
+          ## Deployment notes
+
+          - CI-validated source revision for this release tag.
+          - API and Web container images will be published by the Release Images workflow after this release is published.
+          - Image digests and build attestations will be recorded in this release once publication completes.
+          EOF
+          fi
+
+          body_file="$(mktemp)"
+          {
+            echo "ChaharSooq release \`${TAG}\`."
+            echo
+            echo "- API and Web container images."
+            echo "- CI-validated source revision."
+            echo "- Image digests and build attestations are recorded in this release."
+            echo
+            cat "$notes_file"
+            echo
+            echo "<!-- charsooq:image-digests:start -->"
+            echo "### Released container images"
+            echo
+            echo "| Image | Reference | Digest |"
+            echo "| --- | --- | --- |"
+            echo "| API | Pending image publication | Pending |"
+            echo "| Web | Pending image publication | Pending |"
+            echo
+            echo "Commit: \`${sha}\`"
+            echo
+            echo "Production selects the images by digest after successful publication. Use the immutable \`repository@sha256:<digest>\` references recorded by the release workflow."
+            echo "<!-- charsooq:image-digests:end -->"
+          } > "$body_file"
+
+          echo "body_file=${body_file}" >> "$GITHUB_OUTPUT"
+
+      - name: Create and publish GitHub Release
+        if: steps.prepare.outputs.existing != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          BODY_FILE: ${{ steps.prepare.outputs.body_file }}
+          SHA: ${{ steps.prepare.outputs.sha }}
+        run: |
+          set -euo pipefail
+          # Re-check to avoid duplicate creation races.
+          if gh release view "$TAG" --json tagName >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists; refusing to overwrite."
+            exit 1
+          fi
+          gh release create "$TAG" \
+            --title "ChaharSooq ${TAG}" \
+            --notes-file "$BODY_FILE" \
+            --target "$SHA" \
+            --latest

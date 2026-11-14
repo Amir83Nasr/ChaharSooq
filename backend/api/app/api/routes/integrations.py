@@ -12,15 +12,16 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.api.dependencies import get_db, get_db_readonly, require_admin, require_user
-from app.api.openapi import CONFLICT, SERVICE_UNAVAILABLE, UNAUTHORIZED
+from app.api.dependencies import get_db, get_db_readonly, require_admin, require_owner, require_user
+from app.api.openapi import CONFLICT, FORBIDDEN, SERVICE_UNAVAILABLE, UNAUTHORIZED, VALIDATION_ERROR
 from app.core.database import get_engine
 from app.models import Admin, ParsinaSyncState
 from app.models.competitor import CompetitorSyncState
-from app.schemas import SyncRunOut, SyncStatusOut
+from app.schemas import ParsinaConnectionIn, ParsinaConnectionOut, SyncRunOut, SyncStatusOut
 from app.schemas.competitor import CompetitorSyncRunOut, CompetitorSyncStatusOut
 from app.services import SettingsService
 from app.services.competitor_sync import CompetitorSyncBusyError, CompetitorSyncService
+from app.services.parsina_connection import get_parsina_connection_view, update_parsina_connection
 from app.services.sync import (
     ProductSyncService,
     SyncBusyError,
@@ -111,6 +112,50 @@ def parsina_status(
     session: Session = Depends(get_db_readonly),  # noqa: B008
 ) -> SyncStatusOut:
     return _status(session)
+
+
+@router.get(
+    "/integrations/parsina/connection",
+    response_model=ParsinaConnectionOut,
+    summary="Parsina connection config",
+    description=(
+        "Effective Parsina connection details for the super admin. The password "
+        "is never returned; `password_set` indicates whether one is configured."
+    ),
+    responses={403: FORBIDDEN},
+)
+def parsina_connection(
+    _owner: Admin = Depends(require_owner),  # noqa: B008
+    session: Session = Depends(get_db_readonly),  # noqa: B008
+) -> ParsinaConnectionOut:
+    return ParsinaConnectionOut.model_validate(get_parsina_connection_view(session))
+
+
+@router.put(
+    "/integrations/parsina/connection",
+    response_model=ParsinaConnectionOut,
+    summary="Update Parsina connection config",
+    description=(
+        "Saves Parsina connection details (base URL, username, password, "
+        "organization id, fiscal year). Only the super admin may update them. "
+        "Leave `password` empty to keep the existing password."
+    ),
+    responses={403: FORBIDDEN, 422: VALIDATION_ERROR},
+)
+def update_parsina_connection_view(
+    payload: ParsinaConnectionIn,
+    _owner: Admin = Depends(require_owner),  # noqa: B008
+    session: Session = Depends(get_db),  # noqa: B008
+) -> ParsinaConnectionOut:
+    result = update_parsina_connection(
+        session,
+        base_url=payload.base_url,
+        username=payload.username,
+        password=payload.password,
+        org_id=payload.org_id,
+        fiscal_year=payload.fiscal_year,
+    )
+    return ParsinaConnectionOut.model_validate(result)
 
 
 @router.post(

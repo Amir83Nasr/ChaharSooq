@@ -44,6 +44,7 @@ from app.integrations.sources import (
 )
 from app.models import ParsinaSyncState, Product
 from app.repositories import ProductRepository, SyncStateRepository
+from app.services.parsina_connection import resolve_parsina_settings
 
 if TYPE_CHECKING:
     from httpx import BaseTransport
@@ -93,16 +94,18 @@ class ProductSyncService:
         self._sync_state = SyncStateRepository(session)
         self._products = ProductRepository(session)
 
-    @staticmethod
     def _default_source(
-        settings: ParsinaSettings | None, transport: BaseTransport | None
+        self,
+        settings: ParsinaSettings | None,
+        transport: BaseTransport | None,
     ) -> CommoditySource:
         # Explicit settings/transport pin the live client (tests, production).
         if settings is not None or transport is not None:
             return ParsinaCommoditySource(settings or get_parsina_settings(), transport=transport)
+        effective = resolve_parsina_settings(self._session).settings
         return build_commodity_source(
             app_settings=get_settings(),
-            parsina_settings=get_parsina_settings(),
+            parsina_settings=effective,
         )
 
     # ── PUBLIC ───────────────────────────────────────────────
@@ -311,26 +314,18 @@ def run_scheduled_sync(
     manual button.
     """
     app_settings = get_settings()
-    # Resolve the source mode first; the due-check + run below is identical
-    # for all three modes so a timing change touches one place only.
-    explicit_settings: ParsinaSettings | None = None
     mode = app_settings.source_mode
     if mode == "off":
         return None
-    if mode == "parsina":
-        settings = get_parsina_settings()
-        if not settings.is_configured or not settings.parsina_sync_enabled:
-            return None
-        explicit_settings = settings
     with session_factory() as session:
+        if mode == "parsina":
+            effective = resolve_parsina_settings(session).settings
+            if not effective.is_configured or not effective.parsina_sync_enabled:
+                return None
         if not _due(session, interval_minutes=interval_minutes):
             return None
         try:
-            service = (
-                ProductSyncService(session, settings=explicit_settings, transport=transport)
-                if explicit_settings is not None
-                else ProductSyncService(session, transport=transport)
-            )
+            service = ProductSyncService(session, transport=transport)
             return service.run()
         except (SyncBusyError, SyncNotConfiguredError):
             return None

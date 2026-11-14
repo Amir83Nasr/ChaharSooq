@@ -33,6 +33,8 @@ import type {
   SettingsUpdate,
   SyncRun,
   SyncStatus,
+  ParsinaConnectionOut,
+  ParsinaConnectionUpdate,
   UserCreate,
   UserOut,
 } from "./api-types"
@@ -293,6 +295,20 @@ export const api = {
     return request<SyncRun>("/api/v1/integrations/parsina/sync", {
       method: "POST",
     })
+  },
+  parsinaConnection() {
+    return request<ParsinaConnectionOut>(
+      "/api/v1/integrations/parsina/connection"
+    )
+  },
+  updateParsinaConnection(payload: ParsinaConnectionUpdate) {
+    return request<ParsinaConnectionOut>(
+      "/api/v1/integrations/parsina/connection",
+      {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      }
+    )
   },
   /** Cancellable status read — used by the sync poller's unmount cleanup. */
   parsinaStatusSignal(signal: AbortSignal) {

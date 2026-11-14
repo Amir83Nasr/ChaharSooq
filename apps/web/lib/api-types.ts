@@ -169,6 +169,24 @@ export interface SyncRun {
   message: string | null
 }
 
+export interface ParsinaConnectionOut {
+  base_url: string
+  username: string
+  org_id: number | null
+  fiscal_year: number | null
+  password_set: boolean
+  configured: boolean
+  source: string
+}
+
+export interface ParsinaConnectionUpdate {
+  base_url?: string | null
+  username?: string | null
+  password?: string | null
+  org_id?: number | null
+  fiscal_year?: number | null
+}
+
 export interface CompetitorSyncStatus {
   running: boolean
   running_since: string | null

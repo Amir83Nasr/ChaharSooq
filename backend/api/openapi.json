@@ -2280,6 +2280,118 @@
         ]
       }
     },
+    "/api/v1/integrations/parsina/connection": {
+      "get": {
+        "tags": [
+          "Integrations"
+        ],
+        "summary": "Parsina connection config",
+        "description": "Effective Parsina connection details for the super admin. The password is never returned; `password_set` indicates whether one is configured.",
+        "operationId": "parsina_connection",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParsinaConnectionOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Signed in, but the account role is not allowed to perform this action (`forbidden`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Integrations"
+        ],
+        "summary": "Update Parsina connection config",
+        "description": "Saves Parsina connection details (base URL, username, password, organization id, fiscal year). Only the super admin may update them. Leave `password` empty to keep the existing password.",
+        "operationId": "update_parsina_connection_view",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParsinaConnectionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParsinaConnectionOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Signed in, but the account role is not allowed to perform this action (`forbidden`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      }
+    },
     "/api/v1/integrations/parsina/sync": {
       "post": {
         "tags": [
@@ -3882,6 +3994,135 @@
           "role"
         ],
         "title": "MeOut"
+      },
+      "ParsinaConnectionIn": {
+        "properties": {
+          "base_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 512
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 512
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          },
+          "org_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Org Id"
+          },
+          "fiscal_year": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 9999.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fiscal Year"
+          }
+        },
+        "type": "object",
+        "title": "ParsinaConnectionIn",
+        "description": "Update Parsina connection fields. Omitted fields keep their current value."
+      },
+      "ParsinaConnectionOut": {
+        "properties": {
+          "base_url": {
+            "type": "string",
+            "title": "Base Url",
+            "description": "Parsina API base URL.",
+            "default": ""
+          },
+          "username": {
+            "type": "string",
+            "title": "Username",
+            "description": "Parsina username.",
+            "default": ""
+          },
+          "org_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Org Id",
+            "description": "Organization id (org)."
+          },
+          "fiscal_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fiscal Year",
+            "description": "Fiscal year."
+          },
+          "password_set": {
+            "type": "boolean",
+            "title": "Password Set",
+            "description": "True when a password is configured.",
+            "default": false
+          },
+          "configured": {
+            "type": "boolean",
+            "title": "Configured",
+            "description": "True when the effective connection is usable.",
+            "default": false
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "description": "Where the effective config comes from: db, env, or none.",
+            "default": "none"
+          }
+        },
+        "type": "object",
+        "title": "ParsinaConnectionOut",
+        "description": "Current Parsina connection as visible to the super admin.\n\nThe password is never returned; `password_set` indicates whether one is\nstored (in the database or provided via env/secrets)."
       },
       "ProductIn": {
         "properties": {

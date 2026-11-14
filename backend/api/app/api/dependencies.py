@@ -70,3 +70,12 @@ def require_admin(
     if admin.role not in (ROLE_OWNER, ROLE_ADMIN):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=FORBIDDEN)
     return admin
+
+
+def require_owner(
+    admin: Annotated[Admin, Depends(require_user)],
+) -> Admin:
+    """Signed-in top-level owner account — sensitive configuration."""
+    if admin.role != ROLE_OWNER:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=FORBIDDEN)
+    return admin

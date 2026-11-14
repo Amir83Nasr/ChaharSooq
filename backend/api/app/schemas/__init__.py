@@ -21,6 +21,7 @@ from app.schemas.dashboard import (
     DashboardOverviewOut,
     DashboardSummaryOut,
 )
+from app.schemas.parsina import ParsinaConnectionIn, ParsinaConnectionOut
 from app.schemas.settings import SettingsOut, SettingsUpdateIn
 from app.schemas.suggested_price import SuggestedPriceFormulaIn, SuggestedPriceFormulaOut
 from app.schemas.users import AssignableRole, UserCreateIn, UserOut, UserRole
@@ -41,6 +42,8 @@ __all__ = [
     "LoginIn",
     "LoginOut",
     "MeOut",
+    "ParsinaConnectionIn",
+    "ParsinaConnectionOut",
     "ProductIn",
     "ProductOut",
     "ProductPage",

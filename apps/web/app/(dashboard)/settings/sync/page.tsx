@@ -1,15 +1,30 @@
 import type { Metadata } from "next"
-import { Clock } from "lucide-react"
+import { Clock, Plug } from "lucide-react"
 
 import { CompetitorSyncIntervalSettings } from "@/components/settings/competitor-sync-interval-settings"
+import { ParsinaConnectionSettings } from "@/components/settings/parsina-connection-settings"
 import { SettingsSection } from "@/components/settings/settings-section"
 import { SyncIntervalSettings } from "@/components/settings/sync-interval-settings"
+import { getSessionAdmin } from "@/lib/auth"
+import { isOwner } from "@/lib/session"
 
 export const metadata: Metadata = { title: "چهارسوق | تنظیمات — همگام‌سازی" }
 
-export default function SyncSettingsPage() {
+export default async function SyncSettingsPage() {
+  const user = await getSessionAdmin()
+  const owner = user ? isOwner(user.role) : false
+
   return (
     <>
+      {owner ? (
+        <SettingsSection
+          icon={Plug}
+          title="اتصال به پارسینا"
+          description="مشخصات اتصال به وب‌سرویس حسابداری پارسینا (فقط سوپرادمین)"
+        >
+          <ParsinaConnectionSettings />
+        </SettingsSection>
+      ) : null}
       <SettingsSection
         icon={Clock}
         title="فاصله به‌روزرسانی خودکار"

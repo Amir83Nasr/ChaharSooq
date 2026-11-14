@@ -45,13 +45,8 @@ class SyncScheduler:
             if not CsvCommoditySource(Path(app_settings.products_csv_path)).is_configured:
                 log.info("scheduler off: product CSV fixture not configured")
                 return
-        elif mode in ("parsina", "dev"):
-            settings = get_parsina_settings()
-            if mode == "parsina" and (
-                not settings.is_configured or not settings.parsina_sync_enabled
-            ):
-                log.info("scheduler off: parsina not configured")
-                return
+        # In "parsina" mode the connection can be configured later in settings, so
+        # the loop always starts and each tick checks effective DB/env config.
         if self._thread is not None and self._thread.is_alive():
             return
         self._stop.clear()
@@ -69,7 +64,7 @@ class SyncScheduler:
             )
         else:
             log.info(
-                "scheduler on: every %d min",
+                "scheduler on (parsina): every %d min",
                 get_parsina_settings().parsina_sync_interval_minutes,
             )
 
@@ -96,7 +91,7 @@ class SyncScheduler:
                     interval_minutes=competitor_interval,
                 )
             except Exception:  # noqa: BLE001 — a bad tick must not kill the loop
-                log.exception("scheduled parsina sync crashed")
+                log.exception("scheduled sync tick crashed")
             self._stop.wait(TICK_SECONDS)
 
 

@@ -371,13 +371,7 @@ function FilledSlotCard({
               size="sm"
               variant="destructive"
               disabled={busy}
-              onClick={() => {
-                if (
-                  window.confirm("این لینک حذف شود؟ این عمل قابل بازگشت نیست.")
-                ) {
-                  onDelete()
-                }
-              }}
+              onClick={onDelete}
               className="h-11 w-full rounded-2xl sm:h-8 sm:w-auto"
             >
               <Trash2 /> حذف

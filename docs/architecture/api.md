@@ -56,7 +56,8 @@ compatibility and smaller consumers.
 | `GET`  | `/products/summary` | Server-side inventory totals: total/in/low/out/stock value.  |
 | `GET`  | `/products/groups`  | Distinct raw `main_group_name` values for the filters.       |
 
-`GET /products` accepts `q`, `category_id`, `top_group`, `main_group`, `min_price`,
+`GET /products` accepts `q`, `category_id`, `top_group` (repeatable; `فرش`, `مبلمان`,
+`لوازم خانگی`, `کالای دیجیتال`), `main_group`, `min_price`,
 `max_price`, `competitor_store`, `min_competitor_price`, `max_competitor_price`, `min_stock`,
 `max_stock`, `in_stock`, `sort` (`newest`, `cheapest`, `most_expensive`), `page`, and `page_size`.
 Competitor filters only consider prices inside the configured TTL. An unknown `category_id` on
@@ -84,11 +85,12 @@ create returns `422`.
 `effective_price`, `effective_currency`, and `effective_in_stock` prefer a manual override and
 otherwise use a fetched value that is still within the TTL. `status` reports the last fetch
 result (`success`, `not_found`, `unavailable`, `blocked`, `failed`, `pending`, `manual`).
-Automatic extraction supports Digikala + Technolife (لوازم خانگی), Sofa Mobl (مبلمان), and
+Automatic extraction supports Digikala + Technolife (لوازم خانگی and کالای دیجیتال), Sofa Mobl
+(مبلمان), and
 DigiFresh (فرش). Sofa/DigiFresh links are tracking-only: the price is never entered manually, and
 `price_change_percent` compares the current observation with the previous UTC day's observation.
 Links are limited to the stores valid for each top group (`digikala`/`technolife`/`other` for
-appliances, `sofa` for مبلمان, `digifresh` for فرش), at most one per store. Unknown or stale prices
+لوازم خانگی and کالای دیجیتال, `sofa` for مبلمان, `digifresh` for فرش), at most one per store. Unknown or stale prices
 are excluded from tables and competitor-price filters.
 
 `PATCH /products/{product_id}/price-bounds` stores two percentages per product:
@@ -122,7 +124,7 @@ never hard-deleted. A failed or partial fetch leaves the last successful data un
 `competitor_sync_interval_minutes`, `default_competitor_store`, `suggested_price_formulas`, and
 `product_table_columns`.
 
-- Each formula is `{top_group, weight}`. لوازم خانگی uses
+- Each formula is `{top_group, weight}`. لوازم خانگی and کالای دیجیتال use
   `weight × competitor + (1 − weight) × Parsina`; مبلمان/فرش use
   `Parsina × (1 + weight × daily_change_percent)` because their Sofa/DigiFresh link is a daily
   price tracker, not a direct competitor price. `weight` is 0–1.

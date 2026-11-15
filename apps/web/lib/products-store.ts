@@ -21,6 +21,7 @@ import {
   type ProductPage,
   type ProductSort,
   type SettingsOut,
+  type TopGroup,
 } from "./api"
 import { buildProductParams } from "./api-params"
 import { leaveToLogin } from "./auth-navigation"
@@ -30,7 +31,7 @@ export type StockFilter = "all" | "in" | "out" | "low"
 
 export interface ProductsView {
   q: string
-  topGroup: string | null
+  topGroup: TopGroup | null
   sort: ProductSort
   stock: StockFilter
   minPrice: string

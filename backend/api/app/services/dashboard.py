@@ -1,12 +1,12 @@
 """Dashboard service — overview, competitor gaps, and catalog breakdown."""
 
-import re
 from datetime import UTC, datetime, timedelta
 from typing import TypedDict
 
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.top_groups import TOP_GROUPS, brand_of, top_group_of
 from app.repositories import ProductRepository
 from app.schemas import (
     CatalogBrandOut,
@@ -19,46 +19,13 @@ from app.schemas import (
 
 TOP_GROUPS_LIMIT = 6
 
-SECTION_ORDER = ("فرش", "مبلمان", "لوازم خانگی", "سایر")
+SECTION_ORDER = (*TOP_GROUPS, "سایر")
 
 
 class _BrandBucket(TypedDict):
     brand: str
     count: int
     stock_value: int
-
-
-def top_group_of(name: str | None) -> str | None:
-    """Mirror of the products table `topGroupOf` — section (بخش) per group."""
-    if not name:
-        return None
-    text = name.strip()
-    if not text:
-        return None
-    if text.startswith("فرش"):
-        return "فرش"
-    if text.startswith("مبلمان"):
-        return "مبلمان"
-    return "لوازم خانگی"
-
-
-def brand_of(name: str | None, top: str | None) -> str | None:
-    """Mirror of the products table `brandOf` — remainder after the prefix."""
-    if not name:
-        return None
-    text = name.strip()
-    if not text:
-        return None
-    if top == "فرش":
-        rest = text.removeprefix("فرش").strip()
-        return rest or None
-    if top == "مبلمان":
-        rest = text.removeprefix("مبلمان").strip()
-        return rest or None
-    if top == "لوازم خانگی":
-        rest = re.sub(r"^لوازم\s+خان[گک]ی\s*", "", text).strip()
-        return rest or text
-    return text
 
 
 class DashboardService:

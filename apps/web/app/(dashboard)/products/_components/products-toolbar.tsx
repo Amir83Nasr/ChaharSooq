@@ -17,8 +17,9 @@ import {
   DataTableToolbar,
   SearchInput,
 } from "@/components/data/data-table-toolbar"
-import type { DefaultCompetitorStore, ProductSort } from "@/lib/api"
+import type { DefaultCompetitorStore, ProductSort, TopGroup } from "@/lib/api"
 import type { StockFilter } from "@/lib/products-store"
+import { TOP_GROUPS, isTopGroup } from "@/lib/top-groups"
 import { COMPETITOR_MARKETS } from "./products-table"
 
 export const SORT_LABELS: Record<ProductSort, string> = {
@@ -36,7 +37,7 @@ export const STOCK_FILTER_LABELS: Record<StockFilter, string> = {
 
 interface ToolbarProps {
   q: string
-  topGroup: string | null
+  topGroup: TopGroup | null
   sort: ProductSort
   stock: StockFilter
   market: DefaultCompetitorStore
@@ -44,7 +45,7 @@ interface ToolbarProps {
   maxPrice: string
   hasFilters: boolean
   onQ: (v: string) => void
-  onTopGroup: (v: string | null) => void
+  onTopGroup: (v: TopGroup | null) => void
   onSort: (v: ProductSort) => void
   onStock: (v: StockFilter) => void
   onMarketChange: (v: DefaultCompetitorStore) => void
@@ -83,7 +84,9 @@ export function ProductsToolbar(props: ToolbarProps) {
       />
       <Select
         value={topGroup === null ? "all" : topGroup}
-        onValueChange={(v) => onTopGroup(v === "all" ? null : v)}
+        onValueChange={(v) =>
+          onTopGroup(v === "all" || !isTopGroup(v) ? null : v)
+        }
       >
         <SelectTrigger className="w-full sm:w-44" aria-label="فیلتر دسته‌بندی">
           <SelectValue>
@@ -96,9 +99,11 @@ export function ProductsToolbar(props: ToolbarProps) {
           <SelectGroup>
             <SelectLabel>دسته‌بندی</SelectLabel>
             <SelectItem value="all">همه دسته‌بندی‌ها</SelectItem>
-            <SelectItem value="فرش">فرش</SelectItem>
-            <SelectItem value="مبلمان">مبلمان</SelectItem>
-            <SelectItem value="لوازم خانگی">لوازم خانگی</SelectItem>
+            {TOP_GROUPS.map((group) => (
+              <SelectItem key={group} value={group}>
+                {group}
+              </SelectItem>
+            ))}
           </SelectGroup>
         </SelectContent>
       </Select>

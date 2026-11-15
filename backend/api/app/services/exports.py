@@ -7,7 +7,6 @@ documented in docs/api/README.md.
 
 from __future__ import annotations
 
-import re
 from collections.abc import Iterator, Sequence
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -23,6 +22,9 @@ from app.core.persian_format import (
     format_percent,
     to_persian_digits,
 )
+from app.core.top_groups import brand_of as _brand_of
+from app.core.top_groups import compares_with_competitor
+from app.core.top_groups import top_group_of as _top_group
 from app.models import CompetitorListing, Product
 from app.repositories import (
     CompetitorRepository,
@@ -98,7 +100,7 @@ def _has_filters(filters: ProductFilters) -> bool:
         (
             bool(filters.query),
             filters.category_id is not None,
-            bool(filters.top_group),
+            bool(filters.top_groups),
             bool(filters.main_group),
             filters.min_price is not None,
             filters.max_price is not None,
@@ -117,33 +119,6 @@ def _to_toman(price: float | Decimal | None, currency: str | None) -> Decimal | 
         return None
     amount = Decimal(str(price))
     return amount / 10 if currency == "IRR" else amount
-
-
-def _top_group(main_group_name: str | None) -> str | None:
-    if not main_group_name:
-        return None
-    name = main_group_name.strip()
-    if name.startswith("فرش"):
-        return "فرش"
-    if name.startswith("مبلمان"):
-        return "مبلمان"
-    return "لوازم خانگی"
-
-
-def _brand_of(main_group_name: str | None, top: str | None) -> str | None:
-    if not main_group_name:
-        return None
-    name = main_group_name.strip()
-    if top == "فرش":
-        rest = re.sub(r"^فرش\s*", "", name).strip()
-        return rest or None
-    if top == "مبلمان":
-        rest = re.sub(r"^مبلمان\s*", "", name).strip()
-        return rest or None
-    if top == "لوازم خانگی":
-        rest = re.sub(r"^لوازم\s+خان[گک]ی\s*", "", name).strip()
-        return rest or name
-    return name
 
 
 def _format_percent_magnitude(percent: float) -> str:
@@ -361,10 +336,10 @@ class ExportService:
         brand = _brand_of(product.main_group_name, top)
         base_price = float(product.price or 0)
 
-        is_appliance = top == "لوازم خانگی"
+        compares_competitor = compares_with_competitor(top)
         tracked_store = (
             market
-            if is_appliance
+            if compares_competitor
             else ("sofa" if top == "مبلمان" else ("digifresh" if top == "فرش" else None))
         )
 
@@ -385,7 +360,7 @@ class ExportService:
             next((p for p in prices if p.store == tracked_store), None) if tracked_store else None
         )
         show_competitor = tracked_store is not None and (
-            is_appliance if market in ("digikala", "technolife") else market == tracked_store
+            compares_competitor if market in ("digikala", "technolife") else market == tracked_store
         )
         amount: float | None = None
         if competitor and competitor.price is not None:
@@ -404,8 +379,8 @@ class ExportService:
                 str(status) if status else "", "لینک ثبت نشده"
             )
 
-        pct = _diff_percent(base_price, amount) if is_appliance and fresh else None
-        if not is_appliance or pct is None:
+        pct = _diff_percent(base_price, amount) if compares_competitor and fresh else None
+        if not compares_competitor or pct is None:
             price_diff_text = "—"
         else:
             rounded = round(pct * 10) / 10
@@ -417,7 +392,7 @@ class ExportService:
 
         weight = weights.get(top) if top is not None else None
         if fresh:
-            if is_appliance:
+            if compares_competitor:
                 raw_suggested = _suggested_price_for(base_price, amount, weight)
             else:
                 raw_suggested = _suggested_price_from_daily_change(
@@ -461,8 +436,12 @@ class ExportService:
             "unit": product.unit_name or "—",
             "price": format_amount(product.price),
             "competitor_price": competitor_price_text,
-            "competitor_price_digikala": competitor_text("digikala") if is_appliance else "—",
-            "competitor_price_technolife": competitor_text("technolife") if is_appliance else "—",
+            "competitor_price_digikala": (
+                competitor_text("digikala") if compares_competitor else "—"
+            ),
+            "competitor_price_technolife": (
+                competitor_text("technolife") if compares_competitor else "—"
+            ),
             "price_diff": price_diff_text,
             "suggested_price": suggested_text,
             "suggested_price_change": suggested_change_text,

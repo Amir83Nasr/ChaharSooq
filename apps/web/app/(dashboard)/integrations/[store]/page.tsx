@@ -19,13 +19,14 @@ export default async function IntegrationPage({
         store={store}
         storeName={integration.name}
         description={integration.description}
+        topGroups={integration.topGroups}
       />
     )
   }
 
   return (
     <GroupStoreView
-      topGroup={integration.topGroup}
+      topGroup={integration.topGroups[0] ?? "مبلمان"}
       storeName={integration.name}
       description={integration.description}
     />

@@ -1,8 +1,9 @@
 """Per-top-group suggested price configuration.
 
 Suggested prices use one fixed formula — ``weight × competitor +
-(1 − weight) × Parsina base`` — keyed by the store's three top-level groups
-(فرش، مبلمان، لوازم خانگی), the same groups shown in the products table."""
+(1 − weight) × Parsina base`` — keyed by the store's top-level groups
+(فرش، مبلمان، لوازم خانگی، کالای دیجیتال), the same groups shown in the
+products table."""
 
 from decimal import Decimal
 

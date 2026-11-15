@@ -117,6 +117,7 @@ def test_settings_suggested_price_weight_update_and_reject(client: TestClient) -
         json={
             "suggested_price_formulas": [
                 {"top_group": "لوازم خانگی", "weight": 0.6},
+                {"top_group": "کالای دیجیتال", "weight": 0.5},
                 {"top_group": "مبلمان", "weight": 0.2},
             ]
         },
@@ -124,7 +125,11 @@ def test_settings_suggested_price_weight_update_and_reject(client: TestClient) -
     assert r.status_code == 200, r.text
     assert {
         (item["top_group"], item["weight"]) for item in r.json()["suggested_price_formulas"]
-    } == {("لوازم خانگی", 0.6), ("مبلمان", 0.2)}
+    } == {
+        ("لوازم خانگی", 0.6),
+        ("کالای دیجیتال", 0.5),
+        ("مبلمان", 0.2),
+    }
     assert (
         client.put(
             "/api/v1/settings",

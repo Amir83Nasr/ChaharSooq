@@ -19,6 +19,7 @@ import {
   type CompetitorGap,
   type ProductOut,
   type ProductPage,
+  type TopGroup,
 } from "@/lib/api"
 import { leaveToLogin } from "@/lib/auth-navigation"
 import { DEFAULT_LOW_STOCK_THRESHOLD } from "@/lib/inventory"
@@ -68,12 +69,15 @@ export function AutoStoreView({
   store,
   storeName,
   description,
+  topGroups,
 }: {
   store: AutoStoreKey
   storeName: string
   description: string
+  topGroups: readonly TopGroup[]
 }) {
   const { canManage } = useSession()
+  const sectionsLabel = topGroups.join(" و ")
   const [page, setPage] = useState<ProductPage | null>(null)
   const [freshTotal, setFreshTotal] = useState(0)
   const [gaps, setGaps] = useState<CompetitorGap[]>([])
@@ -126,13 +130,13 @@ export function AutoStoreView({
     Promise.all([
       api.products({
         q: debouncedQ || undefined,
-        top_group: "لوازم خانگی",
+        top_group: topGroups,
         sort: "newest",
         page: pageNum,
         page_size: pageSize,
       }),
       api.products({
-        top_group: "لوازم خانگی",
+        top_group: topGroups,
         competitor_store: store,
         page: 1,
         page_size: 1,
@@ -174,6 +178,7 @@ export function AutoStoreView({
     store,
     dataVersion,
     settingsLoaded,
+    topGroups,
   ])
 
   const total = page?.total ?? 0
@@ -216,7 +221,7 @@ export function AutoStoreView({
                     api.competitorListingsExportUrl(
                       {
                         q: debouncedQ || undefined,
-                        top_group: "لوازم خانگی",
+                        top_group: topGroups,
                       },
                       { store }
                     ),
@@ -242,8 +247,8 @@ export function AutoStoreView({
         <AutoStoreSkeleton />
       ) : total === 0 && debouncedQ === "" ? (
         <EmptyState
-          title="کالای لوازم خانگی ثبت نشده است"
-          hint="پس از همگام‌سازی با پارسبنا، کالاهای لوازم خانگی در این بخش نمایش داده می‌شوند."
+          title="کالایی ثبت نشده است"
+          hint={`پس از همگام‌سازی با پارسینا، کالاهای ${sectionsLabel} در این بخش نمایش داده می‌شوند.`}
           action={
             <Link
               href="/products"
@@ -263,7 +268,7 @@ export function AutoStoreView({
             <Card>
               <CardContent className="flex flex-col gap-2 p-4 sm:p-5">
                 <p className="text-sm text-muted-foreground">
-                  کالاهای لوازم خانگی
+                  کالاهای {sectionsLabel}
                 </p>
                 <p className="text-xl font-bold sm:text-2xl">
                   <PersianNumber value={total} />
@@ -342,7 +347,7 @@ export function AutoStoreView({
                 setPageNum(1)
               }}
               placeholder="جست‌وجو در نام یا کد…"
-              aria-label="جست‌وجو در کالاهای لوازم خانگی"
+              aria-label={`جست‌وجو در کالاهای ${sectionsLabel}`}
               className="h-11 rounded-2xl"
             />
             <Button
@@ -364,7 +369,7 @@ export function AutoStoreView({
                   setPageNum(1)
                 }}
                 placeholder="جست‌وجو در نام یا کد…"
-                aria-label="جست‌وجو در کالاهای لوازم خانگی"
+                aria-label={`جست‌وجو در کالاهای ${sectionsLabel}`}
               />
               <Button
                 variant={onlyMissing ? "default" : "outline"}

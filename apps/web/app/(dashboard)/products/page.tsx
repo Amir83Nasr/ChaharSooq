@@ -10,7 +10,12 @@ import { useIsMobile } from "@workspace/ui/hooks/use-mobile"
 import { PageHeader } from "@workspace/ui/layout/page-header"
 import { Button } from "@workspace/ui/primitives/button"
 
-import { api, type ProductFilters, type ProductOut } from "@/lib/api"
+import {
+  api,
+  type ProductFilters,
+  type ProductOut,
+  type TopGroup,
+} from "@/lib/api"
 import { leaveToLogin } from "@/lib/auth-navigation"
 import { DEFAULT_LOW_STOCK_THRESHOLD } from "@/lib/inventory"
 import { normalizeProductTableColumns } from "@/lib/product-table-columns"
@@ -170,7 +175,8 @@ function ProductsPageContent() {
     maxPrice,
     hasFilters,
     onQ: setQ,
-    onTopGroup: (value: string | null) => setProductsView({ topGroup: value }),
+    onTopGroup: (value: TopGroup | null) =>
+      setProductsView({ topGroup: value }),
     onSort: (value: typeof view.sort) => setProductsView({ sort: value }),
     onStock: (value: StockFilter) => setProductsView({ stock: value }),
     onMarketChange: (value: typeof view.market) =>

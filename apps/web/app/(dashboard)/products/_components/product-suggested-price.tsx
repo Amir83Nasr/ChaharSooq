@@ -6,7 +6,7 @@ import { Price } from "@workspace/ui/persian/price"
 import { formatPersianNumber } from "@workspace/ui/lib/number"
 import { cn } from "@workspace/ui/lib/utils"
 
-import { api, type ProductOut, type TopGroup } from "@/lib/api"
+import { api, type ProductOut } from "@/lib/api"
 import { toTomanAmount } from "@/lib/money"
 import {
   applyPriceBounds,
@@ -15,13 +15,7 @@ import {
   toSuggestedPriceWeights,
   type SuggestedPriceWeights,
 } from "@/lib/suggested-price"
-
-function topGroupOf(name: string | null): TopGroup {
-  const value = name?.trim() ?? ""
-  if (value.startsWith("فرش")) return "فرش"
-  if (value.startsWith("مبلمان")) return "مبلمان"
-  return "لوازم خانگی"
-}
+import { comparesWithCompetitor, topGroupOf } from "@/lib/top-groups"
 
 function formatPercent(value: number): string {
   const rounded = Math.round(value * 10) / 10
@@ -55,8 +49,8 @@ export function ProductSuggestedPrice({ product }: { product: ProductOut }) {
     }
   }, [])
 
-  const topGroup = topGroupOf(product.main_group_name)
-  const tracking = topGroup !== "لوازم خانگی"
+  const topGroup = topGroupOf(product.main_group_name) ?? "لوازم خانگی"
+  const tracking = !comparesWithCompetitor(topGroup)
   const weight = weights?.[topGroup] ?? null
   const fresh = product.competitor_prices.filter(
     (price) => price.is_fresh && price.price !== null

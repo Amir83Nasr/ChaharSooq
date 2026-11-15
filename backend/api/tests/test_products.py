@@ -93,6 +93,75 @@ def test_products_show_all_reports_real_page_size(client: TestClient) -> None:
     assert len(body["items"]) == 3
 
 
+def test_product_section_filter_separates_digital_goods(client: TestClient) -> None:
+    """کالای دیجیتال is its own section, not part of لوازم خانگی."""
+    from decimal import Decimal
+
+    from sqlalchemy.orm import Session
+
+    from app.core.database import get_engine
+    from app.models import Product
+
+    login(client)
+    with Session(get_engine()) as db:
+        db.add_all(
+            [
+                Product(
+                    name="فرش آدینا",
+                    sku="RUG-1",
+                    price=Decimal(100),
+                    stock=Decimal(1),
+                    main_group_name="فرش آدینا",
+                ),
+                Product(
+                    name="مبل راحتی",
+                    sku="SOF-1",
+                    price=Decimal(100),
+                    stock=Decimal(1),
+                    main_group_name="مبلمان",
+                ),
+                Product(
+                    name="یخچال",
+                    sku="FRZ-1",
+                    price=Decimal(100),
+                    stock=Decimal(1),
+                    main_group_name="لوازم خانگی اسنوا",
+                ),
+                Product(
+                    name="گوشی",
+                    sku="PHN-1",
+                    price=Decimal(100),
+                    stock=Decimal(1),
+                    main_group_name="گوشی و تبلت",
+                    main_group_id=57,
+                ),
+                Product(
+                    name="کنسول",
+                    sku="CON-1",
+                    price=Decimal(100),
+                    stock=Decimal(1),
+                    main_group_name="کنسول بازی",
+                    main_group_id=56,
+                ),
+            ]
+        )
+        db.commit()
+
+    def section_skus(**params: object) -> set[str]:
+        body = client.get("/api/v1/products", params=params).json()
+        return {item["sku"] for item in body["items"]}
+
+    assert section_skus(top_group="کالای دیجیتال") == {"PHN-1", "CON-1"}
+    assert section_skus(top_group="لوازم خانگی") == {"FRZ-1"}
+    assert section_skus(top_group=["لوازم خانگی", "کالای دیجیتال"]) == {
+        "FRZ-1",
+        "PHN-1",
+        "CON-1",
+    }
+    assert section_skus(top_group="فرش") == {"RUG-1"}
+    assert client.get("/api/v1/products", params={"top_group": "نامعتبر"}).status_code == 422
+
+
 def test_product_groups_cache_headers(client: TestClient) -> None:
     seed(client)
     r = client.get("/api/v1/products/groups")

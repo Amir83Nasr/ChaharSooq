@@ -58,8 +58,8 @@ def dashboard_competitor_gaps(
     response_model=list[CatalogSectionOut],
     summary="Catalog breakdown by section",
     description=(
-        "Per-section (فرش / مبلمان / لوازم خانگی / سایر) totals: items, groups, "
-        "brands, and stock value."
+        "Per-section (فرش / مبلمان / لوازم خانگی / کالای دیجیتال / سایر) totals: "
+        "items, groups, brands, and stock value."
     ),
 )
 def dashboard_catalog_breakdown(

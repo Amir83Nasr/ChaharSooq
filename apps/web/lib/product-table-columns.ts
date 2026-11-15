@@ -42,7 +42,7 @@ export const PRODUCT_TABLE_COLUMNS: readonly ProductTableColumnMeta[] = [
   {
     id: "category",
     label: "دسته‌بندی",
-    hint: "دسته اصلی: فرش، مبلمان یا لوازم خانگی",
+    hint: "تقسیم‌بندی: فرش، مبلمان، لوازم خانگی یا کالای دیجیتال",
     widthClass: "w-24",
     minWidthPx: 96,
     center: true,

@@ -30,7 +30,11 @@ export default function IntegrationsPage() {
               <CardHeader className="flex flex-row flex-wrap items-center gap-2">
                 <CardTitle>{store.name}</CardTitle>
                 <span className="ms-auto flex flex-wrap gap-1.5">
-                  <Badge variant="secondary">{store.topGroup}</Badge>
+                  {store.topGroups.map((group) => (
+                    <Badge key={group} variant="secondary">
+                      {group}
+                    </Badge>
+                  ))}
                   <Badge variant={store.auto ? "default" : "secondary"}>
                     {store.auto
                       ? "بررسی خودکار"

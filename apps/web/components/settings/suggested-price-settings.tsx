@@ -10,6 +10,7 @@ import { Button } from "@workspace/ui/primitives/button"
 import { Input } from "@workspace/ui/primitives/input"
 
 import { api, type SuggestedPriceFormula, type TopGroup } from "@/lib/api"
+import { comparesWithCompetitor } from "@/lib/top-groups"
 
 type WeightInputs = Partial<Record<TopGroup, string>>
 type FieldErrors = Partial<Record<TopGroup, string>>
@@ -42,11 +43,17 @@ const GROUPS: GroupConfig[] = [
     range: "۰٫۴ تا ۰٫۶",
     hint: "کالا قابل‌مقایسه‌تر است؛ وزن بالاتر منطقی است.",
   },
+  {
+    group: "کالای دیجیتال",
+    id: "digital",
+    range: "۰٫۴ تا ۰٫۶",
+    hint: "کالای دیجیتال در دیجی‌کالا و تکنولایف قابل مقایسه است.",
+  },
 ]
 
 /** Furniture/carpet follow the linked product's daily change, not Pc. */
 function isTrackingGroup(group: TopGroup): boolean {
-  return group !== "لوازم خانگی"
+  return !comparesWithCompetitor(group)
 }
 
 interface ParsedWeight {
@@ -257,15 +264,15 @@ export function SuggestedPriceSettings() {
             </h3>
             <p className="text-sm leading-6 text-muted-foreground">
               <span className="hidden sm:inline">
-                لوازم خانگی از ترکیب وزنی قیمت پایه پارسینا و قیمت رقیب ساخته
-                می‌شود. مبلمان و فرش قیمت رقیب مستقیم ندارند؛ تغییر روزانه قیمت
-                محصول لینک‌شده (سوفا یا دیجی‌فرش) با همان وزن روی قیمت پایه
-                اعمال می‌شود. وزن خالی یعنی برای آن دسته قیمت پیشنهادی نمایش
-                داده نمی‌شود.
+                لوازم خانگی و کالای دیجیتال از ترکیب وزنی قیمت پایه پارسینا و
+                قیمت رقیب ساخته می‌شوند. مبلمان و فرش قیمت رقیب مستقیم ندارند؛
+                تغییر روزانه قیمت محصول لینک‌شده (سوفا یا دیجی‌فرش) با همان وزن
+                روی قیمت پایه اعمال می‌شود. وزن خالی یعنی برای آن دسته قیمت
+                پیشنهادی نمایش داده نمی‌شود.
               </span>
               <span className="sm:hidden">
-                لوازم خانگی: وزن رقیب؛ مبلمان/فرش: وزن تغییر روزانه. وزن خالی
-                یعنی بدون قیمت پیشنهادی.
+                لوازم خانگی/کالای دیجیتال: وزن رقیب؛ مبلمان/فرش: وزن تغییر
+                روزانه. وزن خالی یعنی بدون قیمت پیشنهادی.
               </span>
             </p>
           </div>
@@ -273,7 +280,7 @@ export function SuggestedPriceSettings() {
         <div className="mt-4 grid gap-2 sm:grid-cols-2">
           <div className="rounded-xl border border-border/70 bg-background px-4 py-3">
             <p className="text-xs font-medium text-muted-foreground">
-              لوازم خانگی
+              لوازم خانگی و کالای دیجیتال
             </p>
             <p
               dir="ltr"
@@ -322,7 +329,7 @@ export function SuggestedPriceSettings() {
         </dl>
       </section>
 
-      <div className="grid gap-3 xl:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {GROUPS.map((config) => {
           const parsed = parseWeight(weights[config.group] ?? "")
           const weight = parsed.value

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db_readonly, require_user
 from app.api.openapi import CONFLICT, UNAUTHORIZED, VALIDATION_ERROR
+from app.core.top_groups import TopGroup
 from app.models import Admin
 from app.services import (
     EXPORT_TOO_LARGE_MESSAGE,
@@ -55,8 +56,12 @@ def _too_large() -> JSONResponse:
 def export_products_csv(
     q: str = Query(default="", description="Case-insensitive match on name, SKU, and groups."),
     category_id: int | None = Query(default=None, ge=1, description="Exact category id."),
-    top_group: str | None = Query(
-        default=None, max_length=200, description="Section: فرش، مبلمان، or لوازم خانگی."
+    top_group: list[TopGroup] | None = Query(  # noqa: B008
+        default=None,
+        description=(
+            "Section filter; repeat it to include more sections "
+            "(فرش، مبلمان، لوازم خانگی، کالای دیجیتال)."
+        ),
     ),
     main_group: str | None = Query(default=None, max_length=200, description="Raw group name."),
     min_price: int | None = Query(default=None, ge=0, description="Minimum unit price, Toman."),
@@ -97,7 +102,7 @@ def export_products_csv(
     filters = service.filters(
         query=q,
         category_id=category_id,
-        top_group=top_group,
+        top_groups=top_group,
         main_group=main_group,
         min_price=min_price,
         max_price=max_price,
@@ -133,8 +138,12 @@ def export_products_csv(
 def export_competitor_listings_csv(
     q: str = Query(default="", description="Case-insensitive match on product name/SKU/groups."),
     category_id: int | None = Query(default=None, ge=1, description="Exact category id."),
-    top_group: str | None = Query(
-        default=None, max_length=200, description="Section: فرش، مبلمان، or لوازم خانگی."
+    top_group: list[TopGroup] | None = Query(  # noqa: B008
+        default=None,
+        description=(
+            "Section filter; repeat it to include more sections "
+            "(فرش، مبلمان، لوازم خانگی، کالای دیجیتال)."
+        ),
     ),
     main_group: str | None = Query(default=None, max_length=200, description="Raw group name."),
     min_price: int | None = Query(default=None, ge=0, description="Minimum product price."),
@@ -159,7 +168,7 @@ def export_competitor_listings_csv(
     filters = ProductService(session).filters(
         query=q,
         category_id=category_id,
-        top_group=top_group,
+        top_groups=top_group,
         main_group=main_group,
         min_price=min_price,
         max_price=max_price,

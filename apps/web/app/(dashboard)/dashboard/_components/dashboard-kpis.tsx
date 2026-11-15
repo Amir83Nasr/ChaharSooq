@@ -136,7 +136,8 @@ export function DashboardKpis({ overview, threshold }: DashboardKpisProps) {
           </p>
           <p className="text-xs text-muted-foreground">
             <PersianNumber value={overview.competitor_coverage} /> از{" "}
-            <PersianNumber value={overview.appliance_total} /> قلم لوازم خانگی
+            <PersianNumber value={overview.appliance_total} /> قلم کالای قابل
+            مقایسه
           </p>
         </KpiCard>
       </div>

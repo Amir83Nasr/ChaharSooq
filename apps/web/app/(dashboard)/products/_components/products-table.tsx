@@ -25,12 +25,7 @@ import { Skeleton } from "@workspace/ui/primitives/skeleton"
 import { CircleAlert, PackageSearch, RefreshCw } from "lucide-react"
 import { StockCell } from "@/components/data/products-stock-cell"
 import { toTomanAmount } from "@/lib/money"
-import type {
-  ProductOut,
-  ProductPage,
-  ProductTableColumn,
-  TopGroup,
-} from "@/lib/api"
+import type { ProductOut, ProductPage, ProductTableColumn } from "@/lib/api"
 import {
   DEFAULT_PRODUCT_TABLE_COLUMNS,
   PRODUCT_TABLE_COLUMNS,
@@ -42,6 +37,7 @@ import {
   suggestedPriceFromDailyChange,
   type SuggestedPriceWeights,
 } from "@/lib/suggested-price"
+import { brandOf, comparesWithCompetitor, topGroupOf } from "@/lib/top-groups"
 import { useWindowedRows, initialRowWindow } from "./use-windowed-rows"
 
 import { PAGE_SIZE_OPTIONS } from "@/components/settings/page-size-settings"
@@ -62,33 +58,8 @@ interface TableProps {
   onPageSize: (n: number) => void
 }
 
-// Top-level groups for the catalog display: carpet, furniture, home appliances.
-function topGroupOf(name: string | null): TopGroup | null {
-  if (!name) return null
-  const n = name.trim()
-  if (n.startsWith("فرش")) return "فرش"
-  if (n.startsWith("مبلمان")) return "مبلمان"
-  return "لوازم خانگی"
-}
-
-// Brand is the remainder of the main group name after the top-level prefix.
-function brandOf(name: string | null, top: string | null): string | null {
-  if (!name) return null
-  const n = name.trim()
-  if (top === "فرش") {
-    const rest = n.replace(/^فرش\s*/, "").trim()
-    return rest || null
-  }
-  if (top === "مبلمان") {
-    const rest = n.replace(/^مبلمان\s*/, "").trim()
-    return rest || null
-  }
-  if (top === "لوازم خانگی") {
-    const rest = n.replace(/^لوازم\s+خان[گک]ی\s*/, "").trim()
-    return rest || n
-  }
-  return n
-}
+// Top-level groups for the catalog display: carpet, furniture, home
+// appliances, and digital goods (shared helper in `lib/top-groups`).
 
 export type CompetitorMarket = "digikala" | "technolife" | "sofa" | "digifresh"
 
@@ -343,8 +314,8 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
               i +
               1
             const top = topGroupOf(item.main_group_name)
-            const isAppliance = top === "لوازم خانگی"
-            const trackedStore: CompetitorMarket | null = isAppliance
+            const comparesCompetitor = comparesWithCompetitor(top)
+            const trackedStore: CompetitorMarket | null = comparesCompetitor
               ? market
               : top === "مبلمان"
                 ? "sofa"
@@ -358,7 +329,7 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
               : null
             const showCompetitorCell =
               trackedStore !== null &&
-              (isAppliance
+              (comparesCompetitor
                 ? market === "digikala" || market === "technolife"
                 : market === trackedStore)
             const amount = toTomanAmount(
@@ -366,13 +337,13 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
               competitor?.currency ?? null
             )
             const pct =
-              isAppliance && competitor?.is_fresh === true
+              comparesCompetitor && competitor?.is_fresh === true
                 ? diffPercent(item.price, amount)
                 : null
             const weight = top === null ? null : (weights[top] ?? null)
             const rawSuggested =
               competitor?.is_fresh === true
-                ? isAppliance
+                ? comparesCompetitor
                   ? suggestedPriceFor(item.price, amount, weight)
                   : suggestedPriceFromDailyChange(
                       item.price,
@@ -467,7 +438,7 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                       amount !== undefined ? (
                       <span className="inline-flex flex-col items-center gap-0.5">
                         <Price value={amount} />
-                        {!isAppliance &&
+                        {!comparesCompetitor &&
                         competitor.price_change_percent !== null ? (
                           <span
                             className={`text-[11px] ${
@@ -513,7 +484,7 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                 ) : null}
                 {shown.has("price_diff") ? (
                   <TableCell className="text-center">
-                    {!isAppliance || pct === null ? (
+                    {!comparesCompetitor || pct === null ? (
                       <span className="text-muted-foreground">—</span>
                     ) : Object.is(Math.round(pct * 10) / 10, 0) || pct === 0 ? (
                       <span

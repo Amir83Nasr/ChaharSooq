@@ -7,7 +7,8 @@ export type AutoStoreKey = "digikala" | "technolife"
 export interface StoreConfig {
   key: StoreKey
   name: string
-  topGroup: TopGroup
+  /** Catalog sections this store is compared against. */
+  topGroups: TopGroup[]
   description: string
   /** Automatic price check is available (JSON-LD/API extractor exists). */
   auto: boolean
@@ -17,7 +18,7 @@ export const STORES: Record<StoreKey, StoreConfig> = {
   sofa: {
     key: "sofa",
     name: "سوفا",
-    topGroup: "مبلمان",
+    topGroups: ["مبلمان"],
     description:
       "لینک محصولات مبلمان در سوفا ثبت می‌شود و تغییر روزانه قیمت مبنای پیشنهاد است.",
     auto: false,
@@ -25,7 +26,7 @@ export const STORES: Record<StoreKey, StoreConfig> = {
   digifresh: {
     key: "digifresh",
     name: "دیجی‌فرش",
-    topGroup: "فرش",
+    topGroups: ["فرش"],
     description:
       "لینک محصولات فرش در دیجی‌فرش ثبت می‌شود و تغییر روزانه قیمت مبنای پیشنهاد است.",
     auto: false,
@@ -33,15 +34,17 @@ export const STORES: Record<StoreKey, StoreConfig> = {
   digikala: {
     key: "digikala",
     name: "دیجی‌کالا",
-    topGroup: "لوازم خانگی",
-    description: "قیمت لوازم خانگی در دیجی‌کالا با قیمت فروشگاه مقایسه می‌شود.",
+    topGroups: ["لوازم خانگی", "کالای دیجیتال"],
+    description:
+      "قیمت لوازم خانگی و کالای دیجیتال در دیجی‌کالا با قیمت فروشگاه مقایسه می‌شود.",
     auto: true,
   },
   technolife: {
     key: "technolife",
     name: "تکنولایف",
-    topGroup: "لوازم خانگی",
-    description: "قیمت لوازم خانگی در تکنولایف با قیمت فروشگاه مقایسه می‌شود.",
+    topGroups: ["لوازم خانگی", "کالای دیجیتال"],
+    description:
+      "قیمت لوازم خانگی و کالای دیجیتال در تکنولایف با قیمت فروشگاه مقایسه می‌شود.",
     auto: true,
   },
 }

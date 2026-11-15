@@ -14,6 +14,7 @@ import { PackageSearch } from "lucide-react"
 import { StockCell } from "@/components/data/products-stock-cell"
 import { toTomanAmount } from "@/lib/money"
 import type { ProductOut } from "@/lib/api"
+import { comparesWithCompetitor, topGroupOf } from "@/lib/top-groups"
 import type { CompetitorMarket } from "./products-table"
 import { STORE_MARKET_LABELS } from "./products-table"
 import { initialRowWindow, useWindowedRows } from "./use-windowed-rows"
@@ -22,14 +23,6 @@ import { initialRowWindow, useWindowedRows } from "./use-windowed-rows"
 // initial commit cheap while the real heights are measured.
 const CARD_EST_HEIGHT = 168
 const CARD_INITIAL_ROWS = 8
-
-function topGroupOf(name: string | null): string | null {
-  if (!name) return null
-  const n = name.trim()
-  if (n.startsWith("فرش")) return "فرش"
-  if (n.startsWith("مبلمان")) return "مبلمان"
-  return "لوازم خانگی"
-}
 
 function diffPercent(ours: number, theirs: number | null): number | null {
   if (theirs === null || theirs <= 0 || ours <= 0) return null
@@ -49,14 +42,14 @@ export function ProductMobileCard({
 }) {
   const marketLabel = STORE_MARKET_LABELS[market]
   const top = topGroupOf(item.main_group_name)
-  const isAppliance = top === "لوازم خانگی"
+  const comparesCompetitor = comparesWithCompetitor(top)
   const trackedStore =
-    isAppliance || top === null
+    comparesCompetitor || top === null
       ? market
       : top === "مبلمان"
         ? "sofa"
         : "digifresh"
-  const showCompetitor = isAppliance
+  const showCompetitor = comparesCompetitor
     ? market === "digikala" || market === "technolife"
     : market === trackedStore
   const competitor = showCompetitor
@@ -68,7 +61,7 @@ export function ProductMobileCard({
     competitor?.currency ?? null
   )
   const pct =
-    isAppliance && competitor?.is_fresh === true
+    comparesCompetitor && competitor?.is_fresh === true
       ? diffPercent(item.price, amount)
       : null
 
@@ -144,7 +137,8 @@ export function ProductMobileCard({
             >
               {formatDiffCompact(pct)} {pct > 0 ? "گران‌تر" : "ارزان‌تر"}
             </span>
-          ) : !isAppliance && competitor?.price_change_percent != null ? (
+          ) : !comparesCompetitor &&
+            competitor?.price_change_percent != null ? (
             <span
               className={cn(
                 "text-xs font-medium",

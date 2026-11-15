@@ -7,11 +7,12 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast
 
-from sqlalchemy import ColumnElement, and_, case, exists, func, not_, or_, select, update
+from sqlalchemy import ColumnElement, and_, case, exists, false, func, not_, or_, select, update
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.sql import Select
 from sqlalchemy.sql.elements import Case
 
+from app.core.top_groups import DIGITAL_MAIN_GROUP_IDS, DIGITAL_MAIN_GROUP_PREFIXES
 from app.models import CompetitorListing, Product
 
 if TYPE_CHECKING:
@@ -25,7 +26,7 @@ class ProductFilters(NamedTuple):
 
     query: str
     category_id: int | None
-    top_group: str | None
+    top_groups: tuple[str, ...]
     main_group: str | None
     min_price: int | None
     max_price: int | None
@@ -80,6 +81,36 @@ def effective_competitor_price(since: datetime) -> Case:
     )
 
 
+def _digital_criterion() -> ColumnElement[bool]:
+    """Synced digital rows (by group id) plus name-only/manual rows (prefix)."""
+    return or_(
+        # `NULL IN (...)` is NULL, which would make the negated appliance
+        # criterion NULL too; guard it so name-only rows stay visible there.
+        and_(Product.main_group_id.is_not(None), Product.main_group_id.in_(DIGITAL_MAIN_GROUP_IDS)),
+        *(Product.main_group_name.ilike(f"{prefix}%") for prefix in DIGITAL_MAIN_GROUP_PREFIXES),
+    )
+
+
+def _section_criterion(top_group: str) -> ColumnElement[bool]:
+    """SQL for one catalog section (تقسیم‌بندی); mirrors `top_group_of`."""
+    name = Product.main_group_name
+    if top_group == "فرش":
+        return name.ilike("فرش%")
+    if top_group == "مبلمان":
+        return name.ilike("مبلمان%")
+    if top_group == "کالای دیجیتال":
+        return _digital_criterion()
+    if top_group == "لوازم خانگی":
+        return and_(
+            name.is_not(None),
+            not_(name.ilike("فرش%")),
+            not_(name.ilike("مبلمان%")),
+            not_(_digital_criterion()),
+        )
+    # Routes validate against TopGroup; unknown values must not widen the list.
+    return false()
+
+
 def product_base_criteria(filters: ProductFilters) -> list[ColumnElement[bool]]:
     """Product WHERE clauses without competitor-price EXISTS checks.
 
@@ -101,15 +132,8 @@ def product_base_criteria(filters: ProductFilters) -> list[ColumnElement[bool]]:
         criteria.append(Product.category_id == filters.category_id)
     if filters.main_group:
         criteria.append(Product.main_group_name == filters.main_group)
-    if filters.top_group:
-        if filters.top_group == "فرش":
-            criteria.append(Product.main_group_name.ilike("فرش%"))
-        elif filters.top_group == "مبلمان":
-            criteria.append(Product.main_group_name.ilike("مبلمان%"))
-        elif filters.top_group == "لوازم خانگی":
-            criteria.append(Product.main_group_name.is_not(None))
-            criteria.append(not_(Product.main_group_name.ilike("فرش%")))
-            criteria.append(not_(Product.main_group_name.ilike("مبلمان%")))
+    if filters.top_groups:
+        criteria.append(or_(*(_section_criterion(group) for group in filters.top_groups)))
     if filters.min_price is not None:
         criteria.append(Product.price >= filters.min_price)
     if filters.max_price is not None:
@@ -317,16 +341,17 @@ class ProductRepository:
         ]
 
     def coverage_and_appliance_total(self, *, since: datetime) -> tuple[int, int]:
-        """Competitor coverage + لوازم خانگی denominator in ONE round-trip.
+        """Competitor coverage + direct-competitor denominator in ONE round-trip.
 
         Replaces the two former single-purpose COUNT helpers
         (`competitor_coverage`, `appliance_total`): two scalar subqueries
         instead of two round-trips, so the dashboard overview costs 3
         (summary, groups, this) not 4.
 
-        Both sides share the appliance filter: carpet/furniture track the
-        linked product's daily change instead of a direct competitor price,
-        so counting them in the numerator would push the KPI past 100%.
+        Both sides share the same filter: carpet/furniture track the linked
+        product's daily change instead of a direct competitor price, so
+        counting them in the numerator would push the KPI past 100%. Appliance
+        and digital rows both compare against Digikala/Technolife.
         """
         appliance_criteria: tuple[ColumnElement[bool], ...] = (
             Product.is_active.is_(True),

@@ -19,7 +19,11 @@ class DashboardOverviewOut(BaseModel):
         ge=0, description="Active products with at least one fresh competitor price."
     )
     appliance_total: int = Field(
-        ge=0, description="Active non-فرش/مبلمان products (the coverage denominator)."
+        ge=0,
+        description=(
+            "Active products that compare directly with a competitor "
+            "(non-فرش/مبلمان); the coverage denominator."
+        ),
     )
     groups: list[DashboardGroupOut] = Field(
         default_factory=list, description="Top groups by stock value."
@@ -61,7 +65,7 @@ class CatalogBrandOut(BaseModel):
 
 
 class CatalogSectionOut(BaseModel):
-    """Per-section (بخش) aggregate — فرش / مبلمان / لوازم خانگی / سایر."""
+    """Per-section (بخش) aggregate — فرش / مبلمان / لوازم خانگی / کالای دیجیتال / سایر."""
 
     top_group: str = Field(description="Section name.")
     items: int = Field(ge=0, description="Active products in the section.")

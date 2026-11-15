@@ -11,25 +11,14 @@ import {
 } from "@workspace/ui/primitives/responsive-dialog"
 import { Price } from "@workspace/ui/persian/price"
 import { PersianNumber } from "@workspace/ui/persian/persian-number"
-import type {
-  CompetitorListing,
-  CompetitorPrice,
-  ProductOut,
-  TopGroup,
-} from "@/lib/api"
+import type { CompetitorListing, CompetitorPrice, ProductOut } from "@/lib/api"
 import {
   DIALOG_STORES,
   ProductCompetitorPrices,
 } from "./product-competitor-prices"
 import { ProductPriceBounds } from "./product-price-bounds"
 import { ProductSuggestedPrice } from "./product-suggested-price"
-
-function topGroupOf(name: string | null): TopGroup {
-  const value = name?.trim() ?? ""
-  if (value.startsWith("فرش")) return "فرش"
-  if (value.startsWith("مبلمان")) return "مبلمان"
-  return "لوازم خانگی"
-}
+import { topGroupOf } from "@/lib/top-groups"
 
 /** Dialog listings carry the same price facts the table receives. */
 function listingToPrice(listing: CompetitorListing): CompetitorPrice {
@@ -69,7 +58,11 @@ export function ProductDetailDialog(props: {
   }, [selected])
 
   const product = localProduct ?? selected
-  const topGroup = product ? topGroupOf(product.main_group_name) : null
+  // Manual rows have no Parsina group; they behave like appliances (the
+  // default section) so their competitor links stay manageable.
+  const topGroup = product
+    ? (topGroupOf(product.main_group_name) ?? "لوازم خانگی")
+    : null
 
   const handleListingsChanged = useCallback((listings: CompetitorListing[]) => {
     setLocalProduct((current) =>

@@ -18,12 +18,12 @@ import {
 } from "@workspace/ui/primitives/drawer"
 import { SearchInput } from "@/components/data/data-table-toolbar"
 import { ProductsToolbar } from "./products-toolbar"
-import type { DefaultCompetitorStore, ProductSort } from "@/lib/api"
+import type { DefaultCompetitorStore, ProductSort, TopGroup } from "@/lib/api"
 import type { StockFilter } from "@/lib/products-store"
 
 interface Props {
   q: string
-  topGroup: string | null
+  topGroup: TopGroup | null
   sort: ProductSort
   stock: StockFilter
   market: DefaultCompetitorStore
@@ -32,7 +32,7 @@ interface Props {
   hasFilters: boolean
   activeCount: number
   onQ: (v: string) => void
-  onTopGroup: (v: string | null) => void
+  onTopGroup: (v: TopGroup | null) => void
   onSort: (v: ProductSort) => void
   onStock: (v: StockFilter) => void
   onMarketChange: (v: DefaultCompetitorStore) => void

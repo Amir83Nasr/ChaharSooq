@@ -53,9 +53,10 @@ def list_competitor_listings(
     status_code=status.HTTP_201_CREATED,
     summary="Add competitor link",
     description=(
-        "Saves a public product URL for one product. Only لوازم خانگی products "
-        "accept links, with at most one link per store. Digikala and Technolife "
-        "URLs are checked automatically; `other` stores remain manual-only."
+        "Saves a public product URL for one product. Only لوازم خانگی and "
+        "کالای دیجیتال products accept links, with at most one link per store. "
+        "Digikala and Technolife URLs are checked automatically; `other` stores "
+        "remain manual-only."
     ),
     responses={404: NOT_FOUND, 422: VALIDATION_ERROR},
 )

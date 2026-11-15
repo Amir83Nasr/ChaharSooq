@@ -201,7 +201,13 @@ def test_dashboard_catalog_breakdown_requires_auth(client: TestClient) -> None:
 def test_dashboard_catalog_breakdown_empty(client: TestClient) -> None:
     login(client)
     body = client.get("/api/v1/dashboard/catalog-breakdown").json()
-    assert [s["top_group"] for s in body] == ["فرش", "مبلمان", "لوازم خانگی", "سایر"]
+    assert [s["top_group"] for s in body] == [
+        "فرش",
+        "مبلمان",
+        "لوازم خانگی",
+        "کالای دیجیتال",
+        "سایر",
+    ]
     assert all(
         s["items"] == 0
         and s["group_count"] == 0
@@ -268,6 +274,14 @@ def test_dashboard_catalog_breakdown_groups_by_section(
                 stock=Decimal(1),
                 main_group_name="یخچال اسنوا",
             ),
+            Product(
+                name="گوشی",
+                sku="PHN-1",
+                price=Decimal(700),
+                stock=Decimal(1),
+                main_group_name="گوشی و تبلت",
+                main_group_id=57,
+            ),
         ]
     )
     session.commit()
@@ -289,6 +303,14 @@ def test_dashboard_catalog_breakdown_groups_by_section(
         "brand": "یخچال اسنوا",
         "count": 1,
         "stock_value": 500,
+    }
+    digital = by_section["کالای دیجیتال"]
+    assert (digital["items"], digital["group_count"], digital["brand_count"]) == (1, 1, 1)
+    assert digital["brands"][0] == {
+        "group_name": "گوشی و تبلت",
+        "brand": "گوشی و تبلت",
+        "count": 1,
+        "stock_value": 700,
     }
     assert by_section["سایر"]["items"] == 0
 

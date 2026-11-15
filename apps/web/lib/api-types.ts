@@ -109,7 +109,7 @@ export interface DashboardGroup {
 
 export interface DashboardOverview extends InventorySummary {
   competitor_coverage: number
-  /** Active لوازم خانگی items — the coverage denominator. */
+  /** Active products compared directly with a competitor — coverage denominator. */
   appliance_total: number
   groups: DashboardGroup[]
 }
@@ -254,15 +254,15 @@ export interface SettingsOut {
   product_table_columns: ProductTableColumn[]
 }
 
-export type TopGroup = "فرش" | "مبلمان" | "لوازم خانگی"
+export type TopGroup = "فرش" | "مبلمان" | "لوازم خانگی" | "کالای دیجیتال"
 
 export type DefaultCompetitorStore = "digikala" | "technolife"
 
 export interface SuggestedPriceFormula {
   top_group: TopGroup
   /**
-   * Share applied to the source: competitor price for لوازم خانگی, daily
-   * price change for مبلمان/فرش. Always 0–1.
+   * Share applied to the source: competitor price for لوازم خانگی/کالای
+   * دیجیتال, daily price change for مبلمان/فرش. Always 0–1.
    */
   weight: number
 }
@@ -280,7 +280,7 @@ export interface SettingsUpdate {
 export interface ProductFilters {
   q?: string
   category_id?: number
-  top_group?: string
+  top_group?: TopGroup | readonly TopGroup[]
   main_group?: string
   min_price?: number
   max_price?: number

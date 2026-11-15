@@ -311,7 +311,7 @@
           "Dashboard"
         ],
         "summary": "Catalog breakdown by section",
-        "description": "Per-section (فرش / مبلمان / لوازم خانگی / سایر) totals: items, groups, brands, and stock value.",
+        "description": "Per-section (فرش / مبلمان / لوازم خانگی / کالای دیجیتال / سایر) totals: items, groups, brands, and stock value.",
         "operationId": "dashboard_catalog_breakdown",
         "responses": {
           "200": {
@@ -474,17 +474,25 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string",
-                  "maxLength": 200
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "فرش",
+                      "مبلمان",
+                      "لوازم خانگی",
+                      "کالای دیجیتال"
+                    ],
+                    "type": "string"
+                  }
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "Section filter: فرش، مبلمان، or لوازم خانگی.",
+              "description": "Section filter; repeat it to include more sections (فرش، مبلمان، لوازم خانگی، کالای دیجیتال).",
               "title": "Top Group"
             },
-            "description": "Section filter: فرش، مبلمان، or لوازم خانگی."
+            "description": "Section filter; repeat it to include more sections (فرش، مبلمان، لوازم خانگی، کالای دیجیتال)."
           },
           {
             "name": "main_group",
@@ -1053,7 +1061,7 @@
           "Competitors"
         ],
         "summary": "Add competitor link",
-        "description": "Saves a public product URL for one product. Only لوازم خانگی products accept links, with at most one link per store. Digikala and Technolife URLs are checked automatically; `other` stores remain manual-only.",
+        "description": "Saves a public product URL for one product. Only لوازم خانگی and کالای دیجیتال products accept links, with at most one link per store. Digikala and Technolife URLs are checked automatically; `other` stores remain manual-only.",
         "operationId": "create_competitor_listing",
         "security": [
           {
@@ -1464,17 +1472,25 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string",
-                  "maxLength": 200
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "فرش",
+                      "مبلمان",
+                      "لوازم خانگی",
+                      "کالای دیجیتال"
+                    ],
+                    "type": "string"
+                  }
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "Section: فرش، مبلمان، or لوازم خانگی.",
+              "description": "Section filter; repeat it to include more sections (فرش، مبلمان، لوازم خانگی، کالای دیجیتال).",
               "title": "Top Group"
             },
-            "description": "Section: فرش، مبلمان، or لوازم خانگی."
+            "description": "Section filter; repeat it to include more sections (فرش، مبلمان، لوازم خانگی، کالای دیجیتال)."
           },
           {
             "name": "main_group",
@@ -1828,17 +1844,25 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string",
-                  "maxLength": 200
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "فرش",
+                      "مبلمان",
+                      "لوازم خانگی",
+                      "کالای دیجیتال"
+                    ],
+                    "type": "string"
+                  }
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "Section: فرش، مبلمان، or لوازم خانگی.",
+              "description": "Section filter; repeat it to include more sections (فرش، مبلمان، لوازم خانگی، کالای دیجیتال).",
               "title": "Top Group"
             },
-            "description": "Section: فرش، مبلمان، or لوازم خانگی."
+            "description": "Section filter; repeat it to include more sections (فرش، مبلمان، لوازم خانگی، کالای دیجیتال)."
           },
           {
             "name": "main_group",
@@ -2915,7 +2939,7 @@
           "stock_value"
         ],
         "title": "CatalogSectionOut",
-        "description": "Per-section (بخش) aggregate — فرش / مبلمان / لوازم خانگی / سایر."
+        "description": "Per-section (بخش) aggregate — فرش / مبلمان / لوازم خانگی / کالای دیجیتال / سایر."
       },
       "CategoryIn": {
         "properties": {
@@ -3766,7 +3790,7 @@
             "type": "integer",
             "minimum": 0.0,
             "title": "Appliance Total",
-            "description": "Active non-فرش/مبلمان products (the coverage denominator)."
+            "description": "Active products that compare directly with a competitor (non-فرش/مبلمان); the coverage denominator."
           },
           "groups": {
             "items": {
@@ -4619,7 +4643,8 @@
             "enum": [
               "فرش",
               "مبلمان",
-              "لوازم خانگی"
+              "لوازم خانگی",
+              "کالای دیجیتال"
             ],
             "title": "Top Group",
             "description": "Catalog section the weight applies to."
@@ -4629,7 +4654,7 @@
             "maximum": 1.0,
             "minimum": 0.0,
             "title": "Weight",
-            "description": "Source share (0–1): competitor price for لوازم خانگی, daily price change for مبلمان/فرش."
+            "description": "Source share (0–1): competitor price for لوازم خانگی/کالای دیجیتال, daily price change for مبلمان/فرش."
           }
         },
         "type": "object",
@@ -4646,7 +4671,8 @@
             "enum": [
               "فرش",
               "مبلمان",
-              "لوازم خانگی"
+              "لوازم خانگی",
+              "کالای دیجیتال"
             ],
             "title": "Top Group",
             "description": "Catalog section the weight applies to."
@@ -4656,7 +4682,7 @@
             "maximum": 1.0,
             "minimum": 0.0,
             "title": "Weight",
-            "description": "Source share (0–1): competitor price for لوازم خانگی, daily price change for مبلمان/فرش."
+            "description": "Source share (0–1): competitor price for لوازم خانگی/کالای دیجیتال, daily price change for مبلمان/فرش."
           }
         },
         "type": "object",

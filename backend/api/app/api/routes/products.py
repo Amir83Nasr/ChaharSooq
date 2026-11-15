@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db, get_db_readonly, require_admin, require_user
 from app.api.openapi import NOT_FOUND, UNAUTHORIZED, VALIDATION_ERROR
+from app.core.top_groups import TopGroup
 from app.models import Admin
 from app.schemas import (
     InventorySummaryOut,
@@ -41,10 +42,12 @@ router = APIRouter(tags=["Products"], responses={401: UNAUTHORIZED})
 def list_products(
     q: str = Query(default="", description="Case-insensitive match on name, SKU, and group names."),
     category_id: int | None = Query(default=None, ge=1, description="Exact category id."),
-    top_group: str | None = Query(
+    top_group: list[TopGroup] | None = Query(  # noqa: B008
         default=None,
-        max_length=200,
-        description="Section filter: فرش، مبلمان، or لوازم خانگی.",
+        description=(
+            "Section filter; repeat it to include more sections "
+            "(فرش، مبلمان، لوازم خانگی، کالای دیجیتال)."
+        ),
     ),
     main_group: str | None = Query(
         default=None, max_length=200, description="Exact raw group name."
@@ -80,7 +83,7 @@ def list_products(
     items, total = ProductService(session).list(
         query=q,
         category_id=category_id,
-        top_group=top_group,
+        top_groups=top_group,
         main_group=main_group,
         min_price=min_price,
         max_price=max_price,

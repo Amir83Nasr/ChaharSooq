@@ -24,6 +24,7 @@ import {
 /** Links a product group can track in the detail dialog. */
 export const DIALOG_STORES: Record<TopGroup, CompetitorStore[]> = {
   "لوازم خانگی": ["digikala", "technolife"],
+  "کالای دیجیتال": ["digikala", "technolife"],
   مبلمان: ["sofa"],
   فرش: ["digifresh"],
 }

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
@@ -42,7 +42,7 @@ class ProductService:
         *,
         query: str,
         category_id: int | None,
-        top_group: str | None,
+        top_groups: Sequence[str] | None,
         main_group: str | None,
         min_price: int | None,
         max_price: int | None,
@@ -59,7 +59,9 @@ class ProductService:
         return ProductFilters(
             query=query.strip(),
             category_id=category_id,
-            top_group=(top_group or "").strip() or None,
+            top_groups=tuple(
+                dict.fromkeys(group.strip() for group in (top_groups or []) if group.strip())
+            ),
             main_group=(main_group or "").strip() or None,
             min_price=min_price,
             max_price=max_price,
@@ -78,7 +80,7 @@ class ProductService:
         *,
         query: str,
         category_id: int | None,
-        top_group: str | None,
+        top_groups: Sequence[str] | None,
         main_group: str | None,
         min_price: int | None,
         max_price: int | None,
@@ -102,7 +104,7 @@ class ProductService:
         filters = self.filters(
             query=query,
             category_id=category_id,
-            top_group=top_group,
+            top_groups=top_groups,
             main_group=main_group,
             min_price=min_price,
             max_price=max_price,

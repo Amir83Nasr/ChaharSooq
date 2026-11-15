@@ -15,11 +15,13 @@ import csv
 from pathlib import Path
 from typing import Any, Literal
 
-# Mock titles for the unit ids present in the dev export. Replace them if the
-# real `/UnitCount/BaseInfo` titles differ; unknown ids fall back to "عدد".
+# Titles for the unit ids present in the dev export, taken from Parsina's own
+# inventory export (`data/موجودی مقطعی تعدادی.xls`, column «واحد شمارش»): every
+# matching row agreed on the title, so these ids mirror `/UnitCount/BaseInfo`.
+# Unknown ids fall back to "عدد".
 _DEV_UNIT_TITLES: dict[int, str] = {
     1: "تخته",
-    2: "ست",
+    2: "دست",
     3: "دستگاه",
     4: "عدد",
     5: "متر",

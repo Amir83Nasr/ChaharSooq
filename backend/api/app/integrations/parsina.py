@@ -97,6 +97,20 @@ def _str(raw: Any) -> str | None:
     return text or None
 
 
+def _field(record: dict[str, Any], *names: str) -> Any:
+    """Case-insensitive field lookup.
+
+    Parsina serializes some payloads with PascalCase (`Title`, `Id`) and others
+    with camelCase (`goodId`); the counting-units endpoint disagrees with the
+    rest of the catalog, so match names regardless of case.
+    """
+    wanted = {name.lower() for name in names}
+    for key, value in record.items():
+        if str(key).strip().lower() in wanted:
+            return value
+    return None
+
+
 def _as_bool(raw: Any) -> bool:
     """JSON sends real booleans; the dev CSV sends "true"/"false" strings."""
     if isinstance(raw, bool):
@@ -309,20 +323,50 @@ class ParsinaClient:
         return self._data_list(body), total
 
     def units(self) -> dict[int, str]:
-        """Best-effort id → title map; a failure never aborts a product sync."""
+        """Best-effort countUnit id → title map; a failure never aborts a sync.
+
+        The catalog only carries `countUnit` (an id); the display name comes
+        from `GET /UnitCount/BaseInfo`, whose rows are matched here by id so
+        the products table can show «عدد» instead of `4`.
+        """
         try:
             body = self._request("GET", "/UnitCount/BaseInfo")
+            rows = self._unit_rows(body)
         except ParsinaError:
             # Do not log request/URL details; credentials live in auth payloads.
             log.warning("parsina units lookup failed")
             return {}
         out: dict[int, str] = {}
-        for raw in self._data_list(body):
+        unexpected_keys: set[str] = set()
+        for raw in rows:
             if not isinstance(raw, dict):
                 continue
             row = cast("dict[str, Any]", raw)
-            unit_id = _int(row.get("id"))
-            title = _str(row.get("Title"))
+            unit_id = _int(_field(row, "id", "unitId", "unit_id", "unitCode", "code"))
+            title = _str(_field(row, "Title", "title", "unitName", "unit_name", "name"))
             if unit_id is not None and title:
                 out[unit_id] = title
+            elif title is None:
+                unexpected_keys.update(str(key) for key in row)
+        if not out:
+            # Field names are safe to log; values (and credentials) are not.
+            log.warning(
+                "parsina units lookup returned no usable rows (keys: %s)",
+                ", ".join(sorted(unexpected_keys)) or "-",
+            )
         return out
+
+    def _unit_rows(self, body: Any) -> list[Any]:
+        """Rows of the units envelope; some builds wrap the list in a dict."""
+        data = self._envelope(body).get("data")
+        if isinstance(data, list):
+            return cast("list[Any]", data)
+        if isinstance(data, dict):
+            wrapped = cast("dict[str, Any]", data)
+            for value in wrapped.values():
+                if isinstance(value, list):
+                    return cast("list[Any]", value)
+            return [wrapped]
+        if data is None:
+            return []
+        raise ParsinaResponseError("فیلد data در پاسخ واحدهای شمارش پارسینا نامعتبر است")

@@ -191,6 +191,38 @@ def test_client_refuses_unconfigured_settings() -> None:
         ParsinaClient(ParsinaSettings())
 
 
+def test_client_maps_unit_ids_to_titles_regardless_of_key_case() -> None:
+    """The units endpoint mixes PascalCase and camelCase keys."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/Account"):
+            return httpx.Response(200, json={"access_token": "t", "expires_in": 100})
+        return httpx.Response(
+            200,
+            json={
+                "isSuccess": True,
+                "data": [{"Id": 4, "Title": "عدد"}, {"unit_id": "1", "title": "تخته"}],
+                "total": 2,
+            },
+        )
+
+    with ParsinaClient(SETTINGS, transport=httpx.MockTransport(handler)) as client:
+        assert client.units() == {4: "عدد", 1: "تخته"}
+
+
+def test_client_reads_units_wrapped_in_a_data_object() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/Account"):
+            return httpx.Response(200, json={"access_token": "t", "expires_in": 100})
+        return httpx.Response(
+            200,
+            json={"isSuccess": True, "data": {"items": [{"id": 2, "Title": "ست"}]}},
+        )
+
+    with ParsinaClient(SETTINGS, transport=httpx.MockTransport(handler)) as client:
+        assert client.units() == {2: "ست"}
+
+
 def test_parse_commodity_requires_stable_identity() -> None:
     assert parse_commodity({}) is None
     assert parse_commodity({"goodId": 0, "goodName": "x"}) is None
@@ -316,6 +348,26 @@ def test_client_does_not_log_sensitive_credentials(
     assert secret_token not in combined
     assert "Bearer" not in combined
     assert "Authorization" not in combined
+
+
+def test_sync_keeps_unit_title_when_units_lookup_fails(session: Session) -> None:
+    _service(session, FakeParsina(_goods(_good(1, "A-1", "کالا")))).run()
+
+    def failing_units(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/Account"):
+            return httpx.Response(200, json={"access_token": "t", "expires_in": 100})
+        if request.url.path.endswith("/UnitCount/BaseInfo"):
+            return httpx.Response(500, json={"isSuccess": False})
+        return httpx.Response(200, json=_goods(_good(1, "A-1", "کالا")))
+
+    ProductSyncService(
+        session, settings=SETTINGS, transport=httpx.MockTransport(failing_units)
+    ).run()
+
+    session.expire_all()
+    product = session.execute(select(Product)).scalars().one()
+    assert product.unit_id == 7
+    assert product.unit_name == "عدد"
 
 
 def test_sync_deactivates_rows_missing_from_listing(session: Session) -> None:

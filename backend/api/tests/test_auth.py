@@ -1,12 +1,58 @@
 """Auth flow — login/me/logout, validation envelope."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.core.database import get_engine
+from app.core.database import Base, get_engine, reset_engine
+from app.core.rate_limit import reset_rate_limits
+from app.core.security import hash_password
+from app.main import create_app
 from app.models import Admin
 from app.services import LOGIN_ERROR
 from tests.helpers import login
+
+_COOKIE = "charsooq_session"
+
+
+def _cookie_header(response, name: str = _COOKIE) -> str:
+    cookies = response.headers.get_list("set-cookie")
+    for value in cookies:
+        if value.startswith(f"{name}="):
+            return value
+    raise AssertionError(f"missing {name} cookie in {cookies!r}")
+
+
+@contextmanager
+def _auth_client(monkeypatch: pytest.MonkeyPatch, **env: str) -> Iterator[TestClient]:
+    """Fresh app/client with explicit env overrides for cookie-policy tests."""
+    from app.core import config
+
+    reset_engine()
+    reset_rate_limits()
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+    config.get_database_settings.cache_clear()
+    config.get_settings.cache_clear()
+    config.get_parsina_settings.cache_clear()
+    try:
+        engine = get_engine()
+        Base.metadata.drop_all(engine)
+        Base.metadata.create_all(engine)
+        with Session(engine) as session:
+            session.add(Admin(username="admin", password_hash=hash_password("secret123")))
+            session.commit()
+        with TestClient(create_app()) as client:
+            yield client
+    finally:
+        config.get_database_settings.cache_clear()
+        config.get_settings.cache_clear()
+        config.get_parsina_settings.cache_clear()
+        reset_engine()
+        reset_rate_limits()
 
 
 def test_health(client: TestClient) -> None:
@@ -98,3 +144,120 @@ def test_login_rate_limited_after_repeated_failures(client: TestClient) -> None:
     )
     assert limited.status_code == 429
     assert limited.json()["error"]["code"] == "rate_limited"
+
+
+def _production_mode_env(**overrides: str) -> dict[str, str]:
+    """Production app behavior (Staging identity) with sqlite for hermetic tests."""
+    env = {
+        "APP_ENV": "production",
+        "DEPLOYMENT_ENV": "staging",
+        "DATABASE_URL": "sqlite+pysqlite:///:memory:",
+        "SESSION_SECRET": "s" * 32,
+        "OWNER_PASSWORD": "owner-pass-123",
+        "RUN_MIGRATIONS_ON_STARTUP": "false",
+        "RUN_OWNER_BOOTSTRAP_ON_STARTUP": "false",
+    }
+    env.update(overrides)
+    return env
+
+
+def test_session_cookie_secure_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.core import config
+
+    def load(**env: str):
+        for key, value in env.items():
+            monkeypatch.setenv(key, value)
+        config.get_database_settings.cache_clear()
+        config.get_settings.cache_clear()
+        try:
+            return config.Settings()
+        finally:
+            config.get_database_settings.cache_clear()
+            config.get_settings.cache_clear()
+
+    monkeypatch.delenv("SESSION_COOKIE_SECURE", raising=False)
+    dev = load(APP_ENV="development", DEPLOYMENT_ENV="development")
+    assert dev.session_cookie_secure is False
+
+    prod = load(
+        APP_ENV="production",
+        DEPLOYMENT_ENV="staging",
+        SESSION_SECRET="s" * 32,
+        OWNER_PASSWORD="owner-pass-123",
+        RUN_MIGRATIONS_ON_STARTUP="false",
+        RUN_OWNER_BOOTSTRAP_ON_STARTUP="false",
+    )
+    assert prod.session_cookie_secure is True
+
+
+def test_login_cookie_production_lax_without_secure_when_overridden(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with _auth_client(
+        monkeypatch,
+        **_production_mode_env(SESSION_COOKIE_SECURE="false", SESSION_SAMESITE="lax"),
+    ) as client:
+        response = client.post(
+            "/api/v1/auth/login", json={"username": "admin", "password": "secret123"}
+        )
+        assert response.status_code == 200
+        cookie = _cookie_header(response).lower()
+        parts = {part.strip() for part in cookie.split(";")}
+        assert "httponly" in parts
+        assert "samesite=lax" in parts
+        assert "secure" not in parts
+
+
+def test_login_cookie_production_lax_secure_when_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with _auth_client(
+        monkeypatch,
+        **_production_mode_env(SESSION_COOKIE_SECURE="true", SESSION_SAMESITE="lax"),
+    ) as client:
+        response = client.post(
+            "/api/v1/auth/login", json={"username": "admin", "password": "secret123"}
+        )
+        assert response.status_code == 200
+        cookie = _cookie_header(response).lower()
+        parts = {part.strip() for part in cookie.split(";")}
+        assert "samesite=lax" in parts
+        assert "secure" in parts
+
+
+def test_login_cookie_samesite_none_always_secure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with _auth_client(
+        monkeypatch,
+        **_production_mode_env(SESSION_COOKIE_SECURE="false", SESSION_SAMESITE="none"),
+    ) as client:
+        response = client.post(
+            "/api/v1/auth/login", json={"username": "admin", "password": "secret123"}
+        )
+        assert response.status_code == 200
+        cookie = _cookie_header(response).lower()
+        parts = {part.strip() for part in cookie.split(";")}
+        assert "samesite=none" in parts
+        assert "secure" in parts
+
+
+def test_logout_uses_same_secure_policy_as_login(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with _auth_client(
+        monkeypatch,
+        **_production_mode_env(SESSION_COOKIE_SECURE="false", SESSION_SAMESITE="lax"),
+    ) as client:
+        login_response = client.post(
+            "/api/v1/auth/login", json={"username": "admin", "password": "secret123"}
+        )
+        assert login_response.status_code == 200
+        login_parts = {part.strip() for part in _cookie_header(login_response).lower().split(";")}
+        assert "secure" not in login_parts
+
+        logout_response = client.post("/api/v1/auth/logout")
+        assert logout_response.status_code == 204
+        logout_parts = {part.strip() for part in _cookie_header(logout_response).lower().split(";")}
+        assert "samesite=lax" in logout_parts
+        assert "secure" not in logout_parts

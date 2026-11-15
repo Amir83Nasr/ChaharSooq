@@ -32,6 +32,7 @@ _ISOLATED_SETTINGS_ENV = frozenset(
         "SESSION_COOKIE_NAME",
         "SESSION_TTL_HOURS",
         "SESSION_SAMESITE",
+        "SESSION_COOKIE_SECURE",
         "OWNER_USERNAME",
         "OWNER_PASSWORD",
         "ADMIN_USER",

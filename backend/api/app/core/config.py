@@ -408,6 +408,11 @@ class Settings(DatabaseSettings):
     session_cookie_name: str = Field(default="charsooq_session")
     session_ttl_hours: int = Field(default=12)
     session_samesite: Literal["lax", "none"] = Field(default="lax")
+    # Independent Secure attribute for the session cookie. None means "use the
+    # environment default": production-mode (Staging/Production) defaults to
+    # Secure, Development defaults to non-Secure. An explicit value overrides the
+    # default, except SameSite=None which is always emitted as Secure.
+    session_cookie_secure: bool | None = Field(default=None)
     # Highest-privilege account, created/updated on every API boot. Legacy
     # ADMIN_USER / ADMIN_PASSWORD stay accepted as aliases for existing envs.
     owner_username: str = Field(
@@ -484,6 +489,9 @@ class Settings(DatabaseSettings):
         change the schema or provision the owner in Production: the ordered
         pre-start CLI steps are the only supported path.
         """
+        if self.session_cookie_secure is None:
+            self.session_cookie_secure = self.is_production
+
         production = is_production_deployment()
         if self.run_migrations_on_startup is None:
             self.run_migrations_on_startup = not production

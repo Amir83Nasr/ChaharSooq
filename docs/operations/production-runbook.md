@@ -472,18 +472,31 @@ activated version. For an IP SAN omit `-servername` and verify with `-verify_ip`
 
 Open `https://<site-host>/login` in a browser on an approved client.
 
-| Check               | Expected                                                             |
-| ------------------- | -------------------------------------------------------------------- |
-| Page loads          | Persian RTL login page, no mixed-content or certificate warning      |
-| Login               | Owner credentials from the approved secret succeed                   |
-| Cookie              | `charsooq_session` is `Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/` |
-| Reload / navigation | Session survives a full page reload                                  |
-| Logout              | Session is cleared and a protected page redirects to login           |
-| Rate limiting       | Ten failed attempts in a minute return `429`, not a server error     |
+| Check               | Expected                                                                                                                                                                                                                                                                                                                                  |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Page loads          | Persian RTL login page, no mixed-content or certificate warning                                                                                                                                                                                                                                                                           |
+| Login               | Owner credentials from the approved secret succeed                                                                                                                                                                                                                                                                                        |
+| Cookie              | `charsooq_session` is `HttpOnly`, `SameSite=Lax`, `Path=/`. `Secure` follows `SESSION_COOKIE_SECURE`: default on in production mode. For the current temporary HTTP-only internal deployment it is `false`; after HTTPS is enabled set it to `true` and verify the `Secure` attribute is present. `SameSite=None` always forces `Secure`. |
+| Reload / navigation | Session survives a full page reload                                                                                                                                                                                                                                                                                                       |
+| Logout              | Session is cleared and a protected page redirects to login                                                                                                                                                                                                                                                                                |
+| Rate limiting       | Ten failed attempts in a minute return `429`, not a server error                                                                                                                                                                                                                                                                          |
 
 If the page loads over plain HTTP or the cookie is missing, stop at the proxy/TLS layer; do not
 “fix” it by changing cookie flags. The full auth model is
 [authentication.md](../architecture/authentication.md).
+
+**HTTPS cutover (cookie flag):** when HTTPS is enabled for the approved site, change
+`SESSION_COOKIE_SECURE` to `"true"` in `compose.production.yml` (or the approved deployment
+environment source), recreate the `api` service with the approved method so the updated
+environment is applied (for example `docker compose -f compose.production.yml up -d --no-deps --force-recreate api`),
+then repeat this step over `https://<site-host>` and confirm the `charsooq_session` cookie is stored with
+`Secure`, survives reload/navigation, and is cleared on logout. Do not perform restarts or deploy actions
+without an approved change window.
+
+**Current temporary HTTP-only internal check (if applicable):** when validating the internal HTTP deployment
+before TLS is enabled, access must be over the approved internal HTTP endpoint only; expect the cookie to be
+stored without `Secure` while `SESSION_COOKIE_SECURE=false`. Do not treat missing `Secure` in that temporary
+state as a TLS-ready Production configuration.
 
 ### Step 14 — Verify web → API
 

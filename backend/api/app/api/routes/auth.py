@@ -1,6 +1,6 @@
 """Auth handlers — login/logout/me + session cookie."""
 
-from typing import cast
+from typing import Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
@@ -15,13 +15,24 @@ from app.services import LOGIN_ERROR, AuthService
 router = APIRouter(tags=["Auth"])
 
 
-def _session_cookie(token: str | None, *, max_age: int | None) -> dict[str, object]:
+def _session_cookie_policy() -> tuple[str, bool, Literal["lax", "none"]]:
+    """Return (cookie name, secure, samesite) for login and logout.
+
+    SESSION_COOKIE_SECURE controls the Secure attribute for same-site cookies.
+    SameSite=None requires Secure, so the attribute is forced on even when the
+    operator explicitly disables SESSION_COOKIE_SECURE.
+    """
     settings = get_settings()
     # ponytail: cross-domain prod (Vercel + API host جدا) به SESSION_SAMESITE=none نیاز دارد.
-    samesite: str = "none" if settings.session_samesite == "none" else "lax"
-    secure = True if samesite == "none" else settings.is_production
+    samesite: Literal["lax", "none"] = "none" if settings.session_samesite == "none" else "lax"
+    secure = True if samesite == "none" else bool(settings.session_cookie_secure)
+    return settings.session_cookie_name, secure, samesite
+
+
+def _session_cookie(token: str | None, *, max_age: int | None) -> dict[str, object]:
+    key, secure, samesite = _session_cookie_policy()
     return {
-        "key": settings.session_cookie_name,
+        "key": key,
         "value": token or "",
         "httponly": True,
         "secure": secure,
@@ -60,15 +71,11 @@ def login(payload: LoginIn, response: Response, session: Session = Depends(get_d
     responses={204: {"description": "Session cookie cleared."}},
 )
 def logout(request: Request, response: Response, session: Session = Depends(get_db)) -> None:  # noqa: B008
-    token = request.cookies.get(get_settings().session_cookie_name)
+    key, secure, samesite = _session_cookie_policy()
+    token = request.cookies.get(key)
     if token:
         AuthService(session).logout(token)
-    settings = get_settings()
-    samesite: str = "none" if settings.session_samesite == "none" else "lax"
-    secure = True if samesite == "none" else settings.is_production
-    response.delete_cookie(
-        key=settings.session_cookie_name, path="/", secure=secure, samesite=samesite
-    )
+    response.delete_cookie(key=key, path="/", secure=secure, samesite=samesite)
     response.status_code = status.HTTP_204_NO_CONTENT
 
 

@@ -166,6 +166,9 @@ services:
     logging: *default-logging
     environment:
       <<: *api-env
+      # Temporary for the current HTTP-only internal deployment. Set to "true" once
+      # HTTPS is enabled for Production.
+      SESSION_COOKIE_SECURE: "false"
       # Uvicorn's --proxy-headers (Dockerfile.api) trusts forwarded headers only
       # from this peer. It is web's fixed address on `edge`, never a wildcard:
       # FORWARDED_ALLOW_IPS=* would let any caller spoof the client address that

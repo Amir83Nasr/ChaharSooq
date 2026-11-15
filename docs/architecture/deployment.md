@@ -721,10 +721,16 @@ backup and does not satisfy the requirement above.
 
 The reverse proxy and TLS foundation is configured but **not enabled**: no certificate is
 installed, no DNS name is approved, and nothing is deployed. The API no longer sends HSTS (Caddy
-owns it), the session cookie is already `Secure` in production application mode, and the only
-published ports belong to Caddy. Do not expose `db`, `api`, or `web` directly, and do not start
-Production without deciding the TLS shape described above. The lifecycle — install, rotation,
-rollback, backup/restore, expiry checks, and the first-deployment verification matrix — is
+owns it). The session cookie is `Secure` by default in production application mode, but the
+current HTTP-only internal deployment sets `SESSION_COOKIE_SECURE=false` in
+`compose.production.yml` so browsers can store it over `http://172.30.2.2`. This is a temporary
+exception for the internal HTTP deployment only. Set `SESSION_COOKIE_SECURE=true` once HTTPS is
+enabled, then recreate the `api` service with the approved deployment procedure so the updated
+environment is applied (a plain `restart` does not re-read changed environment values).
+`SameSite=None` cookies are always forced Secure. The only published ports belong to Caddy. Do not
+expose `db`, `api`, or `web` directly, and do not start Production without deciding the TLS shape
+described above. The lifecycle — install,
+rotation, rollback, backup/restore, expiry checks, and the first-deployment verification matrix — is
 [operations/tls-certificate-lifecycle.md](../operations/tls-certificate-lifecycle.md).
 
 ### Remaining before a real server deployment

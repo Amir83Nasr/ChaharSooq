@@ -14,9 +14,9 @@ synced rows always carry the id, while manual/older rows may only have a name.
 import re
 from typing import Literal
 
-TopGroup = Literal["فرش", "مبلمان", "لوازم خانگی", "کالای دیجیتال"]
+TopGroup = Literal["کالای دیجیتال", "لوازم خانگی", "فرش", "مبلمان"]
 
-TOP_GROUPS: tuple[TopGroup, ...] = ("فرش", "مبلمان", "لوازم خانگی", "کالای دیجیتال")
+TOP_GROUPS: tuple[TopGroup, ...] = ("کالای دیجیتال", "لوازم خانگی", "فرش", "مبلمان")
 
 # Parsina main groups that belong to کالای دیجیتال.
 DIGITAL_MAIN_GROUP_IDS: frozenset[int] = frozenset({7, 56, 57})

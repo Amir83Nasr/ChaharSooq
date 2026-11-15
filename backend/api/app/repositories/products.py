@@ -18,7 +18,7 @@ from app.models import CompetitorListing, Product
 if TYPE_CHECKING:
     from sqlalchemy.engine import CursorResult
 
-ProductSort = Literal["newest", "cheapest", "most_expensive"]
+ProductSort = Literal["newest", "cheapest", "most_expensive", "alphabetical", "category"]
 
 
 class ProductFilters(NamedTuple):
@@ -173,11 +173,21 @@ def product_criteria(filters: ProductFilters) -> list[ColumnElement[bool]]:
     return criteria
 
 
-def product_order(sort: ProductSort) -> ColumnElement[Any]:
+_CATEGORY_RANK = case(
+    (_digital_criterion(), 0),
+    (Product.main_group_name.ilike("فرش%"), 2),
+    (Product.main_group_name.ilike("مبلمان%"), 3),
+    else_=1,
+)
+
+
+def product_order(sort: ProductSort) -> tuple[ColumnElement[Any], ...]:
     return {
-        "newest": Product.id.desc(),
-        "cheapest": Product.price.asc(),
-        "most_expensive": Product.price.desc(),
+        "newest": (Product.id.desc(),),
+        "cheapest": (Product.price.asc(), Product.id.desc()),
+        "most_expensive": (Product.price.desc(), Product.id.desc()),
+        "alphabetical": (Product.name.asc(), Product.id.asc()),
+        "category": (_CATEGORY_RANK.asc(), Product.name.asc(), Product.id.asc()),
     }[sort]
 
 
@@ -399,7 +409,7 @@ class ProductRepository:
     ) -> tuple[list[Product], int]:
         base, count_stmt = self._filtered(filters)
         total = int(self._session.execute(count_stmt).scalar_one())
-        stmt = base.order_by(product_order(sort))
+        stmt = base.order_by(*product_order(sort))
         # `page_size=0` means "show all": capped (never unbounded) with no
         # offset so the table truly shows the whole filtered list up to the cap.
         if page_size and page_size > 0:
@@ -423,7 +433,7 @@ class ProductRepository:
         """
         stmt = (
             self._filtered(filters)[0]
-            .order_by(product_order(sort))
+            .order_by(*product_order(sort))
             .execution_options(yield_per=batch_size)
         )
         batch: list[Product] = []

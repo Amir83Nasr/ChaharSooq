@@ -146,14 +146,14 @@ function ProductsPageContent() {
   const hasFilters =
     q.trim() !== "" ||
     view.topGroup !== null ||
-    view.sort !== "newest" ||
+    view.sort !== "category" ||
     view.stock !== "all" ||
     minPrice.trim() !== "" ||
     maxPrice.trim() !== ""
   const activeFilterCount =
     (q.trim() !== "" ? 1 : 0) +
     (view.topGroup !== null ? 1 : 0) +
-    (view.sort !== "newest" ? 1 : 0) +
+    (view.sort !== "category" ? 1 : 0) +
     (view.stock !== "all" ? 1 : 0) +
     (minPrice.trim() !== "" ? 1 : 0) +
     (maxPrice.trim() !== "" ? 1 : 0)
@@ -321,6 +321,7 @@ function ProductsPageContent() {
           <div className="space-y-4">
             <ProductsCards
               items={page.items}
+              sort={view.sort}
               market={view.market}
               threshold={threshold}
               onSelect={setSelected}
@@ -341,6 +342,7 @@ function ProductsPageContent() {
           pageSize={view.pageSize}
           showPageSize
           hasFilters={hasFilters}
+          sort={view.sort}
           market={view.market}
           weights={weights}
           visibleColumns={visibleColumns}

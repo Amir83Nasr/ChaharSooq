@@ -477,10 +477,10 @@
                   "type": "array",
                   "items": {
                     "enum": [
-                      "فرش",
-                      "مبلمان",
+                      "کالای دیجیتال",
                       "لوازم خانگی",
-                      "کالای دیجیتال"
+                      "فرش",
+                      "مبلمان"
                     ],
                     "type": "string"
                   }
@@ -678,14 +678,16 @@
               "enum": [
                 "newest",
                 "cheapest",
-                "most_expensive"
+                "most_expensive",
+                "alphabetical",
+                "category"
               ],
               "type": "string",
-              "description": "`newest` by id, or unit-price order.",
-              "default": "newest",
+              "description": "`category` groups by section then name, `alphabetical` by name, `newest` by id, or unit-price order.",
+              "default": "category",
               "title": "Sort"
             },
-            "description": "`newest` by id, or unit-price order."
+            "description": "`category` groups by section then name, `alphabetical` by name, `newest` by id, or unit-price order."
           },
           {
             "name": "page",
@@ -1475,10 +1477,10 @@
                   "type": "array",
                   "items": {
                     "enum": [
-                      "فرش",
-                      "مبلمان",
+                      "کالای دیجیتال",
                       "لوازم خانگی",
-                      "کالای دیجیتال"
+                      "فرش",
+                      "مبلمان"
                     ],
                     "type": "string"
                   }
@@ -1676,7 +1678,9 @@
               "enum": [
                 "newest",
                 "cheapest",
-                "most_expensive"
+                "most_expensive",
+                "alphabetical",
+                "category"
               ],
               "type": "string",
               "description": "Row order in the file.",
@@ -1847,10 +1851,10 @@
                   "type": "array",
                   "items": {
                     "enum": [
-                      "فرش",
-                      "مبلمان",
+                      "کالای دیجیتال",
                       "لوازم خانگی",
-                      "کالای دیجیتال"
+                      "فرش",
+                      "مبلمان"
                     ],
                     "type": "string"
                   }
@@ -4641,10 +4645,10 @@
           "top_group": {
             "type": "string",
             "enum": [
-              "فرش",
-              "مبلمان",
+              "کالای دیجیتال",
               "لوازم خانگی",
-              "کالای دیجیتال"
+              "فرش",
+              "مبلمان"
             ],
             "title": "Top Group",
             "description": "Catalog section the weight applies to."
@@ -4669,10 +4673,10 @@
           "top_group": {
             "type": "string",
             "enum": [
-              "فرش",
-              "مبلمان",
+              "کالای دیجیتال",
               "لوازم خانگی",
-              "کالای دیجیتال"
+              "فرش",
+              "مبلمان"
             ],
             "title": "Top Group",
             "description": "Catalog section the weight applies to."

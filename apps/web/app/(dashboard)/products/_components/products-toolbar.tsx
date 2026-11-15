@@ -23,6 +23,8 @@ import { TOP_GROUPS, isTopGroup } from "@/lib/top-groups"
 import { COMPETITOR_MARKETS } from "./products-table"
 
 export const SORT_LABELS: Record<ProductSort, string> = {
+  category: "تفکیک دسته‌بندی",
+  alphabetical: "حروف الفبا",
   newest: "جدیدترین",
   cheapest: "ارزان‌ترین",
   most_expensive: "گران‌ترین",
@@ -118,6 +120,8 @@ export function ProductsToolbar(props: ToolbarProps) {
         <SelectContent align="start">
           <SelectGroup>
             <SelectLabel>مرتب‌سازی</SelectLabel>
+            <SelectItem value="category">تفکیک دسته‌بندی</SelectItem>
+            <SelectItem value="alphabetical">حروف الفبا</SelectItem>
             <SelectItem value="newest">جدیدترین</SelectItem>
             <SelectItem value="cheapest">ارزان‌ترین</SelectItem>
             <SelectItem value="most_expensive">گران‌ترین</SelectItem>

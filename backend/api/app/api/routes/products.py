@@ -67,8 +67,12 @@ def list_products(
     in_stock: bool | None = Query(
         default=None, description="`true` for stock > 0, `false` for zero stock."
     ),
-    sort: Literal["newest", "cheapest", "most_expensive"] = Query(
-        default="newest", description="`newest` by id, or unit-price order."
+    sort: Literal["newest", "cheapest", "most_expensive", "alphabetical", "category"] = Query(
+        default="category",
+        description=(
+            "`category` groups by section then name, `alphabetical` by name, "
+            "`newest` by id, or unit-price order."
+        ),
     ),
     page: int = Query(default=1, ge=1, description="1-based page number."),
     page_size: int = Query(

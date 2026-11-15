@@ -60,7 +60,7 @@ export interface ProductsState {
 const INITIAL_VIEW: ProductsView = {
   q: "",
   topGroup: null,
-  sort: "newest",
+  sort: "category",
   stock: "all",
   minPrice: "",
   maxPrice: "",

@@ -345,6 +345,7 @@ export function GroupStoreView({
             ) : (
               <ProductsCards
                 items={page.items}
+                sort="category"
                 market={market}
                 threshold={threshold}
                 onSelect={setSelected}
@@ -373,6 +374,7 @@ export function GroupStoreView({
               pageSize={page.page_size}
               showPageSize={false}
               hasFilters={debouncedQ !== ""}
+              sort="category"
               market={market}
               weights={tableWeights}
               visibleColumns={GROUP_TABLE_COLUMNS}

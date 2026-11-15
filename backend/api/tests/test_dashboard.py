@@ -202,10 +202,10 @@ def test_dashboard_catalog_breakdown_empty(client: TestClient) -> None:
     login(client)
     body = client.get("/api/v1/dashboard/catalog-breakdown").json()
     assert [s["top_group"] for s in body] == [
+        "کالای دیجیتال",
+        "لوازم خانگی",
         "فرش",
         "مبلمان",
-        "لوازم خانگی",
-        "کالای دیجیتال",
         "سایر",
     ]
     assert all(

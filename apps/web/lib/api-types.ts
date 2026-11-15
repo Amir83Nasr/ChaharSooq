@@ -7,7 +7,8 @@ export interface CategoryOut {
   created_at: string
 }
 
-export type ProductSort = "newest" | "cheapest" | "most_expensive"
+export type ProductSort =
+  "category" | "alphabetical" | "newest" | "cheapest" | "most_expensive"
 
 export interface ProductOut {
   id: number
@@ -254,7 +255,7 @@ export interface SettingsOut {
   product_table_columns: ProductTableColumn[]
 }
 
-export type TopGroup = "فرش" | "مبلمان" | "لوازم خانگی" | "کالای دیجیتال"
+export type TopGroup = "کالای دیجیتال" | "لوازم خانگی" | "فرش" | "مبلمان"
 
 export type DefaultCompetitorStore = "digikala" | "technolife"
 

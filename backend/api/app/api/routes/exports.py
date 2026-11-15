@@ -23,7 +23,7 @@ StoreFilter = Literal["digikala", "technolife", "sofa", "digifresh", "other"]
 ListingStatus = Literal[
     "pending", "success", "not_found", "unavailable", "blocked", "failed", "manual"
 ]
-ProductSort = Literal["newest", "cheapest", "most_expensive"]
+ProductSort = Literal["newest", "cheapest", "most_expensive", "alphabetical", "category"]
 MarketFilter = Literal["digikala", "technolife", "sofa", "digifresh"]
 ExportScope = Literal["filtered", "all"]
 

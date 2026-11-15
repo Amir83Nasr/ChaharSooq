@@ -391,6 +391,7 @@ export function AutoStoreView({
               <>
                 <ProductsCards
                   items={visiblePage?.items ?? []}
+                  sort="category"
                   market={store}
                   threshold={threshold}
                   onSelect={setSelected}
@@ -414,6 +415,7 @@ export function AutoStoreView({
               pageSize={pageSize}
               showPageSize={false}
               hasFilters={debouncedQ !== "" || onlyMissing}
+              sort="category"
               market={store}
               weights={weights}
               onSelect={setSelected}

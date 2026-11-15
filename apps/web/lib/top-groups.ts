@@ -6,10 +6,10 @@ import type { TopGroup } from "./api-types"
  * read the section from here so a new division is one edit, not five.
  */
 export const TOP_GROUPS: readonly TopGroup[] = [
+  "کالای دیجیتال",
+  "لوازم خانگی",
   "فرش",
   "مبلمان",
-  "لوازم خانگی",
-  "کالای دیجیتال",
 ]
 
 /** Parsina main groups that belong to کالای دیجیتال. */

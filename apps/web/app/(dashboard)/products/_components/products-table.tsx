@@ -25,7 +25,12 @@ import { Skeleton } from "@workspace/ui/primitives/skeleton"
 import { CircleAlert, PackageSearch, RefreshCw } from "lucide-react"
 import { StockCell } from "@/components/data/products-stock-cell"
 import { toTomanAmount } from "@/lib/money"
-import type { ProductOut, ProductPage, ProductTableColumn } from "@/lib/api"
+import type {
+  ProductOut,
+  ProductPage,
+  ProductSort,
+  ProductTableColumn,
+} from "@/lib/api"
 import {
   DEFAULT_PRODUCT_TABLE_COLUMNS,
   PRODUCT_TABLE_COLUMNS,
@@ -50,6 +55,7 @@ interface TableProps {
   pageSize: number
   showPageSize: boolean
   hasFilters: boolean
+  sort: ProductSort
   market: CompetitorMarket
   weights: SuggestedPriceWeights
   visibleColumns?: readonly ProductTableColumn[]
@@ -238,6 +244,14 @@ function SpacerRow({ height, colSpan }: { height: number; colSpan: number }) {
   )
 }
 
+function buildRowEntries(items: ProductOut[]): {
+  key: number
+  item: ProductOut
+  index: number
+}[] {
+  return items.map((item, index) => ({ key: item.id, item, index }))
+}
+
 export const ProductsTable = memo(function ProductsTable(props: TableProps) {
   const {
     page,
@@ -257,12 +271,13 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
   const shown = new Set(visibleColumns)
   const columnCount = visibleColumns.length
   const marketLabel = STORE_MARKET_LABELS[market]
+  const entries = buildRowEntries(page?.items ?? [])
   // Windowed rendering (hooks before the early returns below): in "show all"
   // mode the whole catalog would otherwise stay mounted and every sidebar
   // toggle / theme flip would reflow thousands of rows.
   const { bodyRef, observeRow, win } = useWindowedRows(
-    page?.items.length ?? 0,
-    (i) => page?.items[i]?.id ?? i
+    entries.length,
+    (i) => entries[i]?.key ?? i
   )
   if (!page) return <ProductTableSkeleton columns={visibleColumns} />
   if (page.items.length === 0) {
@@ -283,7 +298,7 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
   // The window lags one frame behind a fresh fetch (new count, old window):
   // fall back to the deterministic initial window so the table never
   // flashes blank. The mount/scroll effects correct it right after.
-  const count = page.items.length
+  const count = entries.length
   const renderWin =
     win.end > count || (win.end === 0 && count > 0)
       ? initialRowWindow(count)
@@ -305,8 +320,9 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
           {renderWin.topPad > 0 ? (
             <SpacerRow height={renderWin.topPad} colSpan={columnCount} />
           ) : null}
-          {page.items.slice(renderWin.start, renderWin.end).map((item, k) => {
-            const i = renderWin.start + k
+          {entries.slice(renderWin.start, renderWin.end).map((entry, k) => {
+            const entryIndex = renderWin.start + k
+            const { item, index: i } = entry
             const rowNumber =
               (page.page > 1
                 ? (page.page - 1) * (page.page_size || page.items.length)
@@ -360,10 +376,10 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
             const suggestedChange = changePercent(item.price, suggested)
             return (
               <TableRow
-                key={item.id}
+                key={entry.key}
                 tabIndex={0}
                 aria-rowindex={i + 1}
-                ref={observeRow(i)}
+                ref={observeRow(entryIndex)}
                 className="cursor-pointer"
                 onClick={() => onSelect(item)}
                 onKeyDown={(e) => {

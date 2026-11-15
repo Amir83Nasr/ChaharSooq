@@ -13,7 +13,7 @@ import { Skeleton } from "@workspace/ui/primitives/skeleton"
 import { PackageSearch } from "lucide-react"
 import { StockCell } from "@/components/data/products-stock-cell"
 import { toTomanAmount } from "@/lib/money"
-import type { ProductOut } from "@/lib/api"
+import type { ProductOut, ProductSort } from "@/lib/api"
 import { comparesWithCompetitor, topGroupOf } from "@/lib/top-groups"
 import type { CompetitorMarket } from "./products-table"
 import { STORE_MARKET_LABELS } from "./products-table"
@@ -165,29 +165,38 @@ function formatDiffCompact(diff: number): string {
   return `${formatPersianNumber(absStr)}٪`
 }
 
+type CardEntry = { key: number; item: ProductOut }
+
+function buildCardEntries(items: ProductOut[]): CardEntry[] {
+  return items.map((item) => ({ key: item.id, item }))
+}
+
 export const ProductsCards = memo(function ProductsCards({
   items,
+  sort: _sort,
   market,
   threshold,
   onSelect,
 }: {
   items: ProductOut[]
+  sort: ProductSort
   market: CompetitorMarket
   threshold: number
   onSelect: (item: ProductOut) => void
 }) {
   // "Show all" can return the whole catalog; render only the viewport slice.
   // Spacing lives on each <li> so measured heights include the gap.
+  const entries = buildCardEntries(items)
   const options = {
     estimatedRowHeight: CARD_EST_HEIGHT,
     initialRows: CARD_INITIAL_ROWS,
   }
   const { bodyRef, observeRow, win } = useWindowedRows<HTMLUListElement>(
-    items.length,
-    (i) => items[i]?.id ?? i,
+    entries.length,
+    (i) => entries[i]?.key ?? i,
     options
   )
-  const count = items.length
+  const count = entries.length
   const renderWin =
     win.end > count || (win.end === 0 && count > 0)
       ? initialRowWindow(count, options)
@@ -198,12 +207,17 @@ export const ProductsCards = memo(function ProductsCards({
       {renderWin.topPad > 0 ? (
         <li aria-hidden="true" style={{ height: renderWin.topPad }} />
       ) : null}
-      {items.slice(renderWin.start, renderWin.end).map((item, k) => {
+      {entries.slice(renderWin.start, renderWin.end).map((entry, k) => {
         const i = renderWin.start + k
         return (
-          <li key={item.id} ref={observeRow(i)} className="pb-2.5">
+          <li
+            key={entry.key}
+            ref={observeRow(i)}
+            data-vi={i}
+            className="pb-2.5"
+          >
             <ProductMobileCard
-              item={item}
+              item={entry.item}
               market={market}
               threshold={threshold}
               onSelect={onSelect}

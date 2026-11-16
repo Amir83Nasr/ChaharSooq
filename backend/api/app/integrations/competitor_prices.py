@@ -475,10 +475,10 @@ def _digikala_variant_price(variant: object) -> Decimal | None:
     """Read a variant's positive ``price.selling_price`` (returned in Rial)."""
     if not isinstance(variant, dict):
         return None
-    price_map = variant.get("price")
+    price_map = cast(dict[str, Any], variant).get("price")
     if not isinstance(price_map, dict):
         return None
-    selling = price_map.get("selling_price")
+    selling = cast(dict[str, Any], price_map).get("selling_price")
     if selling is None:
         return None
     try:
@@ -545,17 +545,19 @@ def _fetch_digikala_api(product_id: str, client: httpx.Client | None = None) -> 
             chosen: dict[str, Any] | None = None
             default_variant = product.get("default_variant")
             if isinstance(default_variant, dict):
-                amount = _digikala_variant_price(default_variant)
+                default_map = cast(dict[str, Any], default_variant)
+                amount = _digikala_variant_price(default_map)
                 if amount is not None:
-                    chosen = default_variant
+                    chosen = default_map
             if amount is None:
                 # Some listings ship without a priced default variant; fall back
                 # to the first variant that exposes a selling price.
                 variants = product.get("variants")
                 if isinstance(variants, list):
-                    for variant in variants:
-                        if not isinstance(variant, dict):
+                    for item in cast(list[object], variants):
+                        if not isinstance(item, dict):
                             continue
+                        variant = cast(dict[str, Any], item)
                         candidate = _digikala_variant_price(variant)
                         if candidate is not None:
                             amount, chosen = candidate, variant

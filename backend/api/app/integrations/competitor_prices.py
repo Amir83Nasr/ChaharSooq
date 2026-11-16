@@ -551,20 +551,33 @@ def _fetch_digikala_api(product_id: str, client: httpx.Client | None = None) -> 
                     chosen = default_map
             if amount is None:
                 # Some listings ship without a priced default variant; fall back
-                # to the first variant that exposes a selling price.
+                # to a marketable variant, or the first priced one.
                 variants = product.get("variants")
                 if isinstance(variants, list):
+                    fallback: dict[str, Any] | None = None
                     for item in cast(list[object], variants):
                         if not isinstance(item, dict):
                             continue
                         variant = cast(dict[str, Any], item)
                         candidate = _digikala_variant_price(variant)
-                        if candidate is not None:
+                        if candidate is None:
+                            continue
+                        if fallback is None:
+                            fallback = variant
+                        if str(variant.get("status") or "") == "marketable":
                             amount, chosen = candidate, variant
                             break
+                    if amount is None and fallback is not None:
+                        amount = _digikala_variant_price(fallback)
+                        chosen = fallback
             if amount is not None:
                 variant_status = str((chosen or {}).get("status") or "")
-                in_stock = product_status == "marketable" and variant_status != "out_of_stock"
+                in_stock = product_status == "marketable" and variant_status not in {
+                    "out_of_stock",
+                    "unmarketable",
+                    "not_sellable",
+                    "inactive",
+                }
                 return FetchedPrice(amount, "IRR", in_stock)
             if product_status in {"out_of_stock", "unmarketable", "not_sellable", "inactive"}:
                 return FetchedPrice(None, None, False)
@@ -585,6 +598,7 @@ def fetch_competitor_price(store: str, url: str) -> FetchedPrice:
     # interval (~+5s on every cold check).
     _acquire_slot(store)
     with httpx.Client(timeout=_REQUEST_TIMEOUT, follow_redirects=False, trust_env=False) as client:
+        api_error: PriceFetchError | None = None
         if store == "digikala":
             # Bot traffic usually gets a JS-shell page without JSON-LD, so try
             # the light public JSON API first and skip the heavy HTML fetch.
@@ -597,6 +611,7 @@ def fetch_competitor_price(store: str, url: str) -> FetchedPrice:
                         raise
                     # "unavailable" (e.g. no price in API payload) falls
                     # through to the HTML path below.
+                    api_error = exc
                 else:
                     result = replace(result, observed_at=datetime.now(UTC))
                     _cache_set(cache_key, result)
@@ -611,6 +626,10 @@ def fetch_competitor_price(store: str, url: str) -> FetchedPrice:
             product_id = _digikala_product_id(safe_url)
             if product_id is None:
                 raise PriceFetchError("unavailable", "قیمت معتبر در دادهٔ ساختاریافتهٔ صفحه پیدا نشد")
+            if api_error is not None:
+                # The API already answered this check; don't spend a second
+                # request to get the same failure.
+                raise api_error
             result = _fetch_digikala_api(product_id, client=client)
         if result is None:
             raise PriceFetchError("unavailable", "قیمت معتبر در دادهٔ ساختاریافتهٔ صفحه پیدا نشد")

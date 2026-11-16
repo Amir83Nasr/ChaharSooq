@@ -367,6 +367,26 @@ def test_digikala_api_falls_back_to_variant_list(monkeypatch: MonkeyPatch) -> No
     assert prices._fetch_digikala_api("16621422") == FetchedPrice(Decimal("15000000"), "IRR", True)
 
 
+def test_digikala_api_prefers_marketable_variant(monkeypatch: MonkeyPatch) -> None:
+    _stub_settings(monkeypatch)
+    payload = {
+        "status": 200,
+        "data": {
+            "product": {
+                "id": 16621422,
+                "status": "marketable",
+                "default_variant": None,
+                "variants": [
+                    {"id": 1, "status": "unmarketable", "price": {"selling_price": 10000000}},
+                    {"id": 2, "status": "marketable", "price": {"selling_price": 12000000}},
+                ],
+            }
+        },
+    }
+    _stub_digikala_api(monkeypatch, _FakeApiResponse(200, payload))
+    assert prices._fetch_digikala_api("16621422") == FetchedPrice(Decimal("12000000"), "IRR", True)
+
+
 @pytest.mark.parametrize(
     ("status_code", "expected_status"),
     [(404, "not_found"), (403, "blocked")],

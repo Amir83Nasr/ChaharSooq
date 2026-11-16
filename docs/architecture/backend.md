@@ -194,9 +194,11 @@ loads the dev fixture and `make db-clear-products` empties it (development only)
 
 ## Competitor prices
 
-Links and observations are stored separately from the Parsina catalog. Digikala, Technolife,
-Sofa Mobl, and DigiFresh product pages are fetched through JSON-LD offers; `other` stores are
-manual-only. Sofa/DigiFresh are daily trackers: one observation per UTC day feeds
+Links and observations are stored separately from the Parsina catalog. Digikala prices come from its
+public product API (`/product/v1/products/{id}/`, Rial); Technolife, Sofa Mobl, and DigiFresh
+product pages are fetched through JSON-LD offers; `other` stores are manual-only. Digikala serves a
+JavaScript-only shell to non-browser clients, so the API is tried first and the HTML page only
+remains as a fallback. Sofa/DigiFresh are daily trackers: one observation per UTC day feeds
 `price_change_percent`, which replaces the competitor price in the furniture/carpet suggested
 formula. Fetched prices expire after `COMPETITOR_PRICE_TTL_HOURS` (default 24), and
 `COMPETITOR_REQUEST_INTERVAL_SECONDS` (default 5) throttles requests. The fetcher checks

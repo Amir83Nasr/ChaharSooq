@@ -41,22 +41,22 @@ The questions to IT, with the stage each answer is needed for, are in
 
 ### 2.1 Summary
 
-| #   | Item                                         | Status  | One-line reason                                                                   |
-| --- | -------------------------------------------- | ------- | --------------------------------------------------------------------------------- |
-| 1   | Production Docker Compose                    | Ready   | Six services, ordered, structurally validated; never started on a host            |
-| 2   | API and web Dockerfiles                      | Ready   | Multi-stage, pinned bases, non-root, healthchecks                                 |
-| 3   | Caddy and reverse proxy                      | Ready   | Pinned image, one upstream, isolated network, hardened                            |
-| 4   | TLS and certificate lifecycle                | Partial | Lifecycle tooling complete; renewal policy and real material are open             |
-| 5   | PostgreSQL and role provisioning             | Ready   | Three least-privilege roles, idempotent one-shot provisioner                      |
-| 6   | Alembic and migration runner                 | Ready   | Locked one-shot runner; CI proves idempotency, single head, and round-trip        |
-| 7   | Owner bootstrap                              | Partial | Command exists and is idempotent; the release workflow that authorises it is open |
-| 8   | Secret file management                       | Partial | File-backed mechanism and least privilege ready; custodian and schedule are open  |
-| 9   | Backup and restore                           | Partial | Designed and rehearsed offline; no scheduler, destination, or alerting exists     |
-| 10  | Healthcheck and readiness                    | Ready   | Real readiness checks per service, enforced by `depends_on`                       |
-| 11  | Logging and log rotation                     | Partial | Per-container rotation is enforced; host rotation and collection are IT decisions |
-| 12  | Makefile and operational commands            | Ready   | Complete production target set; no target removes a volume                        |
-| 13  | CI/CD and image publishing                   | Partial | Publishing workflow exists and is untested; no deploy workflow                    |
-| 14  | Deployment and troubleshooting documentation | Ready   | Architecture, runbook, troubleshooting, backup, TLS, and ADR set                  |
+| #   | Item                                         | Status  | One-line reason                                                                                              |
+| --- | -------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------ |
+| 1   | Production Docker Compose                    | Ready   | Six services, ordered, structurally validated; never started on a host                                       |
+| 2   | API and web Dockerfiles                      | Ready   | Multi-stage, pinned bases, non-root, healthchecks                                                            |
+| 3   | Caddy and reverse proxy                      | Ready   | Pinned image, one upstream, isolated network, hardened                                                       |
+| 4   | TLS and certificate lifecycle                | Partial | Lifecycle tooling complete; renewal policy and real material are open                                        |
+| 5   | PostgreSQL and role provisioning             | Ready   | Three least-privilege roles, idempotent one-shot provisioner                                                 |
+| 6   | Alembic and migration runner                 | Ready   | Locked one-shot runner; CI proves idempotency, single head, and round-trip                                   |
+| 7   | Owner bootstrap                              | Partial | Command exists and is idempotent; the release workflow that authorises it is open                            |
+| 8   | Secret file management                       | Partial | File-backed mechanism and least privilege ready; custodian and schedule are open                             |
+| 9   | Backup and restore                           | Partial | Designed and rehearsed offline; no scheduler, destination, or alerting exists                                |
+| 10  | Healthcheck and readiness                    | Ready   | Real readiness checks per service, enforced by `depends_on`                                                  |
+| 11  | Logging and log rotation                     | Partial | Per-container rotation is enforced; host rotation and collection are IT decisions                            |
+| 12  | Makefile and operational commands            | Ready   | Complete production target set; no target removes a volume                                                   |
+| 13  | CI/CD and image publishing                   | Partial | Publishing and deploy jobs exist and are untested; the self-hosted runner and host values are not configured |
+| 14  | Deployment and troubleshooting documentation | Ready   | Architecture, runbook, troubleshooting, backup, TLS, and ADR set                                             |
 
 ### 2.2 Evidence per item
 
@@ -196,9 +196,12 @@ Two limits are part of the evidence, not of the plan. GitHub Container Registry 
 immutable-tag feature, so the workflow's refusal to publish over an existing tag is a guard and not
 a guarantee, and a digest — not a tag — is the authoritative reference. The workflow has also
 **never been executed**: no release exists, no registry package has been created, and the registry
-itself is an open IT decision (question 4.6). There is still **no deploy workflow**: publishing an
-image does not deploy it, and the promotion from Staging to Production stays a manual, explicit
-step.
+itself is an open IT decision (question 4.6). The workflow now has a Blue-Green `deploy` job that runs on a self-hosted runner with the
+`charsooq-production` label; the runner is not registered yet and the host deployment file (including the
+green slot edge values) does not exist, so publishing an image still does not deploy it until those
+are configured. Runner preparation, installation/registration procedures, outbound access, and
+security controls are documented in [self-hosted-runner.md](self-hosted-runner.md). The decisions
+are [ADR 016](../adr/016-ci-cd-deploy-job.md) and [ADR 017](../adr/017-blue-green-deployment.md).
 
 **14 — Deployment and troubleshooting documentation: Ready.**
 Architecture and environment boundaries: [`docs/architecture/deployment.md`](../architecture/deployment.md).
@@ -365,36 +368,36 @@ implied.
 
 ## 7. Deployment readiness matrix
 
-| Subject                                    | Status  | Prerequisite                                                                                                                                                  | Who provides          | Blocks the first deployment?                     |
-| ------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- | ------------------------------------------------ |
-| Production Compose stack                   | Ready   | Docker Engine + Compose v2 on the host                                                                                                                        | IT                    | No — the code is ready                           |
-| API and web images                         | Ready   | A builder with the toolchain, or a registry                                                                                                                   | Team / IT             | No                                               |
-| Approved internal IP                       | Blocked | `CHARSOOQ_PROXY_BIND_IP`                                                                                                                                      | IT                    | **Yes**                                          |
-| Internal DNS name                          | Blocked | `CHARSOOQ_SITE_HOST`, equal to the certificate SAN                                                                                                            | IT                    | **Yes**                                          |
-| `edge` subnet and fixed web address        | Blocked | `CHARSOOQ_EDGE_SUBNET`, `CHARSOOQ_WEB_EDGE_IP`, conflict-checked                                                                                              | IT                    | **Yes**                                          |
-| TLS material or CA decision                | Blocked | `CHARSOOQ_TLS_MODE` plus a validated certificate pair, or an `internal-ca` decision                                                                           | IT                    | **Yes**                                          |
-| Six secret files on the host               | Partial | `postgres_password`, `database_url`, `migration_database_url`, `session_secret`, `owner_password`, `parsina_password`, with the documented ownership and mode | IT / secret custodian | **Yes**                                          |
-| Docker daemon and deploy account access    | Blocked | Docker running; the deploy account in the `docker` group                                                                                                      | IT                    | **Yes**                                          |
-| Deployment checkout at the approved commit | Ready   | A clean checkout at the approved SHA, plus the four exported deployment values                                                                                | Team                  | **Yes** — the values have no defaults            |
-| Port availability on 80/443                | Blocked | Confirmation that both ports are free and inbound is permitted                                                                                                | IT                    | **Yes**                                          |
-| Database role provisioning                 | Ready   | The admin password and both role URLs                                                                                                                         | Team                  | No                                               |
-| Schema migration                           | Ready   | The migration credential                                                                                                                                      | Team                  | No                                               |
-| Owner bootstrap                            | Partial | `owner_password`, and an approved release workflow that says who runs it                                                                                      | Team + owner          | No — it is a separate explicit step              |
-| Backup before the first migration          | Partial | A verified encrypted dump — not needed on a fresh volume, mandatory before migrating existing data                                                            | Team                  | No for a fresh volume; **yes** for existing data |
-| Backup tooling, destination, key custody   | Blocked | An approved tool, an off-host destination, and a key custodian                                                                                                | IT                    | No for start; **yes** before go-live             |
-| Restore drill                              | Partial | A scratch-container restore of a real archive, recorded                                                                                                       | Team                  | No for start; **yes** before go-live             |
-| Backup scheduler and alerting              | Missing | A timer and an alert channel                                                                                                                                  | IT                    | No                                               |
-| PITR and WAL archiving                     | Missing | A separate ADR plus storage, tooling, and a drill                                                                                                             | Team + IT             | No                                               |
-| Container health and readiness             | Ready   | None beyond the stack                                                                                                                                         | Team                  | No                                               |
-| Log rotation on the host                   | Partial | Host-level logrotate or a log collector                                                                                                                       | IT                    | No                                               |
-| Registry and image publishing              | Partial | A registry IT accepts, credentials if it is not GitHub Container Registry, retention rules, and pull access from the Production host                          | IT                    | No — a host build is the recorded fallback       |
-| CI deploy workflow                         | Missing | Self-hosted runner or an approved SSH deployment path                                                                                                         | IT                    | No                                               |
-| Image `revision` label                     | Ready   | None — both images carry the commit SHA and the release workflow verifies it against the published bytes                                                      | Team                  | No                                               |
-| Registry-enforced tag immutability         | Missing | GitHub Container Registry has no immutable-tag feature; the workflow's guard is a check, not a guarantee                                                      | IT                    | No — the digest is the deployment reference      |
-| Firewall / VLAN for client access          | Blocked | Inbound `443` from the approved client segment                                                                                                                | IT                    | **Yes** for user access                          |
-| Root CA distribution to clients            | Blocked | Group Policy or an equivalent mechanism, in `internal-ca` mode                                                                                                | IT                    | **Yes** for user access in `internal-ca`         |
-| Monitoring and alert channel               | Blocked | A paging channel and an owner                                                                                                                                 | IT                    | No for start; **yes** for go-live                |
-| Certificate renewal ownership              | Blocked | A named owner and a calendar entry                                                                                                                            | IT                    | No for start; **yes** for go-live                |
+| Subject                                    | Status  | Prerequisite                                                                                                                                                      | Who provides          | Blocks the first deployment?                     |
+| ------------------------------------------ | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- | ------------------------------------------------ |
+| Production Compose stack                   | Ready   | Docker Engine + Compose v2 on the host                                                                                                                            | IT                    | No — the code is ready                           |
+| API and web images                         | Ready   | A builder with the toolchain, or a registry                                                                                                                       | Team / IT             | No                                               |
+| Approved internal IP                       | Blocked | `CHARSOOQ_PROXY_BIND_IP`                                                                                                                                          | IT                    | **Yes**                                          |
+| Internal DNS name                          | Blocked | `CHARSOOQ_SITE_HOST`, equal to the certificate SAN                                                                                                                | IT                    | **Yes**                                          |
+| `edge` subnet and fixed web address        | Blocked | `CHARSOOQ_EDGE_SUBNET`, `CHARSOOQ_WEB_EDGE_IP`, conflict-checked                                                                                                  | IT                    | **Yes**                                          |
+| TLS material or CA decision                | Blocked | `CHARSOOQ_TLS_MODE` plus a validated certificate pair, or an `internal-ca` decision                                                                               | IT                    | **Yes**                                          |
+| Six secret files on the host               | Partial | `postgres_password`, `database_url`, `migration_database_url`, `session_secret`, `owner_password`, `parsina_password`, with the documented ownership and mode     | IT / secret custodian | **Yes**                                          |
+| Docker daemon and deploy account access    | Blocked | Docker running; the deploy account in the `docker` group                                                                                                          | IT                    | **Yes**                                          |
+| Deployment checkout at the approved commit | Ready   | A clean checkout at the approved SHA, plus the four exported deployment values                                                                                    | Team                  | **Yes** — the values have no defaults            |
+| Port availability on 80/443                | Blocked | Confirmation that both ports are free and inbound is permitted                                                                                                    | IT                    | **Yes**                                          |
+| Database role provisioning                 | Ready   | The admin password and both role URLs                                                                                                                             | Team                  | No                                               |
+| Schema migration                           | Ready   | The migration credential                                                                                                                                          | Team                  | No                                               |
+| Owner bootstrap                            | Partial | `owner_password`, and an approved release workflow that says who runs it                                                                                          | Team + owner          | No — it is a separate explicit step              |
+| Backup before the first migration          | Partial | A verified encrypted dump — not needed on a fresh volume, mandatory before migrating existing data                                                                | Team                  | No for a fresh volume; **yes** for existing data |
+| Backup tooling, destination, key custody   | Blocked | An approved tool, an off-host destination, and a key custodian                                                                                                    | IT                    | No for start; **yes** before go-live             |
+| Restore drill                              | Partial | A scratch-container restore of a real archive, recorded                                                                                                           | Team                  | No for start; **yes** before go-live             |
+| Backup scheduler and alerting              | Missing | A timer and an alert channel                                                                                                                                      | IT                    | No                                               |
+| PITR and WAL archiving                     | Missing | A separate ADR plus storage, tooling, and a drill                                                                                                                 | Team + IT             | No                                               |
+| Container health and readiness             | Ready   | None beyond the stack                                                                                                                                             | Team                  | No                                               |
+| Log rotation on the host                   | Partial | Host-level logrotate or a log collector                                                                                                                           | IT                    | No                                               |
+| Registry and image publishing              | Partial | A registry IT accepts, credentials if it is not GitHub Container Registry, retention rules, and pull access from the Production host                              | IT                    | No — a host build is the recorded fallback       |
+| CI deploy workflow                         | Partial | The `deploy` job and `deploy/scripts/deploy.sh` exist; a registered self-hosted runner with `charsooq-production` and `/etc/charsooq/production.env` are required | IT                    | No — the workflow is configured                  |
+| Image `revision` label                     | Ready   | None — both images carry the commit SHA and the release workflow verifies it against the published bytes                                                          | Team                  | No                                               |
+| Registry-enforced tag immutability         | Missing | GitHub Container Registry has no immutable-tag feature; the workflow's guard is a check, not a guarantee                                                          | IT                    | No — the digest is the deployment reference      |
+| Firewall / VLAN for client access          | Blocked | Inbound `443` from the approved client segment                                                                                                                    | IT                    | **Yes** for user access                          |
+| Root CA distribution to clients            | Blocked | Group Policy or an equivalent mechanism, in `internal-ca` mode                                                                                                    | IT                    | **Yes** for user access in `internal-ca`         |
+| Monitoring and alert channel               | Blocked | A paging channel and an owner                                                                                                                                     | IT                    | No for start; **yes** for go-live                |
+| Certificate renewal ownership              | Blocked | A named owner and a calendar entry                                                                                                                                | IT                    | No for start; **yes** for go-live                |
 
 ### 7.1 Blocking the first deployment
 
@@ -427,9 +430,10 @@ answered:
 ### 7.3 Can be completed later
 
 These are real gaps, but none of them prevents the first deployment or the first user access:
-a registry and image publishing pipeline, a CI deploy workflow, an OCI `revision` label, host-level
-log rotation and central collection, a backup scheduler and alerting, a dedicated backup role,
-PITR/WAL archiving, non-root Caddy, IPv6, HTTP/3, and high availability.
+a registry and image publishing pipeline, the self-hosted runner registration and host deployment
+values for the CI deploy job, host-level log rotation and central collection, a backup scheduler and
+alerting, a dedicated backup role, PITR/WAL archiving, non-root Caddy, IPv6, HTTP/3, and high
+availability.
 
 ## 8. Work that can continue without IT
 

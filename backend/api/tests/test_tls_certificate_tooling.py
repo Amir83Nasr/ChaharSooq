@@ -721,11 +721,14 @@ def test_only_the_proxy_receives_certificate_mounts_and_ca_state() -> None:
     assert any(str(volume).startswith("caddy_data:/data") for volume in caddy_volumes)
     assert any(str(volume).startswith("caddy_config:/config") for volume in caddy_volumes)
     assert "secrets" not in services["caddy"]
-    assert set(services["caddy"]["environment"]) == {
+    caddy_env = set(services["caddy"]["environment"])
+    assert {
         "CHARSOOQ_SITE_HOST",
         "CHARSOOQ_TLS_MODE",
         "CHARSOOQ_HSTS_MAX_AGE",
-    }
+    } <= caddy_env
+    # Protocol/auto-HTTPS are config-driven (HTTP-only now, HTTPS possible later).
+    assert {"CHARSOOQ_PUBLIC_SCHEME", "CHARSOOQ_CADDY_AUTO_HTTPS"} <= caddy_env
 
     for name, service in services.items():
         if name == "caddy":

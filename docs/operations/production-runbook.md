@@ -8,8 +8,10 @@ The architecture is in [deployment.md](../architecture/deployment.md); TLS opera
 [backup-and-recovery.md](backup-and-recovery.md).
 
 Production is an internal-only, single-host Docker Compose stack. There is no HA pair, no zero-downtime
-deployment, no registry/deploy pipeline, and no monitoring agent committed to this repository. Treat
-every restart as a short outage and every schema change as irreversible until a verified backup exists.
+deployment, and no monitoring agent committed to this repository. The release workflow has a
+Production `deploy` job, but it needs a registered self-hosted runner and the host deployment file;
+until then the manual procedure below remains the fallback. Treat every restart as a short outage
+and every schema change as irreversible until a verified backup exists.
 
 ## 1. Command conventions
 
@@ -575,12 +577,19 @@ short outage into a restore.
 
 ## 6. Update and release workflow
 
+The automated path is the release workflow's `deploy` job, which calls
+[`deploy/scripts/deploy.sh`](../../deploy/scripts/deploy.sh) on the self-hosted runner. It performs a
+Blue-Green deployment (shared base + blue/green slots, traffic switch via
+`deploy/caddy/active-upstream.caddy`, previous slot kept for rollback). It requires the runner to be
+registered with the `charsooq-production` label and `/etc/charsooq/production.env` to exist with
+blue/green edge values. Runner preparation and activation are in
+[self-hosted-runner.md](self-hosted-runner.md). Until the runner and host values are configured, the
+manual procedure below is the supported fallback.
+
 The target is: build once from an approved commit, publish it under a version tag and a commit-SHA
 tag, push to the approved registry, and deploy that exact image **by digest**. `latest` is never a
 Production release identity, and a tag is never the deployment reference: the digest is the
-authoritative one. The registry, promotion mechanism, and deploy access are still open decisions;
-until they exist, a host build from a clean approved commit is a temporary, recorded fallback, not
-the target.
+authoritative one.
 
 ### 6.1 Release gates
 

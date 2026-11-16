@@ -405,10 +405,13 @@ def test_the_digests_are_recorded_in_the_release_report() -> None:
 
 def test_the_web_build_argument_matches_the_production_compose_file() -> None:
     compose = _compose()
-    compose_value = compose["services"]["web"]["build"]["args"]["API_URL_INTERNAL"]
+    # Blue-Green slots share the same build contract: the web rewrite target is
+    # baked into the image, so each slot reaches its paired API as `api`.
+    compose_value = compose["services"]["web-blue"]["build"]["args"]["API_URL_INTERNAL"]
 
     api_url_internal = cast(str, _publish_job()["env"]["API_URL_INTERNAL"])
     assert api_url_internal == compose_value
+    assert api_url_internal == compose["services"]["web-green"]["build"]["args"]["API_URL_INTERNAL"]
     assert "API_URL_INTERNAL=${{ env.API_URL_INTERNAL }}" in str(
         _step("build_web")["with"]["build-args"]
     )
@@ -482,3 +485,168 @@ def test_every_action_is_pinned_to_a_full_commit_sha() -> None:
                 # A local reusable workflow, not an action.
                 continue
             assert PINNED_ACTION.match(uses), f"{name}: {uses} is not pinned to a commit SHA"
+
+
+# ─── Production deployment contract ──────────────────────────────────────────
+
+DEPLOY_SCRIPT_PATH = REPO_ROOT / "deploy" / "scripts" / "deploy.sh"
+
+
+def _deploy_job() -> dict[str, Any]:
+    return cast(dict[str, Any], _workflow()["jobs"]["deploy"])
+
+
+def test_deploy_waits_for_successful_image_publication() -> None:
+    """No deployment may start before both images exist in the registry."""
+
+    assert _deploy_job()["needs"] == ["publish"]
+
+
+def test_deploy_runs_only_on_the_dedicated_self_hosted_runner() -> None:
+    runs_on = _deploy_job()["runs-on"]
+
+    assert isinstance(runs_on, list)
+    assert "self-hosted" in runs_on
+    assert "charsooq-production" in runs_on
+    assert "ubuntu-latest" not in runs_on
+
+
+def test_deploy_is_gated_to_stable_released_releases() -> None:
+    condition = str(_deploy_job()["if"])
+
+    assert "github.event.release.draft == false" in condition
+    assert "github.event.release.prerelease == false" in condition
+    # A manual run is not a second authorization: it must opt in.
+    assert "workflow_dispatch" in condition
+    assert "inputs.deploy == true" in condition
+
+
+def test_a_manual_run_does_not_deploy_unless_it_opts_in() -> None:
+    deploy_input = _triggers()["workflow_dispatch"]["inputs"]["deploy"]
+
+    assert deploy_input["type"] == "boolean"
+    assert deploy_input["default"] is False
+
+
+def test_the_publish_job_exposes_the_release_identity_and_digests() -> None:
+    outputs = _publish_job()["outputs"]
+
+    assert outputs["tag"] == "${{ steps.release.outputs.tag }}"
+    assert outputs["version"] == "${{ steps.release.outputs.version }}"
+    assert outputs["sha"] == "${{ steps.meta.outputs.sha }}"
+    assert outputs["api_digest"] == "${{ steps.build_api.outputs.digest }}"
+    assert outputs["web_digest"] == "${{ steps.build_web.outputs.digest }}"
+
+
+def test_deploy_receives_the_real_digests() -> None:
+    env = _deploy_job()["env"]
+
+    assert (
+        env["CHARSOOQ_API_IMAGE"]
+        == "${{ needs.publish.outputs.api_image }}@${{ needs.publish.outputs.api_digest }}"
+    )
+    assert (
+        env["CHARSOOQ_WEB_IMAGE"]
+        == "${{ needs.publish.outputs.web_image }}@${{ needs.publish.outputs.web_digest }}"
+    )
+    assert env["CHARSOOQ_RELEASE_SHA"] == "${{ needs.publish.outputs.sha }}"
+
+
+def test_deploy_checks_out_the_released_commit() -> None:
+    checkout = next(
+        step
+        for step in _deploy_job()["steps"]
+        if str(step.get("uses", "")).startswith("actions/checkout")
+    )
+
+    assert checkout["with"]["ref"] == "${{ needs.publish.outputs.tag }}"
+    assert checkout["with"]["persist-credentials"] is False
+
+
+def test_deploy_uses_the_production_environment_and_minimal_permissions() -> None:
+    job = _deploy_job()
+
+    assert job["environment"] == "production"
+    assert job["permissions"] == {"contents": "read"}
+    # The deploy job must not reference a GitHub secret: the host keeps its own
+    # secret files, and the workflow passes only the release identity.
+    assert "secrets." not in yaml.safe_dump(job)
+
+
+def test_deploy_serializes_production_deployments() -> None:
+    concurrency = _deploy_job()["concurrency"]
+
+    assert concurrency["group"] == "deploy-production"
+    assert concurrency["cancel-in-progress"] is False
+
+
+def test_pull_request_workflows_never_use_the_production_runner() -> None:
+    """A pull request must never land on the Production host."""
+
+    workflows_dir = REPO_ROOT / ".github" / "workflows"
+    for path in workflows_dir.glob("*.yml"):
+        if "charsooq-production" in path.read_text(encoding="utf-8"):
+            assert path.name == "release.yml"
+
+    # The release workflow itself has no pull_request trigger.
+    assert "pull_request" not in _triggers()
+    # CI keeps using GitHub-hosted runners.
+    assert "pull_request" in _ci_triggers()
+    for job in _ci_workflow()["jobs"].values():
+        assert "self-hosted" not in str(job.get("runs-on", ""))
+
+
+def test_the_deploy_script_is_fail_closed_and_digest_only() -> None:
+    script = DEPLOY_SCRIPT_PATH.read_text(encoding="utf-8")
+    # Comments describe the absence of destructive commands; the assertions
+    # apply to the executable lines.
+    code = "\n".join(line for line in script.splitlines() if not line.lstrip().startswith("#"))
+
+    assert "set -euo pipefail" in code
+    # A deploy log must never be a secret dump.
+    assert "set -x" not in code
+    # Only content addresses are accepted.
+    assert "*@sha256:*" in code
+    # No volume or image is ever removed.
+    assert "down -v" not in code
+    assert "volume prune" not in code
+    assert "system prune" not in code
+    # The published commit link and real health are verified before traffic moves.
+    assert "org.opencontainers.image.revision" in code
+    assert "verify_slot" in code
+    assert "verify_external" in code
+    # Blue-Green: detect/select slots, switch upstream atomically, reload Caddy
+    # gracefully (no admin API), persist state, and keep the previous slot.
+    assert "detect_active_slot" in code
+    assert "write_upstream" in code
+    assert "active-upstream.caddy" in code
+    assert "USR1" in code
+    assert "ACTIVE_SLOT" in code
+    assert "kept for rollback" in code
+    # A failure before the switch must not change the active slot.
+    assert "the active slot was not changed" in code
+    # Non-secret deployment values come from the host, not from GitHub.
+    assert "CHARSOOQ_ENV_FILE" in code
+    assert "secrets." not in code
+    # Migrations run on the shared database while slots overlap.
+    assert "compatible with the active slot" in code or "migrate" in code
+    # Protocol-aware external verification (HTTP-only or HTTPS), fail-closed.
+    assert "CHARSOOQ_PUBLIC_SCHEME" in code
+    assert "CHARSOOQ_PUBLIC_PORT" in code
+    assert "X-Forwarded-Port ${CHARSOOQ_PUBLIC_PORT}" in code
+    assert (
+        "external HTTP health probe failed" in code or "external HTTPS health probe failed" in code
+    )
+    assert "CHARSOOQ_EDGE_GREEN_SUBNET" in code
+    assert "CHARSOOQ_WEB_GREEN_EDGE_IP" in code
+
+
+def test_the_deploy_script_is_valid_bash() -> None:
+    result = subprocess.run(  # noqa: S603 - fixed interpreter, no shell
+        [BASH, "-n", str(DEPLOY_SCRIPT_PATH)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr

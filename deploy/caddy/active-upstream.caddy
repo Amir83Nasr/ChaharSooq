@@ -1,0 +1,25 @@
+# Active Blue-Green upstream, rewritten atomically by deploy/scripts/deploy.sh.
+# Do not edit by hand during a deployment. The proxy forwards to exactly one
+# slot; the inactive slot is never referenced here.
+# Default is HTTPS-oriented (port 443). deploy.sh rewrites this file using the
+# configured public protocol/port (HTTP-only: port 80) before traffic moves.
+reverse_proxy web-blue:3000 {
+	# Never forward client-supplied forwarding values. Caddy already ignores
+	# incoming X-Forwarded-* by default (no trusted_proxies is configured), and
+	# these lines make the rewrite explicit. They also drop the RFC 7239
+	# `Forwarded` header and other IP hints that Caddy would otherwise pass
+	# through untouched, so Next.js and FastAPI only ever see Caddy's values.
+	# Caddy warns that the X-Forwarded-* sets duplicate its defaults; they stay
+	# because a future global `trusted_proxies` would otherwise change behaviour
+	# to "augment the client's header" without any visible config change here.
+	header_up X-Forwarded-For {remote_host}
+	header_up X-Forwarded-Proto {scheme}
+	header_up X-Forwarded-Host {host}
+	# The published external port for the configured protocol (443 for HTTPS,
+	# 80 for HTTP-only). Next.js would otherwise fill this header with its own
+	# internal port (3000).
+	header_up X-Forwarded-Port 443
+	header_up -Forwarded
+	header_up -X-Real-IP
+	header_up -X-Forwarded-Server
+}

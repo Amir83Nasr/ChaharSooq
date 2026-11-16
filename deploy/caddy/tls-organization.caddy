@@ -22,3 +22,10 @@
 # This mode also covers the IP SAN case: the certificate must contain the exact
 # address used in CHARSOOQ_SITE_HOST when that value is an IP.
 tls {$CHARSOOQ_TLS_CERT_FILE:/etc/caddy/certs/current/fullchain.pem} {$CHARSOOQ_TLS_KEY_FILE:/etc/caddy/certs/current/privkey.pem}
+
+# HSTS is owned here and applies only to HTTPS responses. HTTP-only mode uses
+# tls-none.caddy and must not send HSTS. Set CHARSOOQ_HSTS_MAX_AGE=0 to disable
+# enforcement while clients are still trusting the TLS root CA.
+header {
+	Strict-Transport-Security "max-age={$CHARSOOQ_HSTS_MAX_AGE:31536000}"
+}

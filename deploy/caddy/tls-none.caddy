@@ -1,0 +1,3 @@
+# TLS mode `none`: explicit HTTP-only serving (no TLS terminator, no certificate).
+# Used for the current temporary HTTP-only internal Production deployment.
+# Do not send HSTS over plain HTTP. Switch to an HTTPS TLS mode when approved.

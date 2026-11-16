@@ -11,3 +11,10 @@
 # Distribution to clients is an IT decision (for example Group Policy). Do not
 # enable strict certificate validation in a browser fleet until it is installed.
 tls internal
+
+# HSTS is owned here and applies only to HTTPS responses. HTTP-only mode uses
+# tls-none.caddy and must not send HSTS. Set CHARSOOQ_HSTS_MAX_AGE=0 to disable
+# enforcement while clients are still trusting the TLS root CA.
+header {
+	Strict-Transport-Security "max-age={$CHARSOOQ_HSTS_MAX_AGE:31536000}"
+}

@@ -149,7 +149,7 @@ docker-down: ## Stop Docker Compose services
 docker-logs: ## Follow Docker Compose logs
 	docker compose -f $(COMPOSE_FILE) logs -f
 
-# ─── DOCKER: PRODUCTION ───────────────────────────────────
+# ─── DOCKER: PRODUCTION (Blue-Green) ──────────────────────
 # Structural validation does not read secret files, so it works on a machine
 # without production secrets. Only the run targets need the real files.
 #
@@ -165,14 +165,17 @@ docker-logs: ## Follow Docker Compose logs
 PROD_DEPLOYMENT_ENV = \
 	CHARSOOQ_PROXY_BIND_IP=192.0.2.10 \
 	CHARSOOQ_SITE_HOST=charsooq.example.test \
-	CHARSOOQ_EDGE_SUBNET=192.0.2.0/24 \
-	CHARSOOQ_WEB_EDGE_IP=192.0.2.11
+	CHARSOOQ_EDGE_BLUE_SUBNET=192.0.2.0/28 \
+	CHARSOOQ_WEB_BLUE_EDGE_IP=192.0.2.11 \
+	CHARSOOQ_EDGE_GREEN_SUBNET=192.0.2.16/28 \
+	CHARSOOQ_WEB_GREEN_EDGE_IP=192.0.2.17
 
 PROD_IMAGE_ENV = \
 	CHARSOOQ_API_IMAGE=ghcr.io/example/charsooq-api@sha256:0000000000000000000000000000000000000000000000000000000000000000 \
 	CHARSOOQ_WEB_IMAGE=ghcr.io/example/charsooq-web@sha256:0000000000000000000000000000000000000000000000000000000000000000
 
 PROD_STRUCTURAL_ENV = $(PROD_DEPLOYMENT_ENV) $(PROD_IMAGE_ENV)
+PROD_SLOT ?= blue ## Blue-Green slot used by prod-up/prod-pull/prod-ps helpers
 
 # Local build identity. Every value is derived from the checkout, so a local
 # build carries the same OCI metadata a published image carries and the same
@@ -190,9 +193,10 @@ PROD_BUILD_ENV = \
 	CHARSOOQ_BUILD_VERSION=$(PROD_BUILD_VERSION) \
 	CHARSOOQ_BUILD_SOURCE=$(PROD_BUILD_SOURCE)
 
-prod-config: ## Validate the production compose file (no secrets needed)
-	$(PROD_STRUCTURAL_ENV) docker compose -f $(COMPOSE_PROD_FILE) config --quiet
-	@echo "production compose: structure valid (documentation values only)"
+prod-config: ## Validate the production Blue-Green compose file (no secrets needed)
+	$(PROD_STRUCTURAL_ENV) docker compose -f $(COMPOSE_PROD_FILE) --profile blue config --quiet
+	$(PROD_STRUCTURAL_ENV) docker compose -f $(COMPOSE_PROD_FILE) --profile green config --quiet
+	@echo "production compose: blue and green slot structure valid (documentation values only)"
 
 # Offline certificate validation. Reads local files only: no network, no key
 # material printed, no issuance. Supply the host that must appear in the leaf
@@ -251,13 +255,13 @@ prod-caddy-validate: ## Validate the Caddyfile in the pinned Caddy image (needs 
 prod-build: ## Build production API and web images from this commit (host-build fallback)
 	# The deployment values are documentation placeholders: Compose interpolates
 	# the whole file before building, and none of them affect the image bytes.
-	$(PROD_DEPLOYMENT_ENV) $(PROD_BUILD_ENV) docker compose -f $(COMPOSE_PROD_FILE) build
+	$(PROD_DEPLOYMENT_ENV) $(PROD_BUILD_ENV) docker compose -f $(COMPOSE_PROD_FILE) --profile blue build
 	@echo "built charsooq-api:$(PROD_BUILD_TAG) and charsooq-web:$(PROD_BUILD_TAG) from $(PROD_BUILD_REVISION)"
 
-prod-pull: ## Pull the released API and web images (needs CHARSOOQ_API_IMAGE and CHARSOOQ_WEB_IMAGE)
-	docker compose -f $(COMPOSE_PROD_FILE) pull api web
+prod-pull: ## Pull the released API and web images for a slot (SLOT=blue|green, needs image refs)
+	docker compose -f $(COMPOSE_PROD_FILE) --profile $(PROD_SLOT) pull api-$(PROD_SLOT) web-$(PROD_SLOT)
 
-prod-image-revision: ## Print the release commit recorded in the deployed images (needs the image variables)
+prod-image-revision: ## Print the release commit recorded in the image references (needs the image variables)
 	@test -n "$(CHARSOOQ_API_IMAGE)" && test -n "$(CHARSOOQ_WEB_IMAGE)" || { \
 		echo "usage: CHARSOOQ_API_IMAGE=<ref> CHARSOOQ_WEB_IMAGE=<ref> make prod-image-revision"; \
 		exit 2; \
@@ -271,20 +275,21 @@ prod-provision: ## Run idempotent database role provisioning once (needs real se
 prod-migrate: ## Run the production migration runner once (needs real secrets)
 	docker compose -f $(COMPOSE_PROD_FILE) run --rm migrate
 
-prod-bootstrap-owner: ## Run the explicit production owner bootstrap once (needs real secrets)
-	docker compose -f $(COMPOSE_PROD_FILE) run --rm api python backend/api/scripts/bootstrap_owner.py
+prod-bootstrap-owner: ## Run the explicit production owner bootstrap once (needs real secrets, SLOT=blue|green)
+	docker compose -f $(COMPOSE_PROD_FILE) --profile $(PROD_SLOT) run --rm api-$(PROD_SLOT) python backend/api/scripts/bootstrap_owner.py
 
-prod-up: ## Start the production stack from the released images (needs real secrets; only Caddy publishes ports)
-	docker compose -f $(COMPOSE_PROD_FILE) up -d --no-build
+prod-up: ## Start base infra and one slot from released images (SLOT=blue|green, needs real secrets)
+	docker compose -f $(COMPOSE_PROD_FILE) up -d --no-build db caddy
+	docker compose -f $(COMPOSE_PROD_FILE) --profile $(PROD_SLOT) up -d --no-build
 
-prod-ps: ## Show production service status
-	docker compose -f $(COMPOSE_PROD_FILE) ps
+prod-ps: ## Show production service status (SLOT=blue|green)
+	docker compose -f $(COMPOSE_PROD_FILE) --profile $(PROD_SLOT) ps
 
-prod-logs: ## Follow production logs
-	docker compose -f $(COMPOSE_PROD_FILE) logs -f
+prod-logs: ## Follow production logs (SLOT=blue|green)
+	docker compose -f $(COMPOSE_PROD_FILE) --profile $(PROD_SLOT) logs -f
 
 prod-down: ## Stop production services (keeps volumes and data)
-	docker compose -f $(COMPOSE_PROD_FILE) down
+	docker compose -f $(COMPOSE_PROD_FILE) --profile blue --profile green down
 
 # ─── DEPLOY ───────────────────────────────────────────────
 deploy-api: ## Deploy backend API to FastAPI Cloud (run from backend/api)

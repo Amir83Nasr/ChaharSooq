@@ -33,62 +33,80 @@ def _compose() -> dict[str, Any]:
         return cast(dict[str, Any], yaml.safe_load(handle))
 
 
-def test_the_only_upstream_is_the_web_container() -> None:
+def test_the_only_upstream_is_the_active_web_slot() -> None:
     site = _code("site.caddy")
+    active = _code("active-upstream.caddy")
 
-    assert site.count("reverse_proxy") == 1
-    assert "reverse_proxy web:3000" in site
-    assert "api:8000" not in site
-    assert "db:5432" not in site
-    assert "provision" not in site
-    assert "migrate" not in site
+    assert "import active-upstream.caddy" in site
+    assert site.count("reverse_proxy") == 0
+    assert active.count("reverse_proxy") == 1
+    assert re.search(r"reverse_proxy web-(blue|green):3000", active)
+    # Only the active slot is proxied; no internal service is exposed.
+    combined = site + "\n" + active
+    assert "api:8000" not in combined
+    assert "db:5432" not in combined
+    assert "provision" not in combined
+    assert "migrate" not in combined
 
 
-def test_https_is_the_only_site_scheme_and_tls_mode_is_selected() -> None:
+def test_protocol_and_tls_mode_are_configuration_driven() -> None:
     root = _code("Caddyfile")
 
-    assert "https://{$CHARSOOQ_SITE_HOST}" in root
-    # There is no http:// site block, so a plain-HTTP Production cannot be
-    # configured by accident; automatic HTTPS creates the :80 redirect.
-    assert "http://" not in root
-    assert "import tls-{$CHARSOOQ_TLS_MODE}.caddy" in root
+    # Scheme, auto-HTTPS behavior, and TLS snippet are selected from config so
+    # HTTP-only (current Production) and future HTTPS are both supported without
+    # hardcoded protocol/IP/TLS values.
+    assert "{$CHARSOOQ_PUBLIC_SCHEME" in root
+    assert "{$CHARSOOQ_SITE_HOST}" in root
+    assert "auto_https {$CHARSOOQ_CADDY_AUTO_HTTPS" in root
+    assert "import tls-{$CHARSOOQ_TLS_MODE" in root
     assert "admin off" in root
     assert "skip_install_trust" in root
 
     assert (CADDY_DIR / "tls-organization.caddy").is_file()
     assert (CADDY_DIR / "tls-internal-ca.caddy").is_file()
+    assert (CADDY_DIR / "tls-none.caddy").is_file()
     assert "tls internal" in _code("tls-internal-ca.caddy")
     assert "fullchain.pem" in _code("tls-organization.caddy")
+    assert "tls " not in _code("tls-none.caddy")
 
 
 def test_client_forwarding_headers_are_overwritten_not_trusted() -> None:
-    site = _code("site.caddy")
+    active = _code("active-upstream.caddy")
 
     for header, placeholder in (
         ("X-Forwarded-For", "{remote_host}"),
         ("X-Forwarded-Proto", "{scheme}"),
         ("X-Forwarded-Host", "{host}"),
-        ("X-Forwarded-Port", "443"),
     ):
-        assert f"header_up {header} {placeholder}" in site
+        assert f"header_up {header} {placeholder}" in active
+    # X-Forwarded-Port is rewritten by deploy.sh to the configured public port
+    # (443 for HTTPS, 80 for HTTP-only). The committed default is 443.
+    assert "header_up X-Forwarded-Port" in active
+    assert "443" in active
     # RFC 7239 and vendor headers Caddy would otherwise pass through untouched.
     for header in ("-Forwarded", "-X-Real-IP", "-X-Forwarded-Server"):
-        assert f"header_up {header}" in site
+        assert f"header_up {header}" in active
     # Nothing upstream of Caddy is trusted, so no XFF value is ever accepted.
-    assert "trusted_proxies" not in site
+    assert "trusted_proxies" not in active
+    assert "trusted_proxies" not in _code("site.caddy")
 
 
-def test_hsts_is_owned_here_and_stays_conservative() -> None:
+def test_hsts_is_owned_by_https_tls_modes_only_and_stays_conservative() -> None:
     site = _code("site.caddy")
+    org = _code("tls-organization.caddy")
+    internal = _code("tls-internal-ca.caddy")
+    none = _code("tls-none.caddy")
 
-    # HSTS is owned here, with a configurable max-age (0 disables enforcement
-    # while clients are still trusting the TLS root CA). Conservative by default.
-    assert "Strict-Transport-Security" in site
-    assert "CHARSOOQ_HSTS_MAX_AGE" in site
-    assert "max-age=" in site
-    # includeSubDomains/preload wait for the DNS and TLS decisions owned by IT.
-    assert "includeSubDomains" not in site
-    assert "preload" not in site
+    # HSTS must not be sent for HTTP-only mode.
+    assert "Strict-Transport-Security" not in site
+    assert "Strict-Transport-Security" not in none
+    # HTTPS modes own HSTS with configurable max-age (0 disables enforcement).
+    for snippet in (org, internal):
+        assert "Strict-Transport-Security" in snippet
+        assert "CHARSOOQ_HSTS_MAX_AGE" in snippet
+        assert "max-age=" in snippet
+        assert "includeSubDomains" not in snippet
+        assert "preload" not in snippet
 
 
 def test_no_certificate_material_or_private_key_is_committed() -> None:
@@ -123,7 +141,13 @@ def test_access_log_never_captures_credentials() -> None:
         "request>headers",
         "http.request.header",
     )
-    for name in ("Caddyfile", "site.caddy", "tls-organization.caddy", "tls-internal-ca.caddy"):
+    for name in (
+        "Caddyfile",
+        "site.caddy",
+        "active-upstream.caddy",
+        "tls-organization.caddy",
+        "tls-internal-ca.caddy",
+    ):
         code = _code(name).lower()
         for token in forbidden:
             assert token not in code, f"{name} references {token!r} in the log path"
@@ -133,15 +157,18 @@ def test_access_log_never_captures_credentials() -> None:
     assert "output stdout" in site
 
 
-def test_caddy_upstream_matches_the_compose_web_service() -> None:
-    match = re.search(r"reverse_proxy ([a-z0-9_.-]+):(\d+)", _code("site.caddy"))
+def test_caddy_active_upstream_matches_a_compose_web_slot() -> None:
+    match = re.search(r"reverse_proxy ([a-z0-9_.-]+):(\d+)", _code("active-upstream.caddy"))
     assert match is not None
     upstream, port = match.group(1), match.group(2)
-    assert upstream == "web"
+    assert upstream in {"web-blue", "web-green"}
 
     services = _compose()["services"]
     web = services[upstream]
     assert port in {str(item) for item in web["expose"]}
-    assert set(web["networks"]) == {"edge", "proxy"}
+    expected_networks = (
+        {"edge_blue", "proxy"} if upstream == "web-blue" else {"edge_green", "proxy"}
+    )
+    assert set(web["networks"]) == expected_networks
     # The proxy is on that shared network only, never on edge/backend.
     assert set(services["caddy"]["networks"]) == {"proxy"}

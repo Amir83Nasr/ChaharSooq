@@ -10,7 +10,7 @@ Related: [ADR 015](../adr/015-container-image-release-and-publishing.md) ·
 [IT requirements](it-requirements.md) ·
 [Troubleshooting](troubleshooting.md)
 
-Status: implemented in this repository. The automatic tag-to-release and release-to-images workflows are configured; execution results depend on the specific release run. No Production stack is started by these workflows, and `market-linux` is never contacted.
+Status: implemented in this repository. The automatic tag-to-release and release-to-images workflows are configured, and the release workflow now has a Production deploy job. Execution results depend on the specific release run. The deploy job requires a registered self-hosted runner with the `charsooq-production` label and the host deployment file `/etc/charsooq/production.env`; it has not been executed yet, and `market-linux` has not been contacted. Runner preparation and activation procedures are in [self-hosted-runner.md](self-hosted-runner.md).
 
 ## 1. The release identity
 
@@ -165,7 +165,40 @@ inside that window could move the tag. The window is seconds wide and needs regi
 but it is not closed. Only a registry that supports immutable tags closes it; GitHub Container
 Registry does not, and IT has not named another registry yet.
 
-### 2.3 Tags
+### 2.3 Production deploy job
+
+The same workflow has a `deploy` job that runs only after `publish` succeeds:
+
+```text
+release: published → verify → publish → deploy (self-hosted runner, charsooq-production label)
+```
+
+| Property      | Value                                                                                                                                                          |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Trigger       | `release: published` for a stable release; a manual run must set `deploy: true`                                                                                |
+| Runner        | `[self-hosted, Linux, charsooq-production]`; no GitHub-hosted runner and no `pull_request` trigger                                                             |
+| Network       | The runner keeps an outbound connection to GitHub. No inbound port, webhook, or public IP                                                                      |
+| Images        | `CHARSOOQ_API_IMAGE` / `CHARSOOQ_WEB_IMAGE` are `repository@sha256:<digest>` from the publish job outputs                                                      |
+| Registry auth | Public GHCR images are pulled without a PAT; no token is stored by the workflow                                                                                |
+| Host values   | Non-secret deployment values come from `/etc/charsooq/production.env`, never from GitHub secrets                                                               |
+| Gate          | `environment: production`; one deployment at a time (`concurrency.group: deploy-production`)                                                                   |
+| Failure       | Before the traffic switch the active slot is left unchanged; after a post-switch verification failure the script returns traffic to the previously active slot |
+
+Draft and prerelease releases are rejected by the publish job, so `deploy` never runs for
+them. A manual `workflow_dispatch` run builds and publishes only; it deploys when `deploy` is
+explicitly set to `true` and the named release is published and stable.
+
+The `production` environment is created automatically the first time the job references it. If
+the environment is later configured with **Selected branches and tags**, add a tag rule for `v*`
+so a release tag can deploy; the default (all branches and tags) needs no rule.
+
+The deploy script is [`deploy/scripts/deploy.sh`](../../deploy/scripts/deploy.sh). It is the
+only supported automated path and it never removes a volume, database, or image. It performs a
+Blue-Green deployment: shared `db`/`provision`/`migrate`/`caddy`, a blue and a green
+`api`+`web` slot, traffic switched by rewriting `deploy/caddy/active-upstream.caddy` and
+reloading Caddy gracefully. The previous slot is kept running for rollback.
+
+### 2.4 Tags
 
 For the release `v1.4.0` built from commit `9f2c…`:
 
@@ -181,7 +214,7 @@ does not enforce that, and the tags are not immutable in the registry sense (see
 [section 1.1](#11-version-tag-sha-tag-and-digest)). Use the **digest** in Production; the tags
 exist for humans and for tracing.
 
-### 2.4 OCI metadata
+### 2.5 OCI metadata
 
 Every published image carries:
 
@@ -356,6 +389,13 @@ The registry, the two image names, and the internal API address are workflow-lev
   must not be promoted.
 - **The release body is the release record.** Commit SHA, both digests, and the operator's approval
   belong there.
+- **The deploy job is the only job allowed on the Production runner.** It has the `charsooq-production`
+  label, `contents: read`, and no GitHub secret.
+- **The deploy script is the only automated Production path.** It deploys by digest, verifies the
+  revision label and health, and restores the previous images on failure. Do not add a second,
+  different deploy path.
+- **A manual run does not deploy by default.** `workflow_dispatch` builds and publishes; it deploys
+  only when `deploy` is explicitly set to `true`.
 
 ### 6.1 Handling failed release workflows safely
 
@@ -363,6 +403,7 @@ The registry, the two image names, and the internal API address are workflow-lev
 - **`Create Release` reports that the release already exists:** this is a safe no-op. Do not overwrite the existing release body. If the release exists but image publication must be retried/repaired, follow the `Release Images` guidance below and use the documented manual `workflow_dispatch` only when appropriate.
 - **`Release Images` fails before pushing images:** inspect the workflow logs, fix the underlying issue in a new commit if code changes are required, and release a **new** version tag. Do not republish or overwrite existing image tags/digests.
 - **`Release Images` fails after partially publishing image tags:** the guard refuses to overwrite existing tags, so a simple re-run is unsafe/incomplete. A registry administrator must remove the half-published tags if repair of the same version is explicitly required; the safest path is usually to publish a **new** version. Never deploy partially published artifacts.
+- **`Release Images` deploy fails:** the deploy script restores the previously running images when the new release does not become healthy. Read the job log, confirm the previous images are healthy, and do not retry the same release until the cause is understood. A migration that is not backward-compatible needs a restore, not a code retry (see [backup-and-recovery.md](backup-and-recovery.md)).
 - **Avoid duplicate tags/releases:** always check existing tags/releases before tagging (`git tag --list 'v*' --sort=-v:refname | head`, `gh release view vX.Y.Z`), use a unique next version, and push only that single new tag. Never modify or delete existing tags/releases (`v0.1.0`, `v0.1.1`, etc.). A push to `main` does not create a release.
 
 ## 7. What still needs an answer

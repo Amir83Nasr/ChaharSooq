@@ -247,8 +247,8 @@ The frontend client (`apps/web/lib/api.ts`) mirrors these shapes; see [docs/api/
 - Frontend unit tests: `packages/ui/src/lib/*.test.ts` (vitest) — Persian digits, `٬` grouping, `٫` dates
 - Frontend e2e: `apps/web/e2e/` (playwright) — unauthenticated redirects, Persian login form, RTL shell, mobile layout; runs against the production build without a backend — `pnpm --filter web test:e2e`
 - Backend tests: `backend/api/tests/` (pytest) — auth flow, roles and user management, product CRUD, validation envelope
-- CI runs lint, format check, typecheck, both test suites, the production build, and the Playwright e2e suite. The repository has no deploy workflow: Staging deploys through the Vercel/FastAPI Cloud Git integration, and Production promotion is a separate explicit step.
-- A published GitHub Release triggers the image publishing workflow, which builds and pushes the API and web images for that commit. See [docs/operations/release-management.md](docs/operations/release-management.md).
+- CI runs lint, format check, typecheck, both test suites, the production build, and the Playwright e2e suite. Staging deploys through the Vercel/FastAPI Cloud Git integration.
+- A published GitHub Release triggers the release workflow, which builds and pushes the API and web images for that commit and then runs a Production Blue-Green `deploy` job on the self-hosted runner with the `charsooq-production` label. The job is configured but needs the runner and `/etc/charsooq/production.env`; it has not been executed yet. See [docs/operations/release-management.md](docs/operations/release-management.md), [ADR 016](docs/adr/016-ci-cd-deploy-job.md), and [ADR 017](docs/adr/017-blue-green-deployment.md).
 
 ## Build
 

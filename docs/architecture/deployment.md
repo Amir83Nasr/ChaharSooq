@@ -63,11 +63,14 @@ Development → GitHub / CI → Staging → approval → Production
 
 ### Current state vs target
 
-- The repository has **no deploy workflow**. `ci.yml` verifies code but does not deploy.
+- `ci.yml` verifies code but does not deploy. A published GitHub Release runs `release.yml`,
+  which publishes both images and then has a `deploy` job for Production.
+- The Production `deploy` job runs on a self-hosted runner with the `charsooq-production` label and an
+  outbound-only connection to GitHub. It requires the runner to be registered and the host
+  deployment file to exist; it has not been executed yet.
 - Vercel and FastAPI Cloud deploy from their Git integration for Staging. Whether those
   platforms wait for CI checks is platform configuration, not encoded in this repository; it
   must be verified in both dashboards before treating the flow as gated.
-- Production has no pipeline yet. Building one is a required part of making Production live.
 - **A push to `main` must never be assumed to be a Production release.** Production promotion is
   a separate, explicit step.
 - **Image publishing exists.** [`.github/workflows/release.yml`](../../.github/workflows/release.yml)
@@ -225,21 +228,27 @@ foundation (Caddy, the `proxy` network, TLS modes, forwarded headers, HSTS) is i
 documented here but is **not enabled against a real certificate** yet — see
 [ADR 012](../adr/012-internal-reverse-proxy-and-tls.md).
 
-### Production services
+### Production services (Blue-Green)
 
-| Service     | Image / build                     | Runtime identity | Exposure / purpose                                                             |
-| ----------- | --------------------------------- | ---------------- | ------------------------------------------------------------------------------ |
-| `db`        | `postgres:18.6-trixie`            | `999:999`        | Internal only; persistent volume at `/var/lib/postgresql`                      |
-| `provision` | `Dockerfile.api` (`charsooq-api`) | `10001:10001`    | One-shot idempotent role/grant provisioning; exits 0 when the roles are ready  |
-| `migrate`   | `Dockerfile.api` (`charsooq-api`) | `10001:10001`    | One-shot locked migration runner; exits 0 at `head`                            |
-| `api`       | `Dockerfile.api` (`charsooq-api`) | `10001:10001`    | Internal only on `backend` + `edge`; FastAPI on port `8000`                    |
-| `web`       | `Dockerfile.web` (`charsooq-web`) | `1000:1000`      | Internal only on `edge` + `proxy`; Next.js standalone server on port `3000`    |
-| `caddy`     | `caddy:2.11.9-alpine`             | image default    | `proxy` only; publishes `80`/`443` on one approved internal IP; TLS terminator |
+| Service                  | Image / build                     | Runtime identity | Exposure / purpose                                                              |
+| ------------------------ | --------------------------------- | ---------------- | ------------------------------------------------------------------------------- |
+| `db`                     | `postgres:18.6-trixie`            | `999:999`        | Internal only; persistent volume at `/var/lib/postgresql`                       |
+| `provision`              | `Dockerfile.api` (`charsooq-api`) | `10001:10001`    | One-shot idempotent role/grant provisioning; exits 0 when the roles are ready   |
+| `migrate`                | `Dockerfile.api` (`charsooq-api`) | `10001:10001`    | One-shot locked migration runner; exits 0 at `head`                             |
+| `api-blue` / `api-green` | `Dockerfile.api` (`charsooq-api`) | `10001:10001`    | Slot APIs on `backend` + slot edge network; FastAPI on port `8000`              |
+| `web-blue` / `web-green` | `Dockerfile.web` (`charsooq-web`) | `1000:1000`      | Slot web tiers on slot edge + `proxy`; Next.js standalone server on port `3000` |
+| `caddy`                  | `caddy:2.11.9-alpine`             | image default    | `proxy` only; publishes `80`/`443` on one approved internal IP; TLS terminator  |
 
-`db`, `provision`, `migrate`, `api`, `web`, and `caddy` are the only services. Redis is not part of this
-stack: login rate limiting is in-memory for the current single-host deployment, and adding Redis
-without a measured need would add another stateful service. The Compose project name is
-`charsooq-production`, so its networks and volume are separate from the development stack.
+`db`, `provision`, `migrate`, and `caddy` are the shared base. `api-blue/web-blue` and
+`api-green/web-green` are compose-profile slots: only the active slot receives traffic, while the
+previous slot stays running for rollback until the next successful deployment. Redis is not part of
+this stack. The Compose project name is `charsooq-production`, so its networks and volumes are
+separate from the development stack.
+
+Container stdout/stderr is bounded per service with Docker's `json-file` driver (`max-size: 10m`,
+`max-file: 5`). The database is shared and never duplicated between slots; migrations run once per
+deployment and must remain compatible with the old and new code during the overlap window. The
+deploy decision and limitations are in [ADR 017](../adr/017-blue-green-deployment.md).
 
 Container stdout/stderr is bounded per service with Docker's `json-file` driver (`max-size: 10m`,
 `max-file: 5`). An unbounded stream can fill the host disk and stop PostgreSQL, so this is part of the

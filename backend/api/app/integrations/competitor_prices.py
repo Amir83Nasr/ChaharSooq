@@ -67,7 +67,9 @@ class FetchedPrice:
 
 
 _DIGIKALA_ID_RE = re.compile(r"dkp-(\d+)", re.IGNORECASE)
-_DIGIKALA_API_BASE = "https://api.digikala.com/v2/product"
+# Current public product endpoint used by the Digikala web app. The older
+# `api.digikala.com/v2/product/{id}/` path now answers 404 for every id.
+_DIGIKALA_API_BASE = "https://api.digikala.com/product/v1/products"
 
 
 class JsonLdParser(HTMLParser):
@@ -469,6 +471,25 @@ def _digikala_product_id(url: str) -> str | None:
     return match.group(1) if match else None
 
 
+def _digikala_variant_price(variant: object) -> Decimal | None:
+    """Read a variant's positive ``price.selling_price`` (returned in Rial)."""
+    if not isinstance(variant, dict):
+        return None
+    price_map = variant.get("price")
+    if not isinstance(price_map, dict):
+        return None
+    selling = price_map.get("selling_price")
+    if selling is None:
+        return None
+    try:
+        amount = Decimal(str(selling))
+    except (InvalidOperation, ValueError):
+        return None
+    if not amount.is_finite() or amount <= 0:
+        return None
+    return amount
+
+
 def _fetch_digikala_api(product_id: str, client: httpx.Client | None = None) -> FetchedPrice:
     """Read price/stock from Digikala's public product API (prices in Rial)."""
     api_url = f"{_DIGIKALA_API_BASE}/{product_id}/"
@@ -520,26 +541,28 @@ def _fetch_digikala_api(product_id: str, client: httpx.Client | None = None) -> 
                     "unavailable", "پاسخ سرویس دیجی‌کالا قابل تفسیر نیست"
                 ) from None
             product_status = str(product.get("status", ""))
-            variant = product.get("default_variant")
-            if isinstance(variant, list):
-                variant = None
-            variant_map = cast(
-                dict[str, Any] | None, variant if isinstance(variant, dict) else None
-            )
-            price = variant_map.get("price") if variant_map is not None else None
-            price_map = cast(dict[str, Any] | None, price if isinstance(price, dict) else None)
-            selling = price_map.get("selling_price") if price_map is not None else None
-            try:
-                amount = Decimal(str(selling)) if selling is not None else None
-            except InvalidOperation:
-                amount = None
-            if amount is not None and (not amount.is_finite() or amount <= 0):
-                amount = None
+            amount: Decimal | None = None
+            chosen: dict[str, Any] | None = None
+            default_variant = product.get("default_variant")
+            if isinstance(default_variant, dict):
+                amount = _digikala_variant_price(default_variant)
+                if amount is not None:
+                    chosen = default_variant
+            if amount is None:
+                # Some listings ship without a priced default variant; fall back
+                # to the first variant that exposes a selling price.
+                variants = product.get("variants")
+                if isinstance(variants, list):
+                    for variant in variants:
+                        if not isinstance(variant, dict):
+                            continue
+                        candidate = _digikala_variant_price(variant)
+                        if candidate is not None:
+                            amount, chosen = candidate, variant
+                            break
             if amount is not None:
-                variant_status = variant_map.get("status") if variant_map is not None else None
-                in_stock = product_status == "marketable" and (
-                    variant_map is None or variant_status == "marketable"
-                )
+                variant_status = str((chosen or {}).get("status") or "")
+                in_stock = product_status == "marketable" and variant_status != "out_of_stock"
                 return FetchedPrice(amount, "IRR", in_stock)
             if product_status in {"out_of_stock", "unmarketable", "not_sellable", "inactive"}:
                 return FetchedPrice(None, None, False)

@@ -298,7 +298,7 @@ class _FakeApiClient:
         return None
 
     def get(self, url: str, headers: Any = None, **kwargs: Any) -> _FakeApiResponse:
-        assert url.startswith("https://api.digikala.com/v2/product/")
+        assert url.startswith("https://api.digikala.com/product/v1/products/")
         return _FakeApiClient.response
 
 
@@ -345,6 +345,26 @@ def test_digikala_api_marketable_and_out_of_stock(monkeypatch: MonkeyPatch) -> N
     }
     _stub_digikala_api(monkeypatch, _FakeApiResponse(200, out_of_stock))
     assert prices._fetch_digikala_api("111111") == FetchedPrice(None, None, False)
+
+
+def test_digikala_api_falls_back_to_variant_list(monkeypatch: MonkeyPatch) -> None:
+    _stub_settings(monkeypatch)
+    payload = {
+        "status": 200,
+        "data": {
+            "product": {
+                "id": 16621422,
+                "status": "marketable",
+                "default_variant": {"id": 1, "status": "unmarketable", "price": {}},
+                "variants": [
+                    {"id": 1, "status": "unmarketable", "price": {}},
+                    {"id": 2, "status": "marketable", "price": {"selling_price": 15000000}},
+                ],
+            }
+        },
+    }
+    _stub_digikala_api(monkeypatch, _FakeApiResponse(200, payload))
+    assert prices._fetch_digikala_api("16621422") == FetchedPrice(Decimal("15000000"), "IRR", True)
 
 
 @pytest.mark.parametrize(

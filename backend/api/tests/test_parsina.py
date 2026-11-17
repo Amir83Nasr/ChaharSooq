@@ -350,7 +350,7 @@ def test_client_does_not_log_sensitive_credentials(
     assert "Authorization" not in combined
 
 
-def test_sync_keeps_unit_title_when_units_lookup_fails(session: Session) -> None:
+def test_sync_clears_unit_title_when_units_lookup_fails(session: Session) -> None:
     _service(session, FakeParsina(_goods(_good(1, "A-1", "کالا")))).run()
 
     def failing_units(request: httpx.Request) -> httpx.Response:
@@ -366,8 +366,34 @@ def test_sync_keeps_unit_title_when_units_lookup_fails(session: Session) -> None
 
     session.expire_all()
     product = session.execute(select(Product)).scalars().one()
+    # Lookup failed: keep the id but do not keep a (potentially stale) title.
     assert product.unit_id == 7
-    assert product.unit_name == "عدد"
+    assert product.unit_name is None
+
+
+def test_sync_clears_stale_unit_title_when_count_unit_changes_and_lookup_fails(
+    session: Session,
+) -> None:
+    _service(session, FakeParsina(_goods(_good(1, "A-1", "کالا")))).run()
+
+    changed = _good(1, "A-1", "کالا")
+    changed["countUnit"] = 9
+
+    def failing_units(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/Account"):
+            return httpx.Response(200, json={"access_token": "t", "expires_in": 100})
+        if request.url.path.endswith("/UnitCount/BaseInfo"):
+            return httpx.Response(500, json={"isSuccess": False})
+        return httpx.Response(200, json=_goods(changed))
+
+    ProductSyncService(
+        session, settings=SETTINGS, transport=httpx.MockTransport(failing_units)
+    ).run()
+
+    session.expire_all()
+    product = session.execute(select(Product)).scalars().one()
+    assert product.unit_id == 9
+    assert product.unit_name is None
 
 
 def test_sync_deactivates_rows_missing_from_listing(session: Session) -> None:

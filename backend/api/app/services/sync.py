@@ -249,13 +249,12 @@ class ProductSyncService:
         product.main_group_name = row.main_group_name
         product.sub_group_name = row.sub_group_name
         product.unit_id = row.count_unit
-        # units is best-effort: a failed/missed lookup must not blank a title
-        # that was resolved on an earlier run.
-        unit_name = units.get(row.count_unit) if row.count_unit is not None else None
-        if unit_name is not None:
-            product.unit_name = unit_name
-        elif row.count_unit is None:
+        # A count_unit id with no resolved title must not keep a stale name from
+        # a previous sync (e.g. the unit changed but the lookup failed).
+        if row.count_unit is None:
             product.unit_name = None
+        else:
+            product.unit_name = units.get(row.count_unit)
         product.weight = row.weight
         product.is_special = row.is_special
         product.buy_price = row.buy_price

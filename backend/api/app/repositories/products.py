@@ -82,11 +82,18 @@ def effective_competitor_price(since: datetime) -> Case:
 
 
 def _digital_criterion() -> ColumnElement[bool]:
-    """Synced digital rows (by group id) plus name-only/manual rows (prefix)."""
+    """SQL mirror of `is_digital_group` — name wins, id only without a name.
+
+    Parsina renumbers group ids between exports, so an id-only match would mark
+    appliance groups as digital (and sort them into the digital section).
+    """
     return or_(
         # `NULL IN (...)` is NULL, which would make the negated appliance
         # criterion NULL too; guard it so name-only rows stay visible there.
-        and_(Product.main_group_id.is_not(None), Product.main_group_id.in_(DIGITAL_MAIN_GROUP_IDS)),
+        and_(
+            Product.main_group_name.is_(None),
+            Product.main_group_id.in_(DIGITAL_MAIN_GROUP_IDS),
+        ),
         *(Product.main_group_name.ilike(f"{prefix}%") for prefix in DIGITAL_MAIN_GROUP_PREFIXES),
     )
 

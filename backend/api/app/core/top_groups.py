@@ -7,8 +7,11 @@ products table, list filters, dashboard, and CSV exports:
 - لوازم خانگی — every remaining group that is not digital.
 - کالای دیجیتال — consoles, phones/tablets, and laptops/PCs.
 
-Digital groups are matched by Parsina's `mainGroup` id and by a name prefix:
-synced rows always carry the id, while manual/older rows may only have a name.
+Digital groups are matched by their name prefix. Parsina reuses/renumbers
+`mainGroup` ids between catalog exports (id 7 was a laptop group in the old CSV
+but is «لوازم خانگی بلانتون» in the new one), so an id alone must never override
+a group name. The id set is only a fallback for rows with no name at all, like
+older manual rows.
 """
 
 import re
@@ -18,8 +21,9 @@ TopGroup = Literal["کالای دیجیتال", "لوازم خانگی", "فرش
 
 TOP_GROUPS: tuple[TopGroup, ...] = ("کالای دیجیتال", "لوازم خانگی", "فرش", "مبلمان")
 
-# Parsina main groups that belong to کالای دیجیتال.
-DIGITAL_MAIN_GROUP_IDS: frozenset[int] = frozenset({7, 56, 57})
+# Ids of the digital groups in the current Parsina catalog; used only when a
+# row has no group name. Names are authoritative — see module docstring.
+DIGITAL_MAIN_GROUP_IDS: frozenset[int] = frozenset({27, 28, 29})
 DIGITAL_MAIN_GROUP_PREFIXES: tuple[str, ...] = (
     "کنسول بازی",
     "گوشی و تبلت",
@@ -34,11 +38,16 @@ DIGITAL_GROUP = "کالای دیجیتال"
 
 
 def is_digital_group(name: str | None, main_group_id: int | None = None) -> bool:
-    """True when the row belongs to the digital section."""
-    if main_group_id is not None and main_group_id in DIGITAL_MAIN_GROUP_IDS:
-        return True
+    """True when the row belongs to the digital section.
+
+    A group name wins over the id; ids drift between Parsina exports, so an old
+    digital id on an appliance group must not misclassify it (and drag it to
+    the top of the category sort).
+    """
     text = (name or "").strip()
-    return text.startswith(DIGITAL_MAIN_GROUP_PREFIXES)
+    if text:
+        return text.startswith(DIGITAL_MAIN_GROUP_PREFIXES)
+    return main_group_id in DIGITAL_MAIN_GROUP_IDS if main_group_id is not None else False
 
 
 def top_group_of(name: str | None, main_group_id: int | None = None) -> TopGroup | None:

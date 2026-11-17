@@ -70,10 +70,8 @@ to start with guessed values** rather than hardcoded to the currently reported a
   `X-Forwarded-Server`. Next.js preserves those values and only fills gaps from its own socket, and
   its rewrite forwards them to FastAPI. FastAPI/Uvicorn trusts only `web`'s fixed address
   (`FORWARDED_ALLOW_IPS`); `FORWARDED_ALLOW_IPS=*` is forbidden.
-- **Documentation is the operational source of truth:**
-  [deployment.md](../architecture/deployment.md#reverse-proxy-tls-and-exposure) holds the topology,
-  variables, certificate handling, verification commands, and the open decisions that IT must
-  answer.
+- **AGENTS.md and README.md are the operational source of truth:** they hold the exposure and
+  trust-boundary rules and the open decisions that IT must answer.
 
 ## Alternatives
 
@@ -119,5 +117,5 @@ to start with guessed values** rather than hardcoded to the currently reported a
   Vercel project's response headers, not in the application. A regression test
   (`backend/api/tests/test_hsts_ownership.py`) fails if environment-conditional HSTS returns.
 - The ten IT-owned decisions (DNS, CA, root-CA distribution, fixed IP, ports 80/443, IPv6, Docker
-  address pools, firewall/VLAN, certificate policy) remain open and are listed in
-  [deployment.md](../architecture/deployment.md#open-decisions-owned-by-it).
+  address pools, firewall/VLAN, certificate policy) remain open and are listed in AGENTS.md
+  section 3.

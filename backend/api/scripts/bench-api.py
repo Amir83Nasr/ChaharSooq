@@ -8,8 +8,8 @@ Measures wall time for:
   2. GET /api/v1/dashboard/overview
   3. GET /api/v1/dashboard/summary
 
-Prints per-endpoint mean over N runs. Re-run after perf changes and record
-the numbers in docs/perf-baseline.md. Not part of CI (needs a live server).
+Prints per-endpoint mean over N runs. Re-run after perf changes.
+Not part of CI (needs a live server).
 """
 
 from __future__ import annotations

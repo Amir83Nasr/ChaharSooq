@@ -24,8 +24,6 @@ from app.models.catalog import Product
 
 log = logging.getLogger("charsooq")
 
-_DEV_UNIT_FALLBACK = "عدد"
-
 
 class DevDbSourceError(Exception):
     """The dev database is unreachable or returned an unusable catalog."""
@@ -110,9 +108,13 @@ def _to_raw(product: Product) -> dict[str, Any]:
 
 
 def _unit_titles(products: list[Product]) -> dict[int, str]:
-    """Mirror the Parsina units call from the unit names stored in dev."""
+    """Mirror the Parsina units call from the unit names stored in dev.
+
+    A row with no resolved title is left out: inventing «عدد» would silently
+    mislabel whatever unit the dev product actually uses.
+    """
     titles: dict[int, str] = {}
     for product in products:
-        if product.unit_id is not None:
-            titles[product.unit_id] = product.unit_name or _DEV_UNIT_FALLBACK
+        if product.unit_id is not None and product.unit_name:
+            titles[product.unit_id] = product.unit_name
     return titles

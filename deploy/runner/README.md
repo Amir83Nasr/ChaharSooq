@@ -22,10 +22,12 @@ registration token, private key, or Production credential.
 
 ## Before activation
 
-1. Read [docs/operations/self-hosted-runner.md](../../docs/operations/self-hosted-runner.md)
-   for install, registration, service, access control, outbound access,
-   Docker/secrets restrictions, removal, and security risks.
-2. Complete the activation runbook in that document on the approved host.
+1. The runner is repository-scoped, labeled `charsooq-production`, and must run only trusted
+   release deploy jobs — never pull requests or other untrusted workflows. Keep it outbound-only,
+   with no access to secret files, and use a dedicated non-root account (the `docker` group is
+   root-equivalent).
+2. Complete installation, registration, service setup, access control, and removal on the approved
+   host. Obtain the registration token at registration time; never store it in this repository.
 3. Obtain the registration token from GitHub at registration time; do not store
    it in files committed to this repository.
 4. Do not run any install/register command against Production until the change

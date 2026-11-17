@@ -353,19 +353,19 @@ def test_runner_preparation_artifacts_and_documentation_exist() -> None:
     assert PREFLIGHT_SCRIPT_PATH.is_file()
     assert (REPO_ROOT / "deploy" / "runner" / "runner.env.example").is_file()
     assert (REPO_ROOT / "deploy" / "runner" / "README.md").is_file()
-    assert (REPO_ROOT / "docs" / "operations" / "self-hosted-runner.md").is_file()
+    assert (REPO_ROOT / "deploy" / "README.md").is_file()
+    assert (REPO_ROOT / "AGENTS.md").is_file()
 
-    runner_doc_path = REPO_ROOT / "docs" / "operations" / "self-hosted-runner.md"
-    runner_doc = runner_doc_path.read_text(encoding="utf-8")
+    agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
     runner_readme = (REPO_ROOT / "deploy" / "runner" / "README.md").read_text(encoding="utf-8")
+    deploy_readme = (REPO_ROOT / "deploy" / "README.md").read_text(encoding="utf-8")
     runner_env = (REPO_ROOT / "deploy" / "runner" / "runner.env.example").read_text(
         encoding="utf-8"
     )
-    assert "charsooq-production" in runner_doc
-    assert "Nothing in this repository installs" in runner_doc
-    assert "no runner has been registered" in runner_doc
+    assert "charsooq-production" in agents
     assert "No runner is installed or registered" in runner_readme
-    assert "registration token" in runner_doc.lower()
+    assert "no token/secret is stored here" in deploy_readme
+    assert "registration token" in runner_readme.lower()
     assert "NO registration token" in runner_env
     assert "SECRET" not in runner_env
 

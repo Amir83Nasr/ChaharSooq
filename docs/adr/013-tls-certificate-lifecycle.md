@@ -63,9 +63,9 @@ certificate is wrong, and stay operable if the CA key is lost.
 - **TLS material must not reach Git or an image.** Certificate/key extensions stay in `.gitignore`;
   `deploy/` and certificate/key extensions are excluded by `.dockerignore`; no Dockerfile copies
   them; only Caddy mounts the certificate directory and CA volumes. Static tests guard these rules.
-- **Operational runbooks live in `docs/operations/`.** That new docs subfolder separates procedures
-  from architecture notes; [tls-certificate-lifecycle.md](../operations/tls-certificate-lifecycle.md)
-  is the first one. No top-level workspace or application folder is added.
+- **Operations procedures were kept separate from architecture notes.** Those runbooks have since
+  been consolidated into AGENTS.md and README.md; no top-level workspace or application folder was
+  added.
 
 ## Alternatives
 

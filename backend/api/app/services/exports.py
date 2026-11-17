@@ -2,7 +2,7 @@
 
 Exports are user-facing files: Persian headers, Persian digits, Jalali dates.
 The JSON API keeps machine values; this module is the deliberate exception
-documented in docs/api/README.md.
+documented in AGENTS.md, section 11.
 """
 
 from __future__ import annotations

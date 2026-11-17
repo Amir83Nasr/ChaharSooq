@@ -2,7 +2,7 @@
 
 `APP_ENV` is application behavior, not environment identity: Staging and
 Production both run `APP_ENV=production`, so a script cannot tell them apart
-from it (see `docs/architecture/deployment.md`). Protected database scripts
+from it (see AGENTS.md, section 3). Protected database scripts
 therefore read `DEPLOYMENT_ENV`, whose accepted values are `development`,
 `staging`, and `production`.
 

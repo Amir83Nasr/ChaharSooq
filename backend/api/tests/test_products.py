@@ -143,6 +143,16 @@ def test_product_section_filter_separates_digital_goods(client: TestClient) -> N
                     main_group_name="کنسول بازی",
                     main_group_id=56,
                 ),
+                # Old exports used id 7 for laptops; the current catalog uses
+                # it for an appliance group. Name must win over the stale id.
+                Product(
+                    name="بلانتون",
+                    sku="BLN-1",
+                    price=Decimal(100),
+                    stock=Decimal(1),
+                    main_group_name="لوازم خانگی بلانتون",
+                    main_group_id=7,
+                ),
             ]
         )
         db.commit()
@@ -152,14 +162,52 @@ def test_product_section_filter_separates_digital_goods(client: TestClient) -> N
         return {item["sku"] for item in body["items"]}
 
     assert section_skus(top_group="کالای دیجیتال") == {"PHN-1", "CON-1"}
-    assert section_skus(top_group="لوازم خانگی") == {"FRZ-1"}
+    assert section_skus(top_group="لوازم خانگی") == {"FRZ-1", "BLN-1"}
     assert section_skus(top_group=["لوازم خانگی", "کالای دیجیتال"]) == {
         "FRZ-1",
+        "BLN-1",
         "PHN-1",
         "CON-1",
     }
     assert section_skus(top_group="فرش") == {"RUG-1"}
     assert client.get("/api/v1/products", params={"top_group": "نامعتبر"}).status_code == 422
+
+
+def test_category_sort_groups_by_section_not_stale_group_id(client: TestClient) -> None:
+    """Digital first, then appliances — even when an appliance carries id 7."""
+    from decimal import Decimal
+
+    from sqlalchemy.orm import Session
+
+    from app.core.database import get_engine
+    from app.models import Product
+
+    login(client)
+    with Session(get_engine()) as db:
+        db.add_all(
+            [
+                Product(
+                    name="یخچال بلانتون",
+                    sku="BLN-1",
+                    price=Decimal(100),
+                    stock=Decimal(1),
+                    main_group_name="لوازم خانگی بلانتون",
+                    main_group_id=7,
+                ),
+                Product(
+                    name="گوشی",
+                    sku="PHN-1",
+                    price=Decimal(100),
+                    stock=Decimal(1),
+                    main_group_name="گوشی و تبلت",
+                    main_group_id=28,
+                ),
+            ]
+        )
+        db.commit()
+
+    items = client.get("/api/v1/products", params={"sort": "category"}).json()["items"]
+    assert [item["sku"] for item in items] == ["PHN-1", "BLN-1"]
 
 
 def test_product_groups_cache_headers(client: TestClient) -> None:

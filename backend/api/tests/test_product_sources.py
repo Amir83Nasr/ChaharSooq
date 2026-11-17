@@ -1,6 +1,7 @@
 """Product sources — dev CSV fixture, dev DB simulation, source selection."""
 
 import csv
+import json
 from collections.abc import Iterator
 from decimal import Decimal
 from pathlib import Path
@@ -117,8 +118,8 @@ def test_csv_source_strips_padding_parses_rows_and_titles_units(tmp_path: Path) 
     raw_rows, total, units = source.fetch()
 
     assert total == len(raw_rows) == 2
-    # The export only has countUnit ids; the source supplies the dev titles.
-    assert units == {4: "عدد", 99: "عدد"}
+    # A bare CSV uses the fallback table from the Parsina units endpoint.
+    assert units == {4: "توپ", 99: "عدد"}
     assert raw_rows[0]["goodCode"] == "A-1"
     assert raw_rows[0]["goodName"] == "کالا یک"
 
@@ -130,6 +131,57 @@ def test_csv_source_strips_padding_parses_rows_and_titles_units(tmp_path: Path) 
     assert second.is_special is True
     assert first.sale_price == Decimal("1000")
     assert first.remain == Decimal("3")
+
+
+def test_csv_source_prefers_saved_units_over_mock_titles(tmp_path: Path) -> None:
+    """A saved units response beside the CSV wins over the mock fallback."""
+    path = _write_csv(
+        tmp_path / "products.csv",
+        [_row("1", "A-1", "کالا", unit="99")],
+    )
+    (tmp_path / "units.json").write_text(
+        json.dumps(
+            {
+                "isSuccess": True,
+                "data": [
+                    {"Id": "4", "Title": "توپ"},
+                    {"Id": "99", "Title": "جعبه"},
+                ],
+                "total": 2,
+            }
+        )
+    )
+    _rows, _total, units = CsvCommoditySource(path).fetch()
+    assert units == {4: "توپ", 99: "جعبه"}
+
+
+_PRODUCTS_FIXTURE = Path(__file__).parents[3] / "data" / "products.json"
+_UNITS_FIXTURE = Path(__file__).parents[3] / "data" / "units.json"
+
+
+@pytest.mark.skipif(
+    not (_PRODUCTS_FIXTURE.exists() and _UNITS_FIXTURE.exists()),
+    reason="local Parsina JSON fixtures not present",
+)
+def test_json_fixture_uses_real_unit_titles_and_all_prices(tmp_path: Path) -> None:
+    """The dev dump matches the Parsina envelope: countUnit id → Title."""
+    products = json.loads(_PRODUCTS_FIXTURE.read_text())
+    units = json.loads(_UNITS_FIXTURE.read_text())
+    path = tmp_path / "products.json"
+    path.write_text(json.dumps(products, ensure_ascii=False))
+    (tmp_path / "units.json").write_text(json.dumps(units, ensure_ascii=False))
+
+    source = CsvCommoditySource(path)
+    rows, total, unit_titles = source.fetch()
+    assert total == len(rows) == products["total"]
+    assert source.label == "csv"  # API contract label unchanged
+    assert len(unit_titles) == units["total"]
+    assert unit_titles[8] == "عدد"
+    parsed = [parse_commodity(row) for row in rows]
+    assert all(
+        row is not None and row.sale_price and row.sale_price > 0 and row.remain and row.remain > 0
+        for row in parsed
+    )
 
 
 def test_csv_source_missing_or_unreadable_is_handled(tmp_path: Path) -> None:
@@ -267,7 +319,7 @@ def test_csv_sync_inserts_then_updates(session: Session, tmp_path: Path) -> None
     assert len(products) == 2
     assert {p.external_id for p in products} == {1, 2}
     assert {p.main_group_name for p in products} == {"گروه اصلی"}
-    assert {p.unit_name for p in products} == {"عدد"}
+    assert {p.unit_name for p in products} == {"توپ"}
 
 
 def test_csv_sync_deactivates_missing_rows_instead_of_deleting_them(

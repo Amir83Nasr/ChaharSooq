@@ -5,9 +5,8 @@ Date: 2026-11-14 · Status: accepted
 ## Context
 
 Production is a single-host Docker Compose stack on `market-linux` with PostgreSQL 18.6 in the
-`charsooq-production_pgdata` volume. [deployment.md](../architecture/deployment.md#backups-and-recovery)
-recorded that database backups, encryption, off-host retention, and a rehearsed restore are not
-implemented. The TLS volumes have a separate encrypted backup design in
+`charsooq-production_pgdata` volume. AGENTS.md section 3 records that database backups, encryption,
+off-host retention, and a rehearsed restore are not implemented. The TLS volumes have a separate encrypted backup design in
 [ADR 013](013-tls-certificate-lifecycle.md); that is not a database backup.
 
 The organization has not yet approved a backup tool, encryption/key custody, off-host destination,
@@ -88,9 +87,5 @@ Residual risks / open items:
 
 ## References
 
-- [Database backup and recovery runbook](../operations/backup-and-recovery.md)
-- [Production runbook](../operations/production-runbook.md)
-- [Troubleshooting](../operations/troubleshooting.md)
-- [TLS certificate lifecycle](../operations/tls-certificate-lifecycle.md)
+- Backup, recovery, and production rules: AGENTS.md section 3 and README.md.
 - [ADR 013 — TLS certificate lifecycle](013-tls-certificate-lifecycle.md)
-- [Deployment](../architecture/deployment.md)

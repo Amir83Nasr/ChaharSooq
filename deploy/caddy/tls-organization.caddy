@@ -4,7 +4,7 @@
 # default /etc/charsooq/tls) and must be readable by the Caddy container only.
 #
 # Required layout by default (the host directory is CHARSOOQ_TLS_DIR, default
-# /etc/charsooq/tls; see docs/operations/tls-certificate-lifecycle.md):
+# /etc/charsooq/tls; Caddy is the only TLS terminator, no certificate is committed):
 #   current -> versions/<stamp>            one atomic symlink, the only pointer
 #   versions/<stamp>/fullchain.pem         leaf certificate + intermediates
 #   versions/<stamp>/privkey.pem           matching private key, mode 0600

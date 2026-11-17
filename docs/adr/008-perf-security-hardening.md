@@ -39,7 +39,7 @@ Harden in place, no migration of frameworks, no new component library:
   Permissions-Policy on Next headers, shared `scripts/load-env.mjs`.
 - Deploy: uvicorn `--workers 2 --proxy-headers --no-server-header`,
   compose resource limits + secret-via-environment, postgres pinned minor.
-- Observability: `scripts/bench-api.py` (stdlib-only) + `docs/perf-baseline.md`.
+- Observability: `scripts/bench-api.py` (stdlib-only).
 
 ## Consequences
 

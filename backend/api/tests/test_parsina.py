@@ -1,6 +1,7 @@
 """Parsina integration — client contract, sync rules, endpoints (mocked HTTP)."""
 
 import csv
+import json
 import logging
 from collections.abc import Iterator
 from datetime import UTC, datetime
@@ -22,6 +23,7 @@ from app.integrations.parsina import (
     ParsinaNetworkError,
     ParsinaResponseError,
     parse_commodity,
+    unit_titles_from_rows,
 )
 from app.models import Product
 from app.models.parsina import ParsinaSyncState
@@ -208,6 +210,20 @@ def test_client_maps_unit_ids_to_titles_regardless_of_key_case() -> None:
 
     with ParsinaClient(SETTINGS, transport=httpx.MockTransport(handler)) as client:
         assert client.units() == {4: "عدد", 1: "تخته"}
+
+
+_UNITS_FIXTURE = Path(__file__).parents[3] / "data" / "units.json"
+
+
+@pytest.mark.skipif(not _UNITS_FIXTURE.exists(), reason="local Parsina units fixture not present")
+def test_units_envelope_from_saved_export_maps_every_id_to_title() -> None:
+    """`units.json` is the exact payload Parsina returns in production."""
+    envelope = json.loads(_UNITS_FIXTURE.read_text())
+    assert envelope["endpoint"] == "/BaseInfo/UnitCount"
+    titles = unit_titles_from_rows(envelope["data"])
+    assert len(titles) == envelope["total"]
+    assert titles[8] == "عدد"
+    assert titles[42] == "متر"
 
 
 def test_client_reads_units_wrapped_in_a_data_object() -> None:

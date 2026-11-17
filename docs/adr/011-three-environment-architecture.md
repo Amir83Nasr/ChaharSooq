@@ -37,9 +37,9 @@ must be controlled and reversible.
   and approved.
 - Production exposes only the reverse proxy publicly, terminates TLS there, keeps PostgreSQL and
   the API on the internal network, and has scheduled, tested backups. Details still unknown are
-  recorded as open decisions in the deployment document, not guessed.
-- [docs/architecture/deployment.md](../architecture/deployment.md) is the operational source of
-  truth; this ADR records the decision and links to it rather than duplicating the runbook.
+  recorded as open decisions in AGENTS.md section 3, not guessed.
+- Operational rules now live in AGENTS.md section 3 and README.md; this ADR records the decision
+  rather than duplicating the runbook.
 
 ## Alternatives
 

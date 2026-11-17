@@ -14,7 +14,7 @@ cp apps/web/.env.example apps/web/.env.local
 2. Follow [AGENTS.md](AGENTS.md): it defines the architecture boundaries, formatting rules, and definition of done.
 3. Machine values stay numeric/Latin in backend, API, and DB. Persian digits, `٬`, `٫`, Jalali dates, and the Toman glyph live only in the UI layer (`packages/ui`).
 4. Business logic goes in `backend/api/app/services/`, never in route handlers. UI primitives stay free of business logic.
-5. Follow the release flow: Development → GitHub/CI → Staging → approval → Production. Each environment has its own secrets and database; never reuse them. A push to `main` is not a Production release ([deployment](../docs/architecture/deployment.md)).
+5. Follow the release flow: Development → GitHub/CI → Staging → approval → Production. Each environment has its own secrets and database; never reuse them. A push to `main` is not a Production release ([AGENTS.md](AGENTS.md) section 3).
 
 ## Checks (must pass before push)
 
@@ -29,4 +29,4 @@ Lefthook runs fast checks on commit (formatting, lint, ruff on staged files) and
 
 ## Docs
 
-Update `docs/` and `README.md` alongside behavior changes. Significant architectural decisions need an ADR under `docs/adr/`.
+Update `AGENTS.md` and `README.md` alongside behavior changes. Significant architectural decisions need a new ADR under `docs/adr/` with the next number; never renumber existing ADRs.

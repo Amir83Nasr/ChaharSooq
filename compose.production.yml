@@ -4,8 +4,9 @@
 #
 # Secrets are file-backed and live outside this repository. Set
 # CHARSOOQ_SECRETS_DIR to the directory that holds them (default:
-# /etc/charsooq/secrets) and see docs/architecture/deployment.md for the
-# required names, ownership, and permissions. No secret value belongs here.
+# /etc/charsooq/secrets); see README.md (Production Docker stack) and
+# AGENTS.md section 3 for the required names, ownership, and permissions.
+# No secret value belongs here.
 #
 # Four deployment values are required and deliberately have no default, so an
 # unconfigured stack fails to start instead of publishing a port on every
@@ -17,7 +18,7 @@
 #   CHARSOOQ_WEB_BLUE_EDGE_IP / CHARSOOQ_WEB_GREEN_EDGE_IP
 #                           each slot web's fixed address; that slot API's only
 #                           trusted proxy
-# See docs/architecture/deployment.md#reverse-proxy-tls-and-exposure.
+# See README.md (Production Docker stack) and AGENTS.md section 3.
 #
 # Blue-Green: `db`, `provision`, `migrate`, and `caddy` are the shared base.
 # The deployable API/web pair runs in one slot at a time (`blue` or `green`)
@@ -41,7 +42,7 @@ x-api-image: &api-image
   # must fail closed instead of silently running whatever happens to sit in
   # the local image cache. Select a release by digest:
   #   export CHARSOOQ_API_IMAGE='ghcr.io/<namespace>/charsooq-api@sha256:<digest>'
-  # See docs/operations/release-management.md.
+  # See AGENTS.md section 3 (release flow).
   image: ${CHARSOOQ_API_IMAGE:?set CHARSOOQ_API_IMAGE to the released image reference, for example ghcr.io/<namespace>/charsooq-api@sha256:<digest>}
   # Pull the published image when it is not in the local cache. With a digest
   # reference this is what makes the deployed bytes the released bytes.
@@ -81,7 +82,7 @@ x-api-env: &api-env
 
 # Docker's json-file driver has no size limit by default, so an unrotated
 # stdout stream can fill the host disk and take PostgreSQL with it. Bound every
-# service's log at the container level; see docs/operations/production-runbook.md.
+# service's log at the container level.
 x-logging: &default-logging
   driver: json-file
   options:

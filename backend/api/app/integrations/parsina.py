@@ -1,10 +1,10 @@
 """Parsina HTTP client — auth, envelope parsing, typed transport errors.
 
-Contract (docs/api/parsina-api.pdf):
+Contract (docs/parsina-api.pdf):
   POST {base}/Account                      {username, password, org, year} → access_token
   GET  {base}/Commodity                    list of goods
   GET  {base}/commodity/LoadByFilter?Ware&Saletype&Id
-  GET  {base}/UnitCount/BaseInfo           counting units
+  GET  {base}/BaseInfo/UnitCount           counting units (legacy alias below)
 Every envelope: {isSuccess, statusCode, message, data, total}.
 """
 
@@ -29,6 +29,9 @@ TOKEN_REFRESH_MARGIN_SECONDS = 300
 TOKEN_FALLBACK_TTL_SECONDS = 2 * 60 * 60
 TRANSIENT_REQUEST_ATTEMPTS = 3
 TRANSIENT_REQUEST_BACKOFF_SECONDS = 0.5
+# The live export saves this endpoint as `/BaseInfo/UnitCount`; older Parsina
+# builds answer `/UnitCount/BaseInfo`. Both return the same Id/Title envelope.
+UNIT_PATHS = ("/BaseInfo/UnitCount", "/UnitCount/BaseInfo")
 
 
 class ParsinaError(Exception):
@@ -109,6 +112,25 @@ def _field(record: dict[str, Any], *names: str) -> Any:
         if str(key).strip().lower() in wanted:
             return value
     return None
+
+
+def unit_titles_from_rows(rows: Any) -> dict[int, str]:
+    """Map Parsina count-unit ids to titles — shared by live API and dev fixture.
+
+    The units endpoint uses PascalCase (`Id`, `Title`) while the catalog uses
+    camelCase (`countUnit`); some builds mix the two, so lookup is case-blind.
+    Unusable rows are skipped: a failed/missing title never aborts a sync.
+    """
+    out: dict[int, str] = {}
+    for raw in rows:
+        if not isinstance(raw, dict):
+            continue
+        row = cast("dict[str, Any]", raw)
+        unit_id = _int(_field(row, "id", "unitId", "unit_id", "unitCode", "code"))
+        title = _str(_field(row, "Title", "title", "unitName", "unit_name", "name"))
+        if unit_id is not None and title:
+            out[unit_id] = title
+    return out
 
 
 def _as_bool(raw: Any) -> bool:
@@ -326,35 +348,21 @@ class ParsinaClient:
         """Best-effort countUnit id → title map; a failure never aborts a sync.
 
         The catalog only carries `countUnit` (an id); the display name comes
-        from `GET /UnitCount/BaseInfo`, whose rows are matched here by id so
-        the products table can show «عدد» instead of `4`.
+        from the counting-units endpoint, whose rows are matched here by id so
+        the products table shows «عدد» instead of `8`. Dev reads the same rows
+        from `units.json` through `unit_titles_from_rows`, so both paths agree.
         """
-        try:
-            body = self._request("GET", "/UnitCount/BaseInfo")
-            rows = self._unit_rows(body)
-        except ParsinaError:
-            # Do not log request/URL details; credentials live in auth payloads.
-            log.warning("parsina units lookup failed")
-            return {}
-        out: dict[int, str] = {}
-        unexpected_keys: set[str] = set()
-        for raw in rows:
-            if not isinstance(raw, dict):
+        for path in UNIT_PATHS:
+            try:
+                rows = self._unit_rows(self._request("GET", path))
+            except ParsinaError:
+                # Do not log request/URL details; credentials live in auth payloads.
                 continue
-            row = cast("dict[str, Any]", raw)
-            unit_id = _int(_field(row, "id", "unitId", "unit_id", "unitCode", "code"))
-            title = _str(_field(row, "Title", "title", "unitName", "unit_name", "name"))
-            if unit_id is not None and title:
-                out[unit_id] = title
-            elif title is None:
-                unexpected_keys.update(str(key) for key in row)
-        if not out:
-            # Field names are safe to log; values (and credentials) are not.
-            log.warning(
-                "parsina units lookup returned no usable rows (keys: %s)",
-                ", ".join(sorted(unexpected_keys)) or "-",
-            )
-        return out
+            titles = unit_titles_from_rows(rows)
+            if titles:
+                return titles
+        log.warning("parsina units lookup returned no usable rows")
+        return {}
 
     def _unit_rows(self, body: Any) -> list[Any]:
         """Rows of the units envelope; some builds wrap the list in a dict."""

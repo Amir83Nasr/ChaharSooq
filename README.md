@@ -2,7 +2,7 @@
 
 Persian, RTL-first admin web application. Monorepo: Next.js frontend + FastAPI backend + PostgreSQL.
 
-Three independent environments: Development (local), Staging (Vercel + FastAPI Cloud + Neon), and Production (Docker Compose on `market-linux`). See [docs/architecture/deployment.md](docs/architecture/deployment.md).
+Three independent environments: Development (local), Staging (Vercel + FastAPI Cloud + Neon), and Production (Docker Compose on `market-linux`). See [AGENTS.md](AGENTS.md) section 3.
 
 ## Tech stack
 
@@ -10,7 +10,7 @@ Three independent environments: Development (local), Staging (Vercel + FastAPI C
 - Backend: FastAPI, SQLAlchemy 2.x, Alembic, Pydantic, uv
 - Database: PostgreSQL (Production pins `postgres:18.6-trixie`)
 
-See [docs/architecture/overview.md](docs/architecture/overview.md) for architecture and [AGENTS.md](AGENTS.md) for agent rules.
+See [AGENTS.md](AGENTS.md) for architecture and agent rules.
 
 ## Requirements
 
@@ -35,7 +35,7 @@ make install           # install frontend + backend deps
 make db-up             # start dev postgres (compose, host :5433)
 make db-migrate        # apply Alembic migrations to dev database
 make db-seed           # ensure the env-managed owner (OWNER_USERNAME/OWNER_PASSWORD)
-make db-seed-parsina   # upsert data/parsina.csv into the dev catalog (keeps links)
+make db-seed-parsina   # upsert the saved Parsina export into the dev catalog (keeps links)
 make db-seed-demo      # add demo competitor prices, daily changes, weights and price bounds
 make dev-all           # postgres + migrate, then backend :8000 + frontend :3000
 ```
@@ -103,7 +103,7 @@ Each app owns its env file: [backend/api/.env.example](backend/api/.env.example)
 | `OWNER_USERNAME`                 | Highest-privilege `owner` login. Defaults to `superadmin`. The API creates this account on boot unless `RUN_OWNER_BOOTSTRAP_ON_STARTUP=false`; `bootstrap_owner.py` is the explicit path.                                                                                                                                                         |
 | `OWNER_PASSWORD`                 | Owner password. Required in production (minimum 8 characters). Changing it re-hashes the account and revokes its sessions on the next boot or explicit owner bootstrap.                                                                                                                                                                           |
 | `PARSINA_*`                      | Parsina accounting API (URL, credentials, org, year, optional warehouse/sale-type). Empty = integration off. `PARSINA_SYNC_INTERVAL_MINUTES` (default 1440) seeds the initial auto-sync interval and `PARSINA_SYNC_ENABLED` toggles the backend scheduler                                                                                         |
-| `PRODUCTS_CSV_PATH`              | Development-only product CSV; defaults to `<repo>/data/parsina.csv`                                                                                                                                                                                                                                                                               |
+| `PRODUCTS_CSV_PATH`              | Development-only product export; defaults to `<repo>/data/parsina.csv`. When `products.json` sits beside it, the saved Parsina response is used instead, with unit titles from `units.json`.                                                                                                                                                      |
 
 ### Environment examples
 
@@ -153,7 +153,7 @@ Accounts have one of three roles:
 | `admin`  | Shop data (products, categories, settings, sync) and viewer management. Never sees other admins.   |
 | `viewer` | Read-only: catalog, dashboard, integration pages, and the settings values those views use.         |
 
-`/users` is available to the owner and admins. The owner sees every account and may create or delete `admin` and `viewer` accounts. An admin sees viewer accounts plus their own account and may create/delete viewers; the owner and other admins stay hidden. At least one management account always remains; since the owner cannot be deleted, the owner can remove every admin. Viewers get `403 forbidden` on every write. `/settings` is available to the owner and admins; the sidebar hides the سیستم group from viewers. See [docs/architecture/authentication.md](docs/architecture/authentication.md) and [ADR 010](docs/adr/010-owner-role.md).
+`/users` is available to the owner and admins. The owner sees every account and may create or delete `admin` and `viewer` accounts. An admin sees viewer accounts plus their own account and may create/delete viewers; the owner and other admins stay hidden. At least one management account always remains; since the owner cannot be deleted, the owner can remove every admin. Viewers get `403 forbidden` on every write. `/settings` is available to the owner and admins; the sidebar hides the سیستم group from viewers. See [AGENTS.md](AGENTS.md) and [ADR 010](docs/adr/010-owner-role.md).
 
 ```bash
 GET    /api/v1/users          # owner: all accounts; admin: viewers + self
@@ -166,7 +166,7 @@ DELETE /api/v1/users/{id}     # also revokes that account's sessions
 Products mirror an external catalog (`external_id` = Parsina `goodId`), and the GET endpoints always read the local mirror. Where the mirror comes from depends on `APP_ENV`:
 
 - **production** — live Parsina API (`PARSINA_*` credentials). The backend scheduler syncs at the interval configured in Settings (default `PARSINA_SYNC_INTERVAL_MINUTES`, 1440); the products page has a «به‌روزرسانی از پارسینا» button for a manual run.
-- **development** — `data/parsina.csv` (an export of the live catalog, same field names). `make db-seed-parsina` upserts it into the dev product mirror; existing product ids, categories, and competitor links are kept and rows missing from the CSV are deactivated, never deleted. The same button re-imports the file. No Parsina credentials are needed; the scheduler ticks on the same interval from the CSV, like production. The export only carries `countUnit` ids, so the CSV source supplies mock unit titles to keep the dev catalog identical to production. `make db-seed-demo` additionally gives every active product demo competitor prices (Digikala/Technolife for appliances, Sofa for furniture, DigiFresh for carpets) with two daily observations, the missing suggested-price weights, and demo floor/ceiling percentages, so all products-table columns are populated in dev. Demo bounds rotate through four clamp scenarios — below the floor, above the ceiling, inside the bounds, and no bounds — so the suggested-price clamp is visible in the table; only bounds the seed itself wrote are refreshed, while an admin's saved clamp is kept. The rotation is keyed on the synced product identity (`external_id`, or SKU for manual rows), so dev and staging show the same demo prices and bounds even though the two databases assign different ids. Demo links use a `demo-` URL path; re-running refreshes only those rows and never touches real/manual links.
+- **development** — the saved Parsina export in `data/`: `products.json` (same field names as `GET /Commodity`, preferred when present) with count-unit titles from `units.json` (same `Id`/`Title` map as `GET /BaseInfo/UnitCount`). `make db-seed-parsina` upserts it into the dev product mirror; existing product ids, categories, and competitor links are kept and rows missing from the export are deactivated, never deleted. The same button re-imports the file. No Parsina credentials are needed; the scheduler ticks on the same interval, like production. If only the older `data/parsina.csv` is available, its `countUnit` ids are resolved to titles from `units.json` or the Parsina unit table in `parsina_csv.py`. `make db-seed-demo` additionally gives every active product demo competitor prices (Digikala/Technolife for appliances, Sofa for furniture, DigiFresh for carpets) with two daily observations, the missing suggested-price weights, and demo floor/ceiling percentages, so all products-table columns are populated in dev. Demo bounds rotate through four clamp scenarios — below the floor, above the ceiling, inside the bounds, and no bounds — so the suggested-price clamp is visible in the table; only bounds the seed itself wrote are refreshed, while an admin's saved clamp is kept. The rotation is keyed on the synced product identity (`external_id`, or SKU for manual rows), so dev and staging show the same demo prices and bounds even though the two databases assign different ids. Demo links use a `demo-` URL path; re-running refreshes only those rows and never touches real/manual links.
 
 Both paths share one validation/apply routine and one DB lock, so runs never overlap. Manual runs return `202` and the UI polls `GET /integrations/parsina/status` until the run finishes, then re-fetches the table in place. A failed or partial fetch never overwrites the last successful data; rows missing from a complete listing are deactivated, never deleted.
 
@@ -213,7 +213,7 @@ The Neon-era production targets are disabled and fail closed with migration guid
 `make db-migrate-prod`, `make db-seed-prod`, `make db-sync-dev-to-prod`, plus the
 `make sync-prod` / `make dev-to-prod` aliases. No Production deployment workflow is approved yet;
 the locked standalone migration runner and explicit owner CLI are the building blocks it must use.
-See [docs/architecture/deployment.md](docs/architecture/deployment.md).
+See [AGENTS.md](AGENTS.md) section 3.
 
 ## Migrations
 
@@ -230,7 +230,7 @@ Schema changes require an Alembic migration under `backend/api/migrations/`. Aut
 - Production order is fixed: secrets/configuration → database reachability → `scripts/migrate.py` → verify the migration succeeded → explicit `scripts/bootstrap_owner.py` when owner provisioning is needed → start the API with both startup flags `false` → check `/health` and `/ready`. Never start the API before the schema is at `head`.
 - CI proves it: fresh `upgrade head`, idempotent re-upgrade, single-head assertion, `alembic check` drift detection, and a downgrade/upgrade round-trip.
 - `make db-validate` runs the offline part locally (no database needed); `make check` includes it.
-- `make db-migrate-prod` is disabled: the Neon-era path is not approved for Production. Production deployments must use the standalone runner as the ordered pre-start step described in [docs/architecture/deployment.md](docs/architecture/deployment.md).
+- `make db-migrate-prod` is disabled: the Neon-era path is not approved for Production. Production deployments must use the standalone runner as the ordered pre-start step described in [AGENTS.md](AGENTS.md) section 3.
 
 ## API contract
 
@@ -240,7 +240,7 @@ Base path `/api/v1`. Interactive docs: Swagger UI at `/docs` (start the API with
 uv run --project backend/api python backend/api/scripts/export_openapi.py
 ```
 
-The frontend client (`apps/web/lib/api.ts`) mirrors these shapes; see [docs/api/README.md](docs/api/README.md).
+The frontend client (`apps/web/lib/api.ts`) mirrors these shapes; see [AGENTS.md](AGENTS.md) section 11.
 
 ## Testing
 
@@ -248,7 +248,7 @@ The frontend client (`apps/web/lib/api.ts`) mirrors these shapes; see [docs/api/
 - Frontend e2e: `apps/web/e2e/` (playwright) — unauthenticated redirects, Persian login form, RTL shell, mobile layout; runs against the production build without a backend — `pnpm --filter web test:e2e`
 - Backend tests: `backend/api/tests/` (pytest) — auth flow, roles and user management, product CRUD, validation envelope
 - CI runs lint, format check, typecheck, both test suites, the production build, and the Playwright e2e suite. Staging deploys through the Vercel/FastAPI Cloud Git integration.
-- A published GitHub Release triggers the release workflow, which builds and pushes the API and web images for that commit and then runs a Production Blue-Green `deploy` job on the self-hosted runner with the `charsooq-production` label. The job is configured but needs the runner and `/etc/charsooq/production.env`; it has not been executed yet. See [docs/operations/release-management.md](docs/operations/release-management.md), [ADR 016](docs/adr/016-ci-cd-deploy-job.md), and [ADR 017](docs/adr/017-blue-green-deployment.md).
+- A published GitHub Release triggers the release workflow, which builds and pushes the API and web images for that commit and then runs a Production Blue-Green `deploy` job on the self-hosted runner with the `charsooq-production` label. The job is configured but needs the runner and `/etc/charsooq/production.env`; it has not been executed yet. See [AGENTS.md](AGENTS.md) section 3, [ADR 016](docs/adr/016-ci-cd-deploy-job.md), and [ADR 017](docs/adr/017-blue-green-deployment.md).
 
 ## Build
 
@@ -294,7 +294,7 @@ Images are published by [`.github/workflows/release.yml`](.github/workflows/rele
 GitHub Release is published: both images are built from that one commit, tagged with the version
 and the commit SHA, stamped with OCI metadata, and shipped with provenance and an SBOM. The digests
 are recorded in the release body, and the digest — not the tag — is the deployment reference. See
-[docs/operations/release-management.md](docs/operations/release-management.md) and
+[AGENTS.md](AGENTS.md) section 3 and
 [ADR 015](docs/adr/015-container-image-release-and-publishing.md).
 
 ### Database roles and production secrets
@@ -328,30 +328,27 @@ are what the container sees. `uid`, `gid`, and `mode` in the Compose file only a
 secrets and are intentionally not set. Make `postgres_password` owned by `999:999` with mode `0440`
 (the `provision` service joins GID `999` to read it), and the other files owned by `10001:10001`
 with mode `0400`. Never commit these files or place them in an image.
-See [docs/architecture/deployment.md](docs/architecture/deployment.md#production-secrets) for the
-exact commands, rotation steps, and verification.
+See [AGENTS.md](AGENTS.md) section 3 for the secret rules; the host commands are in the `Makefile`
+targets.
 
 Only the reverse proxy publishes a host port, and only on one approved internal IP: `caddy` binds
 `80`/`443` (`${CHARSOOQ_PROXY_BIND_IP}`), while `db`, `provision`, `migrate`, `api`, and `web` listen
 only on internal Compose networks (`web:3000`, `api:8000`, `db:5432`). Caddy reaches `web` through a
 dedicated `proxy` network and has no route to the API or PostgreSQL. TLS termination, forwarded
-headers, and HSTS are implemented in [`deploy/caddy`](deploy/caddy) and documented in
-[docs/architecture/deployment.md](docs/architecture/deployment.md#reverse-proxy-tls-and-exposure);
-no certificate is installed and the proxy is not deployed yet. Container logs are bounded
+headers, and HSTS are implemented in [`deploy/caddy`](deploy/caddy) and covered in [AGENTS.md](AGENTS.md)
+section 3; no certificate is installed and the proxy is not deployed yet. Container logs are bounded
 (`json-file`, 10 MB × 5 per service) so an unrotated stream cannot fill the host disk. Backup tooling,
-scheduling, PITR, and restore drills are not implemented; the design is in
-[docs/operations/backup-and-recovery.md](docs/operations/backup-and-recovery.md). PostgreSQL data
+scheduling, PITR, and restore drills are not implemented (see
+[ADR 014](docs/adr/014-production-backup-and-recovery.md)). PostgreSQL data
 lives in the `charsooq-production_pgdata` volume at `/var/lib/postgresql` (the PostgreSQL 18 image
 path), and `make prod-down` never removes it.
 
-Operations documentation: [production runbook](docs/operations/production-runbook.md),
-[troubleshooting](docs/operations/troubleshooting.md), [backup and recovery](docs/operations/backup-and-recovery.md),
-and [TLS lifecycle](docs/operations/tls-certificate-lifecycle.md).
+Operational rules: [AGENTS.md](AGENTS.md) section 3; decisions: [docs/adr/](docs/adr/).
 
 ## Deployment
 
-Charsooq has three independent environments — Development, Staging, and Production. Each has its own secrets, database credentials (`DATABASE_URL`, plus `MIGRATION_DATABASE_URL` where role separation is used), and configuration; no Production data is copied automatically to Staging or Development. A push to `main` is not a Production release. See [docs/architecture/deployment.md](docs/architecture/deployment.md) for the source of truth.
+Charsooq has three independent environments — Development, Staging, and Production. Each has its own secrets, database credentials (`DATABASE_URL`, plus `MIGRATION_DATABASE_URL` where role separation is used), and configuration; no Production data is copied automatically to Staging or Development. A push to `main` is not a Production release. See [AGENTS.md](AGENTS.md) section 3 for the rules.
 
 - Development: local Next.js + FastAPI + PostgreSQL; `make docker-up` runs `web` + `api` + `postgres` from [compose.yml](compose.yml), with a one-shot `migrate` service running the locked migration runner before the API starts. The development stack sets `APP_ENV=production` to exercise production behavior locally and `DEPLOYMENT_ENV=development` so it is never mistaken for Production. `compose.yml` is the development stack, not a Production file.
 - Staging: Vercel frontend (`vercel.json` pins pnpm install/build for the monorepo) + FastAPI Cloud backend (`make deploy-api`) + Neon database. Set `API_URL_INTERNAL` + `NEXT_PUBLIC_API_URL` to the Staging API origin in Vercel — the build fails fast if they still point at localhost. Browser calls same-origin `/api/*`; Next rewrites to the API origin, so the session cookie stays first-party. The API auto-migrates on boot in Staging.
-- Production: Docker Engine + Docker Compose on Ubuntu `market-linux` (`172.30.2.2`): Next.js, FastAPI, and PostgreSQL 18.6, with separate administrative, migration, and application database roles. [compose.production.yml](compose.production.yml) encodes the service order (`db` → `provision` → `migrate` → `api` → `web` → `caddy`), file-backed secrets, internal networks, and health checks. The Caddy reverse proxy, TLS modes, and trusted-proxy design are implemented in [deploy/caddy](deploy/caddy) and [ADR 012](docs/adr/012-internal-reverse-proxy-and-tls.md) but not enabled against a real certificate. Backup tooling, image registry/promotion, the IT-owned DNS/CA/IP decisions, and the actual server deployment remain open. Production is not live yet; see the deployment document.
+- Production: Docker Engine + Docker Compose on Ubuntu `market-linux` (`172.30.2.2`): Next.js, FastAPI, and PostgreSQL 18.6, with separate administrative, migration, and application database roles. [compose.production.yml](compose.production.yml) encodes the service order (`db` → `provision` → `migrate` → `api` → `web` → `caddy`), file-backed secrets, internal networks, and health checks. The Caddy reverse proxy, TLS modes, and trusted-proxy design are implemented in [deploy/caddy](deploy/caddy) and [ADR 012](docs/adr/012-internal-reverse-proxy-and-tls.md) but not enabled against a real certificate. Backup tooling, image registry/promotion, the IT-owned DNS/CA/IP decisions, and the actual server deployment remain open. Production is not live yet; see [AGENTS.md](AGENTS.md) section 3.

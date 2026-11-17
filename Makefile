@@ -90,21 +90,21 @@ db-clear-products: db-migrate ## Delete all products + competitor listings from 
 # These targets were written for the Neon-era production database. Production is
 # now `market-linux` and has no approved migration, owner-seeding, or data-sync
 # path yet, so every legacy production write target fails closed instead of
-# guessing a target. See docs/architecture/deployment.md.
+# guessing a target. See AGENTS.md section 3 and README.md.
 db-migrate-prod: ## DISABLED — legacy Neon-era migration path (see deployment docs)
 	@echo "db-migrate-prod is disabled: no Production migration path is approved yet." >&2
 	@echo "Migrations remain Alembic-based; Production needs the controlled single-runner step." >&2
-	@echo "See docs/architecture/deployment.md." >&2
+	@echo "See AGENTS.md section 3 and README.md." >&2
 	@exit 1
 
 db-seed-prod: ## DISABLED — legacy Neon-era owner bootstrap (see deployment docs)
 	@echo "db-seed-prod is disabled: Production owner provisioning is still an open decision." >&2
-	@echo "Never reuse the Neon-era .env.production file. See docs/architecture/deployment.md." >&2
+	@echo "Never reuse the Neon-era .env.production file. See AGENTS.md section 3." >&2
 	@exit 1
 
 db-sync-dev-to-prod: ## DISABLED — legacy dev → Neon production sync (see deployment docs)
 	@echo "db-sync-dev-to-prod is disabled: there is no approved dev → Production data path." >&2
-	@echo "Use 'make db-sync-dev-to-staging' for Staging. See docs/architecture/deployment.md." >&2
+	@echo "Use 'make db-sync-dev-to-staging' for Staging. See AGENTS.md section 3." >&2
 	@exit 1
 
 db-sync-dev-to-staging: ## Upsert dev data into staging Neon, then fill demo competitor prices (reads backend/api/.env.staging)
@@ -161,7 +161,7 @@ docker-logs: ## Follow Docker Compose logs
 #
 # The two image references are required as well, with a documentation-only
 # digest: an unset image reference must fail the stack instead of running a
-# stale local build. See docs/operations/release-management.md.
+# stale local build. See AGENTS.md section 3.
 PROD_DEPLOYMENT_ENV = \
 	CHARSOOQ_PROXY_BIND_IP=192.0.2.10 \
 	CHARSOOQ_SITE_HOST=charsooq.example.test \

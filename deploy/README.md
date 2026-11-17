@@ -32,7 +32,7 @@ must never contain secret values, private keys, or certificates.
 - `runner/` — **preparation only** for the repository-scoped self-hosted runner
   (`charsooq-production` label): non-secret templates and read-only preflight
   helpers. No runner is installed/registered and no token/secret is stored here.
-  See [docs/operations/self-hosted-runner.md](../docs/operations/self-hosted-runner.md).
+  See `runner/README.md` for the read-only preflight helpers.
 
 ## What must stay outside this directory/repository
 
@@ -43,7 +43,4 @@ must never contain secret values, private keys, or certificates.
   default `/etc/charsooq/tls`.
 - Filled `production.env` files with real environment values.
 
-See [docs/architecture/deployment.md](../docs/architecture/deployment.md),
-[docs/operations/production-runbook.md](../docs/operations/production-runbook.md),
-[docs/operations/tls-certificate-lifecycle.md](../docs/operations/tls-certificate-lifecycle.md),
-and [docs/operations/release-management.md](../docs/operations/release-management.md).
+See [AGENTS.md](../AGENTS.md) for the rules and [README.md](../README.md) for the production stack.

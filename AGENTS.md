@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Constraints for coding agents on **چهارسوق (Charsooq)**, a Persian, RTL-first admin panel. Setup: [README.md](README.md). Contribution flow: [CONTRIBUTING.md](CONTRIBUTING.md). Architecture: [docs/](docs/README.md).
+Constraints for coding agents on **چهارسوق (Charsooq)**, a Persian, RTL-first admin panel. Setup: [README.md](README.md). Contribution flow: [CONTRIBUTING.md](CONTRIBUTING.md). This file is the single source of agent rules; the only other documents are the decision records in [docs/adr/](docs/adr/) and the [Parsina API contract](docs/parsina-api.pdf).
 
 ## 1. Repository map
 
@@ -11,12 +11,13 @@ Constraints for coding agents on **چهارسوق (Charsooq)**, a Persian, RTL-f
 | `packages/eslint-config`, `packages/typescript-config` | Shared ESLint and TypeScript configs                                |
 | `backend/api`                                          | FastAPI service: `app/`, `migrations/`, `tests/`, `scripts/`        |
 | `backend/api/openapi.json`                             | Committed OpenAPI snapshot. Generated; never edit by hand           |
-| `docs/`                                                | Architecture notes, ADRs, API notes                                 |
+| `docs/adr/`                                            | Architecture decision records (append-only; never renumber)         |
+| `docs/parsina-api.pdf`                                 | Parsina API contract (endpoints, envelopes, fields)                 |
 | `.github/workflows/`                                   | CI and deploy                                                       |
 | `Dockerfile.*`, `compose.yml`                          | Container images and the local stack                                |
 | `data/`                                                | Local-only data files (gitignored)                                  |
 
-Do not add a workspace or top-level folder without a documented reason (an ADR).
+Do not add a workspace or top-level folder without a documented reason (an ADR). New significant decisions get the next ADR number in `docs/adr/`; never renumber existing ADRs.
 
 ## 2. Toolchain
 
@@ -35,7 +36,9 @@ Dependency flow: `api/routes → services → repositories → database`.
 - Services hold business logic. Repositories own all SQLAlchemy 2.x queries.
 - Pydantic schemas in `app/schemas/` are the only API boundary types. ORM models do not leave the repository layer.
 - Schema changes go through Alembic migrations in `migrations/`. `create_all` is allowed only in tests and dev seed scripts.
-- External APIs (for example Parsina) live in `app/integrations/`.
+- External APIs (for example Parsina, the dev mirror, and competitor pages) live in `app/integrations/`. `app/api/dependencies.py` owns DB sessions and auth guards; `app/api/openapi.py` owns shared OpenAPI metadata; `app/core/` owns config, engine/session, security, rate limiting, migration lock/runner, role provisioning, and the scheduler. Import public names from the package `__init__.py` files.
+- When you need the Parsina API contract (endpoints, request/response envelope, field names), read [docs/parsina-api.pdf](docs/parsina-api.pdf) — it is the source of truth for the integration, not the saved JSON fixtures in `data/`.
+- Catalog sync never hard-deletes products: missing rows are soft-deactivated so dependent rows survive. `competitor_listings.product_id` is `ON DELETE RESTRICT`.
 
 ### Frontend
 
@@ -47,9 +50,8 @@ Dependency flow: `api/routes → services → repositories → database`.
 
 ### Environments
 
-Charsooq has exactly three independent environments. Full operational detail lives in
-[docs/architecture/deployment.md](docs/architecture/deployment.md); the decision is
-[ADR 011](docs/adr/011-three-environment-architecture.md).
+Charsooq has exactly three independent environments
+([ADR 011](docs/adr/011-three-environment-architecture.md)).
 
 | Environment | Host                                 | Frontend / Backend / Database            |
 | ----------- | ------------------------------------ | ---------------------------------------- |
@@ -57,20 +59,43 @@ Charsooq has exactly three independent environments. Full operational detail liv
 | Staging     | Cloud                                | Vercel / FastAPI Cloud / Neon            |
 | Production  | Ubuntu `market-linux` (`172.30.2.2`) | Next.js / FastAPI / PostgreSQL in Docker |
 
+- `APP_ENV` is application behavior (`development` locally, `production` in both Staging and
+  Production); `DEPLOYMENT_ENV` is the environment identity and is mandatory under
+  `APP_ENV=production`. Protected database scripts fail closed when it is missing or unknown.
 - Staging is a verification environment, not production. The Vercel/FastAPI Cloud/Neon stack is
   preserved for Staging until an approved replacement exists.
 - Every environment owns its variables, secrets, and `DATABASE_URL`. Never share them; never put
-  real values in Git, docs, or `.env.example` files.
-- Migrations run only against their own environment's database. Production migrations are
-  controlled, run before the new API version, and never race between workers.
+  real values in Git, docs, or `.env.example` files. Secrets are file-backed outside the repository
+  (default `/etc/charsooq/secrets`); never commit them or bake them into images, and never enter
+  Production credentials into Swagger.
+- Migrations run only against their own environment's database, through the single locked runner
+  (`backend/api/scripts/migrate.py`, `MIGRATION_DATABASE_URL`). Production requires the migration
+  role, runs before the new API version, and never races between workers. Never let the API
+  auto-migrate or auto-bootstrap the owner in Production (`RUN_MIGRATIONS_ON_STARTUP=false`,
+  `RUN_OWNER_BOOTSTRAP_ON_STARTUP=false`). Production order: secrets/config → database reachability
+  → migration → verify → explicit owner bootstrap when needed → API with both startup flags off →
+  `/health` and `/ready`. Never start the API before the schema is at `head`.
 - No Production data flows automatically into Staging or Development. Real data outside
   Production requires a controlled, sanitized process.
-- Do not modify `compose.yml` for Production; it is the development stack. Production uses a
-  separate compose file (planned).
+- `compose.yml` is the development stack; Production uses `compose.production.yml`. Only the
+  reverse proxy publishes host ports; API, web, and database listen on internal networks.
 - A push to `main` is not a Production release. Production promotion is explicit, after Staging
-  approval.
-- Unknown infrastructure details are open decisions, not guesses (registry, TLS, secrets
-  mechanism, backups, deploy access). See deployment.md.
+  approval: GitHub Release → published images → the `charsooq-production` self-hosted runner →
+  Blue-Green deploy. Untrusted workflows must never run on that runner.
+- With explicit Production identity, both database URLs must be PostgreSQL on **non-loopback**
+  hosts with **different roles**; localhost/SQLite defaults fail before connecting. Never print a
+  database URL, host, username, or password.
+- Production separates the database into administrative (only `db`/`provision`), migration, and
+  application roles; the application role has DML only and no schema/role privileges. Do not use
+  `docker-entrypoint-initdb.d` scripts for role provisioning. Take a verified backup before any
+  destructive or irreversible migration; no default target removes the data volume.
+- Rate-limit login to 10 attempts/minute per IP and username (shared across replicas only with
+  `REDIS_URL`). The API never sets HSTS — Caddy owns it in Production, the Vercel edge in Staging.
+- Unknown infrastructure details are open decisions, not guesses: registry and artifact promotion,
+  deploy access, migration control, secrets operations, backup/DR and monitoring, Staging identity
+  and data policy, Production seeding; IT owns the internal DNS name, internal CA and root-CA
+  distribution, the approved fixed IP (`172.30.2.2` is **not** approved), ports 80/443, IPv6 status,
+  Docker address pools, firewall/VLAN, and certificate SAN/renewal policy.
 
 ## 4. UI system
 
@@ -120,9 +145,10 @@ Do not write digit conversion, date formatting, or raw `تومان` strings in f
 
 This is an admin panel with password login.
 
-- Hash passwords with Argon2id (`argon2-cffi`). Never store or log plaintext passwords.
-- Use server-managed sessions with the session ID in an HttpOnly cookie. Set `Secure` in production and an explicit `SameSite` policy.
-- Rate-limit login attempts.
+- Hash passwords with Argon2id (`argon2-cffi`). Never store or log plaintext passwords. User passwords must be at least 8 characters.
+- Use opaque server-managed sessions (only a SHA-256 hash is stored) in an HttpOnly cookie. Set `Secure` in production, `SameSite=Lax`, `Path=/`, and rotate the session on every login so older cookies stop working.
+- Three roles: `owner` (env-managed via `OWNER_*`), `admin` (shop data plus viewer management), `viewer` (read-only). Reads use `require_user`; all writes plus `/users*` and `/settings*` use `require_admin`; viewers get `403 forbidden`. The owner cannot be deleted and the last management account cannot be removed.
+- Rate-limit login attempts to 10 per minute per IP and username.
 - Do not store auth tokens in `localStorage` or `sessionStorage`.
 - Never log passwords, session IDs, API keys, secrets, or Authorization headers.
 - Never commit secrets. Only the per-app `.env.example` files (`backend/api/`, `apps/web/`) are tracked. Docker builds must not receive `.env*` files (see `.dockerignore`).
@@ -193,6 +219,26 @@ design — optimize around them, never remove them:
 - Root-cause record: [ADR 007](docs/adr/007-sidebar-theme-motion-performance.md)
   — re-check it before touching header blur, grid placement, sidebar
   duration, or global transitions.
+
+## 11. HTTP API contract
+
+- Base path `/api/v1`; the FastAPI app is the source of truth. Swagger at `/docs`, ReDoc at `/redoc`, live document at `/openapi.json`.
+- Errors always use `{"error": {"code", "message", "details?"}}`: `code` is stable and machine-readable, `message`/`details` are Persian. Responses carry machine values (integer Toman, UTC datetimes, ISO dates); all formatting is UI-only.
+- Auth: one session per admin. A new login rotates the server-side session, invalidating older cookies. Missing or expired sessions return `401 unauthorized`.
+- Pagination: `page` starts at 1; `page_size=0` means show all (service cap 2000), an explicit size is capped at 500.
+- `GET /categories` and `GET /products/groups` return a weak `ETag` and `Cache-Control: private, max-age=60`.
+- Sync triggers return `202` immediately; counters and errors arrive through the matching `GET …/status` endpoint.
+- CSV exports are the deliberate exception to the machine-values rule: UTF-8 with BOM, comma-separated, Persian digits/Jalali dates, capped at 50,000 rows (`409 export_too_large`). Any signed-in account may download them.
+- After any route or schema change regenerate the committed snapshot: `uv run --project backend/api python backend/api/scripts/export_openapi.py`. `make openapi-check` (part of `make check` and CI) must pass; never edit `backend/api/openapi.json` by hand.
+- `apps/web/lib/api.ts` and `apps/web/lib/api-types.ts` mirror the contract manually — update both sides in the same change and run `make typecheck`.
+
+## 12. Checks and tests
+
+- `make check` runs lint, typecheck, both test suites, `make openapi-check`, and `make db-validate`; `make build` is the production web build. CI runs the same gates plus Playwright e2e.
+- Frontend unit tests: `pnpm --filter @workspace/ui test` (Persian digits, `٬` grouping, `٫` Jalali dates, `<Price />`).
+- Backend tests: `cd backend/api && uv run --no-sync pytest -q`. They use in-memory SQLite by default; CI adds a PostgreSQL 18 service for parity.
+- E2E: `pnpm --filter web test:e2e` — runs against the production build without a backend (auth redirects, RTL shell, login form, mobile layout).
+- Lefthook runs fast checks on commit and broader checks on push. Do not bypass with `--no-verify` unless a maintainer asks.
 
 <!-- BEGIN:turborepo-agent-rules -->
 

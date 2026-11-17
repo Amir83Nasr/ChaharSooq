@@ -87,7 +87,7 @@ fi
 if id "$RUNNER_USER" >/dev/null 2>&1; then
   pass "runner user exists: $RUNNER_USER"
   if id -nG "$RUNNER_USER" 2>/dev/null | tr ' ' '\n' | grep -qx docker; then
-    warn "runner user is in the docker group (root-equivalent access). Review least-privilege options in docs/operations/self-hosted-runner.md"
+    warn "runner user is in the docker group (root-equivalent access). Review least-privilege options in AGENTS.md section 3"
   else
     info "runner user is not in the docker group (check how Docker access will be granted)"
   fi

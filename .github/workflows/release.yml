@@ -2,7 +2,7 @@ name: Release Images
 
 # Images are published only from a published GitHub Release. There is
 # deliberately no `push` trigger: a push to `main` is never a Production
-# release (docs/architecture/deployment.md#release-flow-and-cicd).
+# release (AGENTS.md, section 3).
 on:
   release:
     types: [published]

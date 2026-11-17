@@ -72,8 +72,8 @@ secret that does not exist yet.
   reusable workflow receives the release tag, so the checks run against the published commit and
   not against `main`.
 - **Every action is pinned to a full commit SHA.** A publishing workflow must not depend on a
-  movable action tag. The version behind each pin is recorded in the workflow file and in
-  [release-management.md](../operations/release-management.md).
+  movable action tag. The version behind each pin is recorded in the workflow file; release rules
+  live in AGENTS.md section 3.
 
 ## Consequences
 

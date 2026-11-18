@@ -23,7 +23,8 @@ make check    # lint + typecheck + tests + offline migration and OpenAPI checks
 make build    # production web build
 ```
 
-`make help` lists the main targets. The same checks run in CI (`.github/workflows/ci.yml`).
+`make help` lists the short user shortcuts; `make help-all` lists every target.
+The same checks run in CI (`.github/workflows/ci.yml`).
 
 Lefthook runs fast checks on commit (formatting, lint, ruff on staged files) and the broader checks on push. Do not bypass them with `--no-verify` unless a maintainer asks you to.
 

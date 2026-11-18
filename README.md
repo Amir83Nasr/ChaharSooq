@@ -28,11 +28,13 @@ cp apps/web/.env.example apps/web/.env.local
 
 ## Development commands
 
-Run everything from the repository root with make (`make help` lists the main targets):
+Run everything from the repository root with make. `make help` lists the short user
+shortcuts below; `make help-all` lists every target.
 
 ```bash
 make install           # install frontend + backend deps
 make db-up             # start dev postgres (compose, host :5433)
+make db-down           # stop dev postgres (data volume kept)
 make db-migrate        # apply Alembic migrations to dev database
 make db-seed           # ensure the env-managed owner (OWNER_USERNAME/OWNER_PASSWORD)
 make db-seed-parsina   # upsert the saved Parsina export into the dev catalog (keeps links)
@@ -50,14 +52,22 @@ make dev-web    # frontend only (turbo)
 Checks, tests, build:
 
 ```bash
+make format     # format frontend + backend source files in place
 make lint       # frontend lint + backend ruff check/format
 make typecheck  # frontend tsc + backend pyright
 make test       # ui vitest + backend pytest
 make check      # lint + typecheck + tests + offline migration and OpenAPI checks
 make build      # production build (web)
+make clean      # remove regenerable caches and build output
 make clean-cache # remove regenerable tool caches (.turbo, .ruff_cache, …)
 make clean-build # remove build output and test artifacts (.next, …)
 ```
+
+On the server (or from a laptop with `SSH_HOST=...`), `make prod-deploy` resolves the
+newest release to image digests, pulls them, provisions and migrates the database, and
+verifies health. `make prod-logs` follows the logs and accepts the same `SSH_HOST=...`
+option. Both are in the short `make help` list. See [Deployment](#deployment) for the
+full flow.
 
 Without make:
 
@@ -269,7 +279,7 @@ make prod-up        # start db -> provision -> migrate -> api -> web -> caddy
 make prod-provision # run idempotent role provisioning once (needs secrets)
 make prod-migrate   # run the locked migration runner once (needs secrets)
 make prod-ps        # service status and health
-make prod-logs      # follow logs
+make prod-logs      # follow logs [SSH_HOST=...]
 make prod-down      # stop services; volumes and data are kept
 
 # One-command deploy of the newest published release:

@@ -2,10 +2,10 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-.PHONY: build check install help doctor \
-	clean-build clean-cache \
+.PHONY: build check install help help-all doctor \
+	clean clean-build clean-cache format \
 	dev-web dev-api dev-all \
-	db-up db-wait db-migrate db-bootstrap-owner db-seed db-seed-parsina db-seed-demo \
+	db-up db-down db-wait db-migrate db-bootstrap-owner db-seed db-seed-parsina db-seed-demo \
 	db-clear-products db-validate db-sync-dev-to-staging db-seed-demo-staging \
 	sync-dev-to-staging sync-staging dev-to-staging \
 	docker-build docker-up docker-down docker-logs deploy-api \
@@ -15,15 +15,20 @@ SHELL := /bin/bash
 	lint typecheck test test-e2e openapi-check
 
 # ─── HELP ─────────────────────────────────────────────────
-help: ## Show this help message
-	@bo=""; g=""; bl=""; d=""; r=""; \
+# `make help` lists only targets whose description starts with @user;
+# `make help-all` lists every target. The marker lives in the description
+# itself, so there is no separate list of shortcuts to keep in sync.
+help help-all: ## Show the short user list (help) or every target (help-all)
+	@mode=all; [ "$@" = "help" ] && mode=user; \
+	bo=""; g=""; bl=""; d=""; r=""; \
 	if [ -z "$${NO_COLOR:-}" ] && [ -t 1 ]; then \
 		bo=$$'\033[1m\033[32m'; g=$$'\033[32m'; bl=$$'\033[34m'; d=$$'\033[2m'; r=$$'\033[0m'; \
 	fi; \
 	printf "%sChaharSooq%s%s — Persian-first admin panel (Next.js + FastAPI)%s\n\n" "$$bo" "$$r" "$$d" "$$r"; \
 	printf "Usage:  make %s[VARIABLE=value]%s %s<TARGET>%s\n\n" "$$bl" "$$r" "$$bl" "$$r"; \
 	printf "%sCommands:%s\n" "$$g" "$$r"; \
-	awk -v g="$$g" -v bl="$$bl" -v r="$$r" '/^# ─── / { sec=$$0; sub(/^# ─── /, "", sec); sub(/ ─*$$/, "", sec); cur=sec; next } /^[a-z][a-z0-9_.-]*:[^=]*##/ { name=$$1; sub(/:.*/, "", name); if (name == "help") next; if (cur != "" && cur != last) { printf "  %s%s:%s\n", g, cur, r; last=cur } desc=$$0; sub(/^[^#]*##[[:space:]]*/, "", desc); printf "    %s%-22s%s %s\n", bl, name, r, desc }' $(MAKEFILE_LIST); \
+	awk -v g="$$g" -v bl="$$bl" -v r="$$r" -v mode="$$mode" '/^# ─── / { sec=$$0; sub(/^# ─── /, "", sec); sub(/ ─*$$/, "", sec); cur=sec; next } /^[a-z][a-z0-9_.-]*:[^=]*##/ { name=$$1; sub(/:.*/, "", name); desc=$$0; sub(/^[^#]*##[[:space:]]*/, "", desc); user=(desc ~ /^@user[[:space:]]+/); sub(/^@user[[:space:]]+/, "", desc); if (mode == "user" && !user) next; if (mode == "user") cur="USER SHORTCUTS"; if (cur != "" && cur != last) { printf "  %s%s:%s\n", g, cur, r; last=cur } printf "    %s%-22s%s %s\n", bl, name, r, desc }' $(MAKEFILE_LIST); \
+	if [ "$$mode" = "user" ]; then printf "\n  Run %smake help-all%s to see every target.\n" "$$bl" "$$r"; fi; \
 	printf "\n%sOptions:%s\n" "$$g" "$$r"; \
 	awk -v bl="$$bl" -v r="$$r" '/^[A-Z][A-Z0-9_]*[[:space:]]*\?=.*##/ { key=$$1; line=$$0; sub(/^[^?]*\?=[ \t]*/, "", line); n++; split(line, p, /##/); val=p[1]; gsub(/^[ \t]+|[ \t]+$$/, "", val); entry[n]=key "=" val; desc[n]=p[2]; gsub(/^[ \t]+|[ \t]+$$/, "", desc[n]); width=(length(entry[n])>width?length(entry[n]):width) } END { for (i=1;i<=n;i++) printf "  %s%-*s%s %s\n", bl, width, entry[i], r, desc[i] }' $(MAKEFILE_LIST)
 
@@ -32,7 +37,8 @@ COMPOSE_FILE ?= compose.yml ## Compose file used by up/down/logs
 COMPOSE_PROD_FILE ?= compose.production.yml ## Production compose file (separate from development)
 CHARSOOQ_SECRETS_DIR ?= /etc/charsooq/secrets ## Host directory of production secret files (never committed)
 CHARSOOQ_TLS_DIR ?= /etc/charsooq/tls ## Host directory of organization TLS material (never committed)
-SSH_HOST ?= ## Optional server alias; when set, prod-deploy runs over SSH instead of locally
+PROD_ENV_FILE ?= /etc/charsooq/production.env
+SSH_HOST ?= ## Optional server alias; when set, prod-deploy and prod-logs run over SSH instead of locally
 VERSION ?= latest## Release to deploy; "latest" means the newest published release
 DB_PORT ?= 5433 ## Host port of the dev postgres db-wait/dev-api expect
 YES ?= 0 ## Set YES=1 to skip the confirmation prompt for db-sync-dev-to-staging
@@ -49,7 +55,7 @@ COMPOSE := docker compose -f $(COMPOSE_FILE)
 COMPOSE_PROD := docker compose -f $(COMPOSE_PROD_FILE)
 
 # ─── INSTALL / SETUP ──────────────────────────────────────
-install: ## Install frontend and backend dependencies and git hooks
+install: ## @user Install frontend and backend dependencies and git hooks
 	pnpm install --frozen-lockfile
 	uv sync --locked
 	pnpm exec lefthook install
@@ -62,15 +68,17 @@ clean-cache: ## Remove regenerable tool caches (turbo, ruff, pytest, __pycache__
 clean-build: ## Remove build output and test artifacts (.next, playwright)
 	rm -rf apps/web/.next apps/web/test-results apps/web/playwright-report
 
+clean: clean-cache clean-build ## @user Remove regenerable caches and build output
+
 # ─── DEV / RUN ────────────────────────────────────────────
-dev-web: ## Start frontend dev server (turbo)
+dev-web: ## @user Start frontend dev server (turbo)
 	pnpm dev
 
-dev-api: db-wait ## Start backend API with reload (waits for postgres first)
+dev-api: db-wait ## @user Start backend API with reload (waits for postgres first)
 	# --no-sync: reuse the installed venv offline (`make install` re-syncs).
 	$(UVICORN)
 
-dev-all: db-migrate ## Start backend + frontend together (stops both if either exits)
+dev-all: db-migrate ## @user Start backend + frontend together (stops both if either exits)
 	@uv run --no-sync --project backend/api uvicorn app.main:app --app-dir backend/api --host 0.0.0.0 --port 8000 --reload & \
 	api=$$!; \
 	pnpm dev & \
@@ -80,8 +88,11 @@ dev-all: db-migrate ## Start backend + frontend together (stops both if either e
 	echo "dev-all: one server exited - stopping the other"
 
 # ─── DATABASE: DEV ────────────────────────────────────────
-db-up: ## Start dev postgres (own container, port 5433)
+db-up: ## @user Start dev postgres (own container, port 5433)
 	$(COMPOSE)up -d postgres
+
+db-down: ## @user Stop dev postgres (data volume kept)
+	$(COMPOSE)stop postgres
 
 db-wait: ## Wait up to 20s for dev postgres to accept connections (no DB needed otherwise)
 	@for i in $$(seq 1 20); do \
@@ -91,13 +102,13 @@ db-wait: ## Wait up to 20s for dev postgres to accept connections (no DB needed 
 	done; \
 	echo "postgres is not reachable on 127.0.0.1:$(DB_PORT) - run make db-up" >&2; exit 1
 
-db-migrate: db-up ## Apply Alembic migrations to dev database (single advisory-locked runner)
+db-migrate: db-up ## @user Apply Alembic migrations to dev database (single advisory-locked runner)
 	DEPLOYMENT_ENV=development $(PY_SCRIPT)migrate.py
 
 db-bootstrap-owner: db-migrate ## Ensure the env-managed owner via the explicit CLI (no create_all)
 	DEPLOYMENT_ENV=development $(PY_SCRIPT)bootstrap_owner.py
 
-db-seed: db-migrate ## Ensure the env-managed owner (OWNER_USERNAME, OWNER_PASSWORD)
+db-seed: db-migrate ## @user Ensure the env-managed owner (OWNER_USERNAME, OWNER_PASSWORD)
 	DEPLOYMENT_ENV=development $(PY_SCRIPT)seed_admin.py
 
 db-seed-parsina: db-migrate ## Upsert data/parsina.csv into dev DB (keeps product ids + links)
@@ -129,7 +140,7 @@ db-validate: ## Validate migrations offline: single head + SQL renders cleanly
 	@echo "migrations validate: single head, offline SQL OK"
 
 # ─── DOCTOR ───────────────────────────────────────────────
-doctor: ## Check toolchain, env files, and service reachability
+doctor: ## @user Check toolchain, env files, and service reachability
 	@node --version && pnpm --version
 	@python3 --version && uv --version
 	@docker info > /dev/null 2>&1 && echo "docker: ok" || echo "docker: NOT RUNNING"
@@ -260,7 +271,7 @@ prod-build: ## Build production API and web images from this commit (host-build 
 
 # One command to deploy on the server. Set SSH_HOST to run remotely; otherwise
 # run it directly on the host. VERSION defaults to the newest published release.
-prod-deploy: ## Deploy the newest release (or VERSION=v1.2.3) to Production [SSH_HOST=...]
+prod-deploy: ## @user Pull newest release images and deploy on the server [VERSION=…] [SSH_HOST=…]
 ifeq ($(strip $(SSH_HOST)),)
 	./deploy/scripts/deploy.sh "$(VERSION)"
 else
@@ -293,8 +304,15 @@ prod-up: ## Start production services from released images (needs real secrets)
 prod-ps: ## Show production service status
 	$(COMPOSE_PROD) ps
 
-prod-logs: ## Follow production logs
-	$(COMPOSE_PROD) logs -f
+# Compose needs the same deployment values the deploy script sources before
+# running, so read the host env file in both the local and SSH variants.
+prod-logs: ## @user Follow production logs [SSH_HOST=...]
+ifeq ($(strip $(SSH_HOST)),)
+	@test -f "$(PROD_ENV_FILE)" || { echo "missing $(PROD_ENV_FILE)" >&2; exit 1; }; \
+		set -a && . "$(PROD_ENV_FILE)" && set +a && $(COMPOSE_PROD) logs -f
+else
+	ssh $(SSH_HOST) 'cd /opt/charsooq && test -f "$(PROD_ENV_FILE)" && set -a && . "$(PROD_ENV_FILE)" && set +a && docker compose -f "$(strip $(COMPOSE_PROD_FILE))" logs -f'
+endif
 
 prod-down: ## Stop production services (keeps volumes and data)
 	$(COMPOSE_PROD) down
@@ -304,7 +322,11 @@ deploy-api: ## Deploy backend API to FastAPI Cloud (run from backend/api)
 	cd backend/api && uvx --with 'fastapi[standard]' fastapi deploy
 
 # ─── QUALITY / CHECKS ─────────────────────────────────────
-lint: ## Run frontend lint and backend ruff checks
+format: ## @user Format frontend and backend source files in place
+	pnpm exec prettier --write .
+	$(RUFF) format .
+
+lint: ## @user Run frontend lint and backend ruff checks
 	pnpm lint
 	pnpm format:check
 	$(RUFF) check .
@@ -314,7 +336,7 @@ typecheck: ## Run frontend typecheck and backend pyright
 	pnpm typecheck
 	$(UV_RUN) pyright
 
-test: ## Run frontend and backend tests
+test: ## @user Run frontend and backend tests
 	pnpm test
 	# Run from backend/api so pytest reads its pyproject (testpaths, coverage gate).
 	cd backend/api && uv run --no-sync pytest -q
@@ -328,4 +350,4 @@ openapi-check: ## Fail if backend/api/openapi.json is stale (read-only, no DB ne
 build: ## Build web app for production
 	pnpm --filter web build
 
-check: lint typecheck test db-validate openapi-check ## Run lint + typecheck + test + offline migration and OpenAPI validation
+check: lint typecheck test db-validate openapi-check ## @user Run lint + typecheck + test + offline migration and OpenAPI validation

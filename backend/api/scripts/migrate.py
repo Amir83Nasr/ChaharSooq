@@ -4,6 +4,8 @@ Usage from the repository root::
 
     DEPLOYMENT_ENV=development uv run --project backend/api \
       python backend/api/scripts/migrate.py
+    # Read-only check used by deploy.sh before starting the API:
+    python backend/api/scripts/migrate.py --check
 
 The runner resolves the database through ``MigrationSettings`` only
 (``MIGRATION_DATABASE_URL``; Development/Staging may still fall back to
@@ -22,12 +24,23 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.core.deployment import KNOWN_DEPLOYMENT_ENVS, enforce_deployment_env
 from app.core.migration_lock import MigrationLockTimeoutError
-from app.core.migrations import apply_migrations, safe_error_message
+from app.core.migrations import apply_migrations, has_pending_migrations, safe_error_message
 
 
 def main() -> None:
     enforce_deployment_env("migrate", KNOWN_DEPLOYMENT_ENVS)
+    args = sys.argv[1:]
+    if args not in ([], ["--check"]):
+        raise SystemExit("usage: migrate.py [--check]")
+    check_only = bool(args)
     try:
+        if check_only:
+            pending = has_pending_migrations()
+            message = (
+                "migrate: migrations pending" if pending else "migrate: database already at head"
+            )
+            print(message)
+            return
         apply_migrations()
     except MigrationLockTimeoutError as error:
         print(f"migrate: {error}", file=sys.stderr)

@@ -63,11 +63,12 @@ make clean-cache # remove regenerable tool caches (.turbo, .ruff_cache, …)
 make clean-build # remove build output and test artifacts (.next, …)
 ```
 
-On the server (or from a laptop with `SSH_HOST=...`), `make prod-deploy` resolves the
-newest release to image digests, pulls them, provisions and migrates the database, and
-verifies health. `make prod-logs` follows the logs and accepts the same `SSH_HOST=...`
-option. Both are in the short `make help` list. See [Deployment](#deployment) for the
-full flow.
+On the server (or from a laptop with `SSH_HOST=...`), `make prod-deploy` reads the newest
+published GitHub Release, resolves it to image digests, pulls them, provisions the
+database, applies pending migrations, and verifies service and endpoint health. It
+prints numbered progress and a final status summary. `make prod-logs` follows the logs
+and accepts the same `SSH_HOST=...` option. Both are in the short `make help` list. See
+[Deployment](#deployment) for the full flow.
 
 Without make:
 
@@ -257,7 +258,7 @@ The frontend client (`apps/web/lib/api.ts`) mirrors these shapes; see [AGENTS.md
 - Frontend e2e: `apps/web/e2e/` (playwright) — unauthenticated redirects, Persian login form, RTL shell, mobile layout; runs against the production build without a backend — `pnpm --filter web test:e2e`
 - Backend tests: `backend/api/tests/` (pytest) — auth flow, roles and user management, product CRUD, validation envelope
 - CI runs lint, format check, typecheck, both test suites, the production build, and the Playwright e2e suite. Staging deploys through the Vercel/FastAPI Cloud Git integration.
-- A `v*` tag triggers the release workflow, which verifies that commit, builds and pushes the API and web images, and only then publishes the GitHub Release with the verified digests in its body ([ADR 019](docs/adr/019-release-publication-after-image-verification.md)). Deployment is a separate, explicit operator step: `make prod-deploy` runs a single-slot, digest-pinned, health-gated script on the server (or over SSH with `SSH_HOST=...`) and deploys the newest release. It has not been executed yet; see [AGENTS.md](AGENTS.md) section 3 and [ADR 018](docs/adr/018-simple-production-deploy.md). The earlier runner/Blue-Green design in ADR 016/017 is superseded.
+- A `v*` tag triggers the release workflow, which verifies that commit, builds and pushes the API and web images, and only then publishes the GitHub Release with the verified digests in its body ([ADR 019](docs/adr/019-release-publication-after-image-verification.md)). Deployment is a separate, explicit operator step: `make prod-deploy` runs a single-slot, digest-pinned, health-gated script on the server (or over SSH with `SSH_HOST=...`) and deploys the newest published Release. It has not been executed yet; see [AGENTS.md](AGENTS.md) section 3, [ADR 018](docs/adr/018-simple-production-deploy.md) and [ADR 021](docs/adr/021-github-release-deploy-discovery.md). The earlier runner/Blue-Green design in ADR 016/017 is superseded.
 
 ## Build
 
@@ -282,12 +283,17 @@ make prod-ps        # service status and health
 make prod-logs      # follow logs [SSH_HOST=...]
 make prod-down      # stop services; volumes and data are kept
 
-# One-command deploy of the newest published release:
+# One-command deploy of the newest published GitHub Release:
 make prod-deploy                             # run locally on the host
 make prod-deploy SSH_HOST=charsooq            # from a laptop, over SSH
 # A specific version is optional: make prod-deploy VERSION=v1.2.3
 # Rollback is the same command with the previous version tag.
 ```
+
+`CHARSOOQ_GITHUB_REPO` in the host env file names the repository whose Releases are
+discovered; a private repository additionally needs `GITHUB_TOKEN` exported in the
+operator shell. The deploy script checks migrations with a read-only `--check` call
+and only runs the one-shot migration service when a revision is pending.
 
 `make prod-up` runs the one-shot `provision` and `migrate` services in order; the API is not
 created until both succeed. `make prod-provision` and `make prod-migrate` run those same steps

@@ -4,7 +4,8 @@
 # default /etc/charsooq/tls) and must be readable by the Caddy container only.
 #
 # Required layout by default (the host directory is CHARSOOQ_TLS_DIR, default
-# /etc/charsooq/tls; Caddy is the only TLS terminator, no certificate is committed):
+# /etc/charsooq/tls, mounted read-only at /data/certs; Caddy is the only TLS
+# terminator, no certificate is committed):
 #   current -> versions/<stamp>            one atomic symlink, the only pointer
 #   versions/<stamp>/fullchain.pem         leaf certificate + intermediates
 #   versions/<stamp>/privkey.pem           matching private key, mode 0600
@@ -21,7 +22,7 @@
 #
 # This mode also covers the IP SAN case: the certificate must contain the exact
 # address used in CHARSOOQ_SITE_HOST when that value is an IP.
-tls {$CHARSOOQ_TLS_CERT_FILE:/etc/caddy/certs/current/fullchain.pem} {$CHARSOOQ_TLS_KEY_FILE:/etc/caddy/certs/current/privkey.pem}
+tls {$CHARSOOQ_TLS_CERT_FILE:/data/certs/current/fullchain.pem} {$CHARSOOQ_TLS_KEY_FILE:/data/certs/current/privkey.pem}
 
 # HSTS is owned here and applies only to HTTPS responses. HTTP-only mode uses
 # tls-none.caddy and must not send HSTS. Set CHARSOOQ_HSTS_MAX_AGE=0 to disable

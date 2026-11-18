@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Validate and atomically activate a certificate pair for the Caddy container.
 
-Layout inside the directory mounted at ``/etc/caddy/certs``::
+Layout inside the directory mounted at ``/data/certs``::
 
     current -> versions/<stamp>       the only pointer Caddy reads through
     versions/<stamp>/fullchain.pem    leaf first, then intermediates, 0644

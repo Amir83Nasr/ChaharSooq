@@ -273,14 +273,18 @@ services:
       - "${CHARSOOQ_PROXY_BIND_IP:?set CHARSOOQ_PROXY_BIND_IP to the approved internal IP}:80:80"
       - "${CHARSOOQ_PROXY_BIND_IP:?set CHARSOOQ_PROXY_BIND_IP to the approved internal IP}:443:443"
     volumes:
+      # Certificate authority, issued certificates, and OCSP state. Losing this
+      # volume rotates Caddy's internal CA and breaks every trusting client.
+      # Mount it before the certificate directory: that mountpoint is created
+      # inside this writable volume.
+      - caddy_data:/data
       # Read-only Caddyfile and snippets, including the static upstream.
       - ./deploy/caddy:/etc/caddy:ro
       # Certificate material stays outside the repository. Unused in
-      # `internal-ca` mode; the directory may be empty.
-      - ${CHARSOOQ_TLS_DIR:-/etc/charsooq/tls}:/etc/caddy/certs:ro
-      # Certificate authority, issued certificates, and OCSP state. Losing this
-      # volume rotates Caddy's internal CA and breaks every trusting client.
-      - caddy_data:/data
+      # `internal-ca` mode; the directory may be empty. It must not be nested
+      # under /etc/caddy, which is a read-only bind mount: Docker cannot create
+      # a mountpoint there while the root filesystem is read-only.
+      - ${CHARSOOQ_TLS_DIR:-/etc/charsooq/tls}:/data/certs:ro
       - caddy_config:/config
     networks:
       - proxy

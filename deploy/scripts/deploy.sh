@@ -2,28 +2,48 @@
 # Single-slot Production deploy entry point, run on the server after a release.
 #
 # Usage (from /opt/charsooq on the server):
-#   ./deploy/scripts/deploy.sh                 # deploy the newest release
-#   ./deploy/scripts/deploy.sh v1.2.3          # deploy a specific release
+#   ./deploy/scripts/deploy.sh                 # newest published GitHub release
+#   ./deploy/scripts/deploy.sh latest          # same as above
+#   ./deploy/scripts/deploy.sh v1.2.3          # a specific published release
 #   ./deploy/scripts/deploy.sh <api@sha256:..> <web@sha256:..>   # explicit digests
 #
-# With no argument the `latest` discovery pointer is resolved to two immutable
-# digests before anything changes. Both images must report the same version and
-# commit label, so a half-published release can never be deployed mixed. Nothing
-# is removed; rollback is the same command with the previous version tag.
+# With no argument the newest published GitHub Release is read from the API,
+# its version tag is resolved to two immutable digests, and both images must
+# report that version and the release commit before anything changes. The
+# release is published only after CI verified the images (ADR 019), so this is
+# the single all-or-nothing signal the operator needs. Nothing is removed;
+# rollback is the same command with the previous version tag.
 set -euo pipefail
 
 COMPOSE_FILE="${CHARSOOQ_COMPOSE_FILE:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/compose.production.yml}"
 ENV_FILE="${CHARSOOQ_ENV_FILE:-/etc/charsooq/production.env}"
+TOTAL_STEPS=9
+STEP=0
+START_SECONDS=$SECONDS
+BOLD=""
+RESET=""
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+  BOLD=$'\033[1m'
+  RESET=$'\033[0m'
+fi
 
 log() { printf '[deploy] %s\n' "$*"; }
 fail() { printf '[deploy] ERROR: %s\n' "$*" >&2; exit 1; }
+step() {
+  STEP=$((STEP + 1))
+  printf '\n[deploy] %s[%d/%d] %s%s\n' "$BOLD" "$STEP" "$TOTAL_STEPS" "$*" "$RESET"
+}
+note() { printf '[deploy]     %s\n' "$*"; }
+skip() { printf '[deploy]     (skip) %s\n' "$*"; }
 
 usage() {
-  printf 'usage: %s [version-tag | <api-ref@sha256:...> <web-ref@sha256:...>]\n' "$0" >&2
+  printf 'usage: %s [latest | vMAJOR.MINOR.PATCH | <api-ref@sha256:...> <web-ref@sha256:...>]\n' "$0" >&2
   exit 2
 }
 
 [ $# -le 2 ] || usage
+
+step "Validating host configuration"
 
 # The release identity must survive anything left in the host env file.
 if [ -f "$ENV_FILE" ]; then
@@ -52,28 +72,63 @@ secret_dir="${CHARSOOQ_SECRETS_DIR:-/etc/charsooq/secrets}"
 [ -d "$secret_dir" ] || fail "secret directory not found: $secret_dir"
 
 command -v docker >/dev/null 2>&1 || fail "docker is required"
-command -v curl >/dev/null 2>&1 || fail "curl is required for the health probe"
+command -v curl >/dev/null 2>&1 || fail "curl is required for the GitHub API and health probes"
+command -v jq >/dev/null 2>&1 || fail "jq is required to read the release and image labels"
+note "host configuration, secret directory and command dependencies are valid"
+
+# ─── RELEASE DISCOVERY ───────────────────────────────────────────────────────
+
+github_header_file=""
+cleanup() {
+  [ -z "$github_header_file" ] || rm -f "$github_header_file"
+}
+trap cleanup EXIT
+
+# The optional token supports private repositories. It travels in a 0600
+# header file instead of a command-line argument and is never logged.
+fetch_release() {
+  local endpoint="$1" url
+  url="https://api.github.com/repos/${CHARSOOQ_GITHUB_REPO}/${endpoint}"
+  local -a options=(
+    -fsS --retry 2 --retry-delay 1 --connect-timeout 5 --max-time 20
+    -H 'Accept: application/vnd.github+json'
+    -H 'X-GitHub-Api-Version: 2022-11-28'
+  )
+  if [ -n "${GITHUB_TOKEN:-}" ]; then
+    github_header_file="$(mktemp "${TMPDIR:-/tmp}/charsooq-release.XXXXXX")"
+    chmod 600 "$github_header_file"
+    printf 'Authorization: Bearer %s\n' "$GITHUB_TOKEN" > "$github_header_file"
+    options+=("-H" "@$github_header_file")
+  fi
+  curl "${options[@]}" "$url" || fail "cannot fetch the GitHub release from $url"
+  rm -f "$github_header_file"
+  github_header_file=""
+}
 
 resolve_digest() {
   local ref="$1" digest
   digest="$(docker buildx imagetools inspect "$ref" --format '{{.Manifest.Digest}}' 2>/dev/null)" ||
     fail "cannot resolve a digest for $ref"
   case "$digest" in
-    sha256:*) printf '%s@%s\n' "${ref%%:*}" "$digest" ;;
+    sha256:*) printf '%s@%s\n' "${ref%:*}" "$digest" ;;
     *) fail "cannot resolve a digest for $ref" ;;
   esac
 }
 
-# Read an OCI label from an image we are about to deploy. `latest` is only a
-# name: the labels tie the resolved bytes back to one release and one commit.
+# Read an OCI label from an image we are about to deploy.
 image_label() {
   local ref="$1" label="$2" json
   json="$(docker buildx imagetools inspect "$ref" --format '{{json .Image}}' 2>/dev/null)" ||
     return 1
-  printf '%s' "$json" | grep -o "\"${label}\":\"[^\"]*\"" | head -n 1 |
-    sed -E 's/.*:"([^"]*)"/\1/'
+  printf '%s' "$json" | jq -r --arg k "$label" \
+    '.. | objects | .Labels? | select(. != null) | .[$k]? // empty' | head -n 1
 }
 
+step "Resolving the release to immutable image digests"
+
+release_tag=""
+release_commit=""
+version=""
 if [ $# -eq 2 ]; then
   case "$1" in
     *@sha256:*) ;;
@@ -85,24 +140,50 @@ if [ $# -eq 2 ]; then
   esac
   CHARSOOQ_API_IMAGE="$1"
   CHARSOOQ_WEB_IMAGE="$2"
+  note "using explicit digests; GitHub release discovery skipped"
 else
-  # No argument means the newest published release. Both forms resolve to
-  # digests; a tag is never the deployment reference.
   release="${1:-latest}"
+  case "$release" in
+    latest|v[0-9]*.[0-9]*.[0-9]*) ;;
+    *) usage ;;
+  esac
+  [ -n "${CHARSOOQ_GITHUB_REPO:-}" ] || fail "CHARSOOQ_GITHUB_REPO is not set in $ENV_FILE"
+
+  if [ "$release" = "latest" ]; then
+    note "fetching the newest published release of $CHARSOOQ_GITHUB_REPO"
+    release_json="$(fetch_release 'releases/latest')"
+  else
+    note "fetching release $release of $CHARSOOQ_GITHUB_REPO"
+    release_json="$(fetch_release "releases/tags/$release")"
+  fi
+
+  release_tag="$(printf '%s' "$release_json" | jq -er '.tag_name // empty')" ||
+    fail "the GitHub response has no release tag"
+  [[ "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
+    fail "unexpected release tag '$release_tag'; expected vMAJOR.MINOR.PATCH"
+  [ "$(printf '%s' "$release_json" | jq -r '.draft // false')" = "false" ] ||
+    fail "release $release_tag is still a draft"
+  [ "$(printf '%s' "$release_json" | jq -r '.prerelease // false')" = "false" ] ||
+    fail "release $release_tag is a prerelease"
+
+  # The release workflow passes --target <commit>, so this is normally a full
+  # SHA. A release created with a branch target is still deployable, but its
+  # commit cannot be cross-checked against the image label.
+  release_commit="$(printf '%s' "$release_json" | jq -r '.target_commitish // empty')"
+  [[ "$release_commit" =~ ^[0-9a-f]{40}$ ]] || release_commit=""
+  version="${release_tag#v}"
+
+  # Version tags are write-once; `latest` is never used as a deployment ref.
   [ -n "${CHARSOOQ_API_REPO:-}" ] || fail "CHARSOOQ_API_REPO is not set in $ENV_FILE"
   [ -n "${CHARSOOQ_WEB_REPO:-}" ] || fail "CHARSOOQ_WEB_REPO is not set in $ENV_FILE"
-  case "$release" in
-    *@sha256:*)
-      fail "pass both image digests explicitly, or pass a version tag"
-      ;;
-  esac
-  log "resolving '$release' to image digests"
-  CHARSOOQ_API_IMAGE="$(resolve_digest "${CHARSOOQ_API_REPO}:$release")"
-  CHARSOOQ_WEB_IMAGE="$(resolve_digest "${CHARSOOQ_WEB_REPO}:$release")"
+  CHARSOOQ_API_IMAGE="$(resolve_digest "${CHARSOOQ_API_REPO:-}:$version")"
+  CHARSOOQ_WEB_IMAGE="$(resolve_digest "${CHARSOOQ_WEB_REPO:-}:$version")"
 fi
+note "api image   $CHARSOOQ_API_IMAGE"
+note "web image   $CHARSOOQ_WEB_IMAGE"
 export CHARSOOQ_API_IMAGE CHARSOOQ_WEB_IMAGE
 
-# Fail closed on a mixed pair: both images must come from the same release.
+step "Verifying that both images are from one release"
 api_version="$(image_label "$CHARSOOQ_API_IMAGE" org.opencontainers.image.version || true)"
 web_version="$(image_label "$CHARSOOQ_WEB_IMAGE" org.opencontainers.image.version || true)"
 api_revision="$(image_label "$CHARSOOQ_API_IMAGE" org.opencontainers.image.revision || true)"
@@ -111,51 +192,166 @@ web_revision="$(image_label "$CHARSOOQ_WEB_IMAGE" org.opencontainers.image.revis
   fail "images report different versions ('$api_version' vs '$web_version'); retry after the release finishes"
 [ -n "$api_revision" ] && [ "$api_revision" = "$web_revision" ] ||
   fail "images report different commits ('$api_revision' vs '$web_revision'); retry after the release finishes"
-log "release $api_version ($api_revision)"
+if [ -n "$version" ]; then
+  [ "$api_version" = "$version" ] ||
+    fail "image version '$api_version' does not match GitHub release $release_tag"
+  if [ -n "$release_commit" ]; then
+    [ "$api_revision" = "$release_commit" ] ||
+      fail "image commit '$api_revision' does not match release commit '$release_commit'"
+  fi
+fi
+note "version $api_version, commit $api_revision"
 
-# Interpolate the whole Compose file with real host values before changing state.
+# ─── DEPLOY ──────────────────────────────────────────────────────────────────
+
 COMPOSE=(docker compose -f "$COMPOSE_FILE")
+
+step "Validating the production Compose file"
 "${COMPOSE[@]}" config --quiet || fail "compose configuration is invalid"
 
-log "api image   $CHARSOOQ_API_IMAGE"
-log "web image   $CHARSOOQ_WEB_IMAGE"
-
-log "pulling released images"
+step "Pulling the released images"
 "${COMPOSE[@]}" pull api web
 
-log "provisioning database roles"
+step "Provisioning database roles"
 "${COMPOSE[@]}" run --rm provision
 
-log "applying migrations before the API starts"
-"${COMPOSE[@]}" run --rm migrate
+step "Checking database migrations"
+migration_check_failed=0
+migration_output="$("${COMPOSE[@]}" run --rm migrate \
+  python backend/api/scripts/migrate.py --check 2>&1)" || migration_check_failed=1
+while IFS= read -r line; do
+  if [ -n "$line" ]; then
+    note "$line"
+  fi
+done <<< "$migration_output"
+case "$migration_output" in
+  *"usage: migrate.py"*)
+    # A rollback may deploy an image from before --check existed. Its runner
+    # still applies all pending migrations under the advisory lock, so use it
+    # directly instead of refusing to roll back.
+    note "image has no --check support; running the migration runner directly"
+    "${COMPOSE[@]}" run --rm migrate
+    migration_state="checked by runner"
+    ;;
+  *"migrate: migrations pending"*)
+    note "applying pending migrations before the API starts"
+    "${COMPOSE[@]}" run --rm migrate
+    migration_state="applied"
+    ;;
+  *"migrate: database already at head"*)
+    skip "database already at head"
+    migration_state="already at head"
+    ;;
+  *)
+    [ "$migration_check_failed" -eq 0 ] || fail "migration check failed; no service was started"
+    fail "unexpected migration check output; refusing to start the API"
+    ;;
+esac
 
-log "starting api and web"
+step "Starting api and web"
+previous_version=""
+api_container_id="$("${COMPOSE[@]}" ps -q api 2>/dev/null || true)"
+api_container_id="${api_container_id%%$'\n'*}"
+if [ -n "$api_container_id" ]; then
+  previous_version="$(docker inspect \
+    --format '{{index .Config.Labels "org.opencontainers.image.version"}}' \
+    "$api_container_id" 2>/dev/null || true)"
+  case "$previous_version" in
+    ""|"<no value>") previous_version="" ;;
+  esac
+fi
 "${COMPOSE[@]}" up -d --no-build --remove-orphans
 
 # The upstream host is resolved by Caddy; a graceful reload refreshes that DNS
 # after the web container was replaced (admin API is off, so SIGUSR1 is used).
-caddy_id="$("${COMPOSE[@]}" ps -q caddy | head -n 1)"
+caddy_id="$("${COMPOSE[@]}" ps -q caddy 2>/dev/null || true)"
+caddy_id="${caddy_id%%$'\n'*}"
 [ -n "$caddy_id" ] || fail "caddy container not found"
 docker kill --signal=USR1 "$caddy_id" >/dev/null
 
+# ─── VERIFICATION / SUMMARY ──────────────────────────────────────────────────
+
 probe() {
-  local base="${CHARSOOQ_PUBLIC_SCHEME}://${CHARSOOQ_SITE_HOST}"
+  local base="${CHARSOOQ_PUBLIC_SCHEME}://${CHARSOOQ_SITE_HOST}" options=(-fsS --connect-timeout 5 --max-time 10)
   if [ "$CHARSOOQ_PUBLIC_SCHEME" = "https" ] && [ -n "${CHARSOOQ_CA_FILE:-}" ]; then
-    curl -fsS --cacert "$CHARSOOQ_CA_FILE" "${base}$1" >/dev/null
-  else
-    curl -fsS "${base}$1" >/dev/null
+    options+=(--cacert "$CHARSOOQ_CA_FILE")
   fi
+  curl "${options[@]}" "${base}$1" >/dev/null
 }
 
-log "verifying external health"
+container_state() {
+  local service="$1" id state
+  id="$("${COMPOSE[@]}" ps -q "$service" 2>/dev/null || true)"
+  id="${id%%$'\n'*}"
+  [ -n "$id" ] || { printf 'missing\n'; return 0; }
+  state="$(docker inspect \
+    --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+    "$id" 2>/dev/null || true)"
+  printf '%s\n' "${state:-unknown}"
+}
+
+healthy_state() {
+  case "$1" in
+    healthy|running) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+step "Verifying service and endpoint health"
+SERVICES=(db api web caddy)
+PROBES=(/api/v1/health /api/v1/ready /login)
+states=()
 verified=0
-for _ in {1..30}; do
-  if probe /api/v1/health && probe /login; then
+for attempt in {1..30}; do
+  states=()
+  all_running=1
+  for service in "${SERVICES[@]}"; do
+    state="$(container_state "$service")"
+    states+=("$state")
+    # Caddy has no healthcheck in Compose; `running` is its expected state.
+    [ "$service" = "caddy" ] || healthy_state "$state" || all_running=0
+  done
+  endpoints_ok=1
+  for endpoint in "${PROBES[@]}"; do
+    probe "$endpoint" || endpoints_ok=0
+  done
+  if [ "$all_running" -eq 1 ] && [ "$endpoints_ok" -eq 1 ]; then
     verified=1
     break
   fi
+  note "waiting for services (attempt $attempt/30)"
   sleep 2
 done
-[ "$verified" -eq 1 ] || fail "health probe failed; check logs with: make prod-logs"
+[ "$verified" -eq 1 ] || {
+  service_report=""
+  for index in "${!SERVICES[@]}"; do
+    service_report+="${SERVICES[index]}=${states[index]} "
+  done
+  fail "health verification failed ($service_report); check logs with: make prod-logs"
+}
 
-log "deployment complete ($api_version). Rollback: deploy.sh <previous-version>"
+service_report=""
+for index in "${!SERVICES[@]}"; do
+  service_report+="${SERVICES[index]}=${states[index]} "
+done
+probe_report=""
+for endpoint in "${PROBES[@]}"; do
+  probe_report+="$endpoint ok  "
+done
+release_display="${release_tag:-$api_version}"
+rollback_to="${previous_version:+v$previous_version}"
+[ -n "$rollback_to" ] && [ "$rollback_to" != "$release_display" ] ||
+  rollback_to="<previous-version>"
+elapsed=$((SECONDS - START_SECONDS))
+
+printf '\n[deploy] ── Deployment summary ──────────────────────────────────\n'
+printf '[deploy]   %-11s %s\n' "Status" "deployed"
+printf '[deploy]   %-11s %s\n' "Release" "$release_display ($api_revision)"
+printf '[deploy]   %-11s %s\n' "Host" "${CHARSOOQ_PUBLIC_SCHEME}://${CHARSOOQ_SITE_HOST}"
+printf '[deploy]   %-11s %s\n' "Database" "$migration_state"
+printf '[deploy]   %-11s %s\n' "Services" "$service_report"
+printf '[deploy]   %-11s %s\n' "Probes" "$probe_report"
+printf '[deploy]   %-11s %s\n' "Duration" "${elapsed}s"
+printf '[deploy]   %-11s %s\n' "Rollback" "./deploy/scripts/deploy.sh $rollback_to"
+printf '\n[deploy] All services are up and every health probe passed on %s.\n' "$CHARSOOQ_SITE_HOST"
+log "deployment complete ($api_version)"

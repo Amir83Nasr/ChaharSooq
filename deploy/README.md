@@ -18,18 +18,21 @@ must never contain secret values, private keys, or certificates.
   `versions/<stamp>/` and switches the single `current` symlink atomically for
   rollback-safe activation.
 - `production.env.example` — template for the non-secret deployment variables
-  required by `compose.production.yml` (`CHARSOOQ_*`), including the image
-  repositories, the single edge network/web address, and configuration-driven
-  protocol/TLS (HTTP-only or HTTPS). Copy it **outside** the repository, fill
-  the approved values, and source it in the operator shell. Do not guess or
-  auto-generate network/TLS values.
+  required by `compose.production.yml` (`CHARSOOQ_*`), including the GitHub
+  repository used for release discovery, the image repositories, the single
+  edge network/web address, and configuration-driven protocol/TLS (HTTP-only or
+  HTTPS). Copy it **outside** the repository, fill the approved values, and
+  source it in the operator shell. Do not guess or auto-generate network/TLS
+  values.
 - `scripts/deploy.sh` — the one Production deploy entry point, run on the host
-  (or over SSH via `make prod-deploy SSH_HOST=...`). With no argument it resolves
-  the `latest` discovery pointer to two image digests, checks that both images
-  report the same release version and commit, then pulls, provisions, migrates,
-  starts the single `api`/`web` pair, and verifies external health. A specific
-  version tag or two explicit digests are also accepted. It is fail-closed and
-  never reads a secret value or removes a volume, database, or image.
+  (or over SSH via `make prod-deploy SSH_HOST=...`). With no argument it reads the
+  newest published GitHub Release, resolves its version tag to two image
+  digests, checks that both images report that release version and commit, then
+  pulls, provisions, checks migrations (applying only when pending), starts the
+  single `api`/`web` pair, and verifies container and external health. A specific
+  version tag or two explicit digests are also accepted. It prints numbered
+  progress and a final health/status summary, is fail-closed, and never reads a
+  secret value or removes a volume, database, or image.
 
 ## What must stay outside this directory/repository
 

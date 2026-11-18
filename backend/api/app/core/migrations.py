@@ -26,6 +26,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Connection, Engine, create_engine
 from sqlalchemy.engine import make_url
@@ -33,6 +34,9 @@ from sqlalchemy.pool import NullPool, StaticPool
 
 from app.core.config import get_migration_settings
 from app.core.migration_lock import migration_lock
+
+if TYPE_CHECKING:
+    from alembic.config import Config
 
 log = logging.getLogger("charsooq.migrations")
 
@@ -71,17 +75,49 @@ def _build_migration_engine(url: str) -> Engine:
     return create_engine(parsed, poolclass=NullPool)
 
 
-def _run_upgrade(connection: Connection) -> None:
-    """Run Alembic's ``upgrade head`` on the caller's connection."""
-    from alembic import command
+def _alembic_config() -> Config:
+    """Point Alembic at this backend's versions directory."""
     from alembic.config import Config
 
     cfg = Config()
     cfg.set_main_option("script_location", str(_BACKEND_DIR / "migrations"))
+    return cfg
+
+
+def _run_upgrade(connection: Connection) -> None:
+    """Run Alembic's ``upgrade head`` on the caller's connection."""
+    from alembic import command
+
+    cfg = _alembic_config()
     # migrations/env.py uses this connection instead of creating its own, so
     # the advisory lock and the migration share one database session.
     cfg.attributes["connection"] = connection
     command.upgrade(cfg, "head")
+
+
+def has_pending_migrations() -> bool:
+    """Compare the recorded revision with the versions directory (read-only).
+
+    The deploy script uses this to skip the one-shot migration service when the
+    database is already at head. It never upgrades or writes to the database;
+    the upgrade path still holds the advisory lock. A repository with multiple
+    heads is a configuration error, not a state to guess about.
+    """
+    from alembic.migration import MigrationContext
+    from alembic.script import ScriptDirectory
+
+    cfg = _alembic_config()
+    engine = _build_migration_engine(_database_url())
+    try:
+        with engine.connect() as connection:
+            current = MigrationContext.configure(connection).get_current_revision()
+            heads = ScriptDirectory.from_config(cfg).get_heads()
+    finally:
+        engine.dispose()
+
+    if len(heads) != 1:
+        raise RuntimeError(f"expected a single migration head, found {heads}")
+    return current != heads[0]
 
 
 def apply_migrations() -> None:

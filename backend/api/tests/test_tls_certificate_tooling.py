@@ -717,8 +717,12 @@ def test_only_the_proxy_receives_certificate_mounts_and_ca_state() -> None:
     services = compose["services"]
 
     caddy_volumes = [str(volume) for volume in services["caddy"]["volumes"]]
-    assert any(volume.endswith(":/etc/caddy/certs:ro") for volume in caddy_volumes)
-    assert any(str(volume).startswith("caddy_data:/data") for volume in caddy_volumes)
+    assert any(volume.endswith(":/data/certs:ro") for volume in caddy_volumes)
+    data_index = next(i for i, volume in enumerate(caddy_volumes) if volume == "caddy_data:/data")
+    certs_index = next(
+        i for i, volume in enumerate(caddy_volumes) if volume.endswith(":/data/certs:ro")
+    )
+    assert data_index < certs_index  # the mountpoint is created on the writable volume
     assert any(str(volume).startswith("caddy_config:/config") for volume in caddy_volumes)
     assert "secrets" not in services["caddy"]
     caddy_env = set(services["caddy"]["environment"])

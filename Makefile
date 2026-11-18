@@ -39,7 +39,7 @@ CHARSOOQ_SECRETS_DIR ?= /etc/charsooq/secrets ## Host directory of production se
 CHARSOOQ_TLS_DIR ?= /etc/charsooq/tls ## Host directory of organization TLS material (never committed)
 PROD_ENV_FILE ?= /etc/charsooq/production.env
 SSH_HOST ?= ## Optional server alias; when set, prod-deploy and prod-logs run over SSH instead of locally
-VERSION ?= latest## Release to deploy; "latest" means the newest published release
+VERSION ?= latest## Release to deploy; "latest" means the newest published GitHub Release
 DB_PORT ?= 5433 ## Host port of the dev postgres db-wait/dev-api expect
 YES ?= 0 ## Set YES=1 to skip the confirmation prompt for db-sync-dev-to-staging
 
@@ -271,7 +271,7 @@ prod-build: ## Build production API and web images from this commit (host-build 
 
 # One command to deploy on the server. Set SSH_HOST to run remotely; otherwise
 # run it directly on the host. VERSION defaults to the newest published release.
-prod-deploy: ## @user Pull newest release images and deploy on the server [VERSION=…] [SSH_HOST=…]
+prod-deploy: ## @user Deploy the newest GitHub Release on the server [VERSION=…] [SSH_HOST=…]
 ifeq ($(strip $(SSH_HOST)),)
 	./deploy/scripts/deploy.sh "$(VERSION)"
 else

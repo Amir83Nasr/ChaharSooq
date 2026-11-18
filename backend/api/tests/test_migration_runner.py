@@ -20,6 +20,12 @@ from app.core.migration_lock import MigrationLockTimeoutError
 
 pytestmark = pytest.mark.usefixtures("isolated_settings")
 
+
+@pytest.fixture(autouse=True)
+def _cli_has_no_extra_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("sys.argv", ["migrate.py"])
+
+
 DATABASE_URL = "postgresql+psycopg://app:super-secret@db.invalid/charsooq"
 MIGRATION_URL = "postgresql+psycopg://migrator:migration-secret@db.invalid/charsooq"
 
@@ -110,6 +116,65 @@ def test_runner_releases_lock_and_closes_engine_on_failure(
         migrations_module.apply_migrations()
 
     assert any("pg_advisory_unlock" in sql for sql in executed)
+    engine.dispose.assert_called_once()
+
+
+def test_migration_check_compares_the_current_revision_with_head(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    connection, _ = _fake_connection()
+    engine = _fake_engine(connection)
+    _use_fake_database(monkeypatch, connection=connection, engine=engine)
+    monkeypatch.setattr(
+        "alembic.migration.MigrationContext.configure",
+        lambda _connection: SimpleNamespace(get_current_revision=lambda: "head-1"),
+    )
+    monkeypatch.setattr(
+        "alembic.script.ScriptDirectory.from_config",
+        lambda _config: SimpleNamespace(get_heads=lambda: ["head-1"]),
+    )
+
+    assert migrations_module.has_pending_migrations() is False
+    engine.dispose.assert_called_once()
+
+
+def test_migration_check_detects_an_empty_or_behind_database(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    connection, _ = _fake_connection()
+    engine = _fake_engine(connection)
+    _use_fake_database(monkeypatch, connection=connection, engine=engine)
+    current = "head-0"
+
+    def context(_connection: object) -> SimpleNamespace:
+        return SimpleNamespace(get_current_revision=lambda: current)
+
+    monkeypatch.setattr("alembic.migration.MigrationContext.configure", context)
+    monkeypatch.setattr(
+        "alembic.script.ScriptDirectory.from_config",
+        lambda _config: SimpleNamespace(get_heads=lambda: ["head-1"]),
+    )
+
+    assert migrations_module.has_pending_migrations() is True
+    current = None
+    assert migrations_module.has_pending_migrations() is True
+
+
+def test_migration_check_refuses_multiple_heads(monkeypatch: pytest.MonkeyPatch) -> None:
+    connection, _ = _fake_connection()
+    engine = _fake_engine(connection)
+    _use_fake_database(monkeypatch, connection=connection, engine=engine)
+    monkeypatch.setattr(
+        "alembic.migration.MigrationContext.configure",
+        lambda _connection: SimpleNamespace(get_current_revision=lambda: "head-1"),
+    )
+    monkeypatch.setattr(
+        "alembic.script.ScriptDirectory.from_config",
+        lambda _config: SimpleNamespace(get_heads=lambda: ["head-1", "head-2"]),
+    )
+
+    with pytest.raises(RuntimeError, match="single migration head"):
+        migrations_module.has_pending_migrations()
     engine.dispose.assert_called_once()
 
 
@@ -227,6 +292,45 @@ def test_cli_success_prints_no_database_details(
     assert "at head" in captured.out
     assert captured.err == ""
     assert DATABASE_URL not in captured.out + captured.err
+
+
+def test_cli_check_reports_pending_without_applying_migrations(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("DEPLOYMENT_ENV", "development")
+    monkeypatch.setattr("sys.argv", ["migrate.py", "--check"])
+    monkeypatch.setattr(migrate_script, "has_pending_migrations", lambda: True)
+
+    def fail_if_applied() -> None:
+        raise AssertionError("a check must never upgrade the database")
+
+    monkeypatch.setattr(migrate_script, "apply_migrations", fail_if_applied)
+
+    migrate_script.main()
+
+    assert "migrate: migrations pending" in capsys.readouterr().out
+
+
+def test_cli_check_reports_a_database_at_head(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("DEPLOYMENT_ENV", "development")
+    monkeypatch.setattr("sys.argv", ["migrate.py", "--check"])
+    monkeypatch.setattr(migrate_script, "has_pending_migrations", lambda: False)
+
+    migrate_script.main()
+
+    assert "migrate: database already at head" in capsys.readouterr().out
+
+
+def test_cli_rejects_unknown_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DEPLOYMENT_ENV", "development")
+    monkeypatch.setattr("sys.argv", ["migrate.py", "--upgrade"])
+
+    with pytest.raises(SystemExit, match="usage: migrate.py"):
+        migrate_script.main()
 
 
 def test_cli_requires_an_explicit_deployment_identity(

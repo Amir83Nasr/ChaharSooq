@@ -669,16 +669,23 @@ def test_the_deploy_script_is_fail_closed_and_deploys_by_digest() -> None:
         "--profile",
     ):
         assert removed not in code
+    # The published GitHub Release selects the version; no tag is required.
+    assert "releases/latest" in code
+    assert "releases/tags/" in code
+    assert "CHARSOOQ_GITHUB_REPO" in code
+    assert "GITHUB_TOKEN" in code  # private repositories, via a 0600 header file
+    assert "mktemp" in code
     # Ordered one-shot steps, then the single api/web pair, then health.
     pull = code.index('"${COMPOSE[@]}" pull api web')
     provision = code.index('"${COMPOSE[@]}" run --rm provision')
-    migrate = code.index('"${COMPOSE[@]}" run --rm migrate')
+    migrate_check = code.index("python backend/api/scripts/migrate.py --check")
     up = code.index('"${COMPOSE[@]}" up -d --no-build --remove-orphans')
-    probe = code.index("probe /api/v1/health")
-    assert pull < provision < migrate < up < probe
-    assert "probe /login" in code
+    probe = code.index("PROBES=(/api/v1/health")
+    assert pull < provision < migrate_check < up < probe
+    for endpoint in ("/api/v1/ready", "/login"):
+        assert endpoint in code
     assert "USR1" in code  # refresh Caddy's upstream DNS after web is replaced
-    # Non-secret deployment values come from the host, not from GitHub.
+    # Non-secret deployment values come from the host; GitHub only identifies a release.
     assert "CHARSOOQ_ENV_FILE" in code
     assert "secrets." not in code
     assert "CHARSOOQ_EDGE_SUBNET" in code

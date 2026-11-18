@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Constraints for coding agents on **چهارسوق (Charsooq)**, a Persian, RTL-first admin panel. Setup: [README.md](README.md). Contribution flow: [CONTRIBUTING.md](CONTRIBUTING.md). This file is the single source of agent rules; the only other documents are the decision records in [docs/adr/](docs/adr/) and the [Parsina API contract](docs/parsina-api.pdf).
+Constraints for coding agents on **چهارسوق (Charsooq)**, a Persian, RTL-first admin panel. Setup: [README.md](README.md). Contribution flow: [CONTRIBUTING.md](CONTRIBUTING.md). This file is the single source of agent rules; the only other documents are the decision records in [docs/adr/](docs/adr/), the [Parsina API contract](docs/parsina-api.pdf), and its Markdown transcription [docs/parsina-api.md](docs/parsina-api.md).
 
 ## 1. Repository map
 
@@ -13,6 +13,7 @@ Constraints for coding agents on **چهارسوق (Charsooq)**, a Persian, RTL-f
 | `backend/api/openapi.json`                             | Committed OpenAPI snapshot. Generated; never edit by hand           |
 | `docs/adr/`                                            | Architecture decision records (append-only; never renumber)         |
 | `docs/parsina-api.pdf`                                 | Parsina API contract (endpoints, envelopes, fields)                 |
+| `docs/parsina-api.md`                                  | Derived Markdown transcription (no screenshot examples)             |
 | `.github/workflows/`                                   | CI and deploy                                                       |
 | `Dockerfile.*`, `compose.yml`                          | Container images and the local stack                                |
 | `data/`                                                | Local-only data files (gitignored)                                  |
@@ -37,7 +38,7 @@ Dependency flow: `api/routes → services → repositories → database`.
 - Pydantic schemas in `app/schemas/` are the only API boundary types. ORM models do not leave the repository layer.
 - Schema changes go through Alembic migrations in `migrations/`. `create_all` is allowed only in tests and dev seed scripts.
 - External APIs (for example Parsina, the dev mirror, and competitor pages) live in `app/integrations/`. `app/api/dependencies.py` owns DB sessions and auth guards; `app/api/openapi.py` owns shared OpenAPI metadata; `app/core/` owns config, engine/session, security, rate limiting, migration lock/runner, role provisioning, and the scheduler. Import public names from the package `__init__.py` files.
-- When you need the Parsina API contract (endpoints, request/response envelope, field names), read [docs/parsina-api.pdf](docs/parsina-api.pdf) — it is the source of truth for the integration, not the saved JSON fixtures in `data/`.
+- When you need the Parsina API contract (endpoints, request/response envelope, field names), read [docs/parsina-api.pdf](docs/parsina-api.pdf) — it is the source of truth for the integration, not the saved JSON fixtures in `data/`. [docs/parsina-api.md](docs/parsina-api.md) is a derived, searchable transcription without the screenshot examples.
 - Catalog sync never hard-deletes products: missing rows are soft-deactivated so dependent rows survive. `competitor_listings.product_id` is `ON DELETE RESTRICT`.
 
 ### Frontend

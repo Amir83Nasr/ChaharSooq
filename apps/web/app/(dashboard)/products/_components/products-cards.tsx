@@ -14,7 +14,7 @@ import { PackageSearch } from "lucide-react"
 import { StockCell } from "@/components/data/products-stock-cell"
 import { toTomanAmount } from "@/lib/money"
 import type { ProductOut, ProductSort } from "@/lib/api"
-import { comparesWithCompetitor, topGroupOf } from "@/lib/top-groups"
+import { comparesWithCompetitor } from "@/lib/top-groups"
 import type { CompetitorMarket } from "./products-table"
 import { STORE_MARKET_LABELS } from "./products-table"
 import { initialRowWindow, useWindowedRows } from "./use-windowed-rows"
@@ -41,7 +41,7 @@ export function ProductMobileCard({
   onSelect: (item: ProductOut) => void
 }) {
   const marketLabel = STORE_MARKET_LABELS[market]
-  const top = topGroupOf(item.main_group_name)
+  const top = item.top_group
   const comparesCompetitor = comparesWithCompetitor(top)
   const trackedStore =
     comparesCompetitor || top === null

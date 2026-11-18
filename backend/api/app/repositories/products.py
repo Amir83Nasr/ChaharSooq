@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.sql import Select
 from sqlalchemy.sql.elements import Case
 
-from app.core.top_groups import DIGITAL_MAIN_GROUP_IDS, DIGITAL_MAIN_GROUP_PREFIXES
+from app.core.top_groups import DIGITAL_MAIN_GROUP_IDS, DIGITAL_NAME_PATTERNS
 from app.models import CompetitorListing, Product
 
 if TYPE_CHECKING:
@@ -86,6 +86,8 @@ def _digital_criterion() -> ColumnElement[bool]:
 
     Parsina renumbers group ids between exports, so an id-only match would mark
     appliance groups as digital (and sort them into the digital section).
+    Patterns are derived from `DIGITAL_TOKENS` in `app.core.top_groups`, so
+    extending the Python rule extends the SQL filter too.
     """
     return or_(
         # `NULL IN (...)` is NULL, which would make the negated appliance
@@ -94,7 +96,7 @@ def _digital_criterion() -> ColumnElement[bool]:
             Product.main_group_name.is_(None),
             Product.main_group_id.in_(DIGITAL_MAIN_GROUP_IDS),
         ),
-        *(Product.main_group_name.ilike(f"{prefix}%") for prefix in DIGITAL_MAIN_GROUP_PREFIXES),
+        *(Product.main_group_name.ilike(f"%{pattern}%") for pattern in DIGITAL_NAME_PATTERNS),
     )
 
 

@@ -1,9 +1,9 @@
 import type { TopGroup } from "./api-types"
 
 /**
- * Catalog sections in display order — mirrors the backend
- * `app/core/top_groups.py`. Filters, table cells, and suggested prices all
- * read the section from here so a new division is one edit, not five.
+ * Catalog sections in display order. The section itself is computed once by
+ * the backend and sent as `ProductOut.top_group`; this module only holds
+ * presentation helpers (labels, brand display, competitor rules).
  */
 export const TOP_GROUPS: readonly TopGroup[] = [
   "کالای دیجیتال",
@@ -12,31 +12,8 @@ export const TOP_GROUPS: readonly TopGroup[] = [
   "مبلمان",
 ]
 
-/** Parsina main groups that belong to کالای دیجیتال. */
-const DIGITAL_GROUP_PREFIXES = [
-  "کنسول بازی",
-  "گوشی و تبلت",
-  "لبت تاب", // Parsina's spelling; «لپ تاپ» is the common one.
-  "لپ تاپ",
-] as const
-
-export function isDigitalGroup(name: string | null): boolean {
-  const value = name?.trim() ?? ""
-  return DIGITAL_GROUP_PREFIXES.some((prefix) => value.startsWith(prefix))
-}
-
 export function isTopGroup(value: string | null): value is TopGroup {
   return value !== null && (TOP_GROUPS as readonly string[]).includes(value)
-}
-
-/** Section (بخش) of one raw Parsina group; `null` when it has no group. */
-export function topGroupOf(name: string | null): TopGroup | null {
-  const value = name?.trim() ?? ""
-  if (!value) return null
-  if (isDigitalGroup(value)) return "کالای دیجیتال"
-  if (value.startsWith("فرش")) return "فرش"
-  if (value.startsWith("مبلمان")) return "مبلمان"
-  return "لوازم خانگی"
 }
 
 /**

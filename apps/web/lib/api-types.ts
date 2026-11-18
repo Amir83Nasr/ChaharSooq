@@ -18,6 +18,7 @@ export interface ProductOut {
   price: number
   stock: number
   main_group_name: string | null
+  top_group: TopGroup | null
   sub_group_name: string | null
   unit_name: string | null
   is_active: boolean

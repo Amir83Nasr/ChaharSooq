@@ -5,6 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.core.top_groups import TopGroup
 from app.schemas.competitor import CompetitorPriceOut
 
 
@@ -56,6 +57,9 @@ class ProductOut(BaseModel):
     price: float = Field(description="Unit price in Toman.")
     stock: float = Field(description="Available quantity.")
     main_group_name: str | None = Field(default=None, description="Raw Parsina group name.")
+    top_group: TopGroup | None = Field(
+        default=None, description="Derived catalog section (بخش), never stored in the DB."
+    )
     sub_group_name: str | None = None
     unit_name: str | None = None
     is_active: bool = Field(default=True, description="False once the source drops the row.")

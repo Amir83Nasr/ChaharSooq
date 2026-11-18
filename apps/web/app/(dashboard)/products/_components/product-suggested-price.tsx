@@ -15,7 +15,7 @@ import {
   toSuggestedPriceWeights,
   type SuggestedPriceWeights,
 } from "@/lib/suggested-price"
-import { comparesWithCompetitor, topGroupOf } from "@/lib/top-groups"
+import { comparesWithCompetitor } from "@/lib/top-groups"
 
 function formatPercent(value: number): string {
   const rounded = Math.round(value * 10) / 10
@@ -49,7 +49,7 @@ export function ProductSuggestedPrice({ product }: { product: ProductOut }) {
     }
   }, [])
 
-  const topGroup = topGroupOf(product.main_group_name) ?? "لوازم خانگی"
+  const topGroup = product.top_group ?? "لوازم خانگی"
   const tracking = !comparesWithCompetitor(topGroup)
   const weight = weights?.[topGroup] ?? null
   const fresh = product.competitor_prices.filter(

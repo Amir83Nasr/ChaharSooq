@@ -8,6 +8,7 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, Numeric, S
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.core.top_groups import TopGroup, top_group_of
 from app.models.base import utcnow
 
 if TYPE_CHECKING:
@@ -133,3 +134,8 @@ class Product(Base):
     competitor_listings: Mapped[list["CompetitorListing"]] = relationship(
         back_populates="product", passive_deletes=True
     )
+
+    @property
+    def top_group(self) -> TopGroup | None:
+        """Derived catalog section; no DB column — see `app.core.top_groups`."""
+        return top_group_of(self.main_group_name, self.main_group_id)

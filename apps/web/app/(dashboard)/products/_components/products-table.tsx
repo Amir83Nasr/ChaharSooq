@@ -42,7 +42,7 @@ import {
   suggestedPriceFromDailyChange,
   type SuggestedPriceWeights,
 } from "@/lib/suggested-price"
-import { brandOf, comparesWithCompetitor, topGroupOf } from "@/lib/top-groups"
+import { brandOf, comparesWithCompetitor } from "@/lib/top-groups"
 import { useWindowedRows, initialRowWindow } from "./use-windowed-rows"
 
 import { PAGE_SIZE_OPTIONS } from "@/components/settings/page-size-settings"
@@ -329,7 +329,7 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                 : 0) +
               i +
               1
-            const top = topGroupOf(item.main_group_name)
+            const top = item.top_group
             const comparesCompetitor = comparesWithCompetitor(top)
             const trackedStore: CompetitorMarket | null = comparesCompetitor
               ? market

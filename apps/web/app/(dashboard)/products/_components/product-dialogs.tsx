@@ -18,7 +18,6 @@ import {
 } from "./product-competitor-prices"
 import { ProductPriceBounds } from "./product-price-bounds"
 import { ProductSuggestedPrice } from "./product-suggested-price"
-import { topGroupOf } from "@/lib/top-groups"
 
 /** Dialog listings carry the same price facts the table receives. */
 function listingToPrice(listing: CompetitorListing): CompetitorPrice {
@@ -60,9 +59,7 @@ export function ProductDetailDialog(props: {
   const product = localProduct ?? selected
   // Manual rows have no Parsina group; they behave like appliances (the
   // default section) so their competitor links stay manageable.
-  const topGroup = product
-    ? (topGroupOf(product.main_group_name) ?? "لوازم خانگی")
-    : null
+  const topGroup = product ? (product.top_group ?? "لوازم خانگی") : null
 
   const handleListingsChanged = useCallback((listings: CompetitorListing[]) => {
     setLocalProduct((current) =>

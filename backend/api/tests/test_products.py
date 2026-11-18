@@ -210,6 +210,54 @@ def test_category_sort_groups_by_section_not_stale_group_id(client: TestClient) 
     assert [item["sku"] for item in items] == ["PHN-1", "BLN-1"]
 
 
+def test_new_group_names_are_classified_by_the_api_and_sql_filter(client: TestClient) -> None:
+    """New Parsina group names need no code change to enter the digital section."""
+    from decimal import Decimal
+
+    from sqlalchemy.orm import Session
+
+    from app.core.database import get_engine
+    from app.models import Product
+
+    login(client)
+    with Session(get_engine()) as db:
+        db.add_all(
+            [
+                Product(
+                    name="لپتاپ گیمینگ",
+                    sku="LAP-1",
+                    price=Decimal(100),
+                    stock=Decimal(1),
+                    main_group_name="لپتاپ گیمینگ",
+                ),
+                Product(
+                    name="آیفون",
+                    sku="MOB-1",
+                    price=Decimal(100),
+                    stock=Decimal(1),
+                    main_group_name="گوشي و تبلت",  # Parsina's Arabic yeh
+                ),
+                Product(
+                    name="تلویزیون",
+                    sku="TAP-1",
+                    price=Decimal(100),
+                    stock=Decimal(1),
+                    main_group_name="لوازم خانگی سونی",
+                ),
+                Product(name="چای", sku="MAN-1", price=Decimal(100), stock=Decimal(1)),
+            ]
+        )
+        db.commit()
+
+    by_sku = {item["sku"]: item for item in client.get("/api/v1/products").json()["items"]}
+    assert by_sku["LAP-1"]["top_group"] == "کالای دیجیتال"
+    assert by_sku["MOB-1"]["top_group"] == "کالای دیجیتال"
+    assert by_sku["TAP-1"]["top_group"] == "لوازم خانگی"
+    assert by_sku["MAN-1"]["top_group"] is None
+    digital = client.get("/api/v1/products", params={"top_group": "کالای دیجیتال"}).json()
+    assert {item["sku"] for item in digital["items"]} == {"LAP-1", "MOB-1"}
+
+
 def test_product_groups_cache_headers(client: TestClient) -> None:
     seed(client)
     r = client.get("/api/v1/products/groups")

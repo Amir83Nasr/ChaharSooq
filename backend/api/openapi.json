@@ -4259,6 +4259,24 @@
             "title": "Main Group Name",
             "description": "Raw Parsina group name."
           },
+          "top_group": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "کالای دیجیتال",
+                  "لوازم خانگی",
+                  "فرش",
+                  "مبلمان"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top Group",
+            "description": "Derived catalog section (بخش), never stored in the DB."
+          },
           "sub_group_name": {
             "anyOf": [
               {

@@ -400,8 +400,21 @@ jobs:
           # Both images are published and verified; nothing in this body is a
           # promise about work that has not finished. Fail closed if another
           # run published the release while this one was building.
-          current_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" 2>/dev/null || true)"
-          if [ -n "$current_json" ] && [ "$(jq -r '.draft' <<<"$current_json")" != "true" ]; then
+          # `gh api` prints the HTTP error body to stdout on a 404. Only its
+          # exit status distinguishes an absent release from a published one:
+          # swallowing it made the first release look concurrent. Any other
+          # API failure is unknown state and must not be treated as absent.
+          if current_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" 2>/dev/null)"; then
+            release_exists=true
+          else
+            release_exists=false
+            state="$(jq -r '.status // empty' <<<"$current_json" 2>/dev/null || true)"
+            if [ "$state" != "404" ]; then
+              echo "::error::could not determine release state for ${TAG}; refusing to publish"
+              exit 1
+            fi
+          fi
+          if [ "$release_exists" = true ] && [ "$(jq -r '.draft' <<<"$current_json")" != "true" ]; then
             echo "::error::release ${TAG} was published concurrently; refusing to overwrite it"
             exit 1
           fi

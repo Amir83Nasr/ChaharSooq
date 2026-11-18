@@ -19,6 +19,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, cast
 
+import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -177,6 +178,62 @@ def _run_guard(
     )
 
 
+def _run_publish_release(
+    tmp_path: Path,
+    *,
+    api_status: int,
+    api_body: str,
+    draft_id: str = "",
+) -> subprocess.CompletedProcess[str]:
+    """Run the publication step with a stubbed `gh`.
+
+    The stub returns `api_body` with `api_status` for `gh api` and prints every
+    other `gh` call, so the test can see which release command was issued
+    without a token, a network, or a real release.
+    """
+
+    stub_dir = tmp_path / "bin"
+    stub_dir.mkdir(parents=True, exist_ok=True)
+    stub = stub_dir / "gh"
+    stub.write_text(
+        "#!/usr/bin/env bash\n"
+        'if [ "$1" = "api" ]; then\n'
+        '  printf "%s" "$STUB_API_BODY"\n'
+        '  exit "$STUB_API_STATUS"\n'
+        "fi\n"
+        'printf "gh %s\\n" "$*"\n',
+        encoding="utf-8",
+    )
+    stub.chmod(0o755)
+    notes = tmp_path / "notes.md"
+    notes.write_text("release notes\n", encoding="utf-8")
+
+    env = {
+        "PATH": f"{stub_dir}{os.pathsep}{os.environ['PATH']}",
+        "TAG": "v1.0.0",
+        "GITHUB_REPOSITORY": "ns/charsooq",
+        "GH_TOKEN": "stub",
+        "BODY_FILE": str(notes),
+        "DRAFT_ID": draft_id,
+        "SHA": "1" * 40,
+        "STUB_API_BODY": api_body,
+        "STUB_API_STATUS": str(api_status),
+    }
+    return subprocess.run(  # noqa: S603 - fixed interpreter, no shell
+        [BASH, "-c", _script("publish_release")],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+
+
+API_NOT_FOUND = '{"message":"Not Found","status":"404"}'
+API_PUBLISHED = '{"tag_name":"v1.0.0","draft":false}'
+API_DRAFT = '{"tag_name":"v1.0.0","draft":true}'
+API_SERVER_ERROR = '{"message":"Internal Server Error","status":"500"}'
+
+
 def test_a_version_tag_requests_a_release_and_publication_is_last() -> None:
     triggers = _triggers()
 
@@ -246,6 +303,45 @@ def test_an_existing_published_release_is_never_overwritten() -> None:
     assert "exit 1" in script
     # A strict semver tag is required; validation runs in the `validate` step.
     assert "=~ ^v(" in _script("validate")
+
+
+def test_publish_creates_a_release_when_none_exists_yet(tmp_path: Path) -> None:
+    """A 404 prints an error JSON on stdout; it is not a published release."""
+
+    result = _run_publish_release(tmp_path, api_status=1, api_body=API_NOT_FOUND)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "gh release create v1.0.0" in result.stdout
+    assert "concurrently" not in result.stdout
+
+
+def test_publish_still_refuses_a_concurrently_published_release(tmp_path: Path) -> None:
+    result = _run_publish_release(tmp_path, api_status=0, api_body=API_PUBLISHED)
+
+    assert result.returncode != 0
+    assert "published concurrently" in result.stdout
+    assert "gh release create" not in result.stdout
+
+
+def test_publish_reuses_a_draft_left_by_an_interrupted_run(tmp_path: Path) -> None:
+    result = _run_publish_release(tmp_path, api_status=0, api_body=API_DRAFT, draft_id="123")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "gh release edit v1.0.0" in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("status", "body"),
+    [(1, API_SERVER_ERROR), (1, ""), (1, "not json")],
+)
+def test_publish_fails_closed_on_an_unknown_release_state(
+    tmp_path: Path, status: int, body: str
+) -> None:
+    result = _run_publish_release(tmp_path, api_status=status, api_body=body)
+
+    assert result.returncode != 0
+    assert "could not determine release state" in result.stdout
+    assert "gh release" not in result.stdout
 
 
 def test_the_release_tag_is_validated_as_a_whole_string() -> None:

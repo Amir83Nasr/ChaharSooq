@@ -1,4 +1,4 @@
-"""Production Compose structure — Blue-Green services and least-privilege secrets.
+"""Production Compose structure — a single api/web pair and least-privilege secrets.
 
 The file is parsed, not started: no Docker daemon or secret file is required.
 """
@@ -44,52 +44,36 @@ def _networks(service: dict[str, Any]) -> set[str]:
     return {str(name) for name in networks}
 
 
-def test_production_services_define_shared_base_and_blue_green_slots() -> None:
+def test_production_services_define_the_base_and_one_deployable_pair() -> None:
     services = _services()
 
-    assert set(services) == {
-        "db",
-        "provision",
-        "migrate",
-        "caddy",
-        "api-blue",
-        "web-blue",
-        "api-green",
-        "web-green",
-    }
+    assert set(services) == {"db", "provision", "migrate", "caddy", "api", "web"}
 
     assert _depends_on(services["provision"]) == {"db": "service_healthy"}
     assert _depends_on(services["migrate"]) == {
         "db": "service_healthy",
         "provision": "service_completed_successfully",
     }
-    assert _depends_on(services["web-blue"]) == {"api-blue": "service_healthy"}
-    assert _depends_on(services["web-green"]) == {"api-green": "service_healthy"}
-    # Caddy proxies the active slot selected in deploy/caddy/active-upstream.caddy;
-    # it is not coupled to a slot at compose start time.
+    assert _depends_on(services["web"]) == {"api": "service_healthy"}
+    # Caddy proxies the single `web` service; no compose-level slot coupling.
     assert "depends_on" not in services["caddy"]
-
-    assert services["api-blue"].get("profiles") == ["blue"]
-    assert services["web-blue"].get("profiles") == ["blue"]
-    assert services["api-green"].get("profiles") == ["green"]
-    assert services["web-green"].get("profiles") == ["green"]
+    for name in ("api", "web"):
+        assert "profiles" not in services[name]
 
 
-def test_slot_apis_receive_only_the_application_credential() -> None:
-    services = _services()
+def test_api_receives_only_the_application_credential() -> None:
+    api = _services()["api"]
 
-    for name in ("api-blue", "api-green"):
-        api = services[name]
-        assert _secrets(api) == {
-            "database_url",
-            "session_secret",
-            "owner_password",
-            "parsina_password",
-        }
-        assert "postgres_password" not in _secrets(api)
-        assert "migration_database_url" not in _secrets(api)
-        assert "DATABASE_URL" not in api.get("environment", {})
-        assert "MIGRATION_DATABASE_URL" not in api.get("environment", {})
+    assert _secrets(api) == {
+        "database_url",
+        "session_secret",
+        "owner_password",
+        "parsina_password",
+    }
+    assert "postgres_password" not in _secrets(api)
+    assert "migration_database_url" not in _secrets(api)
+    assert "DATABASE_URL" not in api.get("environment", {})
+    assert "MIGRATION_DATABASE_URL" not in api.get("environment", {})
 
 
 def test_migration_runner_receives_only_the_migration_credential() -> None:
@@ -139,7 +123,7 @@ def test_one_shot_services_do_not_restart_and_only_the_proxy_publishes_ports() -
 
     assert services["provision"]["restart"] == "no"
     assert services["migrate"]["restart"] == "no"
-    for name in ("db", "api-blue", "web-blue", "api-green", "web-green"):
+    for name in ("db", "api", "web"):
         assert "ports" not in services[name], name
     assert {name for name, service in services.items() if service.get("ports")} == {"caddy"}
 
@@ -153,7 +137,6 @@ def test_proxy_binds_http_and_https_to_one_explicit_internal_ip() -> None:
         "${CHARSOOQ_PROXY_BIND_IP:?set CHARSOOQ_PROXY_BIND_IP to the approved internal IP}:80:80",
         "${CHARSOOQ_PROXY_BIND_IP:?set CHARSOOQ_PROXY_BIND_IP to the approved internal IP}:443:443",
     ]
-    # A bare "0.0.0.0" or "[::]" bind would publish on every interface.
     assert not any("0.0.0.0" in port or "[::]" in port for port in ports)  # noqa: S104
 
 
@@ -163,44 +146,34 @@ def test_network_topology_keeps_the_proxy_away_from_api_and_database() -> None:
     assert _networks(services["db"]) == {"backend"}
     assert _networks(services["provision"]) == {"backend"}
     assert _networks(services["migrate"]) == {"backend"}
-    assert _networks(services["api-blue"]) == {"backend", "edge_blue"}
-    assert _networks(services["web-blue"]) == {"edge_blue", "proxy"}
-    assert _networks(services["api-green"]) == {"backend", "edge_green"}
-    assert _networks(services["web-green"]) == {"edge_green", "proxy"}
-    # Caddy reaches web slots only; it has no route to the APIs, PostgreSQL, or
-    # the one-shot provisioning/migration services.
+    assert _networks(services["api"]) == {"backend", "edge"}
+    assert _networks(services["web"]) == {"edge", "proxy"}
+    # Caddy reaches web only; it has no route to the API, PostgreSQL, or the
+    # one-shot provisioning/migration services.
     assert _networks(services["caddy"]) == {"proxy"}
 
 
 def test_networks_are_declared_without_guessed_subnets() -> None:
     networks = _compose()["networks"]
 
-    assert set(networks) == {"backend", "edge_blue", "edge_green", "proxy"}
+    assert set(networks) == {"backend", "edge", "proxy"}
     assert networks["backend"]["internal"] is True
-    # The proxy subnet stays with Docker until the organization's address pools
-    # and routes are known.
     assert "ipam" not in networks["proxy"]
-    blue = networks["edge_blue"]["ipam"]["config"][0]["subnet"]
-    green = networks["edge_green"]["ipam"]["config"][0]["subnet"]
-    assert str(blue).startswith("${CHARSOOQ_EDGE_BLUE_SUBNET")
-    assert str(green).startswith("${CHARSOOQ_EDGE_GREEN_SUBNET")
+    edge = networks["edge"]["ipam"]["config"][0]["subnet"]
+    assert str(edge).startswith("${CHARSOOQ_EDGE_SUBNET")
 
 
-def test_each_slot_api_trusts_only_its_own_web_container() -> None:
+def test_api_trusts_only_its_web_container() -> None:
     services = _services()
+    api = services["api"]
+    web = services["web"]
 
-    for slot, edge, ip_var in (
-        ("blue", "edge_blue", "CHARSOOQ_WEB_BLUE_EDGE_IP"),
-        ("green", "edge_green", "CHARSOOQ_WEB_GREEN_EDGE_IP"),
-    ):
-        api = services[f"api-{slot}"]
-        web = services[f"web-{slot}"]
-        assert api["environment"]["FORWARDED_ALLOW_IPS"] == web["networks"][edge]["ipv4_address"]
-        assert str(api["environment"]["FORWARDED_ALLOW_IPS"]).startswith(f"${{{ip_var}")
-        # FORWARDED_ALLOW_IPS=* would let any caller spoof the login rate-limit key.
-        assert "*" not in str(api["environment"]["FORWARDED_ALLOW_IPS"])
-        # The web image bakes http://api:8000, so the paired API must be named `api`.
-        assert "api" in api["networks"][edge].get("aliases", [])
+    assert api["environment"]["FORWARDED_ALLOW_IPS"] == web["networks"]["edge"]["ipv4_address"]
+    assert str(api["environment"]["FORWARDED_ALLOW_IPS"]).startswith("${CHARSOOQ_WEB_EDGE_IP")
+    # FORWARDED_ALLOW_IPS=* would let any caller spoof the login rate-limit key.
+    assert "*" not in str(api["environment"]["FORWARDED_ALLOW_IPS"])
+    # The web image bakes http://api:8000, so the API must be named `api`.
+    assert "api" in api["networks"]["edge"].get("aliases", [])
 
 
 def test_caddy_is_pinned_isolated_and_keeps_certificate_state() -> None:
@@ -219,11 +192,11 @@ def test_caddy_is_pinned_isolated_and_keeps_certificate_state() -> None:
     assert any(volume.startswith("caddy_data:/data") for volume in volumes)
     assert any(volume.startswith("caddy_config:/config") for volume in volumes)
     assert {"caddy_data", "caddy_config"} <= set(_compose()["volumes"])
-    # No Docker socket and no writable host path: Caddy manages no containers.
     assert not any("docker.sock" in volume for volume in volumes)
     assert all(volume.endswith(":ro") for volume in volumes if not volume.startswith("caddy_"))
     env = caddy.get("environment", {})
     assert env.get("CHARSOOQ_PUBLIC_SCHEME") == "${CHARSOOQ_PUBLIC_SCHEME:-https}"
+    assert env.get("CHARSOOQ_PUBLIC_PORT") == "${CHARSOOQ_PUBLIC_PORT:-443}"
     assert env.get("CHARSOOQ_TLS_MODE") == "${CHARSOOQ_TLS_MODE:-organization}"
     assert env.get("CHARSOOQ_CADDY_AUTO_HTTPS") == "${CHARSOOQ_CADDY_AUTO_HTTPS:-off}"
 
@@ -251,35 +224,21 @@ def test_production_images_are_explicit_and_have_no_moving_default() -> None:
 
     services = _services()
 
-    api_image = str(services["api-blue"]["image"])
-    web_image = str(services["web-blue"]["image"])
-    # Required, with no fallback value: the reference must be chosen explicitly.
+    api_image = str(services["api"]["image"])
+    web_image = str(services["web"]["image"])
     assert api_image.startswith("${CHARSOOQ_API_IMAGE:?")
     assert web_image.startswith("${CHARSOOQ_WEB_IMAGE:?")
     assert ":-" not in api_image
     assert ":-" not in web_image
-    # Both slots and the one-shot services run the same release images.
-    assert services["api-green"]["image"] == api_image
-    assert services["web-green"]["image"] == web_image
     assert services["provision"]["image"] == api_image
     assert services["migrate"]["image"] == api_image
-    # `latest` is never a Production identity.
     for name, service in services.items():
         assert "latest" not in str(service.get("image", "")), name
 
 
 def test_production_images_are_pulled_rather_than_rebuilt() -> None:
-    services = _services()
-
-    for name in (
-        "provision",
-        "migrate",
-        "api-blue",
-        "web-blue",
-        "api-green",
-        "web-green",
-    ):
-        assert services[name].get("pull_policy") == "missing", name
+    for name in ("provision", "migrate", "api", "web"):
+        assert _services()[name].get("pull_policy") == "missing", name
 
 
 def test_local_builds_carry_the_oci_release_metadata() -> None:
@@ -287,14 +246,11 @@ def test_local_builds_carry_the_oci_release_metadata() -> None:
 
     services = _services()
 
-    api_args = services["api-blue"]["build"]["args"]
-    web_args = services["web-blue"]["build"]["args"]
+    api_args = services["api"]["build"]["args"]
+    web_args = services["web"]["build"]["args"]
     for args in (api_args, web_args):
         assert args["VCS_REF"] == "${CHARSOOQ_BUILD_REVISION:-unknown}"
         assert args["BUILD_DATE"] == "${CHARSOOQ_BUILD_DATE:-unknown}"
         assert args["VERSION"] == "${CHARSOOQ_BUILD_VERSION:-unknown}"
         assert args["SOURCE"] == "${CHARSOOQ_BUILD_SOURCE:-unknown}"
-    # The web image bakes the internal API address into the Next.js rewrite;
-    # the release workflow must build it with the same value.
     assert web_args["API_URL_INTERNAL"] == "http://api:8000"
-    assert services["web-green"]["build"]["args"]["API_URL_INTERNAL"] == "http://api:8000"

@@ -1,6 +1,6 @@
 # Production Caddyfile — internal reverse proxy (HTTP-only or HTTPS/TLS).
 #
-# One site, one upstream: the active Next.js slot. There is deliberately no
+# One site, one upstream: the Next.js `web` service. There is deliberately no
 # route to the API or PostgreSQL, so browsers never talk to FastAPI directly.
 #
 # Protocol and TLS are selected from Configuration (no hardcoded values):

@@ -8,22 +8,18 @@
 # AGENTS.md section 3 for the required names, ownership, and permissions.
 # No secret value belongs here.
 #
-# Four deployment values are required and deliberately have no default, so an
+# Deployment values are required and deliberately have no default, so an
 # unconfigured stack fails to start instead of publishing a port on every
 # interface, guessing an internal subnet, or trusting an unverified proxy:
 #   CHARSOOQ_PROXY_BIND_IP  approved internal IP that Caddy binds 80/443 to
 #   CHARSOOQ_SITE_HOST      internal DNS name or IP that users open
-#   CHARSOOQ_EDGE_BLUE_SUBNET / CHARSOOQ_EDGE_GREEN_SUBNET
-#                           conflict-checked CIDRs for each slot's web<->api network
-#   CHARSOOQ_WEB_BLUE_EDGE_IP / CHARSOOQ_WEB_GREEN_EDGE_IP
-#                           each slot web's fixed address; that slot API's only
-#                           trusted proxy
+#   CHARSOOQ_EDGE_SUBNET    conflict-checked CIDR for the web<->api network
+#   CHARSOOQ_WEB_EDGE_IP    web's fixed address; the API's only trusted proxy
 # See README.md (Production Docker stack) and AGENTS.md section 3.
 #
-# Blue-Green: `db`, `provision`, `migrate`, and `caddy` are the shared base.
-# The deployable API/web pair runs in one slot at a time (`blue` or `green`)
-# selected with a compose profile. The active slot is chosen by
-# deploy/caddy/active-upstream.caddy and recorded in /etc/charsooq/state.
+# deploy/scripts/deploy.sh is the single deploy entry point. It pulls the
+# released images by digest, runs provision and migrate once, then starts the
+# api/web pair. Caddy forwards to the single `web` service.
 name: charsooq-production
 
 # OCI metadata for a locally built image. `make prod-build` fills these in
@@ -247,12 +243,10 @@ services:
           memory: 512M
 
   # Internal reverse proxy (HTTP-only or HTTPS/TLS, configuration-driven). It is
-  # attached to `proxy` only, so it has no route to the slot APIs, `db`,
-  # `provision`, or `migrate`. It publishes 80/443 bound to one approved internal
-  # IP and nothing else; no Docker socket and no host filesystem beyond the
-  # read-only config directories below. The active upstream is selected by
-  # deploy/caddy/active-upstream.caddy and switched by deploy/scripts/deploy.sh
-  # with a graceful reload.
+  # attached to `proxy` only, so it has no route to the API, `db`, `provision`,
+  # or `migrate`. It publishes 80/443 bound to one approved internal IP and
+  # nothing else; no Docker socket and no host filesystem beyond the read-only
+  # config directories below. It forwards to the single `web` service.
   caddy:
     image: caddy:2.11.9-alpine
     restart: unless-stopped
@@ -263,6 +257,8 @@ services:
       # CADDY_AUTO_HTTPS=off. HTTPS: PUBLIC_SCHEME=https, TLS_MODE=organization|internal-ca.
       CHARSOOQ_SITE_HOST: ${CHARSOOQ_SITE_HOST:?set CHARSOOQ_SITE_HOST to the approved internal DNS name or IP}
       CHARSOOQ_PUBLIC_SCHEME: ${CHARSOOQ_PUBLIC_SCHEME:-https}
+      # Published port, used for X-Forwarded-Port (80 for HTTP-only, 443 for HTTPS).
+      CHARSOOQ_PUBLIC_PORT: ${CHARSOOQ_PUBLIC_PORT:-443}
       CHARSOOQ_CADDY_AUTO_HTTPS: ${CHARSOOQ_CADDY_AUTO_HTTPS:-off}
       # HTTPS: organization (files from the organization CA) or internal-ca.
       # HTTP-only: none (no TLS, no redirect, no HSTS).
@@ -277,9 +273,7 @@ services:
       - "${CHARSOOQ_PROXY_BIND_IP:?set CHARSOOQ_PROXY_BIND_IP to the approved internal IP}:80:80"
       - "${CHARSOOQ_PROXY_BIND_IP:?set CHARSOOQ_PROXY_BIND_IP to the approved internal IP}:443:443"
     volumes:
-      # Read-only Caddyfile and snippets. active-upstream.caddy is bind-mounted
-      # from the host deployment checkout so the deploy script can switch the
-      # active slot without a container restart.
+      # Read-only Caddyfile and snippets, including the static upstream.
       - ./deploy/caddy:/etc/caddy:ro
       # Certificate material stays outside the repository. Unused in
       # `internal-ca` mode; the directory may be empty.
@@ -307,86 +301,51 @@ services:
           cpus: "1"
           memory: 256M
 
-  # Blue-Green slot: blue. The web image bakes API_URL_INTERNAL=http://api:8000
-  # at build time, so the paired API is reachable as the network alias `api`
-  # on edge_blue. Only one slot receives traffic; the inactive slot stays
-  # running for rollback until the next successful deployment.
-  api-blue:
+  # Single deployable pair. The web image bakes API_URL_INTERNAL=http://api:8000
+  # at build time, so the API is reachable as the network alias `api` on `edge`.
+  # Caddy publishes to `web`; a deploy is a plain `docker compose up -d`.
+  api:
     <<: *api-service
-    profiles: ["blue"]
     environment:
       <<: *api-env
       SESSION_COOKIE_SECURE: "false"
-      # Uvicorn's --proxy-headers trusts forwarded headers only from this peer.
-      # It is this slot's web fixed address on edge_blue, never a wildcard.
-      FORWARDED_ALLOW_IPS: ${CHARSOOQ_WEB_BLUE_EDGE_IP:?set CHARSOOQ_WEB_BLUE_EDGE_IP to the blue web fixed address on edge_blue}
+      # Uvicorn's --proxy-headers trusts forwarded headers only from this peer:
+      # web's fixed address on edge, never a wildcard.
+      FORWARDED_ALLOW_IPS: ${CHARSOOQ_WEB_EDGE_IP:?set CHARSOOQ_WEB_EDGE_IP to the web fixed address on edge}
     networks:
       backend: {}
-      edge_blue:
+      edge:
         aliases:
           - api
 
-  web-blue:
+  web:
     <<: *web-service
-    profiles: ["blue"]
     networks:
       proxy:
         aliases:
-          - web-blue
-      edge_blue:
-        ipv4_address: ${CHARSOOQ_WEB_BLUE_EDGE_IP:?set CHARSOOQ_WEB_BLUE_EDGE_IP to the blue web fixed address on edge_blue}
+          - web
+      edge:
+        ipv4_address: ${CHARSOOQ_WEB_EDGE_IP:?set CHARSOOQ_WEB_EDGE_IP to the web fixed address on edge}
     depends_on:
-      api-blue:
-        condition: service_healthy
-
-  # Blue-Green slot: green.
-  api-green:
-    <<: *api-service
-    profiles: ["green"]
-    environment:
-      <<: *api-env
-      SESSION_COOKIE_SECURE: "false"
-      FORWARDED_ALLOW_IPS: ${CHARSOOQ_WEB_GREEN_EDGE_IP:?set CHARSOOQ_WEB_GREEN_EDGE_IP to the green web fixed address on edge_green}
-    networks:
-      backend: {}
-      edge_green:
-        aliases:
-          - api
-
-  web-green:
-    <<: *web-service
-    profiles: ["green"]
-    networks:
-      proxy:
-        aliases:
-          - web-green
-      edge_green:
-        ipv4_address: ${CHARSOOQ_WEB_GREEN_EDGE_IP:?set CHARSOOQ_WEB_GREEN_EDGE_IP to the green web fixed address on edge_green}
-    depends_on:
-      api-green:
+      api:
         condition: service_healthy
 
 networks:
-  # Caddy <-> active web slot only. Deliberately has no explicit subnet: Docker's
-  # address pool may still collide with the organization's routes, so a subnet
-  # is only assigned after the conflict check recorded in deployment.md.
+  # Caddy <-> web only. Deliberately has no explicit subnet: Docker's address
+  # pool may still collide with the organization's routes, so a subnet is only
+  # assigned after the conflict check recorded in the deployment documentation.
   proxy:
     driver: bridge
   # Database-only network: PostgreSQL has no route to the outside world.
   backend:
     internal: true
-  # API <-> web per slot. Each subnet comes from the operator because a guessed
-  # CIDR can collide with the internal network of the organization.
-  edge_blue:
+  # web <-> api. The subnet comes from the operator because a guessed CIDR can
+  # collide with the internal network of the organization.
+  edge:
     driver: bridge
     ipam:
       config:
-        - subnet: ${CHARSOOQ_EDGE_BLUE_SUBNET:?set CHARSOOQ_EDGE_BLUE_SUBNET to an approved, conflict-free CIDR for the blue slot}
-  edge_green:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: ${CHARSOOQ_EDGE_GREEN_SUBNET:?set CHARSOOQ_EDGE_GREEN_SUBNET to an approved, conflict-free CIDR for the green slot}
+        - subnet: ${CHARSOOQ_EDGE_SUBNET:?set CHARSOOQ_EDGE_SUBNET to an approved, conflict-free CIDR}
 
 volumes:
   pgdata:

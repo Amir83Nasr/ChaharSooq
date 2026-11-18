@@ -298,20 +298,35 @@ def test_both_images_are_built_from_the_same_commit() -> None:
         assert "BUILD_DATE=${{ steps.meta.outputs.build_date }}" in args
 
 
-def test_image_tags_carry_the_version_and_the_commit_and_never_latest() -> None:
+def test_image_tags_carry_the_version_the_commit_and_a_discovery_pointer() -> None:
     for step_id in ("build_api", "build_web"):
         tags = [
             line.strip()
             for line in str(_step(step_id)["with"]["tags"]).splitlines()
             if line.strip()
         ]
-        assert len(tags) == 2
+        assert len(tags) == 3
         assert tags[0].endswith(":${{ steps.release.outputs.version }}")
         assert tags[1].endswith(":sha-${{ steps.meta.outputs.sha }}")
-        assert not any(tag.endswith(":latest") for tag in tags)
+        assert tags[2].endswith(":latest")
 
-    # The whole workflow must not publish a moving tag.
-    assert ":latest" not in WORKFLOW_PATH.read_text(encoding="utf-8")
+    # `latest` is only a name the server resolves to a digest before deploying;
+    # the version and SHA tags remain the immutable release identity.
+    assert "discovery pointer" in WORKFLOW_PATH.read_text(encoding="utf-8")
+
+
+def test_publishes_are_serialized_so_latest_names_the_newest_release() -> None:
+    concurrency = _workflow()["concurrency"]
+
+    assert concurrency == {"group": "release-images", "cancel-in-progress": False}
+
+
+def test_the_verify_step_checks_the_latest_pointer() -> None:
+    script = _script("verify")
+
+    assert '"${image}:latest"' in script
+    assert "{{.Manifest.Digest}}" in script
+    assert "does not match" in script
 
 
 def test_the_image_names_follow_the_repository_layout() -> None:
@@ -405,13 +420,12 @@ def test_the_digests_are_recorded_in_the_release_report() -> None:
 
 def test_the_web_build_argument_matches_the_production_compose_file() -> None:
     compose = _compose()
-    # Blue-Green slots share the same build contract: the web rewrite target is
-    # baked into the image, so each slot reaches its paired API as `api`.
-    compose_value = compose["services"]["web-blue"]["build"]["args"]["API_URL_INTERNAL"]
+    # The web rewrite target is baked into the image, so the single `web`
+    # service must reach the API as `api`, exactly as the release builds it.
+    compose_value = compose["services"]["web"]["build"]["args"]["API_URL_INTERNAL"]
 
     api_url_internal = cast(str, _publish_job()["env"]["API_URL_INTERNAL"])
     assert api_url_internal == compose_value
-    assert api_url_internal == compose["services"]["web-green"]["build"]["args"]["API_URL_INTERNAL"]
     assert "API_URL_INTERNAL=${{ env.API_URL_INTERNAL }}" in str(
         _step("build_web")["with"]["build-args"]
     )
@@ -492,40 +506,21 @@ def test_every_action_is_pinned_to_a_full_commit_sha() -> None:
 DEPLOY_SCRIPT_PATH = REPO_ROOT / "deploy" / "scripts" / "deploy.sh"
 
 
-def _deploy_job() -> dict[str, Any]:
-    return cast(dict[str, Any], _workflow()["jobs"]["deploy"])
+def test_the_release_workflow_only_publishes_images() -> None:
+    """Deployment is a manual, single command on the server — not a CI job."""
 
+    workflow = _workflow()
 
-def test_deploy_waits_for_successful_image_publication() -> None:
-    """No deployment may start before both images exist in the registry."""
-
-    assert _deploy_job()["needs"] == ["publish"]
-
-
-def test_deploy_runs_only_on_the_dedicated_self_hosted_runner() -> None:
-    runs_on = _deploy_job()["runs-on"]
-
-    assert isinstance(runs_on, list)
-    assert "self-hosted" in runs_on
-    assert "charsooq-production" in runs_on
-    assert "ubuntu-latest" not in runs_on
-
-
-def test_deploy_is_gated_to_stable_released_releases() -> None:
-    condition = str(_deploy_job()["if"])
-
-    assert "github.event.release.draft == false" in condition
-    assert "github.event.release.prerelease == false" in condition
-    # A manual run is not a second authorization: it must opt in.
-    assert "workflow_dispatch" in condition
-    assert "inputs.deploy == true" in condition
-
-
-def test_a_manual_run_does_not_deploy_unless_it_opts_in() -> None:
-    deploy_input = _triggers()["workflow_dispatch"]["inputs"]["deploy"]
-
-    assert deploy_input["type"] == "boolean"
-    assert deploy_input["default"] is False
+    assert set(workflow["jobs"]) == {"verify", "publish"}
+    assert "deploy" not in workflow["jobs"]
+    assert "pull_request" not in _triggers()
+    assert "deploy" not in _triggers()["workflow_dispatch"]["inputs"]
+    # No workflow may target the Production host; the server is not a runner.
+    workflows_dir = REPO_ROOT / ".github" / "workflows"
+    for path in workflows_dir.glob("*.yml"):
+        assert "charsooq-production" not in path.read_text(encoding="utf-8")
+    for job in _ci_workflow()["jobs"].values():
+        assert "self-hosted" not in str(job.get("runs-on", ""))
 
 
 def test_the_publish_job_exposes_the_release_identity_and_digests() -> None:
@@ -538,107 +533,52 @@ def test_the_publish_job_exposes_the_release_identity_and_digests() -> None:
     assert outputs["web_digest"] == "${{ steps.build_web.outputs.digest }}"
 
 
-def test_deploy_receives_the_real_digests() -> None:
-    env = _deploy_job()["env"]
+def test_a_manual_run_still_names_a_published_release() -> None:
+    tag_input = _triggers()["workflow_dispatch"]["inputs"]["tag"]
 
-    assert (
-        env["CHARSOOQ_API_IMAGE"]
-        == "${{ needs.publish.outputs.api_image }}@${{ needs.publish.outputs.api_digest }}"
-    )
-    assert (
-        env["CHARSOOQ_WEB_IMAGE"]
-        == "${{ needs.publish.outputs.web_image }}@${{ needs.publish.outputs.web_digest }}"
-    )
-    assert env["CHARSOOQ_RELEASE_SHA"] == "${{ needs.publish.outputs.sha }}"
+    assert tag_input["required"] is True
+    assert tag_input["type"] == "string"
 
 
-def test_deploy_checks_out_the_released_commit() -> None:
-    checkout = next(
-        step
-        for step in _deploy_job()["steps"]
-        if str(step.get("uses", "")).startswith("actions/checkout")
-    )
-
-    assert checkout["with"]["ref"] == "${{ needs.publish.outputs.tag }}"
-    assert checkout["with"]["persist-credentials"] is False
-
-
-def test_deploy_uses_the_production_environment_and_minimal_permissions() -> None:
-    job = _deploy_job()
-
-    assert job["environment"] == "production"
-    assert job["permissions"] == {"contents": "read"}
-    # The deploy job must not reference a GitHub secret: the host keeps its own
-    # secret files, and the workflow passes only the release identity.
-    assert "secrets." not in yaml.safe_dump(job)
-
-
-def test_deploy_serializes_production_deployments() -> None:
-    concurrency = _deploy_job()["concurrency"]
-
-    assert concurrency["group"] == "deploy-production"
-    assert concurrency["cancel-in-progress"] is False
-
-
-def test_pull_request_workflows_never_use_the_production_runner() -> None:
-    """A pull request must never land on the Production host."""
-
-    workflows_dir = REPO_ROOT / ".github" / "workflows"
-    for path in workflows_dir.glob("*.yml"):
-        if "charsooq-production" in path.read_text(encoding="utf-8"):
-            assert path.name == "release.yml"
-
-    # The release workflow itself has no pull_request trigger.
-    assert "pull_request" not in _triggers()
-    # CI keeps using GitHub-hosted runners.
-    assert "pull_request" in _ci_triggers()
-    for job in _ci_workflow()["jobs"].values():
-        assert "self-hosted" not in str(job.get("runs-on", ""))
-
-
-def test_the_deploy_script_is_fail_closed_and_digest_only() -> None:
+def test_the_deploy_script_is_fail_closed_and_deploys_by_digest() -> None:
     script = DEPLOY_SCRIPT_PATH.read_text(encoding="utf-8")
-    # Comments describe the absence of destructive commands; the assertions
-    # apply to the executable lines.
+    # Comments describe decisions; assertions apply to the executable lines.
     code = "\n".join(line for line in script.splitlines() if not line.lstrip().startswith("#"))
 
     assert "set -euo pipefail" in code
-    # A deploy log must never be a secret dump.
     assert "set -x" not in code
-    # Only content addresses are accepted.
+    # Content addresses only; a tag is resolved to a digest before any change.
     assert "*@sha256:*" in code
-    # No volume or image is ever removed.
+    assert "docker buildx imagetools inspect" in code
+    # Nothing is ever removed.
     assert "down -v" not in code
     assert "volume prune" not in code
     assert "system prune" not in code
-    # The published commit link and real health are verified before traffic moves.
-    assert "org.opencontainers.image.revision" in code
-    assert "verify_slot" in code
-    assert "verify_external" in code
-    # Blue-Green: detect/select slots, switch upstream atomically, reload Caddy
-    # gracefully (no admin API), persist state, and keep the previous slot.
-    assert "detect_active_slot" in code
-    assert "write_upstream" in code
-    assert "active-upstream.caddy" in code
-    assert "USR1" in code
-    assert "ACTIVE_SLOT" in code
-    assert "kept for rollback" in code
-    # A failure before the switch must not change the active slot.
-    assert "the active slot was not changed" in code
+    # No blue-green machinery remains.
+    for removed in (
+        "detect_active_slot",
+        "write_upstream",
+        "active-upstream.caddy",
+        "ACTIVE_SLOT",
+        "STATE_FILE",
+        "--profile",
+    ):
+        assert removed not in code
+    # Ordered one-shot steps, then the single api/web pair, then health.
+    pull = code.index('"${COMPOSE[@]}" pull api web')
+    provision = code.index('"${COMPOSE[@]}" run --rm provision')
+    migrate = code.index('"${COMPOSE[@]}" run --rm migrate')
+    up = code.index('"${COMPOSE[@]}" up -d --no-build --remove-orphans')
+    probe = code.index("probe /api/v1/health")
+    assert pull < provision < migrate < up < probe
+    assert "probe /login" in code
+    assert "USR1" in code  # refresh Caddy's upstream DNS after web is replaced
     # Non-secret deployment values come from the host, not from GitHub.
     assert "CHARSOOQ_ENV_FILE" in code
     assert "secrets." not in code
-    # Migrations run on the shared database while slots overlap.
-    assert "compatible with the active slot" in code or "migrate" in code
-    # Protocol-aware external verification (HTTP-only or HTTPS), fail-closed.
+    assert "CHARSOOQ_EDGE_SUBNET" in code
     assert "CHARSOOQ_PUBLIC_SCHEME" in code
     assert "CHARSOOQ_PUBLIC_PORT" in code
-    assert "X-Forwarded-Port ${CHARSOOQ_PUBLIC_PORT}" in code
-    assert (
-        "external HTTP health probe failed" in code or "external HTTPS health probe failed" in code
-    )
-    assert "CHARSOOQ_EDGE_GREEN_SUBNET" in code
-    assert "CHARSOOQ_WEB_GREEN_EDGE_IP" in code
 
 
 def test_the_deploy_script_is_valid_bash() -> None:

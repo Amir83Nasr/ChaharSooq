@@ -9,7 +9,7 @@ SHELL := /bin/bash
 	db-clear-products db-validate db-sync-dev-to-staging db-seed-demo-staging \
 	sync-dev-to-staging sync-staging dev-to-staging \
 	docker-build docker-up docker-down docker-logs deploy-api \
-	prod-config prod-build prod-pull prod-image-revision \
+	prod-config prod-build prod-deploy prod-pull prod-image-revision \
 	prod-provision prod-migrate prod-bootstrap-owner prod-up prod-ps prod-logs \
 	prod-down prod-caddy-validate tls-validate tls-activate tls-rollback \
 	lint typecheck test test-e2e openapi-check
@@ -32,6 +32,8 @@ COMPOSE_FILE ?= compose.yml ## Compose file used by up/down/logs
 COMPOSE_PROD_FILE ?= compose.production.yml ## Production compose file (separate from development)
 CHARSOOQ_SECRETS_DIR ?= /etc/charsooq/secrets ## Host directory of production secret files (never committed)
 CHARSOOQ_TLS_DIR ?= /etc/charsooq/tls ## Host directory of organization TLS material (never committed)
+SSH_HOST ?= ## Optional server alias; when set, prod-deploy runs over SSH instead of locally
+VERSION ?= latest## Release to deploy; "latest" means the newest published release
 DB_PORT ?= 5433 ## Host port of the dev postgres db-wait/dev-api expect
 YES ?= 0 ## Set YES=1 to skip the confirmation prompt for db-sync-dev-to-staging
 
@@ -69,7 +71,7 @@ dev-api: db-wait ## Start backend API with reload (waits for postgres first)
 	$(UVICORN)
 
 dev-all: db-migrate ## Start backend + frontend together (stops both if either exits)
-	@$(UVICORN) & \
+	@uv run --no-sync --project backend/api uvicorn app.main:app --app-dir backend/api --host 0.0.0.0 --port 8000 --reload & \
 	api=$$!; \
 	pnpm dev & \
 	web=$$!; \
@@ -79,7 +81,7 @@ dev-all: db-migrate ## Start backend + frontend together (stops both if either e
 
 # ─── DATABASE: DEV ────────────────────────────────────────
 db-up: ## Start dev postgres (own container, port 5433)
-	$(COMPOSE) up -d postgres
+	$(COMPOSE)up -d postgres
 
 db-wait: ## Wait up to 20s for dev postgres to accept connections (no DB needed otherwise)
 	@for i in $$(seq 1 20); do \
@@ -138,18 +140,18 @@ doctor: ## Check toolchain, env files, and service reachability
 
 # ─── DOCKER ───────────────────────────────────────────────
 docker-build: ## Build Docker images (web + api)
-	$(COMPOSE) build
+	$(COMPOSE)build
 
 docker-up: ## Start services with Docker Compose (rebuild images)
-	$(COMPOSE) up -d --build
+	$(COMPOSE)up -d --build
 
 docker-down: ## Stop Docker Compose services
-	$(COMPOSE) down
+	$(COMPOSE)down
 
 docker-logs: ## Follow Docker Compose logs
-	$(COMPOSE) logs -f
+	$(COMPOSE)logs -f
 
-# ─── DOCKER: PRODUCTION (Blue-Green) ──────────────────────
+# ─── DOCKER: PRODUCTION (single slot) ─────────────────────
 # Structural validation does not read secret files, so it works on a machine
 # without production secrets. Only the run targets need the real files.
 #
@@ -165,17 +167,16 @@ docker-logs: ## Follow Docker Compose logs
 PROD_DEPLOYMENT_ENV = \
 	CHARSOOQ_PROXY_BIND_IP=192.0.2.10 \
 	CHARSOOQ_SITE_HOST=charsooq.example.test \
-	CHARSOOQ_EDGE_BLUE_SUBNET=192.0.2.0/28 \
-	CHARSOOQ_WEB_BLUE_EDGE_IP=192.0.2.11 \
-	CHARSOOQ_EDGE_GREEN_SUBNET=192.0.2.16/28 \
-	CHARSOOQ_WEB_GREEN_EDGE_IP=192.0.2.17
+	CHARSOOQ_EDGE_SUBNET=192.0.2.0/28 \
+	CHARSOOQ_WEB_EDGE_IP=192.0.2.11 \
+	CHARSOOQ_PUBLIC_SCHEME=http \
+	CHARSOOQ_PUBLIC_PORT=80
 
 PROD_IMAGE_ENV = \
 	CHARSOOQ_API_IMAGE=ghcr.io/example/charsooq-api@sha256:0000000000000000000000000000000000000000000000000000000000000000 \
 	CHARSOOQ_WEB_IMAGE=ghcr.io/example/charsooq-web@sha256:0000000000000000000000000000000000000000000000000000000000000000
 
 PROD_STRUCTURAL_ENV = $(PROD_DEPLOYMENT_ENV) $(PROD_IMAGE_ENV)
-PROD_SLOT ?= blue ## Blue-Green slot used by prod-up/prod-pull/prod-ps helpers
 
 # Local build identity. Every value is derived from the checkout, so a local
 # build carries the same OCI metadata a published image carries and the same
@@ -193,10 +194,9 @@ PROD_BUILD_ENV = \
 	CHARSOOQ_BUILD_VERSION=$(PROD_BUILD_VERSION) \
 	CHARSOOQ_BUILD_SOURCE=$(PROD_BUILD_SOURCE)
 
-prod-config: ## Validate the production Blue-Green compose file (no secrets needed)
-	$(PROD_STRUCTURAL_ENV) $(COMPOSE_PROD) --profile blue config --quiet
-	$(PROD_STRUCTURAL_ENV) $(COMPOSE_PROD) --profile green config --quiet
-	@echo "production compose: blue and green slot structure valid (documentation values only)"
+prod-config: ## Validate the production compose file (no secrets needed)
+	$(PROD_STRUCTURAL_ENV) $(COMPOSE_PROD) config --quiet
+	@echo "production compose structure valid (documentation values only)"
 
 # Offline certificate validation. Reads local files only: no network, no key
 # material printed, no issuance. Supply the host that must appear in the leaf
@@ -255,11 +255,20 @@ prod-caddy-validate: ## Validate the Caddyfile in the pinned Caddy image (needs 
 prod-build: ## Build production API and web images from this commit (host-build fallback)
 	# The deployment values are documentation placeholders: Compose interpolates
 	# the whole file before building, and none of them affect the image bytes.
-	$(PROD_DEPLOYMENT_ENV) $(PROD_BUILD_ENV) $(COMPOSE_PROD) --profile blue build
+	$(PROD_DEPLOYMENT_ENV) $(PROD_BUILD_ENV) $(COMPOSE_PROD) build
 	@echo "built charsooq-api:$(PROD_BUILD_TAG) and charsooq-web:$(PROD_BUILD_TAG) from $(PROD_BUILD_REVISION)"
 
-prod-pull: ## Pull the released API and web images for a slot (SLOT=blue|green, needs image refs)
-	$(COMPOSE_PROD) --profile $(PROD_SLOT) pull api-$(PROD_SLOT) web-$(PROD_SLOT)
+# One command to deploy on the server. Set SSH_HOST to run remotely; otherwise
+# run it directly on the host. VERSION defaults to the newest published release.
+prod-deploy: ## Deploy the newest release (or VERSION=v1.2.3) to Production [SSH_HOST=...]
+ifeq ($(strip $(SSH_HOST)),)
+	./deploy/scripts/deploy.sh "$(VERSION)"
+else
+	ssh $(SSH_HOST) 'cd /opt/charsooq && ./deploy/scripts/deploy.sh "$(VERSION)"'
+endif
+
+prod-pull: ## Pull the released API and web images (needs image refs)
+	$(COMPOSE_PROD) pull api web
 
 prod-image-revision: ## Print the release commit recorded in the image references (needs the image variables)
 	@test -n "$(CHARSOOQ_API_IMAGE)" && test -n "$(CHARSOOQ_WEB_IMAGE)" || { \
@@ -275,21 +284,20 @@ prod-provision: ## Run idempotent database role provisioning once (needs real se
 prod-migrate: ## Run the production migration runner once (needs real secrets)
 	$(COMPOSE_PROD) run --rm migrate
 
-prod-bootstrap-owner: ## Run the explicit production owner bootstrap once (needs real secrets, SLOT=blue|green)
-	$(COMPOSE_PROD) --profile $(PROD_SLOT) run --rm api-$(PROD_SLOT) python backend/api/scripts/bootstrap_owner.py
+prod-bootstrap-owner: ## Run the explicit production owner bootstrap once (needs real secrets)
+	$(COMPOSE_PROD) run --rm api python backend/api/scripts/bootstrap_owner.py
 
-prod-up: ## Start base infra and one slot from released images (SLOT=blue|green, needs real secrets)
-	$(COMPOSE_PROD) up -d --no-build db caddy
-	$(COMPOSE_PROD) --profile $(PROD_SLOT) up -d --no-build
+prod-up: ## Start production services from released images (needs real secrets)
+	$(COMPOSE_PROD) up -d --no-build
 
-prod-ps: ## Show production service status (SLOT=blue|green)
-	$(COMPOSE_PROD) --profile $(PROD_SLOT) ps
+prod-ps: ## Show production service status
+	$(COMPOSE_PROD) ps
 
-prod-logs: ## Follow production logs (SLOT=blue|green)
-	$(COMPOSE_PROD) --profile $(PROD_SLOT) logs -f
+prod-logs: ## Follow production logs
+	$(COMPOSE_PROD) logs -f
 
 prod-down: ## Stop production services (keeps volumes and data)
-	$(COMPOSE_PROD) --profile blue --profile green down
+	$(COMPOSE_PROD) down
 
 # ─── DEPLOY ───────────────────────────────────────────────
 deploy-api: ## Deploy backend API to FastAPI Cloud (run from backend/api)

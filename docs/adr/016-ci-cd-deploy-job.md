@@ -1,6 +1,9 @@
 # ADR 016 — Event-driven CI/CD deploy job
 
-Date: 2026-11-16 · Status: accepted
+Date: 2026-11-16 · Status: superseded by [ADR 018](018-simple-production-deploy.md)
+
+> Kept as a record of the rejected runner/Blue-Green path. Do not implement from
+> this document; [ADR 018](018-simple-production-deploy.md) is the current design.
 
 ## Context
 

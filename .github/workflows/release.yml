@@ -12,18 +12,12 @@ on:
         description: "Tag of an existing published release (for example v1.0.0)."
         required: true
         type: string
-      deploy:
-        description: "Also deploy this release to Production (default: build and publish only)."
-        required: false
-        type: boolean
-        default: false
 
 concurrency:
-  # One release publishes once. A queued run waits for the running one
-  # instead of racing it. The group is keyed by the release tag, and the tag
-  # must be `v<version>`, so two different tags can never name the same image
-  # tag and race each other.
-  group: release-images-${{ github.event.release.tag_name || inputs.tag }}
+  # Publishes are serialized. Version and SHA tags are written once, and the
+  # `latest` discovery pointer must always name the newest completed release —
+  # two concurrent publishes could otherwise leave it pointing at an older one.
+  group: release-images
   cancel-in-progress: false
 
 permissions:
@@ -45,7 +39,7 @@ jobs:
     name: Publish the API and web images
     needs: [verify]
     runs-on: ubuntu-latest
-    # The deploy job consumes these outputs. The digests are the deployment
+    # The digests are the deployment
     # identity; the version and commit are the audit record.
     outputs:
       tag: ${{ steps.release.outputs.tag }}
@@ -169,7 +163,9 @@ jobs:
           # The version tag is the release identity and the SHA tag is the
           # commit alias. Both are written once: the registry does not
           # guarantee immutable tags, so this check is what keeps a tag from
-          # being re-pointed at bytes other than the recorded digest.
+          # being re-pointed at bytes other than the recorded digest. The
+          # `latest` pointer is deliberately excluded: it is moved on every
+          # release and is never used as a deployment reference.
           # The window between this check and the push is a race that only a
           # registry with immutable tags can close.
           existing=""
@@ -197,11 +193,13 @@ jobs:
           context: .
           file: Dockerfile.api
           push: true
-          # Two tags, written once: the release version and the commit SHA.
-          # There is no `latest` and no moving tag.
+          # Version and SHA tags are written once. `latest` is a mutable
+          # discovery pointer only: the server resolves it to a digest and
+          # verifies the release labels before deploying.
           tags: |
             ${{ steps.meta.outputs.api_image }}:${{ steps.release.outputs.version }}
             ${{ steps.meta.outputs.api_image }}:sha-${{ steps.meta.outputs.sha }}
+            ${{ steps.meta.outputs.api_image }}:latest
           build-args: |
             VCS_REF=${{ steps.meta.outputs.sha }}
             BUILD_DATE=${{ steps.meta.outputs.build_date }}
@@ -224,6 +222,7 @@ jobs:
           tags: |
             ${{ steps.meta.outputs.web_image }}:${{ steps.release.outputs.version }}
             ${{ steps.meta.outputs.web_image }}:sha-${{ steps.meta.outputs.sha }}
+            ${{ steps.meta.outputs.web_image }}:latest
           build-args: |
             API_URL_INTERNAL=${{ env.API_URL_INTERNAL }}
             VCS_REF=${{ steps.meta.outputs.sha }}
@@ -279,6 +278,15 @@ jobs:
               echo "::error::${image}:${VERSION} carries no attestation manifest"
               exit 1
             fi
+            # The discovery pointer must name the exact bytes just verified.
+            pointer="$(docker buildx imagetools inspect "${image}:latest" \
+              --format '{{.Manifest.Digest}}')"
+            released="$(docker buildx imagetools inspect "${image}:${VERSION}" \
+              --format '{{.Manifest.Digest}}')"
+            if [ "$pointer" != "$released" ]; then
+              echo "::error::${image}:latest (${pointer}) does not match ${image}:${VERSION} (${released})"
+              exit 1
+            fi
           done
 
       - name: Record the release images
@@ -316,7 +324,7 @@ jobs:
             echo
             echo "Commit: \`${SHA}\`"
             echo
-            echo "Deploy by digest, never by the tag:"
+            echo "`latest` is only a discovery pointer. Deploy by digest, never by the tag:"
             echo
             echo '```bash'
             echo "export CHARSOOQ_API_IMAGE='${API_IMAGE}@${API_DIGEST}'"
@@ -351,7 +359,9 @@ jobs:
 
           Commit: \`${SHA}\`
 
-          Production selects the images by digest:
+          `latest` is a discovery pointer only; Production resolves it to a
+          digest and verifies the release labels before deploying. Explicit
+          digest references:
           \`CHARSOOQ_API_IMAGE='${API_IMAGE}@${API_DIGEST}'\` and
           \`CHARSOOQ_WEB_IMAGE='${WEB_IMAGE}@${WEB_DIGEST}'\`.
           <!-- charsooq:image-digests:end -->
@@ -402,51 +412,3 @@ jobs:
           name: release-images
           path: release-images.json
           retention-days: 90
-
-  # Production deployment. It runs only after both images were published, on
-  # the self-hosted runner inside the company network. The runner keeps an
-  # outbound connection to GitHub, so no inbound port, webhook, or public IP is
-  # involved. The release event is the authorization: a draft or prerelease is
-  # rejected by the publish job, and a manual run must opt in explicitly.
-  deploy:
-    name: Deploy to Production
-    needs: [publish]
-    if: >-
-      (github.event_name == 'release' &&
-      github.event.release.draft == false &&
-      github.event.release.prerelease == false) ||
-      (github.event_name == 'workflow_dispatch' && inputs.deploy == true)
-    # The dedicated Production label. Pull requests never reach this job: the
-    # workflow has no `pull_request` trigger, and CI uses GitHub-hosted runners.
-    runs-on: [self-hosted, Linux, charsooq-production]
-    environment: production
-    timeout-minutes: 30
-    concurrency:
-      # One Production deployment at a time. A queued release waits for the
-      # active one instead of racing it.
-      group: deploy-production
-      cancel-in-progress: false
-    permissions:
-      contents: read
-    env:
-      # Digest references only. A tag is never the deployment identity.
-      CHARSOOQ_API_IMAGE: ${{ needs.publish.outputs.api_image }}@${{ needs.publish.outputs.api_digest }}
-      CHARSOOQ_WEB_IMAGE: ${{ needs.publish.outputs.web_image }}@${{ needs.publish.outputs.web_digest }}
-      CHARSOOQ_RELEASE_TAG: ${{ needs.publish.outputs.tag }}
-      CHARSOOQ_RELEASE_VERSION: ${{ needs.publish.outputs.version }}
-      CHARSOOQ_RELEASE_SHA: ${{ needs.publish.outputs.sha }}
-      CHARSOOQ_COMPOSE_FILE: ${{ github.workspace }}/compose.production.yml
-      # Non-secret deployment values (network, TLS, secret directory) come from
-      # the host, never from GitHub secrets.
-      CHARSOOQ_ENV_FILE: /etc/charsooq/production.env
-      CHARSOOQ_STATE_DIR: /etc/charsooq/state
-    steps:
-      - name: Check out the release commit
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-        with:
-          # The deploy scripts and compose file come from the released commit.
-          ref: ${{ needs.publish.outputs.tag }}
-          persist-credentials: false
-
-      - name: Deploy the released images
-        run: bash deploy/scripts/deploy.sh

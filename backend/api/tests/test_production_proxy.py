@@ -33,20 +33,17 @@ def _compose() -> dict[str, Any]:
         return cast(dict[str, Any], yaml.safe_load(handle))
 
 
-def test_the_only_upstream_is_the_active_web_slot() -> None:
+def test_the_only_upstream_is_the_single_web_service() -> None:
     site = _code("site.caddy")
-    active = _code("active-upstream.caddy")
 
-    assert "import active-upstream.caddy" in site
-    assert site.count("reverse_proxy") == 0
-    assert active.count("reverse_proxy") == 1
-    assert re.search(r"reverse_proxy web-(blue|green):3000", active)
-    # Only the active slot is proxied; no internal service is exposed.
-    combined = site + "\n" + active
-    assert "api:8000" not in combined
-    assert "db:5432" not in combined
-    assert "provision" not in combined
-    assert "migrate" not in combined
+    assert site.count("reverse_proxy") == 1
+    assert re.search(r"reverse_proxy web:3000", site)
+    # No upstream-switching machinery and no internal service is exposed.
+    assert "active-upstream" not in site
+    assert "api:8000" not in site
+    assert "db:5432" not in site
+    assert "provision" not in site
+    assert "migrate" not in site
 
 
 def test_protocol_and_tls_mode_are_configuration_driven() -> None:
@@ -71,24 +68,22 @@ def test_protocol_and_tls_mode_are_configuration_driven() -> None:
 
 
 def test_client_forwarding_headers_are_overwritten_not_trusted() -> None:
-    active = _code("active-upstream.caddy")
+    site = _code("site.caddy")
 
     for header, placeholder in (
         ("X-Forwarded-For", "{remote_host}"),
         ("X-Forwarded-Proto", "{scheme}"),
         ("X-Forwarded-Host", "{host}"),
     ):
-        assert f"header_up {header} {placeholder}" in active
-    # X-Forwarded-Port is rewritten by deploy.sh to the configured public port
-    # (443 for HTTPS, 80 for HTTP-only). The committed default is 443.
-    assert "header_up X-Forwarded-Port" in active
-    assert "443" in active
+        assert f"header_up {header} {placeholder}" in site
+    # X-Forwarded-Port comes from the configured public port (80 HTTP-only,
+    # 443 HTTPS); Caddy's Caddyfile default keeps 443 when unset.
+    assert "header_up X-Forwarded-Port {$CHARSOOQ_PUBLIC_PORT:443}" in site
     # RFC 7239 and vendor headers Caddy would otherwise pass through untouched.
     for header in ("-Forwarded", "-X-Real-IP", "-X-Forwarded-Server"):
-        assert f"header_up {header}" in active
+        assert f"header_up {header}" in site
     # Nothing upstream of Caddy is trusted, so no XFF value is ever accepted.
-    assert "trusted_proxies" not in active
-    assert "trusted_proxies" not in _code("site.caddy")
+    assert "trusted_proxies" not in site
 
 
 def test_hsts_is_owned_by_https_tls_modes_only_and_stays_conservative() -> None:
@@ -144,7 +139,6 @@ def test_access_log_never_captures_credentials() -> None:
     for name in (
         "Caddyfile",
         "site.caddy",
-        "active-upstream.caddy",
         "tls-organization.caddy",
         "tls-internal-ca.caddy",
     ):
@@ -157,18 +151,15 @@ def test_access_log_never_captures_credentials() -> None:
     assert "output stdout" in site
 
 
-def test_caddy_active_upstream_matches_a_compose_web_slot() -> None:
-    match = re.search(r"reverse_proxy ([a-z0-9_.-]+):(\d+)", _code("active-upstream.caddy"))
+def test_caddy_upstream_matches_the_compose_web_service() -> None:
+    match = re.search(r"reverse_proxy ([a-z0-9_.-]+):(\d+)", _code("site.caddy"))
     assert match is not None
     upstream, port = match.group(1), match.group(2)
-    assert upstream in {"web-blue", "web-green"}
+    assert upstream == "web"
 
     services = _compose()["services"]
     web = services[upstream]
     assert port in {str(item) for item in web["expose"]}
-    expected_networks = (
-        {"edge_blue", "proxy"} if upstream == "web-blue" else {"edge_green", "proxy"}
-    )
-    assert set(web["networks"]) == expected_networks
-    # The proxy is on that shared network only, never on edge/backend.
+    assert set(web["networks"]) == {"edge", "proxy"}
+    # The proxy is on the proxy network only, never on edge/backend.
     assert set(services["caddy"]["networks"]) == {"proxy"}

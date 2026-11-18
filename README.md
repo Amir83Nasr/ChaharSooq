@@ -247,7 +247,7 @@ The frontend client (`apps/web/lib/api.ts`) mirrors these shapes; see [AGENTS.md
 - Frontend e2e: `apps/web/e2e/` (playwright) — unauthenticated redirects, Persian login form, RTL shell, mobile layout; runs against the production build without a backend — `pnpm --filter web test:e2e`
 - Backend tests: `backend/api/tests/` (pytest) — auth flow, roles and user management, product CRUD, validation envelope
 - CI runs lint, format check, typecheck, both test suites, the production build, and the Playwright e2e suite. Staging deploys through the Vercel/FastAPI Cloud Git integration.
-- A published GitHub Release triggers the release workflow, which builds and pushes the API and web images for that commit and then runs a Production Blue-Green `deploy` job on the self-hosted runner with the `charsooq-production` label. The job is configured but needs the runner and `/etc/charsooq/production.env`; it has not been executed yet. See [AGENTS.md](AGENTS.md) section 3, [ADR 016](docs/adr/016-ci-cd-deploy-job.md), and [ADR 017](docs/adr/017-blue-green-deployment.md).
+- A published GitHub Release triggers the release workflow, which builds and pushes the API and web images for that commit ([ADR 015](docs/adr/015-container-image-release-and-publishing.md)). Deployment is a separate, explicit operator step: `make prod-deploy` runs a single-slot, digest-pinned, health-gated script on the server (or over SSH with `SSH_HOST=...`) and deploys the newest release. It has not been executed yet; see [AGENTS.md](AGENTS.md) section 3 and [ADR 018](docs/adr/018-simple-production-deploy.md). The earlier runner/Blue-Green design in ADR 016/017 is superseded.
 
 ## Build
 
@@ -271,6 +271,12 @@ make prod-migrate   # run the locked migration runner once (needs secrets)
 make prod-ps        # service status and health
 make prod-logs      # follow logs
 make prod-down      # stop services; volumes and data are kept
+
+# One-command deploy of the newest published release:
+make prod-deploy                             # run locally on the host
+make prod-deploy SSH_HOST=charsooq            # from a laptop, over SSH
+# A specific version is optional: make prod-deploy VERSION=v1.2.3
+# Rollback is the same command with the previous version tag.
 ```
 
 `make prod-up` runs the one-shot `provision` and `migrate` services in order; the API is not

@@ -1,6 +1,9 @@
 # ADR 017 — Blue-Green deployment for Production
 
-Date: 2026-11-16 · Status: accepted
+Date: 2026-11-16 · Status: superseded by [ADR 018](018-simple-production-deploy.md)
+
+> Kept as a record of the rejected Blue-Green design; it was never executed on
+> `market-linux`. Do not implement from this document.
 
 ## Context
 
@@ -33,9 +36,8 @@ constraints:
   `CHARSOOQ_WEB_GREEN_EDGE_IP`. Each slot API trusts only its own web address.
   The web image's baked `API_URL_INTERNAL=http://api:8000` is satisfied by the
   `api` network alias on the slot edge network.
-- **Single active upstream.** Caddy imports
-  [`deploy/caddy/active-upstream.caddy`](../../deploy/caddy/active-upstream.caddy).
-  The deploy script rewrites that file atomically and reloads Caddy with
+- **Single active upstream.** Caddy imports `deploy/caddy/active-upstream.caddy` (removed by
+  ADR 018). The deploy script rewrites that file atomically and reloads Caddy with
   `SIGUSR1` (admin API is off; `caddy reload` is unavailable). The file is part
   of the mounted `deploy/caddy` directory so the switch is visible without a
   container restart.

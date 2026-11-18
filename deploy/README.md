@@ -7,9 +7,10 @@ must never contain secret values, private keys, or certificates.
 ## Contents
 
 - `caddy/` — committed Caddy configuration: the main `Caddyfile`, the shared
-  site body, the two TLS-mode snippets (`organization` and `internal-ca`), and
-  the generated `active-upstream.caddy` that selects the active Blue-Green slot.
-  Mounted read-only into the `caddy` container.
+  `site.caddy` (which holds the single static `reverse_proxy web:3000`
+  upstream), and the three TLS-mode snippets. Mounted read-only into the
+  `caddy` container. No upstream-switching file and no reload-driven traffic
+  selection remain.
 - `tls/validate_certificate.py` — offline validator for a certificate/key pair
   (PEM structure, key match, chain, expiry, SAN, permissions). Prints no key
   material and performs no network access or issuance.
@@ -17,22 +18,18 @@ must never contain secret values, private keys, or certificates.
   `versions/<stamp>/` and switches the single `current` symlink atomically for
   rollback-safe activation.
 - `production.env.example` — template for the non-secret deployment variables
-  required by `compose.production.yml` (`CHARSOOQ_*`), including Blue-Green slot
-  edge values and **configuration-driven protocol/TLS** (HTTP-only or HTTPS).
-  Copy it **outside** the repository, fill the approved values, and source it
-  in the operator shell. Do not guess or auto-generate network/TLS values.
-- `scripts/deploy.sh` — the automated Production deploy entry point called by
-  the release workflow's `deploy` job on the self-hosted runner. It performs a
-  Blue-Green deployment by digest after required-variable/path preflight: it
-  starts the inactive slot, verifies revision/health/smoke checks, switches
-  `caddy/active-upstream.caddy` with a graceful reload, runs **protocol-aware**
-  external probes (HTTP or HTTPS from configuration), and keeps the previous
-  slot running for rollback. It never reads a secret value and never removes a
-  volume, database, or image.
-- `runner/` — **preparation only** for the repository-scoped self-hosted runner
-  (`charsooq-production` label): non-secret templates and read-only preflight
-  helpers. No runner is installed/registered and no token/secret is stored here.
-  See `runner/README.md` for the read-only preflight helpers.
+  required by `compose.production.yml` (`CHARSOOQ_*`), including the image
+  repositories, the single edge network/web address, and configuration-driven
+  protocol/TLS (HTTP-only or HTTPS). Copy it **outside** the repository, fill
+  the approved values, and source it in the operator shell. Do not guess or
+  auto-generate network/TLS values.
+- `scripts/deploy.sh` — the one Production deploy entry point, run on the host
+  (or over SSH via `make prod-deploy SSH_HOST=...`). With no argument it resolves
+  the `latest` discovery pointer to two image digests, checks that both images
+  report the same release version and commit, then pulls, provisions, migrates,
+  starts the single `api`/`web` pair, and verifies external health. A specific
+  version tag or two explicit digests are also accepted. It is fail-closed and
+  never reads a secret value or removes a volume, database, or image.
 
 ## What must stay outside this directory/repository
 
@@ -43,4 +40,6 @@ must never contain secret values, private keys, or certificates.
   default `/etc/charsooq/tls`.
 - Filled `production.env` files with real environment values.
 
-See [AGENTS.md](../AGENTS.md) for the rules and [README.md](../README.md) for the production stack.
+See [AGENTS.md](../AGENTS.md) for the rules, [README.md](../README.md) for the
+production stack, and [ADR 018](../docs/adr/018-simple-production-deploy.md)
+for why deployment is a single-slot script.

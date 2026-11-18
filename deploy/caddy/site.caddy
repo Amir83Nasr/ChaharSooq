@@ -1,6 +1,6 @@
-# Shared site body, imported into the active site in ./Caddyfile.
-# Keep the upstream limited to the active web slot. Do not add the API or
-# PostgreSQL here: the request path is Caddy -> web -> /api/* rewrite -> api.
+# Shared site body, imported into the site in ./Caddyfile.
+# Keep the upstream limited to `web`. Do not add the API or PostgreSQL here:
+# the request path is Caddy -> web -> /api/* rewrite -> api.
 
 encode zstd gzip
 
@@ -13,6 +13,22 @@ log {
 	output stdout
 }
 
-# The active slot is selected by deploy/scripts/deploy.sh, which rewrites this
-# file atomically and reloads Caddy before traffic moves.
-import active-upstream.caddy
+# The single deployable web service. No upstream switching, no reload signal:
+# a deploy replaces the web container and Compose reconnects this network alias.
+reverse_proxy web:3000 {
+	# Never forward client-supplied forwarding values. Caddy already ignores
+	# incoming X-Forwarded-* by default (no trusted_proxies is configured), and
+	# these lines make the rewrite explicit. They also drop the RFC 7239
+	# `Forwarded` header and other IP hints that Caddy would otherwise pass
+	# through untouched, so Next.js and FastAPI only ever see Caddy's values.
+	header_up X-Forwarded-For {remote_host}
+	header_up X-Forwarded-Proto {scheme}
+	header_up X-Forwarded-Host {host}
+	# The published external port for the configured public protocol (443 for
+	# HTTPS, 80 for HTTP-only). Next.js would otherwise fill this header with
+	# its own internal port (3000).
+	header_up X-Forwarded-Port {$CHARSOOQ_PUBLIC_PORT:443}
+	header_up -Forwarded
+	header_up -X-Real-IP
+	header_up -X-Forwarded-Server
+}

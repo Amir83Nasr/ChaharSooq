@@ -247,7 +247,7 @@ The frontend client (`apps/web/lib/api.ts`) mirrors these shapes; see [AGENTS.md
 - Frontend e2e: `apps/web/e2e/` (playwright) — unauthenticated redirects, Persian login form, RTL shell, mobile layout; runs against the production build without a backend — `pnpm --filter web test:e2e`
 - Backend tests: `backend/api/tests/` (pytest) — auth flow, roles and user management, product CRUD, validation envelope
 - CI runs lint, format check, typecheck, both test suites, the production build, and the Playwright e2e suite. Staging deploys through the Vercel/FastAPI Cloud Git integration.
-- A published GitHub Release triggers the release workflow, which builds and pushes the API and web images for that commit ([ADR 015](docs/adr/015-container-image-release-and-publishing.md)). Deployment is a separate, explicit operator step: `make prod-deploy` runs a single-slot, digest-pinned, health-gated script on the server (or over SSH with `SSH_HOST=...`) and deploys the newest release. It has not been executed yet; see [AGENTS.md](AGENTS.md) section 3 and [ADR 018](docs/adr/018-simple-production-deploy.md). The earlier runner/Blue-Green design in ADR 016/017 is superseded.
+- A `v*` tag triggers the release workflow, which verifies that commit, builds and pushes the API and web images, and only then publishes the GitHub Release with the verified digests in its body ([ADR 019](docs/adr/019-release-publication-after-image-verification.md)). Deployment is a separate, explicit operator step: `make prod-deploy` runs a single-slot, digest-pinned, health-gated script on the server (or over SSH with `SSH_HOST=...`) and deploys the newest release. It has not been executed yet; see [AGENTS.md](AGENTS.md) section 3 and [ADR 018](docs/adr/018-simple-production-deploy.md). The earlier runner/Blue-Green design in ADR 016/017 is superseded.
 
 ## Build
 
@@ -296,11 +296,12 @@ export CHARSOOQ_WEB_IMAGE='ghcr.io/<owner>/charsooq-web@sha256:<digest>'
 ```
 
 Images are published by [`.github/workflows/release.yml`](.github/workflows/release.yml) when a
-GitHub Release is published: both images are built from that one commit, tagged with the version
-and the commit SHA, stamped with OCI metadata, and shipped with provenance and an SBOM. The digests
-are recorded in the release body, and the digest — not the tag — is the deployment reference. See
-[AGENTS.md](AGENTS.md) section 3 and
-[ADR 015](docs/adr/015-container-image-release-and-publishing.md).
+`v*` tag is pushed: that commit is verified, both images are built from it, tagged with the version
+and the commit SHA, stamped with OCI metadata, and shipped with provenance and an SBOM. Only after
+the images are verified is the GitHub Release published, with the digests in its body. The digest —
+not the tag — is the deployment reference. See [AGENTS.md](AGENTS.md) section 3 and
+[ADR 015](docs/adr/015-container-image-release-and-publishing.md) and
+[ADR 019](docs/adr/019-release-publication-after-image-verification.md).
 
 ### Database roles and production secrets
 

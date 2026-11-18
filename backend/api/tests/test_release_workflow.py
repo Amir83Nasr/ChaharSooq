@@ -59,12 +59,12 @@ def _triggers() -> dict[str, Any]:
     return cast(dict[str, Any], triggers)
 
 
-def _publish_job() -> dict[str, Any]:
-    return cast(dict[str, Any], _workflow()["jobs"]["publish"])
+def _release_job() -> dict[str, Any]:
+    return cast(dict[str, Any], _workflow()["jobs"]["release"])
 
 
 def _steps() -> list[dict[str, Any]]:
-    return cast(list[dict[str, Any]], _publish_job()["steps"])
+    return cast(list[dict[str, Any]], _release_job()["steps"])
 
 
 def _step(step_id: str) -> dict[str, Any]:
@@ -120,10 +120,12 @@ def _used_actions(workflow: dict[str, Any]) -> list[str]:
 def _tag_validation_block() -> str:
     """The shell block that turns a release tag into an image tag."""
 
-    lines = _script("release").splitlines()
-    start = next(i for i, line in enumerate(lines) if 'if ! [[ "$tag" =~' in line)
+    lines = _script("validate").splitlines()
+    start = next(i for i, line in enumerate(lines) if 'if ! [[ "$TAG" =~' in line)
     end = next(
-        i for i, line in enumerate(lines[start:], start) if line.strip().startswith("version=")
+        i
+        for i, line in enumerate(lines[start:], start)
+        if line.strip().startswith('echo "version=')
     )
     return "\n".join(lines[start : end + 1])
 
@@ -175,32 +177,38 @@ def _run_guard(
     )
 
 
-def test_publishing_is_bound_to_a_published_release() -> None:
+def test_a_version_tag_requests_a_release_and_publication_is_last() -> None:
     triggers = _triggers()
 
-    # A push to `main` is never a Production release, so there is no push
-    # trigger at all.
-    assert "push" not in triggers
-    assert triggers["release"]["types"] == ["published"]
-    # A manual run must name an existing release, so it is an explicit and
-    # controlled mechanism rather than a second, unchecked trigger.
+    # A push to `main` is never a Production release; only a version tag asks
+    # for one. The Release is created after the images are verified, so the
+    # old `release: published` trigger would now be circular.
+    assert triggers["push"] == {"tags": ["v*"]}
+    assert "release" not in triggers
+    assert "branches" not in triggers["push"]
+    assert "pull_request" not in triggers
+    # A manual run names the tag to release, not an existing Release.
     assert triggers["workflow_dispatch"]["inputs"]["tag"]["required"] is True
+    steps = [str(step.get("name")) for step in _steps()]
+    assert steps.index("Verify the published images") < steps.index("Publish the GitHub Release")
+    assert "Pending" not in WORKFLOW_PATH.read_text(encoding="utf-8")
 
 
-def test_the_publish_job_runs_the_repository_checks_first() -> None:
+def test_the_release_job_runs_the_repository_checks_first() -> None:
     workflow = _workflow()
 
     # ci.yml is reusable, and the release job waits for it: no image is
     # published from a commit that did not pass the checks.
     assert workflow["jobs"]["verify"]["uses"] == "./.github/workflows/ci.yml"
-    assert _publish_job()["needs"] == ["verify"]
+    assert _release_job()["needs"] == ["verify"]
 
 
-def test_permissions_are_the_minimum_the_publish_needs() -> None:
-    permissions = _publish_job()["permissions"]
+def test_permissions_are_the_minimum_the_release_needs() -> None:
+    permissions = _release_job()["permissions"]
 
     assert permissions == {
-        "contents": "write",  # record the digests in the release body
+        "contents": "write",  # publish the Release with the final digests
+        "pull-requests": "read",  # PR titles in the release notes
         "packages": "write",  # push to the container registry
         "id-token": "write",  # OIDC token for the attestation
         "attestations": "write",  # store the build provenance attestation
@@ -221,23 +229,23 @@ def test_the_release_commit_is_checked_out_by_tag() -> None:
         step for step in _steps() if str(step.get("uses", "")).startswith("actions/checkout")
     )
 
-    assert checkout["with"]["ref"] == "${{ steps.release.outputs.tag }}"
+    assert checkout["with"]["ref"] == "${{ env.TAG }}"
     # The full history is needed to peel an annotated tag to its commit.
     assert checkout["with"]["fetch-depth"] == 0
     # The token is not left in the checkout configuration.
     assert checkout["with"]["persist-credentials"] is False
 
 
-def test_the_release_must_be_a_stable_published_release() -> None:
+def test_an_existing_published_release_is_never_overwritten() -> None:
     script = _script("release")
 
-    assert "releases/tags/" in script  # a manual run resolves an existing release
+    # A retry may reuse an interrupted draft, but a public Release is final.
+    assert "releases/tags/" in script
     assert ".draft" in script
-    assert ".prerelease" in script
-    # The version tag is the release tag without its leading "v" and must be
-    # a legal Docker tag.
-    assert 'version="${BASH_REMATCH[1]}"' in script
-    assert "=~ ^v(" in script
+    assert "already published" in script
+    assert "exit 1" in script
+    # A strict semver tag is required; validation runs in the `validate` step.
+    assert "=~ ^v(" in _script("validate")
 
 
 def test_the_release_tag_is_validated_as_a_whole_string() -> None:
@@ -254,7 +262,9 @@ def test_the_release_tag_is_validated_as_a_whole_string() -> None:
             [
                 BASH,
                 "-c",
-                'set -euo pipefail\ntag="$1"\n' + block + '\nprintf "%s" "$version"',
+                'set -euo pipefail\nexport TAG="$1" GITHUB_OUTPUT=/dev/null\n'
+                + block
+                + '\nprintf "%s" "$version"',
                 "bash",
                 tag,
             ],
@@ -268,7 +278,8 @@ def test_the_release_tag_is_validated_as_a_whole_string() -> None:
 
     assert version_for("v1.0.0") == "1.0.0"
     assert version_for("v0.1.0") == "0.1.0"
-    assert version_for("v1.0.0-rc.1") == "1.0.0-rc.1"
+    # A release tag is exactly vMAJOR.MINOR.PATCH (ADR 019).
+    assert version_for("v1.0.0-rc.1") is None
     # Without the `v` the tag would collide with another tag's image tag.
     assert version_for("1.0.0") is None
     assert version_for("v") is None
@@ -276,9 +287,6 @@ def test_the_release_tag_is_validated_as_a_whole_string() -> None:
     assert version_for("v1.0.0 with spaces") is None
     # A newline must not smuggle a second line past the check.
     assert version_for("v1.0.0\nEVIL=1") is None
-    # The image tag is at most 128 characters.
-    assert version_for("v" + "a" * 128) == "a" * 128
-    assert version_for("v" + "a" * 129) is None
 
 
 def test_both_images_are_built_from_the_same_commit() -> None:
@@ -293,7 +301,7 @@ def test_both_images_are_built_from_the_same_commit() -> None:
     for step in (api, web):
         args = str(step["with"]["build-args"])
         assert "VCS_REF=${{ steps.meta.outputs.sha }}" in args
-        assert "VERSION=${{ steps.release.outputs.version }}" in args
+        assert "VERSION=${{ steps.validate.outputs.version }}" in args
         assert "SOURCE=${{ steps.meta.outputs.source }}" in args
         assert "BUILD_DATE=${{ steps.meta.outputs.build_date }}" in args
 
@@ -306,7 +314,7 @@ def test_image_tags_carry_the_version_the_commit_and_a_discovery_pointer() -> No
             if line.strip()
         ]
         assert len(tags) == 3
-        assert tags[0].endswith(":${{ steps.release.outputs.version }}")
+        assert tags[0].endswith(":${{ steps.validate.outputs.version }}")
         assert tags[1].endswith(":sha-${{ steps.meta.outputs.sha }}")
         assert tags[2].endswith(":latest")
 
@@ -318,11 +326,11 @@ def test_image_tags_carry_the_version_the_commit_and_a_discovery_pointer() -> No
 def test_publishes_are_serialized_so_latest_names_the_newest_release() -> None:
     concurrency = _workflow()["concurrency"]
 
-    assert concurrency == {"group": "release-images", "cancel-in-progress": False}
+    assert concurrency == {"group": "release", "cancel-in-progress": False}
 
 
 def test_the_verify_step_checks_the_latest_pointer() -> None:
-    script = _script("verify")
+    script = _script("verify_images")
 
     assert '"${image}:latest"' in script
     assert "{{.Manifest.Digest}}" in script
@@ -391,7 +399,7 @@ def test_provenance_and_sbom_travel_with_the_published_image() -> None:
 
 
 def test_the_published_image_is_read_back_from_the_registry() -> None:
-    script = _script("verify")
+    script = _script("verify_images")
 
     # The commit link is verified against the published bytes, not assumed.
     assert "imagetools inspect" in script
@@ -403,19 +411,19 @@ def test_the_published_image_is_read_back_from_the_registry() -> None:
 def test_the_digests_are_recorded_in_the_release_report() -> None:
     record = _script("record")
     release = _script("release_body")
+    publish = _script("publish_release")
 
     assert "release-images.json" in record
     assert "$GITHUB_STEP_SUMMARY" in record
-    # The release body carries the digests, so the artifact can be identified
-    # later without reading the workflow log.
+    # The final body is built from the verified digests, then handed to the
+    # publication step as a file. No placeholder is ever published.
     assert "charsooq:image-digests:start" in release
-    assert "--method" in release and "PATCH" in release
-    # The body is a literal string, never a file name: `gh api --field`
-    # reads a value that starts with `@` from the file system, and
-    # `--raw-field` does not.
-    assert '"-F"' not in release
-    assert '"--field"' not in release
-    assert '"-f"' in release
+    assert "${API_DIGEST}" in release
+    assert "${WEB_DIGEST}" in release
+    assert "--notes-file" in publish
+    assert "gh release create" in publish
+    assert "gh release edit" in publish  # reuse a draft left by an interrupted run
+    assert "published concurrently" in publish
 
 
 def test_the_web_build_argument_matches_the_production_compose_file() -> None:
@@ -424,7 +432,7 @@ def test_the_web_build_argument_matches_the_production_compose_file() -> None:
     # service must reach the API as `api`, exactly as the release builds it.
     compose_value = compose["services"]["web"]["build"]["args"]["API_URL_INTERNAL"]
 
-    api_url_internal = cast(str, _publish_job()["env"]["API_URL_INTERNAL"])
+    api_url_internal = cast(str, _release_job()["env"]["API_URL_INTERNAL"])
     assert api_url_internal == compose_value
     assert "API_URL_INTERNAL=${{ env.API_URL_INTERNAL }}" in str(
         _step("build_web")["with"]["build-args"]
@@ -461,7 +469,10 @@ def test_the_release_verification_runs_against_the_release_commit() -> None:
 
     assert verify["uses"] == "./.github/workflows/ci.yml"
     # The release tag is handed to the reusable workflow.
-    assert verify["with"]["ref"] == "${{ github.event.release.tag_name || inputs.tag }}"
+    assert (
+        verify["with"]["ref"]
+        == "${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+    )
     # The reusable workflow takes it as an input and checks it out.
     ci_inputs = _ci_triggers()["workflow_call"]["inputs"]
     assert "ref" in ci_inputs
@@ -506,12 +517,12 @@ def test_every_action_is_pinned_to_a_full_commit_sha() -> None:
 DEPLOY_SCRIPT_PATH = REPO_ROOT / "deploy" / "scripts" / "deploy.sh"
 
 
-def test_the_release_workflow_only_publishes_images() -> None:
+def test_the_release_workflow_publishes_images_and_the_release_but_never_deploys() -> None:
     """Deployment is a manual, single command on the server — not a CI job."""
 
     workflow = _workflow()
 
-    assert set(workflow["jobs"]) == {"verify", "publish"}
+    assert set(workflow["jobs"]) == {"verify", "release"}
     assert "deploy" not in workflow["jobs"]
     assert "pull_request" not in _triggers()
     assert "deploy" not in _triggers()["workflow_dispatch"]["inputs"]
@@ -523,21 +534,19 @@ def test_the_release_workflow_only_publishes_images() -> None:
         assert "self-hosted" not in str(job.get("runs-on", ""))
 
 
-def test_the_publish_job_exposes_the_release_identity_and_digests() -> None:
-    outputs = _publish_job()["outputs"]
+def test_the_release_is_published_only_after_the_images_are_verified() -> None:
+    ids = [str(step.get("id")) for step in _steps()]
 
-    assert outputs["tag"] == "${{ steps.release.outputs.tag }}"
-    assert outputs["version"] == "${{ steps.release.outputs.version }}"
-    assert outputs["sha"] == "${{ steps.meta.outputs.sha }}"
-    assert outputs["api_digest"] == "${{ steps.build_api.outputs.digest }}"
-    assert outputs["web_digest"] == "${{ steps.build_web.outputs.digest }}"
+    assert ids.index("verify_images") < ids.index("notes") < ids.index("release_body")
+    assert ids.index("release_body") < ids.index("publish_release")
 
 
-def test_a_manual_run_still_names_a_published_release() -> None:
+def test_a_manual_run_names_a_tag_to_release() -> None:
     tag_input = _triggers()["workflow_dispatch"]["inputs"]["tag"]
 
     assert tag_input["required"] is True
     assert tag_input["type"] == "string"
+    assert "tag" in tag_input["description"].lower()
 
 
 def test_the_deploy_script_is_fail_closed_and_deploys_by_digest() -> None:

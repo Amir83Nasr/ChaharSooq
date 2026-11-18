@@ -1,23 +1,23 @@
-name: Release Images
+name: Release
 
-# Images are published only from a published GitHub Release. There is
-# deliberately no `push` trigger: a push to `main` is never a Production
-# release (AGENTS.md, section 3).
+# A version tag is the release request. CI and image publication run first;
+# the GitHub Release is published last, with the verified digests already in
+# its body. A push to `main` is never a Production release (AGENTS.md, section 3).
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag of an existing published release (for example v1.0.0)."
+        description: "Existing tag to release (for example v1.0.0)."
         required: true
         type: string
 
 concurrency:
-  # Publishes are serialized. Version and SHA tags are written once, and the
-  # `latest` discovery pointer must always name the newest completed release —
-  # two concurrent publishes could otherwise leave it pointing at an older one.
-  group: release-images
+  # Publishes are serialized so the `latest` discovery pointer always names
+  # the newest completed release (ADR 018). Two releases must not race.
+  group: release
   cancel-in-progress: false
 
 permissions:
@@ -30,30 +30,21 @@ jobs:
     # image is published. ci.yml is reusable for that purpose.
     uses: ./.github/workflows/ci.yml
     with:
-      # The release tag, not the branch: the checks must run against the very
-      # commit that is about to be published, not against whatever `main`
-      # happens to point at.
-      ref: ${{ github.event.release.tag_name || inputs.tag }}
+      # The tag, not a branch: the checks must run against the commit that is
+      # about to be published, not against whatever `main` happens to point at.
+      ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 
-  publish:
-    name: Publish the API and web images
+  release:
+    name: Publish the images and the GitHub Release
     needs: [verify]
     runs-on: ubuntu-latest
-    # The digests are the deployment
-    # identity; the version and commit are the audit record.
-    outputs:
-      tag: ${{ steps.release.outputs.tag }}
-      version: ${{ steps.release.outputs.version }}
-      sha: ${{ steps.meta.outputs.sha }}
-      api_image: ${{ steps.meta.outputs.api_image }}
-      web_image: ${{ steps.meta.outputs.web_image }}
-      api_digest: ${{ steps.build_api.outputs.digest }}
-      web_digest: ${{ steps.build_web.outputs.digest }}
     permissions:
-      # `contents: write` records the image digests in the release body.
+      # `contents: write` publishes the release and records its body.
+      # `pull-requests: read` supplies PR titles for the release notes.
       # `packages: write` is the registry. `id-token: write` and
       # `attestations: write` back the build provenance attestation.
       contents: write
+      pull-requests: read
       packages: write
       id-token: write
       attestations: write
@@ -65,68 +56,49 @@ jobs:
       # at build time. It must stay identical to compose.production.yml; a
       # mismatch is a wrong rewrite in the released image.
       API_URL_INTERNAL: http://api:8000
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
     steps:
-      - name: Resolve the release
+      - name: Validate the release tag
+        id: validate
+        run: |
+          set -euo pipefail
+          if ! [[ "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "::error::tag '${TAG}' is not a valid release tag; expected vMAJOR.MINOR.PATCH"
+            exit 1
+          fi
+          version="${TAG#v}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve the release state
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
-          EVENT_NAME: ${{ github.event_name }}
-          EVENT_TAG: ${{ github.event.release.tag_name }}
-          EVENT_RELEASE_ID: ${{ github.event.release.id }}
-          INPUT_TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" = "release" ]; then
-            tag="$EVENT_TAG"
-            release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/${EVENT_RELEASE_ID}")"
-          else
-            tag="$INPUT_TAG"
-            # A manual run is not a second authorization: it still has to name
-            # a release that exists and is published.
-            release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}")" || {
-              echo "::error::no release exists for tag ${tag}; publish the release first"
+          # A previous run may have left a draft after a failed image build.
+          # Reuse that draft, but never overwrite a release that is public.
+          if release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" 2>/dev/null)"; then
+            if [ "$(jq -r '.draft' <<<"$release_json")" != "true" ]; then
+              echo "::error::release ${TAG} is already published; publish a new version instead"
               exit 1
-            }
+            fi
+            echo "draft_id=$(jq -r '.id' <<<"$release_json")" >> "$GITHUB_OUTPUT"
+            echo "Reusing the draft release left by an interrupted run of ${TAG}."
+          else
+            echo "draft_id=" >> "$GITHUB_OUTPUT"
           fi
-          # The release the API returned must be the one that was asked for.
-          resolved_tag="$(jq -r '.tag_name' <<<"$release_json")"
-          if [ "$resolved_tag" != "$tag" ]; then
-            echo "::error::release '${resolved_tag}' does not match the requested tag '${tag}'"
-            exit 1
-          fi
-          if [ "$(jq -r '.draft' <<<"$release_json")" = "true" ] ||
-            [ "$(jq -r '.prerelease' <<<"$release_json")" = "true" ]; then
-            echo "::error::release ${tag} is a draft or a prerelease; only a stable published release may publish images"
-            exit 1
-          fi
-          # The release tag must be `v<version>`. The leading `v` is stripped to
-          # form the image tag, and requiring it keeps the release tag and the
-          # image tag in a one-to-one relation, so two different release tags
-          # can never name the same image tag.
-          # `[[ ... =~ ... ]]` anchors the whole string, so an embedded
-          # newline cannot smuggle a second line past the check.
-          if ! [[ "$tag" =~ ^v([A-Za-z0-9_][A-Za-z0-9._-]{0,127})$ ]]; then
-            echo "::error::release tag '${tag}' is not a valid release tag; expected v<version>"
-            exit 1
-          fi
-          version="${BASH_REMATCH[1]}"
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-          echo "release_id=$(jq -r '.id' <<<"$release_json")" >> "$GITHUB_OUTPUT"
 
       - name: Check out the release commit
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
-          # The tag, not the branch: the image must come from the released
-          # commit, never from whatever `main` happens to point at.
-          ref: ${{ steps.release.outputs.tag }}
+          # The tag, not a branch: both the images and the release notes must
+          # come from the released commit, never from `main`.
+          ref: ${{ env.TAG }}
           fetch-depth: 0
           persist-credentials: false
 
       - name: Resolve the build metadata
         id: meta
-        env:
-          TAG: ${{ steps.release.outputs.tag }}
         run: |
           set -euo pipefail
           sha="$(git rev-parse HEAD^{commit})"
@@ -156,7 +128,7 @@ jobs:
         env:
           API_IMAGE: ${{ steps.meta.outputs.api_image }}
           WEB_IMAGE: ${{ steps.meta.outputs.web_image }}
-          VERSION: ${{ steps.release.outputs.version }}
+          VERSION: ${{ steps.validate.outputs.version }}
           SHA: ${{ steps.meta.outputs.sha }}
         run: |
           set -euo pipefail
@@ -197,13 +169,13 @@ jobs:
           # discovery pointer only: the server resolves it to a digest and
           # verifies the release labels before deploying.
           tags: |
-            ${{ steps.meta.outputs.api_image }}:${{ steps.release.outputs.version }}
+            ${{ steps.meta.outputs.api_image }}:${{ steps.validate.outputs.version }}
             ${{ steps.meta.outputs.api_image }}:sha-${{ steps.meta.outputs.sha }}
             ${{ steps.meta.outputs.api_image }}:latest
           build-args: |
             VCS_REF=${{ steps.meta.outputs.sha }}
             BUILD_DATE=${{ steps.meta.outputs.build_date }}
-            VERSION=${{ steps.release.outputs.version }}
+            VERSION=${{ steps.validate.outputs.version }}
             SOURCE=${{ steps.meta.outputs.source }}
           cache-from: type=gha,scope=api
           cache-to: type=gha,mode=max,scope=api
@@ -220,14 +192,14 @@ jobs:
           file: Dockerfile.web
           push: true
           tags: |
-            ${{ steps.meta.outputs.web_image }}:${{ steps.release.outputs.version }}
+            ${{ steps.meta.outputs.web_image }}:${{ steps.validate.outputs.version }}
             ${{ steps.meta.outputs.web_image }}:sha-${{ steps.meta.outputs.sha }}
             ${{ steps.meta.outputs.web_image }}:latest
           build-args: |
             API_URL_INTERNAL=${{ env.API_URL_INTERNAL }}
             VCS_REF=${{ steps.meta.outputs.sha }}
             BUILD_DATE=${{ steps.meta.outputs.build_date }}
-            VERSION=${{ steps.release.outputs.version }}
+            VERSION=${{ steps.validate.outputs.version }}
             SOURCE=${{ steps.meta.outputs.source }}
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
@@ -249,11 +221,11 @@ jobs:
           push-to-registry: true
 
       - name: Verify the published images
-        id: verify
+        id: verify_images
         env:
           API_IMAGE: ${{ steps.meta.outputs.api_image }}
           WEB_IMAGE: ${{ steps.meta.outputs.web_image }}
-          VERSION: ${{ steps.release.outputs.version }}
+          VERSION: ${{ steps.validate.outputs.version }}
           SHA: ${{ steps.meta.outputs.sha }}
         run: |
           set -euo pipefail
@@ -289,6 +261,164 @@ jobs:
             fi
           done
 
+      - name: Prepare the release notes
+        id: notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          previous_tag="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | awk -v tag="$TAG" '$0==tag{found=1; next} found && $0 ~ /^v[0-9]+\.[0-9]+\.[0-9]+$/{print; exit}')"
+
+          notes_file="$(mktemp)"
+          : > "$notes_file"
+          if [ -n "$previous_tag" ]; then
+            range="${previous_tag}..${TAG}"
+            echo "previous_tag=${previous_tag}" >> "$GITHUB_OUTPUT"
+            compare_url="https://github.com/${GITHUB_REPOSITORY}/compare/${previous_tag}...${TAG}"
+
+            mapfile -t subjects < <(git log --no-merges --format='%s' "${range}" 2>/dev/null || true)
+            fixes_file="$(mktemp)"
+            changes_file="$(mktemp)"
+            highlights_file="$(mktemp)"
+            : > "$fixes_file"; : > "$changes_file"; : > "$highlights_file"
+
+            # Prefer merged PR titles for highlights when available.
+            pr_numbers="$(git log --format=%s "${range}" | sed -nE 's/.*\(#([0-9]+)\).*/\1/p' | sort -u || true)"
+            if [ -n "$pr_numbers" ]; then
+              while IFS= read -r pr; do
+                [ -n "$pr" ] || continue
+                title="$(gh pr view "$pr" --json title --jq '.title' 2>/dev/null || true)"
+                if [ -n "$title" ]; then
+                  echo "- ${title} (#${pr})" >> "$highlights_file"
+                fi
+              done <<< "$pr_numbers"
+            fi
+
+            for s in "${subjects[@]}"; do
+              [ -n "$s" ] || continue
+              case "$s" in
+                fix*|Fix*|bugfix*|hotfix*) echo "- ${s}" >> "$fixes_file" ;;
+                feat*|Feat*) echo "- ${s}" >> "$highlights_file" ;;
+                *) echo "- ${s}" >> "$changes_file" ;;
+              esac
+            done
+
+            if [ -s "$highlights_file" ]; then
+              echo "## Highlights" >> "$notes_file"; echo >> "$notes_file"
+              awk '!seen[$0]++' "$highlights_file" | head -20 >> "$notes_file"
+              echo >> "$notes_file"
+            fi
+            if [ -s "$fixes_file" ]; then
+              echo "## Fixes" >> "$notes_file"; echo >> "$notes_file"
+              awk '!seen[$0]++' "$fixes_file" | head -20 >> "$notes_file"
+              echo >> "$notes_file"
+            fi
+            if [ -s "$changes_file" ]; then
+              echo "## Changes" >> "$notes_file"; echo >> "$notes_file"
+              awk '!seen[$0]++' "$changes_file" | head -30 >> "$notes_file"
+              echo >> "$notes_file"
+            fi
+            if [ ! -s "$notes_file" ]; then
+              echo "## Highlights" >> "$notes_file"; echo >> "$notes_file"
+              echo "- Release ${TAG}." >> "$notes_file"; echo >> "$notes_file"
+            fi
+
+            echo "## Deployment notes" >> "$notes_file"
+            echo >> "$notes_file"
+            echo "- CI-validated source revision for this release tag." >> "$notes_file"
+            echo "- API and Web images were built, verified, and published before this release was published." >> "$notes_file"
+            echo "- Image digests and build attestations are recorded below." >> "$notes_file"
+            echo "- Full diff: ${compare_url}" >> "$notes_file"
+          else
+            echo "previous_tag=" >> "$GITHUB_OUTPUT"
+            cat > "$notes_file" <<'EOF'
+          ## Highlights
+
+          - Initial automated release publication for this version tag.
+
+          ## Deployment notes
+
+          - CI-validated source revision for this release tag.
+          - API and Web images were built, verified, and published before this release was published.
+          - Image digests and build attestations are recorded below.
+          EOF
+          fi
+
+          echo "notes_file=${notes_file}" >> "$GITHUB_OUTPUT"
+
+      - name: Build the release body
+        id: release_body
+        env:
+          NOTES_FILE: ${{ steps.notes.outputs.notes_file }}
+          API_IMAGE: ${{ steps.meta.outputs.api_image }}
+          WEB_IMAGE: ${{ steps.meta.outputs.web_image }}
+          API_DIGEST: ${{ steps.build_api.outputs.digest }}
+          WEB_DIGEST: ${{ steps.build_web.outputs.digest }}
+          VERSION: ${{ steps.validate.outputs.version }}
+          SHA: ${{ steps.meta.outputs.sha }}
+        run: |
+          set -euo pipefail
+          body_file="$(mktemp)"
+          {
+            echo "ChaharSooq release \`${TAG}\`."
+            echo
+            echo "- API and Web container images."
+            echo "- CI-validated source revision."
+            echo "- Image digests and build attestations are recorded in this release."
+            echo
+            cat "$NOTES_FILE"
+            echo
+            echo "<!-- charsooq:image-digests:start -->"
+            echo "### Released container images"
+            echo
+            echo "| Image | Reference | Digest |"
+            echo "| --- | --- | --- |"
+            echo "| API | \`${API_IMAGE}:${VERSION}\` | \`${API_DIGEST}\` |"
+            echo "| Web | \`${WEB_IMAGE}:${VERSION}\` | \`${WEB_DIGEST}\` |"
+            echo
+            echo "Commit: \`${SHA}\`"
+            echo
+            echo "\`latest\` is a discovery pointer only. Production resolves it to a digest and verifies the release labels before deploying. Explicit digest references:"
+            echo
+            echo '```bash'
+            echo "export CHARSOOQ_API_IMAGE='${API_IMAGE}@${API_DIGEST}'"
+            echo "export CHARSOOQ_WEB_IMAGE='${WEB_IMAGE}@${WEB_DIGEST}'"
+            echo '```'
+            echo "<!-- charsooq:image-digests:end -->"
+          } > "$body_file"
+          echo "body_file=${body_file}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish the GitHub Release
+        id: publish_release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BODY_FILE: ${{ steps.release_body.outputs.body_file }}
+          DRAFT_ID: ${{ steps.release.outputs.draft_id }}
+          SHA: ${{ steps.meta.outputs.sha }}
+        run: |
+          set -euo pipefail
+          # Both images are published and verified; nothing in this body is a
+          # promise about work that has not finished. Fail closed if another
+          # run published the release while this one was building.
+          current_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" 2>/dev/null || true)"
+          if [ -n "$current_json" ] && [ "$(jq -r '.draft' <<<"$current_json")" != "true" ]; then
+            echo "::error::release ${TAG} was published concurrently; refusing to overwrite it"
+            exit 1
+          fi
+          if [ -n "$DRAFT_ID" ]; then
+            gh release edit "$TAG" \
+              --draft=false \
+              --latest \
+              --title "ChaharSooq ${TAG}" \
+              --notes-file "$BODY_FILE"
+          else
+            gh release create "$TAG" \
+              --title "ChaharSooq ${TAG}" \
+              --notes-file "$BODY_FILE" \
+              --target "$SHA" \
+              --latest
+          fi
+
       - name: Record the release images
         id: record
         env:
@@ -296,8 +426,7 @@ jobs:
           WEB_IMAGE: ${{ steps.meta.outputs.web_image }}
           API_DIGEST: ${{ steps.build_api.outputs.digest }}
           WEB_DIGEST: ${{ steps.build_web.outputs.digest }}
-          VERSION: ${{ steps.release.outputs.version }}
-          TAG: ${{ steps.release.outputs.tag }}
+          VERSION: ${{ steps.validate.outputs.version }}
           SHA: ${{ steps.meta.outputs.sha }}
         run: |
           set -euo pipefail
@@ -324,87 +453,13 @@ jobs:
             echo
             echo "Commit: \`${SHA}\`"
             echo
-            echo "`latest` is only a discovery pointer. Deploy by digest, never by the tag:"
+            echo '`latest` is only a discovery pointer. Deploy by digest, never by the tag:'
             echo
             echo '```bash'
             echo "export CHARSOOQ_API_IMAGE='${API_IMAGE}@${API_DIGEST}'"
             echo "export CHARSOOQ_WEB_IMAGE='${WEB_IMAGE}@${WEB_DIGEST}'"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Record the digests in the release
-        id: release_body
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_ID: ${{ steps.release.outputs.release_id }}
-          API_IMAGE: ${{ steps.meta.outputs.api_image }}
-          WEB_IMAGE: ${{ steps.meta.outputs.web_image }}
-          API_DIGEST: ${{ steps.build_api.outputs.digest }}
-          WEB_DIGEST: ${{ steps.build_web.outputs.digest }}
-          VERSION: ${{ steps.release.outputs.version }}
-          SHA: ${{ steps.meta.outputs.sha }}
-        run: |
-          set -euo pipefail
-          # The release body is the release report: the digests are written
-          # there so the published artifact can be identified later without
-          # reading the workflow log.
-          section="$(cat <<SECTION
-          <!-- charsooq:image-digests:start -->
-          ### Released container images
-
-          | Image | Reference | Digest |
-          | --- | --- | --- |
-          | API | \`${API_IMAGE}:${VERSION}\` | \`${API_DIGEST}\` |
-          | Web | \`${WEB_IMAGE}:${VERSION}\` | \`${WEB_DIGEST}\` |
-
-          Commit: \`${SHA}\`
-
-          `latest` is a discovery pointer only; Production resolves it to a
-          digest and verifies the release labels before deploying. Explicit
-          digest references:
-          \`CHARSOOQ_API_IMAGE='${API_IMAGE}@${API_DIGEST}'\` and
-          \`CHARSOOQ_WEB_IMAGE='${WEB_IMAGE}@${WEB_DIGEST}'\`.
-          <!-- charsooq:image-digests:end -->
-          SECTION
-          )"
-          SECTION="$section" python3 <<'PY'
-          import os
-          import re
-          import subprocess
-
-          start = "<!-- charsooq:image-digests:start -->"
-          end = "<!-- charsooq:image-digests:end -->"
-          pattern = re.compile(re.escape(start) + r".*?" + re.escape(end) + r"\n?", re.S)
-
-          body = subprocess.run(
-              [
-                  "gh",
-                  "api",
-                  f"repos/{os.environ['GITHUB_REPOSITORY']}/releases/{os.environ['RELEASE_ID']}",
-                  "--jq",
-                  ".body // \"\"",
-              ],
-              check=True,
-              capture_output=True,
-              text=True,
-          ).stdout
-
-          body = pattern.sub("", body).rstrip()
-          body = f"{body}\n\n{os.environ['SECTION']}\n" if body else os.environ["SECTION"]
-
-          subprocess.run(
-              [
-                  "gh",
-                  "api",
-                  "--method",
-                  "PATCH",
-                  f"repos/{os.environ['GITHUB_REPOSITORY']}/releases/{os.environ['RELEASE_ID']}",
-                  "-f",
-                  f"body={body}",
-              ],
-              check=True,
-          )
-          PY
 
       - name: Upload the release record
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

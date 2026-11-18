@@ -11,13 +11,13 @@ This file is the single source of agent rules. Other documents:
 - [Parsina API contract](docs/parsina-api.pdf) — source of truth (not the `data/` fixtures);
   [Markdown transcription](docs/parsina-api.md) is a derived, searchable copy.
 
-| Area                     | Decisions                                                                                                                                                                                                                                                     |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Foundation (001–004)     | [Monorepo](docs/adr/001-monorepo.md), [authentication](docs/adr/002-authentication.md), [database](docs/adr/003-database.md), [Persian formatting](docs/adr/004-persian-formatting.md)                                                                        |
-| Dev & UX (005–008)       | [Dev DB sync](docs/adr/005-dev-db-sync-simulation.md), [dev scheduler](docs/adr/006-dev-scheduler.md), [motion performance](docs/adr/007-sidebar-theme-motion-performance.md), [perf/security](docs/adr/008-perf-security-hardening.md)                       |
-| Roles (009–010)          | [Roles](docs/adr/009-role-based-access.md) (superseded), [owner](docs/adr/010-owner-role.md)                                                                                                                                                                  |
-| Infrastructure (011–014) | [Environments](docs/adr/011-three-environment-architecture.md), [proxy/TLS](docs/adr/012-internal-reverse-proxy-and-tls.md), [TLS lifecycle](docs/adr/013-tls-certificate-lifecycle.md), [backup](docs/adr/014-production-backup-and-recovery.md)             |
-| Release (015–018)        | [Images](docs/adr/015-container-image-release-and-publishing.md), [runner deploy](docs/adr/016-ci-cd-deploy-job.md) (superseded), [blue-green](docs/adr/017-blue-green-deployment.md) (superseded), [simple deploy](docs/adr/018-simple-production-deploy.md) |
+| Area                     | Decisions                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Foundation (001–004)     | [Monorepo](docs/adr/001-monorepo.md), [authentication](docs/adr/002-authentication.md), [database](docs/adr/003-database.md), [Persian formatting](docs/adr/004-persian-formatting.md)                                                                                                                                                                                 |
+| Dev & UX (005–008)       | [Dev DB sync](docs/adr/005-dev-db-sync-simulation.md), [dev scheduler](docs/adr/006-dev-scheduler.md), [motion performance](docs/adr/007-sidebar-theme-motion-performance.md), [perf/security](docs/adr/008-perf-security-hardening.md)                                                                                                                                |
+| Roles (009–010)          | [Roles](docs/adr/009-role-based-access.md) (superseded), [owner](docs/adr/010-owner-role.md)                                                                                                                                                                                                                                                                           |
+| Infrastructure (011–014) | [Environments](docs/adr/011-three-environment-architecture.md), [proxy/TLS](docs/adr/012-internal-reverse-proxy-and-tls.md), [TLS lifecycle](docs/adr/013-tls-certificate-lifecycle.md), [backup](docs/adr/014-production-backup-and-recovery.md)                                                                                                                      |
+| Release (015–019)        | [Images](docs/adr/015-container-image-release-and-publishing.md) (partly superseded), [runner deploy](docs/adr/016-ci-cd-deploy-job.md) (superseded), [blue-green](docs/adr/017-blue-green-deployment.md) (superseded), [simple deploy](docs/adr/018-simple-production-deploy.md), [release publication](docs/adr/019-release-publication-after-image-verification.md) |
 
 ## 1. Repository map
 
@@ -94,10 +94,13 @@ Charsooq has exactly three independent environments
 - No automatic Production → Staging/Development data flow; real data outside Production requires a
   controlled, sanitized process. `compose.yml` is development; Production uses
   `compose.production.yml`, with only the reverse proxy publishing host ports.
-- `main` is not a release. After Staging approval: GitHub Release → published images → operator runs
-  `make prod-deploy` (locally or with `SSH_HOST=...`): single-slot, digest-pinned, health-gated, no
-  runner, no Blue-Green, no untrusted workflow on the host
-  ([ADR 018](docs/adr/018-simple-production-deploy.md)).
+- `main` is not a release. After Staging approval: a version tag → CI + published images → GitHub
+  Release → operator runs `make prod-deploy` (locally or with `SSH_HOST=...`): single-slot,
+  digest-pinned, health-gated, no runner, no Blue-Green, no untrusted workflow on the host
+  ([ADR 018](docs/adr/018-simple-production-deploy.md),
+  [ADR 019](docs/adr/019-release-publication-after-image-verification.md)). The Release workflow
+  publishes the GitHub Release last, only after both images are built and verified, with the final
+  digests in its body — never a placeholder body waiting for a later build.
 - With explicit Production identity, both database URLs must be PostgreSQL on **non-loopback**
   hosts with **different roles**; localhost/SQLite fail before connecting. Never print a database
   URL, host, username, or password.

@@ -1,5 +1,6 @@
 # Git hooks. Install with `make install` (or `pnpm exec lefthook install`).
 # pre-commit stays fast: only staged files, per-file commands. pre-push runs the broader checks.
+# Ruff runs from the repo root, so RUFF_CACHE_DIR keeps its cache under backend/api/.
 pre-commit:
   parallel: true
   commands:
@@ -12,10 +13,10 @@ pre-commit:
       run: pnpm exec eslint --no-warn-ignored {staged_files}
     ruff-check:
       glob: "backend/**/*.py"
-      run: uv run --no-sync --project backend/api ruff check {staged_files}
+      run: RUFF_CACHE_DIR=backend/api/.ruff_cache uv run --no-sync --project backend/api ruff check {staged_files}
     ruff-format:
       glob: "backend/**/*.py"
-      run: uv run --no-sync --project backend/api ruff format {staged_files}
+      run: RUFF_CACHE_DIR=backend/api/.ruff_cache uv run --no-sync --project backend/api ruff format {staged_files}
       stage_fixed: true
 
 pre-push:
@@ -23,7 +24,7 @@ pre-push:
     frontend:
       run: pnpm lint && pnpm format:check && pnpm typecheck && pnpm test
     backend:
-      run: uv run --no-sync --project backend/api ruff check . && uv run --no-sync --project backend/api ruff format --check . && uv run --no-sync --project backend/api pyright && cd backend/api && uv run --no-sync pytest -q
+      run: RUFF_CACHE_DIR=backend/api/.ruff_cache uv run --no-sync --project backend/api ruff check . && RUFF_CACHE_DIR=backend/api/.ruff_cache uv run --no-sync --project backend/api ruff format --check . && uv run --no-sync --project backend/api pyright && cd backend/api && uv run --no-sync pytest -q
     # No database needed: single-head check + offline SQL render of every migration.
     migrations:
       run: cd backend/api && uv run --no-sync alembic heads && uv run alembic upgrade head --sql > /dev/null

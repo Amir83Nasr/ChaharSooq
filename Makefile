@@ -2,7 +2,17 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-.PHONY: build check clean-build clean-cache db-bootstrap-owner db-clear-products db-migrate db-migrate-prod db-seed db-seed-demo db-seed-demo-staging db-seed-parsina db-seed-prod db-sync-dev-to-prod db-sync-dev-to-staging sync-dev-to-prod sync-dev-to-staging sync-prod sync-staging dev-to-prod dev-to-staging db-up db-validate db-wait deploy-api dev-all dev-api dev-web docker-build docker-down docker-logs docker-up doctor help install lint openapi-check test test-e2e typecheck prod-bootstrap-owner prod-build prod-caddy-validate prod-config prod-down prod-image-revision prod-logs prod-migrate prod-provision prod-ps prod-pull prod-up tls-activate tls-rollback tls-validate
+.PHONY: build check install help doctor \
+	clean-build clean-cache \
+	dev-web dev-api dev-all \
+	db-up db-wait db-migrate db-bootstrap-owner db-seed db-seed-parsina db-seed-demo \
+	db-clear-products db-validate db-sync-dev-to-staging db-seed-demo-staging \
+	sync-dev-to-staging sync-staging dev-to-staging \
+	docker-build docker-up docker-down docker-logs deploy-api \
+	prod-config prod-build prod-pull prod-image-revision \
+	prod-provision prod-migrate prod-bootstrap-owner prod-up prod-ps prod-logs \
+	prod-down prod-caddy-validate tls-validate tls-activate tls-rollback \
+	lint typecheck test test-e2e openapi-check
 
 # ─── HELP ─────────────────────────────────────────────────
 help: ## Show this help message
@@ -15,7 +25,7 @@ help: ## Show this help message
 	printf "%sCommands:%s\n" "$$g" "$$r"; \
 	awk -v g="$$g" -v bl="$$bl" -v r="$$r" '/^# ─── / { sec=$$0; sub(/^# ─── /, "", sec); sub(/ ─*$$/, "", sec); cur=sec; next } /^[a-z][a-z0-9_.-]*:[^=]*##/ { name=$$1; sub(/:.*/, "", name); if (name == "help") next; if (cur != "" && cur != last) { printf "  %s%s:%s\n", g, cur, r; last=cur } desc=$$0; sub(/^[^#]*##[[:space:]]*/, "", desc); printf "    %s%-22s%s %s\n", bl, name, r, desc }' $(MAKEFILE_LIST); \
 	printf "\n%sOptions:%s\n" "$$g" "$$r"; \
-	awk -v bl="$$bl" -v r="$$r" '/^[A-Z][A-Z0-9_]*[[:space:]]*\?=.*##/ { desc=$$0; sub(/^[^#]*##[[:space:]]*/, "", desc); printf "  %s%s=%s%s %s\n", bl, $$1, $$3, r, desc }' $(MAKEFILE_LIST)
+	awk -v bl="$$bl" -v r="$$r" '/^[A-Z][A-Z0-9_]*[[:space:]]*\?=.*##/ { key=$$1; line=$$0; sub(/^[^?]*\?=[ \t]*/, "", line); n++; split(line, p, /##/); val=p[1]; gsub(/^[ \t]+|[ \t]+$$/, "", val); entry[n]=key "=" val; desc[n]=p[2]; gsub(/^[ \t]+|[ \t]+$$/, "", desc[n]); width=(length(entry[n])>width?length(entry[n]):width) } END { for (i=1;i<=n;i++) printf "  %s%-*s%s %s\n", bl, width, entry[i], r, desc[i] }' $(MAKEFILE_LIST)
 
 # ─── CONFIG / VARIABLES ───────────────────────────────────
 COMPOSE_FILE ?= compose.yml ## Compose file used by up/down/logs
@@ -23,7 +33,18 @@ COMPOSE_PROD_FILE ?= compose.production.yml ## Production compose file (separate
 CHARSOOQ_SECRETS_DIR ?= /etc/charsooq/secrets ## Host directory of production secret files (never committed)
 CHARSOOQ_TLS_DIR ?= /etc/charsooq/tls ## Host directory of organization TLS material (never committed)
 DB_PORT ?= 5433 ## Host port of the dev postgres db-wait/dev-api expect
-YES ?= 0 ## Set YES=1 to skip the confirmation prompt for db-sync-dev-to-{prod,staging}
+YES ?= 0 ## Set YES=1 to skip the confirmation prompt for db-sync-dev-to-staging
+
+# Shared command prefixes: shorter recipes, identical semantics.
+UV_RUN := uv run --no-sync --project backend/api
+PY_SCRIPT := $(UV_RUN) python backend/api/scripts/
+STAGING_ENV_FILE := $(CURDIR)/backend/api/.env.staging
+UV_STAGING_PY := $(UV_RUN) --env-file $(STAGING_ENV_FILE) python backend/api/scripts/
+# Keep ruff's cache under backend/api even when ruff is invoked from the repo root.
+RUFF := RUFF_CACHE_DIR=$(CURDIR)/backend/api/.ruff_cache $(UV_RUN) ruff
+UVICORN := $(UV_RUN) uvicorn app.main:app --app-dir backend/api --host 0.0.0.0 --port 8000 --reload
+COMPOSE := docker compose -f $(COMPOSE_FILE)
+COMPOSE_PROD := docker compose -f $(COMPOSE_PROD_FILE)
 
 # ─── INSTALL / SETUP ──────────────────────────────────────
 install: ## Install frontend and backend dependencies and git hooks
@@ -34,7 +55,7 @@ install: ## Install frontend and backend dependencies and git hooks
 # Caches are always regenerable and gitignored: removing them never loses source.
 clean-cache: ## Remove regenerable tool caches (turbo, ruff, pytest, __pycache__)
 	rm -rf .turbo apps/web/.turbo .ruff_cache backend/api/.ruff_cache .pytest_cache backend/api/.pytest_cache
-	find backend -type d -name __pycache__ -prune -exec rm -rf {} +
+	find backend deploy -type d -name __pycache__ -prune -exec rm -rf {} +
 
 clean-build: ## Remove build output and test artifacts (.next, playwright)
 	rm -rf apps/web/.next apps/web/test-results apps/web/playwright-report
@@ -45,10 +66,10 @@ dev-web: ## Start frontend dev server (turbo)
 
 dev-api: db-wait ## Start backend API with reload (waits for postgres first)
 	# --no-sync: reuse the installed venv offline (`make install` re-syncs).
-	uv run --no-sync --project backend/api uvicorn app.main:app --app-dir backend/api --host 0.0.0.0 --port 8000 --reload
+	$(UVICORN)
 
 dev-all: db-migrate ## Start backend + frontend together (stops both if either exits)
-	@uv run --no-sync --project backend/api uvicorn app.main:app --app-dir backend/api --host 0.0.0.0 --port 8000 --reload & \
+	@$(UVICORN) & \
 	api=$$!; \
 	pnpm dev & \
 	web=$$!; \
@@ -58,7 +79,7 @@ dev-all: db-migrate ## Start backend + frontend together (stops both if either e
 
 # ─── DATABASE: DEV ────────────────────────────────────────
 db-up: ## Start dev postgres (own container, port 5433)
-	docker compose -f $(COMPOSE_FILE) up -d postgres
+	$(COMPOSE) up -d postgres
 
 db-wait: ## Wait up to 20s for dev postgres to accept connections (no DB needed otherwise)
 	@for i in $$(seq 1 20); do \
@@ -69,55 +90,34 @@ db-wait: ## Wait up to 20s for dev postgres to accept connections (no DB needed 
 	echo "postgres is not reachable on 127.0.0.1:$(DB_PORT) - run make db-up" >&2; exit 1
 
 db-migrate: db-up ## Apply Alembic migrations to dev database (single advisory-locked runner)
-	DEPLOYMENT_ENV=development uv run --no-sync --project backend/api python backend/api/scripts/migrate.py
+	DEPLOYMENT_ENV=development $(PY_SCRIPT)migrate.py
 
 db-bootstrap-owner: db-migrate ## Ensure the env-managed owner via the explicit CLI (no create_all)
-	DEPLOYMENT_ENV=development uv run --no-sync --project backend/api python backend/api/scripts/bootstrap_owner.py
+	DEPLOYMENT_ENV=development $(PY_SCRIPT)bootstrap_owner.py
 
 db-seed: db-migrate ## Ensure the env-managed owner (OWNER_USERNAME, OWNER_PASSWORD)
-	DEPLOYMENT_ENV=development uv run --no-sync --project backend/api python backend/api/scripts/seed_admin.py
+	DEPLOYMENT_ENV=development $(PY_SCRIPT)seed_admin.py
 
 db-seed-parsina: db-migrate ## Upsert data/parsina.csv into dev DB (keeps product ids + links)
-	DEPLOYMENT_ENV=development uv run --no-sync --project backend/api python backend/api/scripts/seed_parsina_products.py
+	DEPLOYMENT_ENV=development $(PY_SCRIPT)seed_parsina_products.py
 
 db-seed-demo: db-seed-parsina ## Fill dev demo competitor prices, daily changes, weights and price bounds
-	DEPLOYMENT_ENV=development uv run --no-sync --project backend/api python backend/api/scripts/seed_demo_competitors.py
+	DEPLOYMENT_ENV=development $(PY_SCRIPT)seed_demo_competitors.py
 
 db-clear-products: db-migrate ## Delete all products + competitor listings from dev DB (dev only)
-	DEPLOYMENT_ENV=development uv run --no-sync --project backend/api python backend/api/scripts/clear_products.py
+	DEPLOYMENT_ENV=development $(PY_SCRIPT)clear_products.py
 
-# ─── DATABASE: LEGACY PROD (DISABLED) ─────────────────────
-# These targets were written for the Neon-era production database. Production is
-# now `market-linux` and has no approved migration, owner-seeding, or data-sync
-# path yet, so every legacy production write target fails closed instead of
-# guessing a target. See AGENTS.md section 3 and README.md.
-db-migrate-prod: ## DISABLED — legacy Neon-era migration path (see deployment docs)
-	@echo "db-migrate-prod is disabled: no Production migration path is approved yet." >&2
-	@echo "Migrations remain Alembic-based; Production needs the controlled single-runner step." >&2
-	@echo "See AGENTS.md section 3 and README.md." >&2
-	@exit 1
-
-db-seed-prod: ## DISABLED — legacy Neon-era owner bootstrap (see deployment docs)
-	@echo "db-seed-prod is disabled: Production owner provisioning is still an open decision." >&2
-	@echo "Never reuse the Neon-era .env.production file. See AGENTS.md section 3." >&2
-	@exit 1
-
-db-sync-dev-to-prod: ## DISABLED — legacy dev → Neon production sync (see deployment docs)
-	@echo "db-sync-dev-to-prod is disabled: there is no approved dev → Production data path." >&2
-	@echo "Use 'make db-sync-dev-to-staging' for Staging. See AGENTS.md section 3." >&2
-	@exit 1
-
+# ─── DATABASE: STAGING ────────────────────────────────────
 db-sync-dev-to-staging: ## Upsert dev data into staging Neon, then fill demo competitor prices (reads backend/api/.env.staging)
-	@test -f $(CURDIR)/backend/api/.env.staging || { echo "backend/api/.env.staging is required" >&2; exit 1; }
-	DEPLOYMENT_ENV=staging uv run --no-sync --project backend/api --env-file $(CURDIR)/backend/api/.env.staging python backend/api/scripts/sync_dev_to_prod.py $(if $(filter 1,$(YES)),--yes,)
-	DEPLOYMENT_ENV=staging uv run --no-sync --project backend/api --env-file $(CURDIR)/backend/api/.env.staging python backend/api/scripts/seed_demo_competitors.py --staging
+	@test -f $(STAGING_ENV_FILE) || { echo "backend/api/.env.staging is required" >&2; exit 1; }
+	DEPLOYMENT_ENV=staging $(UV_STAGING_PY)sync_dev_to_prod.py $(if $(filter 1,$(YES)),--yes,)
+	DEPLOYMENT_ENV=staging $(UV_STAGING_PY)seed_demo_competitors.py --staging
 
 db-seed-demo-staging: ## Fill staging Neon with demo competitor prices (reads backend/api/.env.staging)
-	@test -f $(CURDIR)/backend/api/.env.staging || { echo "backend/api/.env.staging is required" >&2; exit 1; }
-	DEPLOYMENT_ENV=staging uv run --no-sync --project backend/api --env-file $(CURDIR)/backend/api/.env.staging python backend/api/scripts/seed_demo_competitors.py --staging
+	@test -f $(STAGING_ENV_FILE) || { echo "backend/api/.env.staging is required" >&2; exit 1; }
+	DEPLOYMENT_ENV=staging $(UV_STAGING_PY)seed_demo_competitors.py --staging
 
-# ─── Aliases (legacy prod sync — disabled) ───────────────
-sync-dev-to-prod sync-prod dev-to-prod: db-sync-dev-to-prod ## DISABLED alias for db-sync-dev-to-prod
+# ─── ALIASES (STAGING SYNC) ───────────────────────────────
 sync-dev-to-staging sync-staging dev-to-staging: db-sync-dev-to-staging ## Alias for db-sync-dev-to-staging
 
 # ─── DATABASE: VALIDATE (NO DB NEEDED) ───────────────────
@@ -134,20 +134,20 @@ doctor: ## Check toolchain, env files, and service reachability
 	@test -f backend/api/.env.local || echo "missing backend/api/.env.local (copy from .env.example)"
 	@test -f apps/web/.env.local || echo "missing apps/web/.env.local (copy from .env.example)"
 	@cd backend/api && uv run --no-sync alembic heads
-	@docker compose -f $(COMPOSE_FILE) ps postgres 2>/dev/null | grep -q healthy && echo "postgres: healthy" || echo "postgres: not healthy (run make db-up)"
+	@$(COMPOSE) ps postgres 2>/dev/null | grep -q healthy && echo "postgres: healthy" || echo "postgres: not healthy (run make db-up)"
 
 # ─── DOCKER ───────────────────────────────────────────────
 docker-build: ## Build Docker images (web + api)
-	docker compose -f $(COMPOSE_FILE) build
+	$(COMPOSE) build
 
 docker-up: ## Start services with Docker Compose (rebuild images)
-	docker compose -f $(COMPOSE_FILE) up -d --build
+	$(COMPOSE) up -d --build
 
 docker-down: ## Stop Docker Compose services
-	docker compose -f $(COMPOSE_FILE) down
+	$(COMPOSE) down
 
 docker-logs: ## Follow Docker Compose logs
-	docker compose -f $(COMPOSE_FILE) logs -f
+	$(COMPOSE) logs -f
 
 # ─── DOCKER: PRODUCTION (Blue-Green) ──────────────────────
 # Structural validation does not read secret files, so it works on a machine
@@ -194,8 +194,8 @@ PROD_BUILD_ENV = \
 	CHARSOOQ_BUILD_SOURCE=$(PROD_BUILD_SOURCE)
 
 prod-config: ## Validate the production Blue-Green compose file (no secrets needed)
-	$(PROD_STRUCTURAL_ENV) docker compose -f $(COMPOSE_PROD_FILE) --profile blue config --quiet
-	$(PROD_STRUCTURAL_ENV) docker compose -f $(COMPOSE_PROD_FILE) --profile green config --quiet
+	$(PROD_STRUCTURAL_ENV) $(COMPOSE_PROD) --profile blue config --quiet
+	$(PROD_STRUCTURAL_ENV) $(COMPOSE_PROD) --profile green config --quiet
 	@echo "production compose: blue and green slot structure valid (documentation values only)"
 
 # Offline certificate validation. Reads local files only: no network, no key
@@ -249,17 +249,17 @@ prod-caddy-validate: ## Validate the Caddyfile in the pinned Caddy image (needs 
 	if [ -n "$(CERT_FILE)" ]; then \
 		flags="-e CHARSOOQ_TLS_CERT_FILE=$(CERT_FILE) -e CHARSOOQ_TLS_KEY_FILE=$(KEY_FILE)"; \
 	fi; \
-	docker compose -f $(COMPOSE_PROD_FILE) run --rm --no-deps $$flags caddy \
+	$(COMPOSE_PROD) run --rm --no-deps $$flags caddy \
 		caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 
 prod-build: ## Build production API and web images from this commit (host-build fallback)
 	# The deployment values are documentation placeholders: Compose interpolates
 	# the whole file before building, and none of them affect the image bytes.
-	$(PROD_DEPLOYMENT_ENV) $(PROD_BUILD_ENV) docker compose -f $(COMPOSE_PROD_FILE) --profile blue build
+	$(PROD_DEPLOYMENT_ENV) $(PROD_BUILD_ENV) $(COMPOSE_PROD) --profile blue build
 	@echo "built charsooq-api:$(PROD_BUILD_TAG) and charsooq-web:$(PROD_BUILD_TAG) from $(PROD_BUILD_REVISION)"
 
 prod-pull: ## Pull the released API and web images for a slot (SLOT=blue|green, needs image refs)
-	docker compose -f $(COMPOSE_PROD_FILE) --profile $(PROD_SLOT) pull api-$(PROD_SLOT) web-$(PROD_SLOT)
+	$(COMPOSE_PROD) --profile $(PROD_SLOT) pull api-$(PROD_SLOT) web-$(PROD_SLOT)
 
 prod-image-revision: ## Print the release commit recorded in the image references (needs the image variables)
 	@test -n "$(CHARSOOQ_API_IMAGE)" && test -n "$(CHARSOOQ_WEB_IMAGE)" || { \
@@ -270,26 +270,26 @@ prod-image-revision: ## Print the release commit recorded in the image reference
 	docker image inspect "$(CHARSOOQ_WEB_IMAGE)" --format 'web revision {{index .Config.Labels "org.opencontainers.image.revision"}}'
 
 prod-provision: ## Run idempotent database role provisioning once (needs real secrets)
-	docker compose -f $(COMPOSE_PROD_FILE) run --rm provision
+	$(COMPOSE_PROD) run --rm provision
 
 prod-migrate: ## Run the production migration runner once (needs real secrets)
-	docker compose -f $(COMPOSE_PROD_FILE) run --rm migrate
+	$(COMPOSE_PROD) run --rm migrate
 
 prod-bootstrap-owner: ## Run the explicit production owner bootstrap once (needs real secrets, SLOT=blue|green)
-	docker compose -f $(COMPOSE_PROD_FILE) --profile $(PROD_SLOT) run --rm api-$(PROD_SLOT) python backend/api/scripts/bootstrap_owner.py
+	$(COMPOSE_PROD) --profile $(PROD_SLOT) run --rm api-$(PROD_SLOT) python backend/api/scripts/bootstrap_owner.py
 
 prod-up: ## Start base infra and one slot from released images (SLOT=blue|green, needs real secrets)
-	docker compose -f $(COMPOSE_PROD_FILE) up -d --no-build db caddy
-	docker compose -f $(COMPOSE_PROD_FILE) --profile $(PROD_SLOT) up -d --no-build
+	$(COMPOSE_PROD) up -d --no-build db caddy
+	$(COMPOSE_PROD) --profile $(PROD_SLOT) up -d --no-build
 
 prod-ps: ## Show production service status (SLOT=blue|green)
-	docker compose -f $(COMPOSE_PROD_FILE) --profile $(PROD_SLOT) ps
+	$(COMPOSE_PROD) --profile $(PROD_SLOT) ps
 
 prod-logs: ## Follow production logs (SLOT=blue|green)
-	docker compose -f $(COMPOSE_PROD_FILE) --profile $(PROD_SLOT) logs -f
+	$(COMPOSE_PROD) --profile $(PROD_SLOT) logs -f
 
 prod-down: ## Stop production services (keeps volumes and data)
-	docker compose -f $(COMPOSE_PROD_FILE) --profile blue --profile green down
+	$(COMPOSE_PROD) --profile blue --profile green down
 
 # ─── DEPLOY ───────────────────────────────────────────────
 deploy-api: ## Deploy backend API to FastAPI Cloud (run from backend/api)
@@ -299,12 +299,12 @@ deploy-api: ## Deploy backend API to FastAPI Cloud (run from backend/api)
 lint: ## Run frontend lint and backend ruff checks
 	pnpm lint
 	pnpm format:check
-	uv run --no-sync --project backend/api ruff check .
-	uv run --no-sync --project backend/api ruff format --check .
+	$(RUFF) check .
+	$(RUFF) format --check .
 
 typecheck: ## Run frontend typecheck and backend pyright
 	pnpm typecheck
-	uv run --no-sync --project backend/api pyright
+	$(UV_RUN) pyright
 
 test: ## Run frontend and backend tests
 	pnpm test
@@ -315,7 +315,7 @@ test-e2e: build ## Run Playwright e2e against the production build
 	pnpm --filter web test:e2e
 
 openapi-check: ## Fail if backend/api/openapi.json is stale (read-only, no DB needed)
-	uv run --no-sync --project backend/api python backend/api/scripts/check_openapi_fresh.py
+	$(UV_RUN) python backend/api/scripts/check_openapi_fresh.py
 
 build: ## Build web app for production
 	pnpm --filter web build

@@ -52,6 +52,7 @@ quote-style = "double"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+cache_dir = ".pytest_cache"
 addopts = ["--cov=app", "--cov-report=term-missing"]
 
 [tool.coverage.run]

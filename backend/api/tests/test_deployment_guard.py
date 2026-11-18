@@ -367,7 +367,14 @@ def test_sync_allowed_for_staging_destination(
 # ── MAKEFILE GUARDS (STATIC, NO DATABASE) ────────────────────
 
 MAKEFILE = Path(__file__).resolve().parents[3] / "Makefile"
-LEGACY_PROD_TARGETS = ["db-migrate-prod", "db-seed-prod", "db-sync-dev-to-prod"]
+REMOVED_MAKE_TARGETS = [
+    "db-migrate-prod",
+    "db-seed-prod",
+    "db-sync-dev-to-prod",
+    "sync-dev-to-prod",
+    "sync-prod",
+    "dev-to-prod",
+]
 IDENTITY_TARGETS = [
     ("db-seed", "development"),
     ("db-seed-parsina", "development"),
@@ -395,18 +402,10 @@ def _recipe(makefile: str, target: str) -> list[str]:
     raise AssertionError(f"Make target {target!r} not found")
 
 
-@pytest.mark.parametrize("target", LEGACY_PROD_TARGETS)
-def test_legacy_prod_make_targets_only_print_and_exit(target: str) -> None:
-    recipe = _recipe(MAKEFILE.read_text(encoding="utf-8"), target)
-    assert recipe, f"{target} has no recipe"
-    assert all(line.startswith(("@echo", "@exit")) for line in recipe), recipe
-    assert any(line.startswith("@exit 1") for line in recipe), recipe
-    assert any("disabled" in line.lower() for line in recipe), recipe
-
-
-def test_legacy_prod_aliases_point_to_the_disabled_target() -> None:
+def test_legacy_prod_make_targets_are_removed() -> None:
     makefile = MAKEFILE.read_text(encoding="utf-8")
-    assert "sync-dev-to-prod sync-prod dev-to-prod: db-sync-dev-to-prod" in makefile
+    for target in REMOVED_MAKE_TARGETS:
+        assert target not in makefile, f"{target} must not remain in the Makefile"
 
 
 def test_makefile_does_not_read_the_legacy_prod_env_file() -> None:

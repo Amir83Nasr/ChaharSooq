@@ -28,7 +28,7 @@ cp apps/web/.env.example apps/web/.env.local
 
 ## Development commands
 
-Run everything from the repository root with make (`make help` lists all targets):
+Run everything from the repository root with make (`make help` lists the main targets):
 
 ```bash
 make install           # install frontend + backend deps
@@ -53,7 +53,7 @@ Checks, tests, build:
 make lint       # frontend lint + backend ruff check/format
 make typecheck  # frontend tsc + backend pyright
 make test       # ui vitest + backend pytest
-make check      # lint + typecheck + test
+make check      # lint + typecheck + tests + offline migration and OpenAPI checks
 make build      # production build (web)
 make clean-cache # remove regenerable tool caches (.turbo, .ruff_cache, …)
 make clean-build # remove build output and test artifacts (.next, …)
@@ -69,16 +69,18 @@ pnpm format:check # frontend format check
 pnpm test         # frontend unit tests
 pnpm --filter web build            # production build
 
-uv run --project backend/api ruff check .          # backend lint
-uv run --project backend/api ruff format --check . # backend format check
-uv run --project backend/api pyright               # backend typecheck
-cd backend/api && uv run --no-sync pytest -q       # backend tests (reads pyproject)
+RUFF_CACHE_DIR=backend/api/.ruff_cache uv run --project backend/api ruff check .          # backend lint
+RUFF_CACHE_DIR=backend/api/.ruff_cache uv run --project backend/api ruff format --check . # backend format check
+uv run --project backend/api pyright                                                     # backend typecheck
+cd backend/api && uv run --no-sync pytest -q                                            # backend tests (reads pyproject)
 ```
 
-Caches are regenerable and gitignored. Ruff and pytest place their cache next to the
-directory you run them from, so running the backend commands from the repository root
-also leaves a `.ruff_cache` / `.pytest_cache` there. `make clean-cache` removes every
-cache copy; `make clean-build` removes `.next` and Playwright artifacts.
+Caches are regenerable and gitignored. `make lint` and the git hooks set
+`RUFF_CACHE_DIR=backend/api/.ruff_cache` so Ruff keeps its cache under `backend/api/`
+even when invoked from the repository root; use the same variable for manual Ruff runs,
+or run them from `backend/api`. Pytest already runs from `backend/api`, so its cache
+lands there too. `make clean-cache` also removes old cache copies from the repository
+root; `make clean-build` removes `.next` and Playwright artifacts.
 
 ## Environment variables
 
@@ -209,11 +211,9 @@ DEPLOYMENT_ENV=development uv run --project backend/api python backend/api/scrip
 paths a controlled deployment can use. `seed_admin.py` stays Development/Staging only: it also
 runs `create_all` and predates the separated owner CLI.
 
-The Neon-era production targets are disabled and fail closed with migration guidance:
-`make db-migrate-prod`, `make db-seed-prod`, `make db-sync-dev-to-prod`, plus the
-`make sync-prod` / `make dev-to-prod` aliases. No Production deployment workflow is approved yet;
-the locked standalone migration runner and explicit owner CLI are the building blocks it must use.
-See [AGENTS.md](AGENTS.md) section 3.
+The legacy Neon-era production Make targets have been removed. Production uses the standalone
+migration runner and explicit owner bootstrap as part of the ordered steps in the
+[Production Docker stack](#production-docker-stack) and [AGENTS.md](AGENTS.md) section 3.
 
 ## Migrations
 
@@ -230,7 +230,6 @@ Schema changes require an Alembic migration under `backend/api/migrations/`. Aut
 - Production order is fixed: secrets/configuration → database reachability → `scripts/migrate.py` → verify the migration succeeded → explicit `scripts/bootstrap_owner.py` when owner provisioning is needed → start the API with both startup flags `false` → check `/health` and `/ready`. Never start the API before the schema is at `head`.
 - CI proves it: fresh `upgrade head`, idempotent re-upgrade, single-head assertion, `alembic check` drift detection, and a downgrade/upgrade round-trip.
 - `make db-validate` runs the offline part locally (no database needed); `make check` includes it.
-- `make db-migrate-prod` is disabled: the Neon-era path is not approved for Production. Production deployments must use the standalone runner as the ordered pre-start step described in [AGENTS.md](AGENTS.md) section 3.
 
 ## API contract
 

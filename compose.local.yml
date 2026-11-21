@@ -1,0 +1,160 @@
+# Local development stack only: the values below are placeholders. Set real
+# values through the environment for any shared or production-like deployment.
+# Run with `make local-up` / `make local-down` (or `docker compose -f compose.local.yml ...`).
+# Source directories are bind-mounted and both apps run their dev servers, so
+# code edits appear without rebuilding the images.
+#
+# APP_ENV=production here exercises production application behavior locally;
+# DEPLOYMENT_ENV=development keeps this stack from being treated as the real
+# Production environment (dotenv/config validation requires both together).
+x-api-env: &api-env
+  APP_ENV: production
+  DEPLOYMENT_ENV: development
+  DATABASE_URL: postgresql+psycopg://charsooq:charsooq@postgres:5432/charsooq
+  SESSION_SECRET: ${SESSION_SECRET:-local-dev-placeholder-secret-min-32B}
+  OWNER_PASSWORD: ${OWNER_PASSWORD:-secret123}
+  REDIS_URL: ${REDIS_URL:-}
+  # Docker file sharing does not always propagate inotify events; polling
+  # keeps uvicorn's reload reliable on both macOS and Linux hosts.
+  WATCHFILES_FORCE_POLLING: "true"
+  # Local archive storage: a named volume the API user owns, so a container
+  # rebuild keeps the dumps produced inside it.
+  BACKUP_DIR: /var/backups/charsooq
+
+x-api-image: &api-image
+  # Separate tag: an older production-style `chaharsooq-api:latest` must never be
+  # reused for the hot-reload target (its CMD has no --reload and no mounted source).
+  image: chaharsooq-api:dev
+  build:
+    context: .
+    dockerfile: Dockerfile.api
+    target: api-dev
+  # The image supplies the locked virtualenv and tools; these mounts supply
+  # the live source, so both `api` and `migrate` see local edits immediately.
+  volumes:
+    - ./backend/api/app:/srv/api/backend/api/app
+    - ./backend/api/migrations:/srv/api/backend/api/migrations
+    - ./backend/api/scripts:/srv/api/backend/api/scripts
+    - backups:/var/backups/charsooq
+
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: charsooq
+      POSTGRES_PASSWORD: charsooq
+      POSTGRES_DB: charsooq
+    ports:
+      - "5433:5432"
+    # PostgreSQL 18 stores its cluster in /var/lib/postgresql/18/docker and
+    # declares /var/lib/postgresql as the image volume. Mount the parent: the
+    # old /var/lib/postgresql/data path leaves that cluster hidden behind an
+    # auto-created anonymous volume and makes the entrypoint refuse to start.
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U charsooq -d charsooq"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+
+  # One-shot schema upgrade through the locked project runner (never a bare
+  # `alembic upgrade head`). It stays out of a plain `docker compose up`:
+  # `make docker-up` runs it with `run --rm`, so the finished container is
+  # removed instead of left stopped. A plain `up` is still safe because the
+  # API runs the same locked path in its Development lifespan.
+  migrate:
+    <<: *api-image
+    profiles: ["tools"]
+    command: ["python", "backend/api/scripts/migrate.py"]
+    environment: *api-env
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *api-image
+    restart: unless-stopped
+    environment: *api-env
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready')",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  web:
+    # Separate tag for the same reason as the API: `chaharsooq-web:latest` may
+    # be a standalone production image whose CMD cannot run `next dev`.
+    image: chaharsooq-web:dev
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      target: web-dev
+    restart: unless-stopped
+    environment:
+      API_URL_INTERNAL: http://api:8000
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    volumes:
+      # Bind only the live-edited source. Mounting the whole repo would hide the
+      # image's Linux node_modules behind the host's macOS ones and require six
+      # anonymous volumes to cover them again (ADR 025). Dependencies, build
+      # cache, and config stay in the image; config/lockfile edits need
+      # `make docker-build`.
+      - ./apps/web/app:/app/apps/web/app
+      - ./apps/web/components:/app/apps/web/components
+      - ./apps/web/fonts:/app/apps/web/fonts
+      - ./apps/web/lib:/app/apps/web/lib
+      - ./apps/web/public:/app/apps/web/public
+      - ./packages/ui/src:/app/packages/ui/src
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:3000/login').then((r)=>{if(r.status>=500)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      # `next dev` compiles /login on the first request, which is slower than
+      # the production standalone server.
+      start_period: 60s
+
+volumes:
+  pgdata:
+  backups:

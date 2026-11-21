@@ -1,8 +1,9 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { PackageMinus, Palette, RefreshCw, Sigma } from "lucide-react"
+import { Database, PackageMinus, Palette, RefreshCw, Sigma } from "lucide-react"
 
+import { formatPersianDateTime } from "@workspace/ui/lib/date"
 import { formatPersianNumber } from "@workspace/ui/lib/number"
 
 import { api, type SettingsOut } from "@/lib/api"
@@ -21,8 +22,29 @@ function intervalLabel(minutes: number): string {
   return `هر ${display} ساعت`
 }
 
-export function SettingsOverview() {
+export function SettingsOverview({ owner }: { owner: boolean }) {
   const [settings, setSettings] = useState<SettingsOut | null>(null)
+  const [lastBackup, setLastBackup] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!owner) return
+    let cancelled = false
+    api
+      .backups()
+      .then((rows) => {
+        if (cancelled) return
+        const verified = rows.find((row) => row.verification === "verified")
+        setLastBackup(
+          verified ? formatPersianDateTime(verified.created_at) : null
+        )
+      })
+      .catch(() => {
+        // The overview card keeps its static description when the list fails.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [owner])
 
   useEffect(() => {
     let cancelled = false
@@ -85,6 +107,19 @@ export function SettingsOverview() {
         description="تم، تعداد ردیف جدول و ستون‌های جدول محصولات"
         summary="ظاهر پنل و چیدمان جدول محصولات را تنظیم کنید"
       />
+      {owner ? (
+        <SettingsOverviewCard
+          href="/settings/backup"
+          icon={Database}
+          title="پشتیبان‌گیری"
+          description="پشتیبان‌گیری دستی و خودکار از پایگاه داده، بارگذاری نسخه، دانلود و بازیابی"
+          summary={
+            lastBackup
+              ? `آخرین پشتیبان تأییدشده: ${lastBackup}`
+              : "ساخت، بارگذاری و بازیابی نسخهٔ پشتیبان (فقط سوپرادمین)"
+          }
+        />
+      ) : null}
     </div>
   )
 }

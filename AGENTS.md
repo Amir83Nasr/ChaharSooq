@@ -22,17 +22,22 @@ This file is the single source of agent rules. Other documents:
 | Release (015–019)        | [Images](docs/adr/015-container-image-release-and-publishing.md) (partly superseded), [runner deploy](docs/adr/016-ci-cd-deploy-job.md) (superseded), [blue-green](docs/adr/017-blue-green-deployment.md) (superseded), [simple deploy](docs/adr/018-simple-production-deploy.md), [release publication](docs/adr/019-release-publication-after-image-verification.md) |
 | Deploy discovery (021)   | [GitHub release discovery](docs/adr/021-github-release-deploy-discovery.md)                                                                                                                                                                                                                                                                                            |
 | Catalog (020)            | [Digital section keywords](docs/adr/020-digital-section-keywords.md)                                                                                                                                                                                                                                                                                                   |
+| Backup metadata (022)    | [Owner-configured backup orchestration](docs/adr/022-owner-configured-backup-orchestration.md) (execution superseded by 023)                                                                                                                                                                                                                                           |
+| Backup execution (023)   | [In-app backup execution and transactional data restore](docs/adr/023-in-app-backup-and-data-restore.md) (restore-request flow superseded by 026)                                                                                                                                                                                                                      |
+| Local dev (024)          | [Local compose hot reload](docs/adr/024-local-compose-hot-reload.md) (web mounts superseded by 025)                                                                                                                                                                                                                                                                    |
+| Local volumes (025)      | [No anonymous volumes in the local stack](docs/adr/025-local-compose-no-anonymous-volumes.md)                                                                                                                                                                                                                                                                          |
+| Restore execution (026)  | [Direct owner restore](docs/adr/026-direct-owner-restore.md)                                                                                                                                                                                                                                                                                                           |
 
 ## 1. Repository map
 
-| Path                                                                    | Contents                                                         |
-| ----------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `apps/web`                                                              | Next.js app: routes, components, API client, e2e tests           |
-| `packages/ui`                                                           | Shared UI kit: shadcn primitives, Persian formatting, styles     |
-| `packages/eslint-config`, `packages/typescript-config`                  | Shared lint and TS configs                                       |
-| `backend/api`                                                           | FastAPI service: `app/`, `migrations/`, `tests/`, `scripts/`     |
-| `backend/api/openapi.json`                                              | Generated snapshot; never edit by hand                           |
-| `deploy/`, `.github/workflows/`, `Dockerfile.*`, `compose.yml`, `data/` | Runtime material, CI, images, local stack, gitignored local data |
+| Path                                                                          | Contents                                                         |
+| ----------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `apps/web`                                                                    | Next.js app: routes, components, API client, e2e tests           |
+| `packages/ui`                                                                 | Shared UI kit: shadcn primitives, Persian formatting, styles     |
+| `packages/eslint-config`, `packages/typescript-config`                        | Shared lint and TS configs                                       |
+| `backend/api`                                                                 | FastAPI service: `app/`, `migrations/`, `tests/`, `scripts/`     |
+| `backend/api/openapi.json`                                                    | Generated snapshot; never edit by hand                           |
+| `deploy/`, `.github/workflows/`, `Dockerfile.*`, `compose.local.yml`, `data/` | Runtime material, CI, images, local stack, gitignored local data |
 
 Do not add a workspace or top-level folder without an ADR. New decisions get the next ADR number;
 never renumber existing ADRs.
@@ -96,8 +101,8 @@ Charsooq has exactly three independent environments
   `RUN_MIGRATIONS_ON_STARTUP=false` and `RUN_OWNER_BOOTSTRAP_ON_STARTUP=false` → `/health`, `/ready`.
   Never start the API before the schema is at `head`; no auto-migrate or auto-bootstrap in Production.
 - No automatic Production → Staging/Development data flow; real data outside Production requires a
-  controlled, sanitized process. `compose.yml` is development; Production uses
-  `compose.production.yml`, with only the reverse proxy publishing host ports.
+  controlled, sanitized process. `compose.local.yml` is the hot-reloading development stack;
+  Production uses `compose.production.yml`, with only the reverse proxy publishing host ports.
 - `main` is not a release. After Staging approval: a version tag → CI + published images → GitHub
   Release → operator runs `make prod-deploy` (locally or with `SSH_HOST=...`): single-slot,
   digest-pinned, health-gated, no runner, no Blue-Green, no untrusted workflow on the host

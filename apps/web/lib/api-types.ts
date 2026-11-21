@@ -256,6 +256,48 @@ export interface SettingsOut {
   product_table_columns: ProductTableColumn[]
 }
 
+export interface BackupSettings {
+  enabled: boolean
+  interval_minutes: number
+  retention_days: number
+  verification_method: string
+  tools_available: boolean
+  storage_ready: boolean
+}
+
+export interface BackupSettingsUpdate {
+  enabled?: boolean
+  interval_minutes?: number
+}
+
+export type BackupStatus = "queued" | "running" | "completed" | "failed"
+export type BackupVerification = "pending" | "verified" | "failed"
+export type BackupKind = "scheduled" | "operator" | "uploaded" | "pre_restore"
+export type RestoreStatus = "queued" | "running" | "completed" | "failed"
+
+export interface BackupRecord {
+  id: number
+  created_at: string
+  finished_at: string | null
+  status: BackupStatus
+  kind: BackupKind
+  size_bytes: number | null
+  sha256: string | null
+  verification: BackupVerification
+  verification_method: string | null
+  source_revision: string | null
+  storage_ref: string | null
+  retention_expires_at: string | null
+  pruned_at: string | null
+  error_code: string | null
+  downloadable: boolean
+  restore_status: RestoreStatus | null
+  restore_started_at: string | null
+  restore_finished_at: string | null
+  restore_error_code: string | null
+  restored_at: string | null
+}
+
 export type TopGroup = "کالای دیجیتال" | "لوازم خانگی" | "فرش" | "مبلمان"
 
 export type DefaultCompetitorStore = "digikala" | "technolife"

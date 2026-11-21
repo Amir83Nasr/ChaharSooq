@@ -24,7 +24,7 @@ Makefile
 **/*.log
 **/*.tsbuildinfo
 Dockerfile*
-compose.yml
+compose.local.yml
 compose.production.yml
 # Reverse-proxy configuration is runtime material for the host, not image input.
 deploy

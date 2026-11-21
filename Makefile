@@ -9,6 +9,7 @@ SHELL := /bin/bash
 	db-clear-products db-validate db-sync-dev-to-staging db-seed-demo-staging \
 	sync-dev-to-staging sync-staging dev-to-staging \
 	docker-build docker-up docker-down docker-logs deploy-api \
+	local-up local-down \
 	prod-config prod-build prod-deploy prod-pull prod-image-revision \
 	prod-provision prod-migrate prod-bootstrap-owner prod-up prod-ps prod-logs \
 	prod-down prod-caddy-validate tls-validate tls-activate tls-rollback \
@@ -33,7 +34,7 @@ help help-all: ## Show the short user list (help) or every target (help-all)
 	awk -v bl="$$bl" -v r="$$r" '/^[A-Z][A-Z0-9_]*[[:space:]]*\?=.*##/ { key=$$1; line=$$0; sub(/^[^?]*\?=[ \t]*/, "", line); n++; split(line, p, /##/); val=p[1]; gsub(/^[ \t]+|[ \t]+$$/, "", val); entry[n]=key "=" val; desc[n]=p[2]; gsub(/^[ \t]+|[ \t]+$$/, "", desc[n]); width=(length(entry[n])>width?length(entry[n]):width) } END { for (i=1;i<=n;i++) printf "  %s%-*s%s %s\n", bl, width, entry[i], r, desc[i] }' $(MAKEFILE_LIST)
 
 # ─── CONFIG / VARIABLES ───────────────────────────────────
-COMPOSE_FILE ?= compose.yml ## Compose file used by up/down/logs
+COMPOSE_FILE ?= compose.local.yml ## Local development compose file (hot reload)
 COMPOSE_PROD_FILE ?= compose.production.yml ## Production compose file (separate from development)
 CHARSOOQ_SECRETS_DIR ?= /etc/charsooq/secrets ## Host directory of production secret files (never committed)
 CHARSOOQ_TLS_DIR ?= /etc/charsooq/tls ## Host directory of organization TLS material (never committed)
@@ -150,17 +151,24 @@ doctor: ## @user Check toolchain, env files, and service reachability
 	@$(COMPOSE) ps postgres 2>/dev/null | grep -q healthy && echo "postgres: healthy" || echo "postgres: not healthy (run make db-up)"
 
 # ─── DOCKER ───────────────────────────────────────────────
-docker-build: ## Build Docker images (web + api)
+docker-build: ## Build local images once (source edits hot-reload afterwards)
 	$(COMPOSE)build
 
-docker-up: ## Start services with Docker Compose (rebuild images)
-	$(COMPOSE)up -d --build
+docker-up: ## Start hot-reloading local stack (one-shot migration auto-removed)
+	$(COMPOSE)run --rm migrate
+	$(COMPOSE)up -d --no-build
 
 docker-down: ## Stop Docker Compose services
 	$(COMPOSE)down
 
 docker-logs: ## Follow Docker Compose logs
 	$(COMPOSE)logs -f
+
+# ─── LOCAL COMPOSE SHORTCUTS ──────────────────────────────
+# User-facing names for the compose.local.yml stack. Behavior stays in
+# docker-up/docker-down so there is only one place that invokes Compose.
+local-up: docker-up ## @user Start local compose stack (postgres + api + web)
+local-down: docker-down ## @user Stop local compose stack (data kept)
 
 # ─── DOCKER: PRODUCTION (single slot) ─────────────────────
 # Structural validation does not read secret files, so it works on a machine
@@ -184,7 +192,7 @@ PROD_DEPLOYMENT_ENV = \
 	CHARSOOQ_PUBLIC_PORT=80
 
 PROD_IMAGE_ENV = \
-	CHARSOOQ_API_IMAGE=ghcr.io/example/charsooq-api@sha256:0000000000000000000000000000000000000000000000000000000000000000 \
+	CHAHARSOQ_API_IMAGE=ghcr.io/example/chaharsooq-api@sha256:0000000000000000000000000000000000000000000000000000000000000000 \
 	CHARSOOQ_WEB_IMAGE=ghcr.io/example/charsooq-web@sha256:0000000000000000000000000000000000000000000000000000000000000000
 
 PROD_STRUCTURAL_ENV = $(PROD_DEPLOYMENT_ENV) $(PROD_IMAGE_ENV)
@@ -198,7 +206,7 @@ PROD_BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 PROD_BUILD_VERSION ?= $(PROD_BUILD_TAG)
 PROD_BUILD_SOURCE ?= $(shell git config --get remote.origin.url 2>/dev/null | sed -e 's|\.git$$||' -e 's|^git@github.com:|https://github.com/|')
 PROD_BUILD_ENV = \
-	CHARSOOQ_API_IMAGE=charsooq-api:$(PROD_BUILD_TAG) \
+	CHAHARSOQ_API_IMAGE=chaharsooq-api:$(PROD_BUILD_TAG) \
 	CHARSOOQ_WEB_IMAGE=charsooq-web:$(PROD_BUILD_TAG) \
 	CHARSOOQ_BUILD_REVISION=$(PROD_BUILD_REVISION) \
 	CHARSOOQ_BUILD_DATE=$(PROD_BUILD_DATE) \
@@ -267,7 +275,7 @@ prod-build: ## Build production API and web images from this commit (host-build 
 	# The deployment values are documentation placeholders: Compose interpolates
 	# the whole file before building, and none of them affect the image bytes.
 	$(PROD_DEPLOYMENT_ENV) $(PROD_BUILD_ENV) $(COMPOSE_PROD) build
-	@echo "built charsooq-api:$(PROD_BUILD_TAG) and charsooq-web:$(PROD_BUILD_TAG) from $(PROD_BUILD_REVISION)"
+	@echo "built chaharsooq-api:$(PROD_BUILD_TAG) and charsooq-web:$(PROD_BUILD_TAG) from $(PROD_BUILD_REVISION)"
 
 # One command to deploy on the server. Set SSH_HOST to run remotely; otherwise
 # run it directly on the host. VERSION defaults to the newest published release.
@@ -282,11 +290,11 @@ prod-pull: ## Pull the released API and web images (needs image refs)
 	$(COMPOSE_PROD) pull api web
 
 prod-image-revision: ## Print the release commit recorded in the image references (needs the image variables)
-	@test -n "$(CHARSOOQ_API_IMAGE)" && test -n "$(CHARSOOQ_WEB_IMAGE)" || { \
-		echo "usage: CHARSOOQ_API_IMAGE=<ref> CHARSOOQ_WEB_IMAGE=<ref> make prod-image-revision"; \
+	@test -n "$(CHAHARSOQ_API_IMAGE)" && test -n "$(CHARSOOQ_WEB_IMAGE)" || { \
+		echo "usage: CHAHARSOQ_API_IMAGE=<ref> CHARSOOQ_WEB_IMAGE=<ref> make prod-image-revision"; \
 		exit 2; \
 	}
-	docker image inspect "$(CHARSOOQ_API_IMAGE)" --format 'api revision {{index .Config.Labels "org.opencontainers.image.revision"}}'
+	docker image inspect "$(CHAHARSOQ_API_IMAGE)" --format 'api revision {{index .Config.Labels "org.opencontainers.image.revision"}}'
 	docker image inspect "$(CHARSOOQ_WEB_IMAGE)" --format 'web revision {{index .Config.Labels "org.opencontainers.image.revision"}}'
 
 prod-provision: ## Run idempotent database role provisioning once (needs real secrets)

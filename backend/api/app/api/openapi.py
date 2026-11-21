@@ -25,6 +25,12 @@ The committed contract is `backend/api/openapi.json`; CI fails when it is stale.
 TAGS_METADATA: list[dict[str, Any]] = [
     {"name": "Health", "description": "Liveness and database readiness probes."},
     {"name": "Auth", "description": "Admin login, logout, and current session."},
+    {
+        "name": "Backups",
+        "description": (
+            "Owner-only backup settings, archive metadata, and direct restore execution."
+        ),
+    },
     {"name": "Dashboard", "description": "Aggregated catalog, stock, and competitor metrics."},
     {
         "name": "Products",

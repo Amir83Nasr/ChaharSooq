@@ -1,6 +1,13 @@
 """Business logic lives here — never in route handlers."""
 
 from app.services.auth import LOGIN_ERROR, AuthService
+from app.services.backups import (
+    BackupRequestError,
+    BackupService,
+    BackupUnavailableError,
+    InvalidArchiveError,
+    UploadTooLargeError,
+)
 from app.services.catalog import CategoryService
 from app.services.dashboard import DashboardService
 from app.services.exports import (
@@ -52,6 +59,11 @@ __all__ = [
     "DEFAULT_PAGE_SIZE",
     "DEFAULT_PAGE_SIZE_KEY",
     "AuthService",
+    "BackupRequestError",
+    "BackupService",
+    "BackupUnavailableError",
+    "InvalidArchiveError",
+    "UploadTooLargeError",
     "CannotDeleteOwnerError",
     "CannotDeleteSelfError",
     "CategoryService",

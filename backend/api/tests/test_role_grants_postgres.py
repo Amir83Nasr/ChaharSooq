@@ -128,6 +128,9 @@ def test_sequence_usage_is_granted(provisioned: tuple[str, str]) -> None:
         assert sequence is not None
         value = app.execute(f"SELECT nextval('{sequence[0]}')").fetchone()
         assert value is not None and value[0] == 1
+        # A data-only restore resyncs sequences after loading explicit ids.
+        app.execute(f"SELECT setval('{sequence[0]}', 42, false)")
+        assert app.execute(f"SELECT nextval('{sequence[0]}')").fetchone() == (42,)
         app.rollback()
 
 

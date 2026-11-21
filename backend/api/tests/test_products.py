@@ -2,6 +2,7 @@
 
 from fastapi.testclient import TestClient
 
+from app.repositories import SHOW_ALL_MAX
 from tests.helpers import login, seed
 
 
@@ -81,6 +82,11 @@ def test_products_summary_counts(client: TestClient) -> None:
     body = client.get("/api/v1/products/summary", params={"threshold": 5}).json()
     # seed: TEA-1 (5×100), CHE-1 (0×300), COF-1 (2×200) → value 500+0+400
     assert body == {"total": 3, "in_stock": 0, "low": 2, "out": 1, "stock_value": 900}
+
+
+def test_show_all_cap_matches_web_constant() -> None:
+    """Keep backend SHOW_ALL_MAX in sync with apps/web/lib/api.ts."""
+    assert SHOW_ALL_MAX == 3000
 
 
 def test_products_show_all_reports_real_page_size(client: TestClient) -> None:

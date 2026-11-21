@@ -44,6 +44,9 @@ _ISOLATED_SETTINGS_ENV = frozenset(
         "RUN_MIGRATIONS_ON_STARTUP",
         "RUN_OWNER_BOOTSTRAP_ON_STARTUP",
         "MIGRATION_LOCK_TIMEOUT_SECONDS",
+        "BACKUP_DIR",
+        "BACKUP_TIMEOUT_SECONDS",
+        "BACKUP_MAX_UPLOAD_BYTES",
     }
 )
 
@@ -82,7 +85,12 @@ def isolated_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
 
 @pytest.fixture()
-def client() -> Iterator[TestClient]:
+def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
+    from app.core import config
+
+    # Archive storage is per-test: never write dumps into the checkout.
+    monkeypatch.setenv("BACKUP_DIR", str(tmp_path / "backups"))
+    config.get_settings.cache_clear()
     reset_engine()
     reset_rate_limits()
     engine = get_engine()
@@ -100,3 +108,4 @@ def client() -> Iterator[TestClient]:
         s.commit()
     with TestClient(create_app()) as c:
         yield c
+    config.get_settings.cache_clear()

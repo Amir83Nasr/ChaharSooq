@@ -164,7 +164,7 @@ def _run_guard(
 
     env = {
         "PATH": f"{stub_dir}{os.pathsep}{os.environ['PATH']}",
-        "API_IMAGE": "ghcr.io/ns/charsooq-api",
+        "API_IMAGE": "ghcr.io/ns/chaharsooq-api",
         "WEB_IMAGE": "ghcr.io/ns/charsooq-web",
         "VERSION": "1.0.0",
         "SHA": "1" * 40,
@@ -458,7 +458,7 @@ def test_an_existing_release_tag_is_never_overwritten() -> None:
 
 
 def test_the_guard_refuses_to_publish_over_an_existing_tag(tmp_path: Path) -> None:
-    result = _run_guard(tmp_path=tmp_path, existing=("ghcr.io/ns/charsooq-api:1.0.0",))
+    result = _run_guard(tmp_path=tmp_path, existing=("ghcr.io/ns/chaharsooq-api:1.0.0",))
 
     assert result.returncode != 0
     assert "already exist" in result.stdout

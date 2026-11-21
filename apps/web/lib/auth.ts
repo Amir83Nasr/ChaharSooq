@@ -7,6 +7,17 @@ import type { SessionUser } from "./session"
 /* Server-side session check — forwards browser cookies to the API. */
 
 const API = apiOrigin()
+// Keep in sync with the API's SESSION_COOKIE_NAME; an anonymous visitor is
+// already known to be signed out, so there is no reason to call /auth/me.
+const SESSION_COOKIE = (
+  process.env.SESSION_COOKIE_NAME ?? "charsooq_session"
+).trim()
+
+function hasSessionCookie(header: string): boolean {
+  return header
+    .split(";")
+    .some((part) => part.trimStart().startsWith(`${SESSION_COOKIE}=`))
+}
 
 /**
  * One `/auth/me` call per request even when nested layouts both check the
@@ -14,6 +25,8 @@ const API = apiOrigin()
  */
 export const getSessionAdmin = cache(async (): Promise<SessionUser | null> => {
   const cookieHeader = (await cookies()).toString()
+  if (!hasSessionCookie(cookieHeader)) return null
+
   let res: Response
   try {
     res = await fetch(`${API}/api/v1/auth/me`, {
@@ -22,10 +35,14 @@ export const getSessionAdmin = cache(async (): Promise<SessionUser | null> => {
       // Never hang a page render on a sick API — fail closed to login.
       signal: AbortSignal.timeout(5000),
     })
-  } catch {
+  } catch (error) {
     // API unreachable from the web server → check API_URL_INTERNAL on the host.
-    // Never log cookieHeader here (session secret material).
-    console.error("getSessionAdmin: API unreachable", { host: API })
+    // Never log cookieHeader here (session secret material); the fetch error
+    // only carries the transport cause (e.g. ECONNREFUSED / timeout).
+    const cause = error instanceof Error ? error.message : String(error)
+    // The page degrades safely to the login screen, so this is a warning, not
+    // a fatal render error — but it stays visible for local diagnosis.
+    console.warn("getSessionAdmin: API unreachable", { host: API, cause })
     return null
   }
   if (!res.ok) {

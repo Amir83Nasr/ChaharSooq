@@ -104,7 +104,7 @@ def test_application_grants_are_runtime_only() -> None:
 
     assert f'GRANT USAGE ON SCHEMA "{APPLICATION_SCHEMA}"' in rendered
     assert "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES" in rendered
-    assert "GRANT USAGE, SELECT ON ALL SEQUENCES" in rendered
+    assert "GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES" in rendered
     assert "REVOKE ALL ON SCHEMA" in rendered
     assert "GRANT ALL" not in rendered
     assert "TRUNCATE" not in rendered
@@ -122,7 +122,7 @@ def test_default_privileges_cover_future_tables_and_sequences() -> None:
 
     assert 'ALTER DEFAULT PRIVILEGES FOR ROLE "charsooq_migrator"' in rendered
     assert 'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO "charsooq_app"' in rendered
-    assert 'GRANT USAGE, SELECT ON SEQUENCES TO "charsooq_app"' in rendered
+    assert 'GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO "charsooq_app"' in rendered
 
 
 def test_grant_statements_are_idempotent_by_construction() -> None:

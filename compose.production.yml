@@ -1,4 +1,4 @@
-# Production stack for market-linux. Development lives in compose.yml and the
+# Production stack for market-linux. Development lives in compose.local.yml and the
 # two files are intentionally independent: nothing here is inherited from the
 # development file or from .env files.
 #
@@ -20,7 +20,7 @@
 # deploy/scripts/deploy.sh is the single deploy entry point. It pulls the
 # released images by digest, runs provision and migrate once, then starts the
 # api/web pair. Caddy forwards to the single `web` service.
-name: charsooq-production
+name: chaharsooq-production
 
 # OCI metadata for a locally built image. `make prod-build` fills these in
 # from the checkout, so even the host-build fallback carries the commit it
@@ -37,9 +37,9 @@ x-api-image: &api-image
   # reference is required and has no default: an unset or moving reference
   # must fail closed instead of silently running whatever happens to sit in
   # the local image cache. Select a release by digest:
-  #   export CHARSOOQ_API_IMAGE='ghcr.io/<namespace>/charsooq-api@sha256:<digest>'
+  #   export CHAHARSOQ_API_IMAGE='ghcr.io/<namespace>/chaharsooq-api@sha256:<digest>'
   # See AGENTS.md section 3 (release flow).
-  image: ${CHARSOOQ_API_IMAGE:?set CHARSOOQ_API_IMAGE to the released image reference, for example ghcr.io/<namespace>/charsooq-api@sha256:<digest>}
+  image: ${CHAHARSOQ_API_IMAGE:?set CHAHARSOQ_API_IMAGE to the released image reference, for example ghcr.io/<namespace>/chaharsooq-api@sha256:<digest>}
   # Pull the published image when it is not in the local cache. With a digest
   # reference this is what makes the deployed bytes the released bytes.
   pull_policy: missing
@@ -51,7 +51,7 @@ x-api-image: &api-image
 x-web-image: &web-image
   # Same contract as the API image: an explicit, immutable reference and no
   # default. `CHARSOOQ_WEB_IMAGE` must come from the same release as
-  # `CHARSOOQ_API_IMAGE`.
+  # `CHAHARSOQ_API_IMAGE`.
   image: ${CHARSOOQ_WEB_IMAGE:?set CHARSOOQ_WEB_IMAGE to the released image reference, for example ghcr.io/<namespace>/charsooq-web@sha256:<digest>}
   pull_policy: missing
   build:
@@ -75,6 +75,9 @@ x-api-env: &api-env
   # cross-origin browser requests are allowed.
   CORS_ORIGINS: ""
   SESSION_SAMESITE: lax
+  # Logical archives live on a named volume the API user owns. Mounted only
+  # into `api` below; the one-shot provision/migrate steps never need it.
+  BACKUP_DIR: /var/backups/charsooq
 
 # Docker's json-file driver has no size limit by default, so an unrotated
 # stdout stream can fill the host disk and take PostgreSQL with it. Bound every
@@ -316,6 +319,10 @@ services:
       # Uvicorn's --proxy-headers trusts forwarded headers only from this peer:
       # web's fixed address on edge, never a wildcard.
       FORWARDED_ALLOW_IPS: ${CHARSOOQ_WEB_EDGE_IP:?set CHARSOOQ_WEB_EDGE_IP to the web fixed address on edge}
+    # Named volume, so an image update keeps the archives. The image creates the
+    # directory owned by UID/GID 10001, so no extra init service is required.
+    volumes:
+      - backups:/var/backups/charsooq
     networks:
       backend: {}
       edge:
@@ -355,6 +362,8 @@ volumes:
   pgdata:
   caddy_data:
   caddy_config:
+  # Backup archives. Never removed by a deploy; retention prunes files inside it.
+  backups:
 
 secrets:
   # File-backed Compose secrets are bind-mounted read-only into /run/secrets.

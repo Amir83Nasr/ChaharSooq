@@ -14,6 +14,9 @@ import {
 } from "./api-params"
 import type {
   ApiError,
+  BackupRecord,
+  BackupSettings,
+  BackupSettingsUpdate,
   CatalogSection,
   CategoryOut,
   CompetitorGap,
@@ -44,11 +47,15 @@ export type * from "./api-types"
 // ── Safety cap (mirrors backend SHOW_ALL_MAX): "show all" never asks for
 // more than this; the table windows the rows but the API still serializes
 // them all.
-export const SHOW_ALL_MAX = 2000
+export const SHOW_ALL_MAX = 3000
 
 // Default request timeout so a hung API never leaves a page spinning forever.
 // Callers with their own AbortSignal (poller cleanup) still win on abort.
 const REQUEST_TIMEOUT_MS = 15_000
+// Archives are streamed and verified server-side, so an upload gets longer.
+const UPLOAD_TIMEOUT_MS = 10 * 60_000
+// How often the owner's backup screen refreshes while work is in flight.
+export const BACKUP_POLL_MS = 3_000
 
 export class ApiRequestError extends Error {
   status: number
@@ -68,8 +75,12 @@ export class ApiRequestError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+async function request<T>(
+  path: string,
+  init?: RequestInit,
+  timeoutMs: number = REQUEST_TIMEOUT_MS
+): Promise<T> {
+  const timeout = AbortSignal.timeout(timeoutMs)
   const signal = init?.signal
     ? AbortSignal.any([init.signal, timeout])
     : timeout
@@ -157,6 +168,49 @@ export const api = {
       return data
     })
   },
+  // Backup data is deliberately outside the five-minute settings cache: the
+  // owner sees live archive state and restore progress.
+  backupSettings() {
+    return request<BackupSettings>("/api/v1/settings/backup")
+  },
+  updateBackupSettings(patch: BackupSettingsUpdate) {
+    return request<BackupSettings>("/api/v1/settings/backup", {
+      method: "PUT",
+      body: JSON.stringify(patch),
+    })
+  },
+  backups() {
+    return request<BackupRecord[]>("/api/v1/backups")
+  },
+  /** Queue a full dump; the API returns 202 and the worker finishes it. */
+  queueBackup() {
+    return request<BackupRecord>("/api/v1/backups", { method: "POST" })
+  },
+  /** Upload a `pg_dump --format=custom` archive for a later restore. */
+  uploadBackup(file: File) {
+    const body = new FormData()
+    body.append("file", file)
+    return request<BackupRecord>(
+      "/api/v1/backups/upload",
+      // Let the browser set the multipart boundary.
+      { method: "POST", body, headers: {} },
+      UPLOAD_TIMEOUT_MS
+    )
+  },
+  /** Download URL — pass to `downloadFile`; never to `request`. */
+  backupDownloadUrl(id: number) {
+    return `/api/v1/backups/${id}/download`
+  },
+  /** Permanently remove one stored archive and its metadata. */
+  deleteBackup(id: number) {
+    return request<void>(`/api/v1/backups/${id}`, { method: "DELETE" })
+  },
+  /** Start a data restore from one verified archive; the worker runs it. */
+  restoreBackup(id: number) {
+    return request<BackupRecord>(`/api/v1/backups/${id}/restore`, {
+      method: "POST",
+    })
+  },
   me() {
     return request<MeOut>("/api/v1/auth/me")
   },
@@ -178,7 +232,7 @@ export const api = {
   products(params: ProductFilters = {}) {
     // `page_size=0` is the canonical "show all" — the backend caps it at
     // SHOW_ALL_MAX. Never rewrite it client-side: the route rejects explicit
-    // sizes above 500, so sending 2000 would 422 and empty the table.
+    // sizes above 500, so sending 3000 would 422 and empty the table.
     return request<ProductPage>(`/api/v1/products${buildProductParams(params)}`)
   },
   /** CSV download URL — pass to `downloadFile`; never to `request`. */

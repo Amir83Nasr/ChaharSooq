@@ -176,6 +176,544 @@
         ]
       }
     },
+    "/api/v1/settings/backup": {
+      "get": {
+        "tags": [
+          "Backups"
+        ],
+        "summary": "Read backup settings",
+        "description": "Owner-only backup schedule settings and local tool availability. Retention and verification are fixed policy.",
+        "operationId": "get_backup_settings",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupSettingsOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Signed in, but the account role is not allowed to perform this action (`forbidden`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Backups"
+        ],
+        "summary": "Update backup settings",
+        "description": "Enables or pauses automatic backups and changes their interval.",
+        "operationId": "update_backup_settings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BackupSettingsUpdateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupSettingsOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Signed in, but the account role is not allowed to perform this action (`forbidden`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/backups": {
+      "get": {
+        "tags": [
+          "Backups"
+        ],
+        "summary": "List backup archives",
+        "description": "Owner-only metadata for recent archives, including file availability. Never includes credentials or filesystem paths.",
+        "operationId": "list_backups",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BackupOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Backups"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Signed in, but the account role is not allowed to perform this action (`forbidden`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Backups"
+        ],
+        "summary": "Queue a manual backup",
+        "description": "Queues a full logical dump of the database. The background worker runs it within seconds; poll `GET /backups` for the result.",
+        "operationId": "queue_backup",
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Signed in, but the account role is not allowed to perform this action (`forbidden`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The request conflicts with the current state (`conflict`, or `category_in_use` for categories).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/backups/upload": {
+      "post": {
+        "tags": [
+          "Backups"
+        ],
+        "summary": "Upload a backup archive",
+        "description": "Accepts a verified pg_dump custom-format archive, stores it locally, and makes it available for a data restore. The file never touches the database.",
+        "operationId": "upload_backup",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_backup"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Signed in, but the account role is not allowed to perform this action (`forbidden`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The request conflicts with the current state (`conflict`, or `category_in_use` for categories).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Upload exceeds the configured cap."
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/backups/{backup_id}/download": {
+      "get": {
+        "tags": [
+          "Backups"
+        ],
+        "summary": "Download a backup archive",
+        "description": "Owner-only download of the stored dump. Expired archives return 404.",
+        "operationId": "download_backup",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "backup_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Backup Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Signed in, but the account role is not allowed to perform this action (`forbidden`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource does not exist (`not_found`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/backups/{backup_id}": {
+      "delete": {
+        "tags": [
+          "Backups"
+        ],
+        "summary": "Delete a backup archive",
+        "description": "Owner-only permanent removal of one stored archive and its metadata. Archives with an active restore or still running are kept.",
+        "operationId": "delete_backup",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "backup_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Backup Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Signed in, but the account role is not allowed to perform this action (`forbidden`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource does not exist (`not_found`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The request conflicts with the current state (`conflict`, or `category_in_use` for categories).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/backups/{backup_id}/restore": {
+      "post": {
+        "tags": [
+          "Backups"
+        ],
+        "summary": "Restore an archive",
+        "description": "Owner-only, direct trigger of a transactional data restore from one verified, locally stored archive. The owner confirms in the client before calling this endpoint. Shop data is replaced; accounts, sessions, and backup history are preserved. A verified pre-restore archive is created first and the load is rolled back on failure. Poll `GET /backups` for `restore_status`.",
+        "operationId": "restore_backup",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "backup_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Backup Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Signed in, but the account role is not allowed to perform this action (`forbidden`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource does not exist (`not_found`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The request conflicts with the current state (`conflict`, or `category_in_use` for categories).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/dashboard/overview": {
       "get": {
         "tags": [
@@ -2863,6 +3401,317 @@
   },
   "components": {
     "schemas": {
+      "BackupOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
+          },
+          "sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sha256"
+          },
+          "verification": {
+            "type": "string",
+            "title": "Verification"
+          },
+          "verification_method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verification Method"
+          },
+          "source_revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Revision"
+          },
+          "storage_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Ref"
+          },
+          "retention_expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retention Expires At"
+          },
+          "pruned_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pruned At"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "restore_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restore Status"
+          },
+          "restore_started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restore Started At"
+          },
+          "restore_finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restore Finished At"
+          },
+          "restore_error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restore Error Code"
+          },
+          "restored_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restored At"
+          },
+          "downloadable": {
+            "type": "boolean",
+            "title": "Downloadable",
+            "description": "The archive file still exists in local storage."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "created_at",
+          "finished_at",
+          "status",
+          "kind",
+          "size_bytes",
+          "sha256",
+          "verification",
+          "verification_method",
+          "source_revision",
+          "storage_ref",
+          "retention_expires_at",
+          "pruned_at",
+          "error_code",
+          "restore_status",
+          "restore_started_at",
+          "restore_finished_at",
+          "restore_error_code",
+          "restored_at",
+          "downloadable"
+        ],
+        "title": "BackupOut"
+      },
+      "BackupSettingsOut": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "description": "Automatic host-side backups are enabled."
+          },
+          "interval_minutes": {
+            "type": "integer",
+            "title": "Interval Minutes",
+            "description": "Minimum interval between scheduled backups."
+          },
+          "retention_days": {
+            "type": "integer",
+            "title": "Retention Days",
+            "description": "Fixed retention policy; not editable in the panel."
+          },
+          "verification_method": {
+            "type": "string",
+            "title": "Verification Method",
+            "description": "How an archive is verified before trust."
+          },
+          "tools_available": {
+            "type": "boolean",
+            "title": "Tools Available",
+            "description": "pg_dump, pg_restore, and psql are present in this runtime."
+          },
+          "storage_ready": {
+            "type": "boolean",
+            "title": "Storage Ready",
+            "description": "The archive directory is writable."
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled",
+          "interval_minutes",
+          "retention_days",
+          "verification_method",
+          "tools_available",
+          "storage_ready"
+        ],
+        "title": "BackupSettingsOut"
+      },
+      "BackupSettingsUpdateIn": {
+        "properties": {
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled",
+            "description": "Enable or pause automatic backups."
+          },
+          "interval_minutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10080.0,
+                "minimum": 60.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interval Minutes",
+            "description": "Automatic backup interval, in minutes."
+          }
+        },
+        "type": "object",
+        "title": "BackupSettingsUpdateIn",
+        "examples": [
+          {
+            "enabled": true,
+            "interval_minutes": 720
+          }
+        ]
+      },
+      "Body_upload_backup": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "description": "`pg_dump --format=custom` archive"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_backup"
+      },
       "CatalogBrandOut": {
         "properties": {
           "group_name": {
@@ -4957,6 +5806,10 @@
     {
       "name": "Auth",
       "description": "Admin login, logout, and current session."
+    },
+    {
+      "name": "Backups",
+      "description": "Owner-only backup settings, archive metadata, and direct restore execution."
     },
     {
       "name": "Dashboard",

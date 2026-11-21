@@ -1,6 +1,7 @@
 """Direct DB queries — no business rules here."""
 
 from app.repositories.auth import AdminRepository, AdminSessionRepository
+from app.repositories.backups import BackupRepository
 from app.repositories.catalog import CategoryRepository
 from app.repositories.competitor import CompetitorRepository
 from app.repositories.competitor_sync import CompetitorSyncStateRepository
@@ -16,6 +17,7 @@ from app.repositories.sync import SyncStateRepository
 __all__ = [
     "AdminRepository",
     "AdminSessionRepository",
+    "BackupRepository",
     "CategoryRepository",
     "CompetitorRepository",
     "CompetitorSyncStateRepository",

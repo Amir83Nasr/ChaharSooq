@@ -24,7 +24,7 @@ ARG VCS_REF=unknown
 ARG BUILD_DATE=unknown
 ARG VERSION=unknown
 ARG SOURCE=unknown
-LABEL org.opencontainers.image.title="charsooq-api" \
+LABEL org.opencontainers.image.title="chaharsooq-api" \
   org.opencontainers.image.description="ChaharSooq FastAPI admin API" \
   org.opencontainers.image.vendor="ChaharSooq" \
   org.opencontainers.image.licenses="MIT" \
@@ -38,6 +38,28 @@ LABEL org.opencontainers.image.title="charsooq-api" \
 # must make each file readable by this UID (see AGENTS.md, section 3).
 RUN groupadd --gid 10001 api \
     && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin api
+
+# PostgreSQL client tools for logical backups. The server runs PostgreSQL 18, and
+# pg_dump refuses a newer server major, so the client must match that major. The
+# Debian default (15) is too old; the pinned PGDG repository provides 18.
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
+    && install -d /usr/share/postgresql-common/pgdg \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+        -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+    && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
+        > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-client-18 \
+    && apt-get purge -y --auto-remove curl gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Local archive directory. A named volume mounted here inherits this owner and
+# mode on first use, so the non-root API user can write without an init service.
+RUN mkdir -p /var/backups/charsooq \
+    && chown 10001:10001 /var/backups/charsooq \
+    && chmod 0700 /var/backups/charsooq
 
 # App code and venv are root-owned and read-only to the runtime user.
 COPY --from=builder /srv/api/.venv /srv/api/.venv
@@ -61,3 +83,9 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
 # banner. Workers are capped at 2 — the sync lock is DB-backed so workers never
 # double-run, and memory stays small on a single host.
 CMD ["uvicorn", "app.main:app", "--app-dir", "backend/api", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--proxy-headers", "--no-server-header"]
+
+# Local development image: same runtime (including the PostgreSQL client used
+# by backups), but uvicorn watches the source bind-mounted by compose.local.yml.
+# A single reload process is enough for local edits; no rebuild is needed.
+FROM api AS api-dev
+CMD ["uvicorn", "app.main:app", "--app-dir", "backend/api", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "backend/api/app", "--no-server-header"]

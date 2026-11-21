@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from app.api.routes import (
     auth,
+    backups,
     categories,
     competitors,
     dashboard,
@@ -18,6 +19,7 @@ from app.api.routes import (
 router = APIRouter()
 router.include_router(health.router)
 router.include_router(auth.router)
+router.include_router(backups.router)
 router.include_router(dashboard.router)
 router.include_router(products.router)
 router.include_router(competitors.router)

@@ -48,6 +48,12 @@ _FIELD_LABELS: dict[str, str] = {
     "weight": "وزن",
     "allowed_decrease_percent": "حداکثر کاهش",
     "allowed_increase_percent": "حداکثر افزایش",
+    "backup_id": "پشتیبان",
+    "note": "توضیح",
+    "enabled": "وضعیت پشتیبان‌گیری خودکار",
+    "interval_minutes": "فاصلهٔ پشتیبان‌گیری",
+    "file": "فایل پشتیبان",
+    "source_revision": "نسخهٔ منبع",
 }
 
 
@@ -87,7 +93,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    """Migrate, ensure the env owner, then start/stop the Parsina scheduler."""
+    """Migrate, ensure the env owner, then start/stop the background workers."""
+    from app.core.backup_scheduler import build_backup_scheduler
     from app.core.migrations import upgrade_to_head
     from app.core.scheduler import build_scheduler
     from app.services.owner import bootstrap_owner
@@ -99,9 +106,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         if settings.run_owner_bootstrap_on_startup:
             bootstrap_owner()
     scheduler = None if settings.app_env == "test" else build_scheduler()
+    backup_scheduler = None if settings.app_env == "test" else build_backup_scheduler()
     if scheduler is not None:
         scheduler.start()
+    if backup_scheduler is not None:
+        backup_scheduler.start()
     yield
+    if backup_scheduler is not None:
+        backup_scheduler.stop()
     if scheduler is not None:
         scheduler.stop()
 
@@ -197,6 +209,7 @@ def create_app() -> FastAPI:
             404: "not_found",
             405: "method_not_allowed",
             409: "conflict",
+            413: "payload_too_large",
             422: "validation_error",
             429: "rate_limited",
         }
@@ -207,6 +220,7 @@ def create_app() -> FastAPI:
             404: "یافت نشد.",
             405: "روش مجاز نیست.",
             409: "این مقدار قبلاً ثبت شده است.",
+            413: "حجم فایل بیش از حد مجاز است.",
             422: "خطای اعتبارسنجی",
             429: "تلاش‌های مکرر؛ لطفاً بعداً تلاش کنید.",
         }

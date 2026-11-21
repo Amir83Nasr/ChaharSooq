@@ -17,6 +17,11 @@ must never contain secret values, private keys, or certificates.
 - `tls/activate_certificate.py` — stages a validated pair under
   `versions/<stamp>/` and switches the single `current` symlink atomically for
   rollback-safe activation.
+- `../backend/api/scripts/backup_cli.py` — one-shot worker CLI (`plan`, `queue-backup`, `run-once`,
+  `prune`, `requests`) for hosts that prefer an external tick over the API's background thread. It
+  uses the application role, refuses Staging, and never reads an admin or migration credential. The
+  API container already runs the same worker; the CLI is not required by the default stack (see
+  [ADR 023](../docs/adr/023-in-app-backup-and-data-restore.md)).
 - `production.env.example` — template for the non-secret deployment variables
   required by `compose.production.yml` (`CHARSOOQ_*`), including the GitHub
   repository used for release discovery, the image repositories, the single

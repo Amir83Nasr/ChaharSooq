@@ -50,7 +50,7 @@ jobs:
       attestations: write
     env:
       REGISTRY: ghcr.io
-      API_IMAGE_NAME: charsooq-api
+      API_IMAGE_NAME: chaharsooq-api
       WEB_IMAGE_NAME: charsooq-web
       # The web image bakes the internal API address into the Next.js rewrite
       # at build time. It must stay identical to compose.production.yml; a
@@ -381,7 +381,7 @@ jobs:
             echo "\`latest\` is a discovery pointer only. Production resolves it to a digest and verifies the release labels before deploying. Explicit digest references:"
             echo
             echo '```bash'
-            echo "export CHARSOOQ_API_IMAGE='${API_IMAGE}@${API_DIGEST}'"
+            echo "export CHAHARSOQ_API_IMAGE='${API_IMAGE}@${API_DIGEST}'"
             echo "export CHARSOOQ_WEB_IMAGE='${WEB_IMAGE}@${WEB_DIGEST}'"
             echo '```'
             echo "<!-- charsooq:image-digests:end -->"
@@ -469,7 +469,7 @@ jobs:
             echo '`latest` is only a discovery pointer. Deploy by digest, never by the tag:'
             echo
             echo '```bash'
-            echo "export CHARSOOQ_API_IMAGE='${API_IMAGE}@${API_DIGEST}'"
+            echo "export CHAHARSOQ_API_IMAGE='${API_IMAGE}@${API_DIGEST}'"
             echo "export CHARSOOQ_WEB_IMAGE='${WEB_IMAGE}@${WEB_DIGEST}'"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"

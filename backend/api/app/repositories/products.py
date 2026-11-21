@@ -41,7 +41,7 @@ class ProductFilters(NamedTuple):
 
 # Safety cap for the "show all" path (page_size=0): never serialize an
 # unbounded result set — the UI windows rows but the API still builds them.
-SHOW_ALL_MAX = 2000
+SHOW_ALL_MAX = 3000
 
 
 class CompetitorGapRow(NamedTuple):

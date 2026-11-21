@@ -22,6 +22,7 @@ const breadcrumbLabels: Record<string, string> = {
   pricing: "قیمت‌گذاری",
   sync: "همگام‌سازی",
   inventory: "انبار",
+  backup: "پشتیبان‌گیری",
   appearance: "نمایش",
   integrations: "اتصال فروشگاه‌ها",
   sofa: "سوفا",

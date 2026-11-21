@@ -29,6 +29,16 @@ DEFAULT_COMPETITOR_SYNC_INTERVAL_MINUTES = 1440
 MIN_COMPETITOR_SYNC_INTERVAL_MINUTES = 15
 MAX_COMPETITOR_SYNC_INTERVAL_MINUTES = 10080
 
+BACKUP_ENABLED_KEY = "backup_enabled"
+# Automatic backups are on by default: a shop admin panel that silently keeps
+# no recoverable copy is the worse failure mode. The owner can pause it.
+DEFAULT_BACKUP_ENABLED = True
+
+BACKUP_INTERVAL_MINUTES_KEY = "backup_interval_minutes"
+DEFAULT_BACKUP_INTERVAL_MINUTES = 720
+MIN_BACKUP_INTERVAL_MINUTES = 60
+MAX_BACKUP_INTERVAL_MINUTES = 10080
+
 DEFAULT_COMPETITOR_STORE_KEY = "default_competitor_store"
 DEFAULT_COMPETITOR_STORE: Literal["digikala", "technolife"] = "digikala"
 ALLOWED_COMPETITOR_STORES: tuple[Literal["digikala", "technolife"], ...] = (
@@ -150,6 +160,30 @@ class SettingsService:
 
     def update_competitor_sync_interval(self, minutes: int) -> int:
         self._settings.upsert(COMPETITOR_SYNC_INTERVAL_KEY, str(minutes))
+        return minutes
+
+    def get_backup_enabled(self) -> bool:
+        row = self._settings.get(BACKUP_ENABLED_KEY)
+        if row is None:
+            return DEFAULT_BACKUP_ENABLED
+        return row.value.strip().lower() in {"true", "1"}
+
+    def update_backup_enabled(self, enabled: bool) -> bool:
+        self._settings.upsert(BACKUP_ENABLED_KEY, "true" if enabled else "false")
+        return enabled
+
+    def get_backup_interval_minutes(self) -> int:
+        row = self._settings.get(BACKUP_INTERVAL_MINUTES_KEY)
+        if row is None:
+            return DEFAULT_BACKUP_INTERVAL_MINUTES
+        try:
+            value = int(row.value)
+        except ValueError:
+            return DEFAULT_BACKUP_INTERVAL_MINUTES
+        return min(max(value, MIN_BACKUP_INTERVAL_MINUTES), MAX_BACKUP_INTERVAL_MINUTES)
+
+    def update_backup_interval_minutes(self, minutes: int) -> int:
+        self._settings.upsert(BACKUP_INTERVAL_MINUTES_KEY, str(minutes))
         return minutes
 
     def get_competitor_store(self) -> Literal["digikala", "technolife"]:

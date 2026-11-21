@@ -37,6 +37,11 @@ _ENV_FILES = (
 # Only the development source reads this file; production uses Parsina.
 _DEFAULT_PRODUCTS_CSV_PATH = _REPO_ROOT / "data" / "parsina.csv"
 
+# Local archive storage. Production mounts a named volume at this path; the
+# development default stays under the gitignored `/data/` directory.
+_DEV_BACKUP_DIR = _REPO_ROOT / "data" / "backups"
+_PRODUCTION_BACKUP_DIR = Path("/var/backups/charsooq")
+
 # Matches the development compose database. Production must never inherit it
 # implicitly; see DatabaseSettings below.
 DEFAULT_DATABASE_URL = "postgresql+psycopg://charsooq:charsooq@localhost:5433/charsooq"
@@ -441,6 +446,14 @@ class Settings(DatabaseSettings):
     dev_database_url: str = Field(default="")
     competitor_request_interval_seconds: float = Field(default=5.0, ge=1, le=300)
     competitor_price_ttl_hours: int = Field(default=24, ge=1, le=720)
+    # Local archive directory. Empty means the environment default: the gitignored
+    # repo data directory in Development, /var/backups/charsooq in Production
+    # (a named Docker volume, created with the API image's UID).
+    backup_dir: str = Field(default="")
+    # Bound a runaway dump so a stuck client cannot hold the worker lease forever.
+    backup_timeout_seconds: int = Field(default=3600, ge=60, le=86400)
+    # Upload cap for operator-supplied archives (default 512 MiB).
+    backup_max_upload_bytes: int = Field(default=536_870_912, ge=1_048_576, le=10_737_418_240)
 
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -514,6 +527,16 @@ class Settings(DatabaseSettings):
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"
+
+    @property
+    def resolved_backup_dir(self) -> Path:
+        """Archive directory: explicit value, else the environment default."""
+        raw = self.backup_dir.strip()
+        if raw:
+            return Path(raw).expanduser()
+        if is_production_deployment():
+            return _PRODUCTION_BACKUP_DIR
+        return _DEV_BACKUP_DIR
 
     @property
     def source_mode(self) -> Literal["csv", "dev", "parsina", "off"]:

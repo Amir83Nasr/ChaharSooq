@@ -14,6 +14,17 @@ RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
   pnpm install --frozen-lockfile --network-concurrency=2 \
     --fetch-timeout=600000 --config.fetch-min-speed-ki-bps=1
 
+# Local development image: the deps layer (including dev tools) plus source.
+# compose.local.yml bind-mounts the repo over /app and runs `next dev`, so host
+# edits are picked up without rebuilding this image.
+FROM deps AS web-dev
+ENV API_URL_INTERNAL=http://api:8000 \
+    NEXT_PUBLIC_API_URL=http://localhost:8000 \
+    HOSTNAME=0.0.0.0 PORT=3000
+COPY . .
+EXPOSE 3000
+CMD ["pnpm", "--filter", "web", "dev"]
+
 # next.config.ts reads API_URL_INTERNAL when it builds the /api/* rewrite,
 # so the value must be present at build time as well as at runtime. Next also
 # serializes it into the standalone server output.

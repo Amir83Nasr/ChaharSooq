@@ -1,6 +1,11 @@
 """Pydantic boundary schemas — machine-readable in/out only."""
 
 from app.schemas.auth import LoginIn, LoginOut, MeOut
+from app.schemas.backup import (
+    BackupOut,
+    BackupSettingsOut,
+    BackupSettingsUpdateIn,
+)
 from app.schemas.catalog import (
     CategoryIn,
     CategoryOut,
@@ -28,6 +33,9 @@ from app.schemas.users import AssignableRole, UserCreateIn, UserOut, UserRole
 
 __all__ = [
     "AssignableRole",
+    "BackupOut",
+    "BackupSettingsOut",
+    "BackupSettingsUpdateIn",
     "CatalogBrandOut",
     "CatalogSectionOut",
     "CategoryIn",

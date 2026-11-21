@@ -45,6 +45,12 @@ select = ["E", "F", "I", "UP", "B", "ASYNC", "S", "DTZ", "A", "C4"]
 "migrations/**" = ["E", "F", "I"]
 # Local-only helper scripts: asserts for status checks, urllib for stdlib-only bench.
 "scripts/**" = ["S101", "S310"]
+# Client binaries are resolved with shutil.which and receive fixed argv arrays,
+# never shell=True or user text; the connection secret travels in the env.
+"app/integrations/pg_tools.py" = ["S603"]
+# The generated restore script only interpolates module-level table allowlists,
+# TOC-derived table names, and escaped setting values.
+"app/services/backup_worker.py" = ["S608"]
 
 [tool.ruff.format]
 quote-style = "double"

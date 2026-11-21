@@ -65,7 +65,7 @@ def _fixture(tmp_path: Path) -> dict[str, str]:
                 "CHARSOOQ_EDGE_SUBNET=192.0.2.0/28",
                 "CHARSOOQ_WEB_EDGE_IP=192.0.2.11",
                 "CHARSOOQ_PUBLIC_SCHEME=http",
-                "CHARSOOQ_API_REPO=ghcr.io/example/charsooq-api",
+                "CHAHARSOQ_API_REPO=ghcr.io/example/chaharsooq-api",
                 "CHARSOOQ_WEB_REPO=ghcr.io/example/charsooq-web",
                 "CHARSOOQ_GITHUB_REPO=Amir83Nasr/ChaharSooq",
             ]
@@ -293,7 +293,7 @@ def test_no_argument_uses_the_newest_published_github_release(tmp_path: Path) ->
     assert result.returncode == 0, result.stderr + result.stdout
     assert "releases/latest" in curl_log.read_text()
     commands = docker_log.read_text()
-    assert "charsooq-api:1.2.3" in commands
+    assert "chaharsooq-api:1.2.3" in commands
     assert "charsooq-web:1.2.3" in commands
     assert ":latest" not in commands
     assert "Release     v1.2.3 (" + REVISION + ")" in result.stdout
@@ -309,11 +309,11 @@ def test_a_tag_deploy_fetches_that_release_and_runs_the_ordered_flow(tmp_path: P
     assert result.returncode == 0, result.stderr + result.stdout
     commands = docker_log.read_text()
     assert "releases/tags/v1.2.3" in curl_log.read_text()
-    assert "charsooq-api:1.2.3" in commands
+    assert "chaharsooq-api:1.2.3" in commands
     assert "charsooq-web:1.2.3" in commands
     assert ":v1.2.3" not in commands
     digest = "sha256:" + "1" * 64
-    assert "ghcr.io/example/charsooq-api@" + digest in result.stdout
+    assert "ghcr.io/example/chaharsooq-api@" + digest in result.stdout
     assert "ghcr.io/example/charsooq-web@" + digest in result.stdout
 
     pull = commands.index("pull api web")
@@ -331,7 +331,7 @@ def test_a_tag_deploy_fetches_that_release_and_runs_the_ordered_flow(tmp_path: P
 def test_explicit_digest_deploy_skips_github_and_tag_resolution(tmp_path: Path) -> None:
     env = _fixture(tmp_path)
     docker_log, curl_log = _fake_bin(tmp_path, env)
-    api = "ghcr.io/example/charsooq-api@sha256:" + "a" * 64
+    api = "ghcr.io/example/chaharsooq-api@sha256:" + "a" * 64
     web = "ghcr.io/example/charsooq-web@sha256:" + "b" * 64
 
     result = _run([api, web], env)

@@ -58,7 +58,10 @@ _SAFE_ROLE_ATTRIBUTES = sql.SQL(
 )
 
 _APPLICATION_TABLE_PRIVILEGES = sql.SQL("SELECT, INSERT, UPDATE, DELETE")
-_APPLICATION_SEQUENCE_PRIVILEGES = sql.SQL("USAGE, SELECT")
+# UPDATE is needed for `setval`, which a data-only restore uses to resync owned
+# sequences after loading explicit ids. It does not allow changing a sequence's
+# definition or ownership.
+_APPLICATION_SEQUENCE_PRIVILEGES = sql.SQL("USAGE, SELECT, UPDATE")
 
 #: Tables the API never needs to touch. ``alembic_version`` is the migration
 #: runner's bookkeeping; revoking it prevents a compromised application role
@@ -510,6 +513,35 @@ def _verify(cursor: psycopg.Cursor[Any], plan: RoleProvisioningPlan, admin_user:
     if row is None or row[0] != 0 or row[1] != 0:
         raise ProvisioningError(
             "the application role owns objects or lacks DML on an application table"
+        )
+
+    # A data-only restore resyncs owned sequences with `setval`, which requires
+    # USAGE, SELECT, and UPDATE. Check every sequence, including ones created
+    # after provisioning through the migration role's default privileges.
+    cursor.execute(
+        """
+        SELECT count(*)
+        FROM pg_class AS c
+        JOIN pg_namespace AS n ON n.oid = c.relnamespace
+        WHERE n.nspname = %s
+          AND c.relkind = 'S'
+          AND NOT (
+            has_sequence_privilege(%s, c.oid, 'USAGE')
+            AND has_sequence_privilege(%s, c.oid, 'SELECT')
+            AND has_sequence_privilege(%s, c.oid, 'UPDATE')
+          )
+        """,
+        (
+            APPLICATION_SCHEMA,
+            plan.app_role,
+            plan.app_role,
+            plan.app_role,
+        ),
+    )
+    row = cursor.fetchone()
+    if row is None or row[0] != 0:
+        raise ProvisioningError(
+            "the application role lacks USAGE/SELECT/UPDATE on an application sequence"
         )
 
     cursor.execute(

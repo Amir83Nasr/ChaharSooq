@@ -226,7 +226,7 @@ def test_production_images_are_explicit_and_have_no_moving_default() -> None:
 
     api_image = str(services["api"]["image"])
     web_image = str(services["web"]["image"])
-    assert api_image.startswith("${CHARSOOQ_API_IMAGE:?")
+    assert api_image.startswith("${CHAHARSOQ_API_IMAGE:?")
     assert web_image.startswith("${CHARSOOQ_WEB_IMAGE:?")
     assert ":-" not in api_image
     assert ":-" not in web_image

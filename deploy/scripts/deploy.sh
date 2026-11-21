@@ -138,7 +138,7 @@ if [ $# -eq 2 ]; then
     *@sha256:*) ;;
     *) usage ;;
   esac
-  CHARSOOQ_API_IMAGE="$1"
+  CHAHARSOQ_API_IMAGE="$1"
   CHARSOOQ_WEB_IMAGE="$2"
   note "using explicit digests; GitHub release discovery skipped"
 else
@@ -174,19 +174,19 @@ else
   version="${release_tag#v}"
 
   # Version tags are write-once; `latest` is never used as a deployment ref.
-  [ -n "${CHARSOOQ_API_REPO:-}" ] || fail "CHARSOOQ_API_REPO is not set in $ENV_FILE"
+  [ -n "${CHAHARSOQ_API_REPO:-}" ] || fail "CHAHARSOQ_API_REPO is not set in $ENV_FILE"
   [ -n "${CHARSOOQ_WEB_REPO:-}" ] || fail "CHARSOOQ_WEB_REPO is not set in $ENV_FILE"
-  CHARSOOQ_API_IMAGE="$(resolve_digest "${CHARSOOQ_API_REPO:-}:$version")"
+  CHAHARSOQ_API_IMAGE="$(resolve_digest "${CHAHARSOQ_API_REPO:-}:$version")"
   CHARSOOQ_WEB_IMAGE="$(resolve_digest "${CHARSOOQ_WEB_REPO:-}:$version")"
 fi
-note "api image   $CHARSOOQ_API_IMAGE"
+note "api image   $CHAHARSOQ_API_IMAGE"
 note "web image   $CHARSOOQ_WEB_IMAGE"
-export CHARSOOQ_API_IMAGE CHARSOOQ_WEB_IMAGE
+export CHAHARSOQ_API_IMAGE CHARSOOQ_WEB_IMAGE
 
 step "Verifying that both images are from one release"
-api_version="$(image_label "$CHARSOOQ_API_IMAGE" org.opencontainers.image.version || true)"
+api_version="$(image_label "$CHAHARSOQ_API_IMAGE" org.opencontainers.image.version || true)"
 web_version="$(image_label "$CHARSOOQ_WEB_IMAGE" org.opencontainers.image.version || true)"
-api_revision="$(image_label "$CHARSOOQ_API_IMAGE" org.opencontainers.image.revision || true)"
+api_revision="$(image_label "$CHAHARSOQ_API_IMAGE" org.opencontainers.image.revision || true)"
 web_revision="$(image_label "$CHARSOOQ_WEB_IMAGE" org.opencontainers.image.revision || true)"
 [ -n "$api_version" ] && [ "$api_version" = "$web_version" ] ||
   fail "images report different versions ('$api_version' vs '$web_version'); retry after the release finishes"

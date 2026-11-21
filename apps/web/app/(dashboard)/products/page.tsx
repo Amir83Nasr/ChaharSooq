@@ -226,10 +226,13 @@ function ProductsPageContent() {
     },
     {
       label: "خروجی همه محصولات",
-      description: "همهٔ ردیف‌ها بدون فیلتر، با ستون‌های نمایش‌داده‌شده",
+      description:
+        "همهٔ ردیف‌ها بدون فیلتر، مرتب بر اساس دسته‌بندی، با ستون‌های نمایش‌داده‌شده",
       buildUrl: () =>
         api.productExportUrl(
-          {},
+          // The all-export drops the view filters; group rows by section instead
+          // of using the API's newest-first default.
+          { sort: "category" },
           { columns: visibleColumns, market: view.market, scope: "all" }
         ),
     },

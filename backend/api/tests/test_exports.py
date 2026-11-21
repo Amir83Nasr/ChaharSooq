@@ -88,9 +88,9 @@ def test_products_csv_mirrors_visible_table_columns(client: TestClient) -> None:
     headers = rows[0]
     # RTL export: columns start from the right, so ردیف is the rightmost column.
     assert headers[-1] == "ردیف"
-    # CSV is the RTL table mirrored left-to-right: تغییرات قیمت رقبا is to the
-    # right of قیمت پیشنهادی in the table, so it comes after it in the file.
-    assert headers.index("قیمت پیشنهادی (تومان)") < headers.index("تغییرات قیمت رقبا")
+    # CSV is the RTL table mirrored left-to-right: the daily change column sits
+    # to the right of the suggested price in the table, so it comes after it here.
+    assert headers.index("قیمت پیشنهادی (تومان)") < headers.index("تغییرات قیمت ارزانترین رقیب")
     # RTL export: واحد sits immediately to the left of موجودی.
     assert headers[0] == "واحد"
     assert headers[1] == "موجودی"
@@ -291,6 +291,80 @@ def test_products_csv_all_export_shows_both_competitor_markets(client: TestClien
     assert "قیمت رقبا (تکنولایف)" not in filtered_headers
 
 
+def test_products_csv_all_export_names_the_cheapest_derived_columns(client: TestClient) -> None:
+    from sqlalchemy.orm import Session
+
+    from app.core.database import get_engine
+    from app.models import Product
+
+    product_id = _product_id(client)
+    with Session(get_engine()) as db:
+        product = db.get(Product, product_id)
+        assert product is not None
+        product.main_group_name = "لوازم خانگی یخچال"
+        db.commit()
+
+    _add_manual_listing(client, product_id, price=25_000_000)
+    _add_manual_listing(
+        client,
+        product_id,
+        store="technolife",
+        url="https://www.technolife.com/product-123456",
+        price=26_000_000,
+    )
+
+    rows = _rows(
+        client.get(
+            "/api/v1/exports/products.csv",
+            params={
+                "columns": "name,competitor_price,price_diff,suggested_price_change",
+                "market": "best",
+                "scope": "all",
+            },
+        )
+    )
+    headers = rows[0]
+    # Both stores still appear side by side in the all-products export.
+    assert "قیمت رقبا (دیجی‌کالا)" in headers
+    assert "قیمت رقبا (تکنولایف)" in headers
+    # The gap and daily change are computed from only the cheaper one.
+    assert "اختلاف قیمت با ارزانترین رقیب" in headers
+    assert "تغییرات قیمت ارزانترین رقیب" in headers
+
+
+def test_products_csv_all_export_sorts_by_category(client: TestClient) -> None:
+    from sqlalchemy.orm import Session
+
+    from app.core.database import get_engine
+    from app.models import Product
+
+    groups = {
+        "AP-1": "لوازم خانگی یخچال",
+        "FU-1": "مبلمان چوبی",
+        "DI-1": "گوشی موبایل",
+    }
+    for sku in groups:
+        _product_id(client, name=sku, sku=sku)
+    with Session(get_engine()) as db:
+        for product in db.query(Product).all():
+            product.main_group_name = groups[product.sku]
+        db.commit()
+
+    rows = _rows(
+        client.get(
+            "/api/v1/exports/products.csv",
+            params={"columns": "sku,category", "scope": "all", "sort": "category"},
+        )
+    )
+    headers = rows[0]
+    assert [row[headers.index("کد")] for row in rows[1:]] == ["DI-1", "AP-1", "FU-1"]
+    assert [row[headers.index("دسته‌بندی")] for row in rows[1:]] == [
+        "کالای دیجیتال",
+        "لوازم خانگی",
+        "مبلمان",
+    ]
+
+
 def test_products_csv_best_market_uses_available_or_cheaper_price(client: TestClient) -> None:
     from sqlalchemy.orm import Session
 
@@ -317,16 +391,24 @@ def test_products_csv_best_market_uses_available_or_cheaper_price(client: TestCl
     def best_price() -> tuple[list[str], list[str]]:
         response = client.get(
             "/api/v1/exports/products.csv",
-            params={"columns": "name,competitor_price", "market": "best", "q": "FR-1"},
+            params={
+                "columns": "name,competitor_price,price_diff,suggested_price_change",
+                "market": "best",
+                "q": "FR-1",
+            },
         )
         assert response.status_code == 200, response.text
         rows = _rows(response)
         return rows[0], rows[1]
 
     headers, row = best_price()
-    label = "قیمت رقبا (ارزانترین رقیب)"
+    label = "قیمت ارزانترین رقیب"
     assert label in headers
     assert row[headers.index(label)] == "۲۵۰۰۰۰۰۰"  # cheaper of the two listings
+    # Derived columns name the picked store, not both competitors.
+    assert "اختلاف قیمت با ارزانترین رقیب" in headers
+    assert "تغییرات قیمت ارزانترین رقیب" in headers
+    assert row[headers.index("اختلاف قیمت با ارزانترین رقیب")] == "۳۰۰٪ گران‌تر"
 
     assert client.delete(f"/api/v1/competitors/{digikala_id}").status_code == 204
     headers, row = best_price()

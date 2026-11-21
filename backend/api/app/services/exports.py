@@ -236,6 +236,10 @@ def _output_columns(selected: list[str], *, scope: str | None) -> list[str]:
 
 def _header_for(column: str, market: str) -> str:
     market_label = MARKET_LABELS.get(market, MARKET_LABELS["digikala"])
+    # "best" picks the cheaper of DigiKala/TechnoLife for the derived columns,
+    # while the full export lists both stores separately. Name the picked
+    # source explicitly so a gap or daily change cannot be read as "both".
+    cheapest = market == "best"
     headers = {
         "row": "ردیف",
         "name": "نام",
@@ -244,12 +248,14 @@ def _header_for(column: str, market: str) -> str:
         "brand": "برند",
         "unit": "واحد",
         "price": "قیمت (تومان)",
-        "competitor_price": f"قیمت رقبا ({market_label})",
+        "competitor_price": ("قیمت ارزانترین رقیب" if cheapest else f"قیمت رقبا ({market_label})"),
         "competitor_price_digikala": "قیمت رقبا (دیجی‌کالا)",
         "competitor_price_technolife": "قیمت رقبا (تکنولایف)",
-        "price_diff": "اختلاف قیمت با رقبا",
+        "price_diff": ("اختلاف قیمت با ارزانترین رقیب" if cheapest else "اختلاف قیمت با رقبا"),
         "suggested_price": "قیمت پیشنهادی (تومان)",
-        "suggested_price_change": "تغییرات قیمت رقبا",
+        "suggested_price_change": (
+            "تغییرات قیمت ارزانترین رقیب" if cheapest else "تغییرات قیمت رقبا"
+        ),
         "stock": "موجودی",
     }
     return headers[column]

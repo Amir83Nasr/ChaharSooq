@@ -167,8 +167,8 @@ def test_backup_settings_are_owner_only(client: TestClient, tools: FakePgTools) 
     response = client.get(SETTINGS_URL)
     assert response.status_code == 200
     assert response.json() == {
-        "enabled": True,
-        "interval_minutes": 720,
+        "enabled": False,
+        "interval_minutes": 10080,
         "retention_days": 30,
         "verification_method": PG_RESTORE_LIST,
         "tools_available": True,

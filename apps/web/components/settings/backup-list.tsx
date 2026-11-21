@@ -132,6 +132,8 @@ type BackupActionsProps = {
   onDownload: () => void
   onRestore: () => void
   onDelete: () => void
+  /** Mobile cards give each action an equal column so the three fit on one line. */
+  card?: boolean
 }
 
 /** The same three actions in the desktop row and the mobile card. */
@@ -143,13 +145,21 @@ function BackupActions({
   onDownload,
   onRestore,
   onDelete,
+  card = false,
 }: BackupActionsProps) {
+  const buttonClass = card
+    ? "h-11 w-full gap-1.5 px-1.5 text-xs max-md:px-1.5 md:h-9 md:text-sm"
+    : "h-11 gap-2 md:h-9"
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div
+      className={
+        card ? "grid grid-cols-3 gap-2" : "flex flex-wrap items-center gap-2"
+      }
+    >
       <Button
         variant="outline"
         size="sm"
-        className="h-11 gap-2 md:h-9"
+        className={buttonClass}
         disabled={!view.downloadable || downloading}
         aria-busy={downloading}
         onClick={onDownload}
@@ -160,7 +170,7 @@ function BackupActions({
       <Button
         variant="outline"
         size="sm"
-        className="h-11 gap-2 md:h-9"
+        className={buttonClass}
         disabled={view.restoreBlocked || restoring}
         aria-busy={restoring}
         onClick={onRestore}
@@ -171,7 +181,7 @@ function BackupActions({
       <Button
         variant="destructive"
         size="sm"
-        className="h-11 gap-2 md:h-9"
+        className={buttonClass}
         disabled={view.deleteBlocked || deleting}
         aria-busy={deleting}
         onClick={onDelete}
@@ -422,10 +432,10 @@ export function BackupList() {
       ) : (
         <>
           <div className="hidden md:block">
-            <Table className="min-w-[56rem]">
+            <Table className="min-w-[60rem]">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-72">اقدامات</TableHead>
+                  <TableHead className="w-96">اقدامات</TableHead>
                   <TableHead className="w-52">زمان ساخت</TableHead>
                   <TableHead className="w-24">نوع</TableHead>
                   <TableHead className="w-28">حجم</TableHead>
@@ -504,6 +514,7 @@ export function BackupList() {
                   </div>
                   <BackupErrors view={view} />
                   <BackupActions
+                    card
                     view={view}
                     downloading={downloading === backup.id}
                     restoring={restoring === backup.id}

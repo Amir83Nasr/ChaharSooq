@@ -3693,7 +3693,7 @@
         "examples": [
           {
             "enabled": true,
-            "interval_minutes": 720
+            "interval_minutes": 10080
           }
         ]
       },

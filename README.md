@@ -359,8 +359,8 @@ only on internal Compose networks (`web:3000`, `api:8000`, `db:5432`). Caddy rea
 dedicated `proxy` network and has no route to the API or PostgreSQL. TLS termination, forwarded
 headers, and HSTS are implemented in [`deploy/caddy`](deploy/caddy) and covered in [AGENTS.md](AGENTS.md)
 section 3; no certificate is installed and the proxy is not deployed yet. Container logs are bounded
-(`json-file`, 10 MB × 5 per service) so an unrotated stream cannot fill the host disk. The owner-only **Settings → پشتیبان‌گیری** page enables automatic backups (default: every
-12 hours), queues a manual dump, uploads and downloads `pg_dump --format=custom` archives, and
+(`json-file`, 10 MB × 5 per service) so an unrotated stream cannot fill the host disk. The owner-only **Settings → پشتیبان‌گیری** page enables automatic backups (off by default, then every
+7 days), queues a manual dump, uploads and downloads `pg_dump --format=custom` archives, and
 restores shop data from a verified version. A background worker inside the API container runs the
 pinned PostgreSQL 18 client with the application role (never the admin or migration credential) and
 stores archives in the `chaharsooq-production_backups` volume; the restore is data-only and atomic,

@@ -19,7 +19,7 @@ export default async function BackupSettingsPage() {
       <SettingsSection
         icon={Database}
         title="پشتیبان خودکار"
-        description="روشن یا خاموش کردن و تعیین فاصلهٔ ساخت نسخهٔ خودکار."
+        description="روشن یا خاموش کردن و تعیین فاصله ساخت نسخه خودکار."
       >
         <BackupSettingsForm />
       </SettingsSection>

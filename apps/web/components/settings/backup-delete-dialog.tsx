@@ -36,13 +36,13 @@ export function BackupDeleteDialog({
 }: BackupDeleteDialogProps) {
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
-      <ResponsiveDialogContent aria-label="حذف نسخهٔ پشتیبان">
+      <ResponsiveDialogContent aria-label="حذف نسخه پشتیبان">
         <ResponsiveDialogHeader>
-          <ResponsiveDialogTitle>حذف نسخهٔ پشتیبان</ResponsiveDialogTitle>
+          <ResponsiveDialogTitle>حذف نسخه پشتیبان</ResponsiveDialogTitle>
           <ResponsiveDialogDescription>
             {backup ? (
               <>
-                نسخهٔ ثبتشده در {formatPersianDateTime(backup.created_at)} و
+                نسخه ثبت‌شده در {formatPersianDateTime(backup.created_at)} و
                 فایل آن برای همیشه حذف می‌شود.
               </>
             ) : null}

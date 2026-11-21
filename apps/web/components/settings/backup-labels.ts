@@ -22,7 +22,7 @@ const BACKUP_ERROR_LABELS: Record<string, string> = {
   pg_tools_unavailable: "ابزارهای PostgreSQL روی این سرور نصب نیستند.",
   pre_restore_failed: "ساخت پشتیبان ایمنی پیش از بازیابی ناموفق بود.",
   interrupted: "اجرا پیش از پایان متوقف شد.",
-  storage_unavailable: "پوشهٔ ذخیرهٔ پشتیبان در دسترس یا قابل نوشتن نیست.",
+  storage_unavailable: "پوشه ذخیره پشتیبان در دسترس یا قابل نوشتن نیست.",
 }
 
 export function backupErrorLabel(code: string | null): string | null {

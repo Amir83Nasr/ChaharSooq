@@ -42,7 +42,7 @@ export function BackupRestoreDialog({
           <ResponsiveDialogDescription>
             {backup ? (
               <>
-                داده‌های فروشگاه با نسخهٔ ثبتشده در{" "}
+                داده‌های فروشگاه با نسخه ثبت‌شده در{" "}
                 {formatPersianDateTime(backup.created_at)} جایگزین می‌شود.
               </>
             ) : null}
@@ -77,7 +77,7 @@ export function BackupRestoreDialog({
           >
             <BusyLabel
               busy={pending}
-              idle="بازیابی"
+              idle="بازیابی نسخه"
               busyLabel="در حال بازیابی…"
               spinner
             />

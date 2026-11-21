@@ -30,12 +30,12 @@ MIN_COMPETITOR_SYNC_INTERVAL_MINUTES = 15
 MAX_COMPETITOR_SYNC_INTERVAL_MINUTES = 10080
 
 BACKUP_ENABLED_KEY = "backup_enabled"
-# Automatic backups are on by default: a shop admin panel that silently keeps
-# no recoverable copy is the worse failure mode. The owner can pause it.
-DEFAULT_BACKUP_ENABLED = True
+# The owner opts in to the schedule; a manual backup is always available.
+DEFAULT_BACKUP_ENABLED = False
 
 BACKUP_INTERVAL_MINUTES_KEY = "backup_interval_minutes"
-DEFAULT_BACKUP_INTERVAL_MINUTES = 720
+# One week, expressed in the machine unit; the panel shows it in whole days.
+DEFAULT_BACKUP_INTERVAL_MINUTES = 10080
 MIN_BACKUP_INTERVAL_MINUTES = 60
 MAX_BACKUP_INTERVAL_MINUTES = 10080
 

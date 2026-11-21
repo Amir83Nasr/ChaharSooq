@@ -586,6 +586,69 @@ def test_worker_creates_due_scheduled_backups(
     assert len(client.get(BACKUPS_URL).json()) == 1
 
 
+def test_manual_backup_satisfies_a_due_schedule(
+    client: TestClient, tools: FakePgTools, archive_dir: Path
+) -> None:
+    with Session(get_engine()) as session:
+        SettingsService(session).update_backup_enabled(True)
+        session.commit()
+
+    login_owner(client)
+    queued = client.post(BACKUPS_URL)
+    assert queued.status_code == 202
+
+    worker = _worker(tools, archive_dir)
+    assert worker.tick() is True
+    # The manual dump just created is a backup: it resets the interval, so the
+    # next tick must not add an automatic archive to the same click.
+    assert worker.tick() is False
+    rows = client.get(BACKUPS_URL).json()
+    assert [row["kind"] for row in rows] == [BACKUP_OPERATOR]
+    assert rows[0]["status"] == BACKUP_COMPLETED
+
+
+def test_uploaded_archive_satisfies_a_due_schedule(
+    client: TestClient, tools: FakePgTools, archive_dir: Path
+) -> None:
+    with Session(get_engine()) as session:
+        SettingsService(session).update_backup_enabled(True)
+        session.commit()
+
+    login_owner(client)
+    response = client.post(
+        "/api/v1/backups/upload",
+        files={"file": ("snapshot.dump", ARCHIVE_BYTES, "application/octet-stream")},
+    )
+    assert response.status_code == 201
+
+    assert _worker(tools, archive_dir).tick() is False
+    rows = client.get(BACKUPS_URL).json()
+    assert [row["kind"] for row in rows] == ["uploaded"]
+
+
+def test_restore_does_not_queue_a_due_scheduled_backup(
+    client: TestClient, tools: FakePgTools, archive_dir: Path
+) -> None:
+    source_id = _verified_record(directory=archive_dir)
+    with Session(get_engine()) as session:
+        SettingsService(session).update_backup_enabled(True)
+        source = session.get(BackupRecord, source_id)
+        assert source is not None
+        source.created_at = utcnow() - timedelta(days=30)
+        session.commit()
+
+    login_owner(client)
+    assert client.post(_restore_url(source_id)).status_code == 202
+
+    worker = _worker(tools, archive_dir)
+    assert worker.tick() is True
+    # The pre-restore safety dump is a fresh archive; it resets the interval so
+    # the owner does not get an unrelated "automatic" backup from the restore.
+    assert worker.tick() is False
+    rows = client.get(BACKUPS_URL).json()
+    assert sorted(row["kind"] for row in rows) == [BACKUP_PRE_RESTORE, BACKUP_SCHEDULED]
+
+
 def test_worker_restores_data_with_a_pre_restore_archive(
     client: TestClient, tools: FakePgTools, archive_dir: Path
 ) -> None:

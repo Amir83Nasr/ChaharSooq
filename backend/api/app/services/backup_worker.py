@@ -43,6 +43,7 @@ from app.models import BackupRecord
 from app.models.backup import (
     BACKUP_COMPLETED,
     BACKUP_FAILED,
+    BACKUP_KINDS,
     BACKUP_PRE_RESTORE,
     BACKUP_QUEUED,
     BACKUP_RUNNING,
@@ -186,7 +187,11 @@ class BackupWorker:
                 return
             if repo.pending() is not None or repo.pending_restore() is not None:
                 return
-            last = repo.last_attempt((BACKUP_SCHEDULED,))
+            # Any archive produced since the last check satisfies the schedule:
+            # a manual dump, an upload, or the safety dump written before a
+            # restore all reset the interval. Counting only scheduled attempts
+            # queues a second, automatic archive right after every owner action.
+            last = repo.last_attempt(BACKUP_KINDS)
             if last is not None:
                 created = aware(last.created_at)
                 if created is not None and now < created + timedelta(

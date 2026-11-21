@@ -334,7 +334,10 @@ def test_migration_releases_archives_pinned_by_legacy_restore_requests(
 ) -> None:
     backup_id = _verified_record(directory=archive_dir)
     with Session(get_engine()) as session:
-        session.execute(text("PRAGMA foreign_keys = ON"))
+        # SQLite needs FK enforcement enabled explicitly; PostgreSQL enforces
+        # RESTRICT on every connection.
+        if session.bind is not None and session.bind.dialect.name == "sqlite":
+            session.execute(text("PRAGMA foreign_keys = ON"))
         session.execute(
             text(
                 "CREATE TABLE backup_restore_requests ("
@@ -356,7 +359,10 @@ def test_migration_releases_archives_pinned_by_legacy_restore_requests(
     # Before the migration the obsolete request pins the archive at the database.
     with pytest.raises(IntegrityError):
         with Session(get_engine()) as session:
-            session.execute(text("PRAGMA foreign_keys = ON"))
+            # SQLite needs FK enforcement enabled explicitly; PostgreSQL enforces
+            # RESTRICT on every connection.
+            if session.bind is not None and session.bind.dialect.name == "sqlite":
+                session.execute(text("PRAGMA foreign_keys = ON"))
             record = session.get(BackupRecord, backup_id)
             assert record is not None
             session.delete(record)

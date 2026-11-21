@@ -59,16 +59,16 @@ def test_settings_product_table_columns_update_and_reject(client: TestClient) ->
     login(client)
     r = client.put(
         "/api/v1/settings",
-        json={"product_table_columns": ["stock", "name", "price"]},
+        json={"product_table_columns": ["stock", "name", "unit"]},
     )
     assert r.status_code == 200, r.text
     # Stored in canonical table order, independent of the request order.
-    assert r.json()["product_table_columns"] == ["name", "price", "stock"]
+    assert r.json()["product_table_columns"] == ["name", "stock", "unit"]
 
     # A partial update keeps the stored selection.
     kept = client.put("/api/v1/settings", json={"low_stock_threshold": 2})
     assert kept.status_code == 200, kept.text
-    assert kept.json()["product_table_columns"] == ["name", "price", "stock"]
+    assert kept.json()["product_table_columns"] == ["name", "stock", "unit"]
 
     assert client.put("/api/v1/settings", json={"product_table_columns": []}).status_code == 422
     assert (

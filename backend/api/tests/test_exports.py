@@ -88,7 +88,9 @@ def test_products_csv_mirrors_visible_table_columns(client: TestClient) -> None:
     headers = rows[0]
     # RTL export: columns start from the right, so ردیف is the rightmost column.
     assert headers[-1] == "ردیف"
-    assert headers[0] == "موجودی"
+    # RTL export: واحد sits immediately to the left of موجودی.
+    assert headers[0] == "واحد"
+    assert headers[1] == "موجودی"
     assert "قیمت (تومان)" in headers
     assert "موجودی" in headers
     # Database/internal columns must not be exported.
@@ -141,7 +143,7 @@ def test_products_csv_respects_visible_columns_and_market(client: TestClient) ->
     response = client.get(
         "/api/v1/exports/products.csv",
         params={
-            "columns": "name,sku,price,competitor_price,price_diff,stock",
+            "columns": "name,sku,price,competitor_price,price_diff,stock,unit",
             "market": "digikala",
         },
     )
@@ -150,6 +152,7 @@ def test_products_csv_respects_visible_columns_and_market(client: TestClient) ->
     headers = rows[0]
     # RTL export: ردیف is the rightmost column and the rest follow in RTL order.
     assert headers == [
+        "واحد",
         "موجودی",
         "اختلاف درصد",
         "قیمت رقبا (دیجی‌کالا)",
@@ -168,7 +171,7 @@ def test_products_csv_respects_visible_columns_and_market(client: TestClient) ->
     scoped = client.get(
         "/api/v1/exports/products.csv",
         params={
-            "columns": "name,sku,price,competitor_price,price_diff,stock",
+            "columns": "name,sku,price,competitor_price,price_diff,stock,unit",
             "market": "digikala",
             "scope": "filtered",
         },

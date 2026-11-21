@@ -49,19 +49,20 @@ ALLOWED_COMPETITOR_STORES: tuple[DefaultCompetitorStore, ...] = (
 
 PRODUCT_TABLE_COLUMNS_KEY = "product_table_columns"
 # Canonical table order; also the default when nothing is stored yet.
+# RTL order: unit is last so it appears immediately to the left of stock.
 PRODUCT_TABLE_COLUMNS: tuple[ProductTableColumn, ...] = (
     "row",
     "name",
     "sku",
     "category",
     "brand",
-    "unit",
     "price",
     "competitor_price",
     "price_diff",
     "suggested_price",
     "suggested_price_change",
     "stock",
+    "unit",
 )
 DEFAULT_PRODUCT_TABLE_COLUMNS: tuple[ProductTableColumn, ...] = PRODUCT_TABLE_COLUMNS
 

@@ -15,6 +15,7 @@ export interface ProductTableColumnMeta {
 
 // Canonical order — the table renders in this order and the settings card
 // offers the same sequence. Keep in sync with backend PRODUCT_TABLE_COLUMNS.
+// RTL: unit is last so it appears immediately to the left of stock.
 export const PRODUCT_TABLE_COLUMNS: readonly ProductTableColumnMeta[] = [
   {
     id: "row",
@@ -53,14 +54,6 @@ export const PRODUCT_TABLE_COLUMNS: readonly ProductTableColumnMeta[] = [
     hint: "برند و زیرگروه کالا",
     widthClass: "w-40",
     minWidthPx: 160,
-  },
-  {
-    id: "unit",
-    label: "واحد",
-    hint: "واحد فروش کالا",
-    widthClass: "w-20",
-    minWidthPx: 80,
-    center: true,
   },
   {
     id: "price",
@@ -108,6 +101,14 @@ export const PRODUCT_TABLE_COLUMNS: readonly ProductTableColumnMeta[] = [
     hint: "موجودی انبار و وضعیت کمبود",
     widthClass: "w-24",
     minWidthPx: 96,
+    center: true,
+  },
+  {
+    id: "unit",
+    label: "واحد",
+    hint: "واحد فروش کالا",
+    widthClass: "w-20",
+    minWidthPx: 80,
     center: true,
   },
 ]

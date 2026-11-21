@@ -135,11 +135,6 @@ function ProductsTableHead(props: {
             <TableHead scope="col">دسته‌بندی</TableHead>
           ) : null}
           {shown.has("brand") ? <TableHead scope="col">برند</TableHead> : null}
-          {shown.has("unit") ? (
-            <TableHead scope="col" className="text-center">
-              واحد
-            </TableHead>
-          ) : null}
           {shown.has("price") ? (
             <TableHead scope="col" className="text-center">
               قیمت
@@ -173,6 +168,11 @@ function ProductsTableHead(props: {
           {shown.has("stock") ? (
             <TableHead scope="col" className="text-center">
               موجودی
+            </TableHead>
+          ) : null}
+          {shown.has("unit") ? (
+            <TableHead scope="col" className="text-center">
+              واحد
             </TableHead>
           ) : null}
         </TableRow>
@@ -406,13 +406,6 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                     )}
                   </TableCell>
                 ) : null}
-                {shown.has("unit") ? (
-                  <TableCell className="truncate text-center text-sm">
-                    {item.unit_name ?? (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                ) : null}
                 {shown.has("price") ? (
                   <TableCell className="text-center">
                     <Price value={item.price} />
@@ -536,6 +529,13 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                 {shown.has("stock") ? (
                   <TableCell className="text-center">
                     <StockCell value={item.stock} threshold={threshold} />
+                  </TableCell>
+                ) : null}
+                {shown.has("unit") ? (
+                  <TableCell className="truncate text-center text-sm">
+                    {item.unit_name ?? (
+                      <span className="text-muted-foreground">—</span>
+                    )}
                   </TableCell>
                 ) : null}
               </TableRow>

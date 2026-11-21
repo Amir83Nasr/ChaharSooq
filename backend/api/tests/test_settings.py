@@ -10,13 +10,13 @@ DEFAULT_PRODUCT_TABLE_COLUMNS = [
     "sku",
     "category",
     "brand",
-    "unit",
     "price",
     "competitor_price",
     "price_diff",
     "suggested_price",
     "suggested_price_change",
     "stock",
+    "unit",
 ]
 
 

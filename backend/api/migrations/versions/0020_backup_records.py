@@ -59,4 +59,8 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index("ix_backup_records_created_at", table_name="backup_records")
+    # 0022's downgrade recreates the restore-request table with a RESTRICT FK to
+    # backup_records. Drop it first so backup_records can be removed on a full
+    # round-trip; a rollback from 0021 simply has no such table.
+    op.execute("DROP TABLE IF EXISTS backup_restore_requests")
     op.drop_table("backup_records")

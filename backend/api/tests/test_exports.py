@@ -2,7 +2,7 @@
 
 import csv
 import io
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from fastapi.testclient import TestClient
@@ -88,6 +88,9 @@ def test_products_csv_mirrors_visible_table_columns(client: TestClient) -> None:
     headers = rows[0]
     # RTL export: columns start from the right, so ردیف is the rightmost column.
     assert headers[-1] == "ردیف"
+    # CSV is the RTL table mirrored left-to-right: تغییرات قیمت رقبا is to the
+    # right of قیمت پیشنهادی in the table, so it comes after it in the file.
+    assert headers.index("قیمت پیشنهادی (تومان)") < headers.index("تغییرات قیمت رقبا")
     # RTL export: واحد sits immediately to the left of موجودی.
     assert headers[0] == "واحد"
     assert headers[1] == "موجودی"
@@ -143,7 +146,7 @@ def test_products_csv_respects_visible_columns_and_market(client: TestClient) ->
     response = client.get(
         "/api/v1/exports/products.csv",
         params={
-            "columns": "name,sku,price,competitor_price,price_diff,stock,unit",
+            "columns": "name,sku,price,price_diff,competitor_price,stock,unit",
             "market": "digikala",
         },
     )
@@ -154,8 +157,8 @@ def test_products_csv_respects_visible_columns_and_market(client: TestClient) ->
     assert headers == [
         "واحد",
         "موجودی",
-        "اختلاف درصد",
         "قیمت رقبا (دیجی‌کالا)",
+        "اختلاف قیمت با رقبا",
         "قیمت (تومان)",
         "کد",
         "نام",
@@ -166,12 +169,12 @@ def test_products_csv_respects_visible_columns_and_market(client: TestClient) ->
     assert row[headers.index("نام")] == "یخچال آزمایشی"
     assert row[headers.index("قیمت رقبا (دیجی‌کالا)")] == "۲۵۰۰۰۰۰۰"
     # Base price 100m vs 25m market price → 300% more expensive.
-    assert row[headers.index("اختلاف درصد")] == "۳۰۰٪ گران‌تر"
+    assert row[headers.index("اختلاف قیمت با رقبا")] == "۳۰۰٪ گران‌تر"
 
     scoped = client.get(
         "/api/v1/exports/products.csv",
         params={
-            "columns": "name,sku,price,competitor_price,price_diff,stock,unit",
+            "columns": "name,sku,price,price_diff,competitor_price,stock,unit",
             "market": "digikala",
             "scope": "filtered",
         },
@@ -328,6 +331,52 @@ def test_products_csv_best_market_uses_available_or_cheaper_price(client: TestCl
     assert client.delete(f"/api/v1/competitors/{digikala_id}").status_code == 204
     headers, row = best_price()
     assert row[headers.index(label)] == "۲۶۰۰۰۰۰۰"  # the only remaining link
+
+
+def test_products_csv_percent_precision_and_daily_change(client: TestClient) -> None:
+    from sqlalchemy.orm import Session
+
+    from app.core.database import get_engine
+    from app.models import CompetitorPriceObservation, Product
+
+    product_id = _product_id(client)
+    with Session(get_engine()) as db:
+        product = db.get(Product, product_id)
+        assert product is not None
+        product.main_group_name = "لوازم خانگی یخچال"
+        product.price = Decimal("104300000")
+        db.commit()
+    listing_id = _add_manual_listing(client, product_id, price=100_000_000)
+    with Session(get_engine()) as db:
+        db.add_all(
+            [
+                CompetitorPriceObservation(
+                    listing_id=listing_id,
+                    price=Decimal("104000000"),
+                    currency="IRT",
+                    in_stock=True,
+                    observed_at=datetime.now(UTC) - timedelta(days=1),
+                ),
+                CompetitorPriceObservation(
+                    listing_id=listing_id,
+                    price=Decimal("100000000"),
+                    currency="IRT",
+                    in_stock=True,
+                    observed_at=datetime.now(UTC),
+                ),
+            ]
+        )
+        db.commit()
+
+    rows = _rows(client.get("/api/v1/exports/products.csv", params={"market": "digikala"}))
+    headers = rows[0]
+    assert headers.index("قیمت پیشنهادی (تومان)") < headers.index("تغییرات قیمت رقبا")
+    # CSV mirrors the RTL table: اختلاف قیمت با رقبا comes before قیمت رقبا here.
+    assert headers.index("قیمت رقبا (دیجی‌کالا)") < headers.index("اختلاف قیمت با رقبا")
+    row = rows[1]
+    # 4.3% competitor gap is a whole number; the daily change keeps its decimal.
+    assert row[headers.index("اختلاف قیمت با رقبا")].startswith("۴٪")
+    assert row[headers.index("تغییرات قیمت رقبا")] == "۳.۸٪ کاهش"
 
 
 def test_persian_format_helpers() -> None:

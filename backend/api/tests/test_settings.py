@@ -11,10 +11,10 @@ DEFAULT_PRODUCT_TABLE_COLUMNS = [
     "category",
     "brand",
     "price",
-    "competitor_price",
     "price_diff",
-    "suggested_price",
+    "competitor_price",
     "suggested_price_change",
+    "suggested_price",
     "stock",
     "unit",
 ]

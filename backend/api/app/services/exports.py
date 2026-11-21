@@ -143,16 +143,15 @@ def _format_percent_magnitude(percent: float) -> str:
     return f"{to_persian_digits(text)}٪"
 
 
+def _format_whole_percent_magnitude(percent: float) -> str:
+    """Price differences are exported as whole percentages, without decimals."""
+    return f"{to_persian_digits(str(round(abs(percent))))}٪"
+
+
 def _diff_percent(ours: float, theirs: float | None) -> float | None:
     if theirs is None or theirs <= 0 or ours <= 0:
         return None
     return (ours - theirs) / theirs * 100
-
-
-def _change_percent(base: float, value: float | None) -> float | None:
-    if value is None or base <= 0:
-        return None
-    return (value - base) / base * 100
 
 
 def _suggested_price_for(
@@ -248,9 +247,9 @@ def _header_for(column: str, market: str) -> str:
         "competitor_price": f"قیمت رقبا ({market_label})",
         "competitor_price_digikala": "قیمت رقبا (دیجی‌کالا)",
         "competitor_price_technolife": "قیمت رقبا (تکنولایف)",
-        "price_diff": "اختلاف درصد",
+        "price_diff": "اختلاف قیمت با رقبا",
         "suggested_price": "قیمت پیشنهادی (تومان)",
-        "suggested_price_change": "درصد تغییر",
+        "suggested_price_change": "تغییرات قیمت رقبا",
         "stock": "موجودی",
     }
     return headers[column]
@@ -405,12 +404,12 @@ class ExportService:
         if not compares_competitor or pct is None:
             price_diff_text = "—"
         else:
-            rounded = round(pct * 10) / 10
+            rounded = round(pct)
             if rounded == 0:
                 price_diff_text = "بدون اختلاف"
             else:
                 word = "گران‌تر" if pct > 0 else "ارزان‌تر"
-                price_diff_text = f"{_format_percent_magnitude(pct)} {word}"
+                price_diff_text = f"{_format_whole_percent_magnitude(pct)} {word}"
 
         weight = weights.get(top) if top is not None else None
         if fresh:
@@ -435,16 +434,19 @@ class ExportService:
         suggested = _apply_price_bounds(base_price, raw_suggested, decrease, increase)
         suggested_text = format_amount(suggested) if suggested is not None else "—"
 
-        suggested_change = _change_percent(base_price, suggested)
-        if suggested_change is None:
-            suggested_change_text = "—"
+        # Daily change of the selected competitor price, not the suggested-price delta.
+        daily_change: float | None = None
+        if competitor is not None and show_competitor:
+            daily_change = competitor.price_change_percent
+        if daily_change is None:
+            daily_change_text = "—"
         else:
-            rounded_c = round(suggested_change * 10) / 10
+            rounded_c = round(daily_change * 10) / 10
             if rounded_c == 0:
-                suggested_change_text = "بدون تغییر"
+                daily_change_text = "بدون تغییر"
             else:
-                word = "بیشتر" if suggested_change > 0 else "کمتر"
-                suggested_change_text = f"{_format_percent_magnitude(suggested_change)} {word}"
+                word = "افزایش" if daily_change > 0 else "کاهش"
+                daily_change_text = f"{_format_percent_magnitude(daily_change)} {word}"
 
         brand_parts = [part for part in [brand, product.sub_group_name] if part]
         brand_text = " - ".join(brand_parts) if brand_parts else "—"
@@ -466,7 +468,7 @@ class ExportService:
             ),
             "price_diff": price_diff_text,
             "suggested_price": suggested_text,
-            "suggested_price_change": suggested_change_text,
+            "suggested_price_change": daily_change_text,
             "stock": format_amount(product.stock),
         }
         return [values[col] for col in columns]

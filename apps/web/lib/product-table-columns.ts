@@ -64,6 +64,14 @@ export const PRODUCT_TABLE_COLUMNS: readonly ProductTableColumnMeta[] = [
     center: true,
   },
   {
+    id: "price_diff",
+    label: "اختلاف قیمت با رقبا",
+    hint: "درصد اختلاف قیمت ما با رقیب",
+    widthClass: "w-28",
+    minWidthPx: 112,
+    center: true,
+  },
+  {
     id: "competitor_price",
     label: "قیمت رقبا",
     hint: "قیمت رقیب در بازار انتخاب‌شده",
@@ -72,9 +80,9 @@ export const PRODUCT_TABLE_COLUMNS: readonly ProductTableColumnMeta[] = [
     center: true,
   },
   {
-    id: "price_diff",
-    label: "اختلاف درصد",
-    hint: "درصد اختلاف قیمت ما با رقیب",
+    id: "suggested_price_change",
+    label: "تغییرات قیمت رقبا",
+    hint: "تغییر روزانه قیمت رقبا نسبت به روز قبل",
     widthClass: "w-28",
     minWidthPx: 112,
     center: true,
@@ -85,14 +93,6 @@ export const PRODUCT_TABLE_COLUMNS: readonly ProductTableColumnMeta[] = [
     hint: "ترکیب قیمت پایه و قیمت رقیب",
     widthClass: "w-32",
     minWidthPx: 128,
-    center: true,
-  },
-  {
-    id: "suggested_price_change",
-    label: "درصد تغییر",
-    hint: "درصد تغییر قیمت پیشنهادی نسبت به قیمت پایه",
-    widthClass: "w-28",
-    minWidthPx: 112,
     center: true,
   },
   {

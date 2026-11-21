@@ -157,8 +157,5 @@ services:
       start_period: 60s
 
 volumes:
-  # A fresh volume for the PostgreSQL 19 cluster. The old chaharsooq_pgdata
-  # volume (PostgreSQL 18) is intentionally kept untouched for rollback.
   pgdata:
-    name: chaharsooq_pgdata19
   backups:

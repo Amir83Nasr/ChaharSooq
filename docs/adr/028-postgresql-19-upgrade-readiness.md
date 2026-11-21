@@ -95,9 +95,9 @@ volumes; keep the abandoned 19 cluster as evidence.
 
 - `Dockerfile.api` must build with `postgresql-client-19` from PGDG; that build is the hard gate
   before merging the pin changes.
-- Development now uses the fresh named volume `chaharsooq_pgdata19`. The old 18 volume was removed
-  only after the restored 19 cluster was verified (same revision and row counts); Production keeps
-  its 18 datadir until its own cutover is verified.
+- Development keeps the default volume name `chaharsooq_pgdata`, now holding the restored
+  PostgreSQL 19 cluster. The old 18 contents were removed only after the restore was verified
+  (same revision and row counts); Production keeps its 18 datadir until its own cutover is verified.
 - The deploy CLI output gains one step (`[n/10]`); its offline tests cover matching, mismatched
   and missing clusters.
 - Existing backups remain restorable into an 18 cluster only. Fresh 19 backups are needed after

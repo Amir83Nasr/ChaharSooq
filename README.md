@@ -61,6 +61,7 @@ make build      # production build (web)
 make clean      # remove regenerable caches and build output
 make clean-cache # remove regenerable tool caches (.turbo, .ruff_cache, …)
 make clean-build # remove build output and test artifacts (.next, …)
+make doctor      # diagnose the local setup (or the Production host, see below)
 ```
 
 On the server (or from a laptop with `SSH_HOST=...`), `make prod-deploy` reads the newest
@@ -289,6 +290,15 @@ make prod-deploy SSH_HOST=charsooq            # from a laptop, over SSH
 # A specific version is optional: make prod-deploy VERSION=v1.2.3
 # Rollback is the same command with the previous version tag.
 ```
+
+On the server, `make doctor` selects the Production checks from `DEPLOYMENT_ENV=production`
+or the presence of `/etc/charsooq/production.env`. It checks host tools, required env keys,
+the file-backed secret directory, compose policy (pins, identity, internal DB, startup flags,
+bound ports) and, when the stack is running, container health, image digests, the migration
+head and `/api/v1/health`, `/api/v1/ready`, `/login`. No secret values or database URLs are
+printed. Use `make doctor-prod` or `DOCTOR_ENV=production make doctor` to force that mode;
+`DOCTOR_ENV=development` forces the local checks. Backup freshness remains a manual owner
+check (ADR 022/023).
 
 `CHARSOOQ_GITHUB_REPO` in the host env file names the repository whose Releases are
 discovered; a private repository additionally needs `GITHUB_TOKEN` exported in the

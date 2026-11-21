@@ -7,6 +7,8 @@ and rejection tests forbid any engine creation at all.
 from __future__ import annotations
 
 import csv
+import shutil
+import subprocess
 import sys
 from collections.abc import Callable, Iterator
 from decimal import Decimal
@@ -418,3 +420,29 @@ def test_makefile_does_not_read_the_legacy_prod_env_file() -> None:
 def test_make_targets_set_the_explicit_identity(target: str, identity: str) -> None:
     recipe = _recipe(MAKEFILE.read_text(encoding="utf-8"), target)
     assert any(f"DEPLOYMENT_ENV={identity}" in line for line in recipe), recipe
+
+
+def test_doctor_production_mode_skips_local_checks() -> None:
+    """Production has no dev toolchain, .env.local files or :5433 database."""
+    make = shutil.which("make")
+    assert make is not None, "make is part of the project toolchain"
+    result = subprocess.run(  # noqa: S603 — make resolved from PATH, fixed arguments
+        [make, "doctor", "DOCTOR_ENV=production"],
+        cwd=MAKEFILE.parent,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Production host" in result.stdout
+    assert "PRODUCTION CONFIG" in result.stdout
+    assert "PRODUCTION RUNTIME" in result.stdout
+    for local_check in (
+        "TOOLCHAIN",
+        "LOCAL CONFIG",
+        "DEV SERVICES",
+        "backend/api/.env.local",
+        "make db-migrate",
+    ):
+        assert local_check not in result.stdout

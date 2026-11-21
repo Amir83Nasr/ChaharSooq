@@ -17,16 +17,6 @@ const MINUTES_PER_DAY = 1440
 const MIN_DAYS = 1
 const MAX_DAYS = 7
 
-const VERIFICATION_LABELS: Record<string, string> = {
-  pg_restore_list: "بررسی ساختار آرشیو",
-  decrypt_list: "بررسی فهرست فایل",
-  drill_restore: "آزمون بازیابی",
-}
-
-function verificationLabel(method: string): string {
-  return VERIFICATION_LABELS[method] ?? toPersianDigits(method)
-}
-
 function minutesToDays(minutes: number): string {
   // Stored settings may predate the day-based UI; show a whole day at minimum.
   return String(Math.max(MIN_DAYS, Math.ceil(minutes / MINUTES_PER_DAY)))
@@ -165,12 +155,6 @@ export function BackupSettingsForm() {
             ? "پوشه ذخیره پشتیبان قابل نوشتن نیست."
             : null}
         </div>
-      ) : null}
-      {settings ? (
-        <p className="text-sm leading-6 text-muted-foreground">
-          تأیید {verificationLabel(settings.verification_method)} · ذخیره روی
-          همین سرور.
-        </p>
       ) : null}
       {error ? (
         <p role="alert" className="text-sm text-destructive">

@@ -39,9 +39,9 @@ LABEL org.opencontainers.image.title="chaharsooq-api" \
 RUN groupadd --gid 10001 api \
     && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin api
 
-# PostgreSQL client tools for logical backups. The server runs PostgreSQL 18, and
+# PostgreSQL client tools for logical backups. The server runs PostgreSQL 19, and
 # pg_dump refuses a newer server major, so the client must match that major. The
-# Debian default (15) is too old; the pinned PGDG repository provides 18.
+# Debian default (15) is too old; the pinned PGDG repository provides 19.
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
@@ -51,7 +51,7 @@ RUN apt-get update \
     && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
         > /etc/apt/sources.list.d/pgdg.list \
     && apt-get update \
-    && apt-get install -y --no-install-recommends postgresql-client-18 \
+    && apt-get install -y --no-install-recommends postgresql-client-19 \
     && apt-get purge -y --auto-remove curl gnupg \
     && rm -rf /var/lib/apt/lists/*
 

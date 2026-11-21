@@ -6,7 +6,8 @@ import { Price } from "@workspace/ui/persian/price"
 import { formatPersianNumber } from "@workspace/ui/lib/number"
 import { cn } from "@workspace/ui/lib/utils"
 
-import { api, type ProductOut } from "@/lib/api"
+import { api, type DefaultCompetitorStore, type ProductOut } from "@/lib/api"
+import { competitorForRow } from "@/lib/competitor-price"
 import { toTomanAmount } from "@/lib/money"
 import {
   applyPriceBounds,
@@ -27,9 +28,8 @@ function formatPercent(value: number): string {
 
 export function ProductSuggestedPrice({ product }: { product: ProductOut }) {
   const [weights, setWeights] = useState<SuggestedPriceWeights | null>(null)
-  const [defaultStore, setDefaultStore] = useState<"digikala" | "technolife">(
-    "digikala"
-  )
+  const [defaultStore, setDefaultStore] =
+    useState<DefaultCompetitorStore>("best")
   const [error, setError] = useState(false)
 
   useEffect(() => {
@@ -60,7 +60,11 @@ export function ProductSuggestedPrice({ product }: { product: ProductOut }) {
         (price) =>
           price.store === (topGroup === "مبلمان" ? "sofa" : "digifresh")
       ) ?? null)
-    : (fresh.find((price) => price.store === defaultStore) ?? fresh[0] ?? null)
+    : defaultStore === "best"
+      ? competitorForRow(fresh, "best", topGroup)
+      : (fresh.find((price) => price.store === defaultStore) ??
+        fresh[0] ??
+        null)
   const amount = toTomanAmount(
     competitor?.price ?? null,
     competitor?.currency ?? null

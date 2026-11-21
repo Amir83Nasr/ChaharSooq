@@ -6,11 +6,7 @@ import { BusyLabel } from "@workspace/ui/primitives/busy-label"
 import { Button } from "@workspace/ui/primitives/button"
 
 import { api, type DefaultCompetitorStore } from "@/lib/api"
-
-const OPTIONS: { value: DefaultCompetitorStore; label: string }[] = [
-  { value: "digikala", label: "دیجی‌کالا" },
-  { value: "technolife", label: "تکنولایف" },
-]
+import { COMPETITOR_MARKETS } from "@/lib/competitor-price"
 
 export function CompetitorStoreSettings() {
   const [value, setValue] = useState<DefaultCompetitorStore | null>(null)
@@ -73,25 +69,25 @@ export function CompetitorStoreSettings() {
   return (
     <div className="flex flex-col gap-3">
       <div
-        className="grid grid-cols-2 gap-2"
+        className="flex flex-wrap gap-2"
         role="radiogroup"
         aria-label="بازار پیش‌فرض قیمت رقبا"
       >
-        {OPTIONS.map((option) => {
-          const active = value === option.value
+        {COMPETITOR_MARKETS.map((option) => {
+          const active = value === option.store
           return (
             <Button
-              key={option.value}
+              key={option.store}
               variant={active ? "default" : "outline"}
               role="radio"
               aria-checked={active}
               disabled={busy}
-              aria-busy={savingValue === option.value}
-              onClick={() => save(option.value)}
+              aria-busy={savingValue === option.store}
+              onClick={() => save(option.store)}
               className="h-11 md:h-9"
             >
               <BusyLabel
-                busy={savingValue === option.value}
+                busy={savingValue === option.store}
                 idle={option.label}
                 busyLabel={<span className="sr-only">در حال ذخیره…</span>}
                 spinner
@@ -100,6 +96,10 @@ export function CompetitorStoreSettings() {
           )
         })}
       </div>
+      <p className="text-xs leading-5 text-muted-foreground">
+        ارزانترین رقیب: نمایش لینک موجود و در صورت وجود هر دو، نمایش قیمت
+        ارزانتر.
+      </p>
       {error ? (
         <p role="alert" className="text-sm text-destructive">
           {error}

@@ -37,6 +37,7 @@ from app.services.competitor import STORE_LABELS, CompetitorService
 from app.services.settings import PRODUCT_TABLE_COLUMNS, SettingsService
 
 MARKET_LABELS = {
+    "best": "ارزانترین رقیب",
     "digikala": "دیجی‌کالا",
     "technolife": "تکنولایف",
     "sofa": "سوفا",
@@ -119,6 +120,19 @@ def _to_toman(price: float | Decimal | None, currency: str | None) -> Decimal | 
         return None
     amount = Decimal(str(price))
     return amount / 10 if currency == "IRR" else amount
+
+
+def _cheapest_price(
+    prices: list[CompetitorPriceOut], stores: tuple[str, ...]
+) -> CompetitorPriceOut | None:
+    """Available listing, or the cheaper one when several stores have prices."""
+    candidates = [price for price in prices if price.store in stores]
+    if not candidates:
+        return None
+    priced = [price for price in candidates if _to_toman(price.price, price.currency) is not None]
+    if not priced:
+        return candidates[0]
+    return min(priced, key=lambda price: _to_toman(price.price, price.currency) or Decimal(0))
 
 
 def _format_percent_magnitude(percent: float) -> str:
@@ -338,7 +352,7 @@ class ExportService:
 
         compares_competitor = compares_with_competitor(top)
         tracked_store = (
-            market
+            None
             if compares_competitor
             else ("sofa" if top == "مبلمان" else ("digifresh" if top == "فرش" else None))
         )
@@ -356,12 +370,20 @@ class ExportService:
             status = competitor.status if competitor else None
             return COMPETITOR_STATUS_LABELS.get(str(status) if status else "", "لینک ثبت نشده")
 
-        competitor = (
-            next((p for p in prices if p.store == tracked_store), None) if tracked_store else None
-        )
-        show_competitor = tracked_store is not None and (
-            compares_competitor if market in ("digikala", "technolife") else market == tracked_store
-        )
+        if compares_competitor:
+            competitor = (
+                _cheapest_price(prices, ("digikala", "technolife"))
+                if market == "best"
+                else next((p for p in prices if p.store == market), None)
+            )
+            show_competitor = True
+        else:
+            competitor = (
+                next((p for p in prices if p.store == tracked_store), None)
+                if tracked_store
+                else None
+            )
+            show_competitor = tracked_store is not None and market in ("best", tracked_store)
         amount: float | None = None
         if competitor and competitor.price is not None:
             toman = _to_toman(competitor.price, competitor.currency)

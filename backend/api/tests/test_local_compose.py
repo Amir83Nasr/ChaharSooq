@@ -1,4 +1,4 @@
-"""Local Compose structure — hot-reload images and the PostgreSQL 18 data mount.
+"""Local Compose structure — hot-reload images and the PostgreSQL 19 data mount.
 
 The file is parsed, not started: no Docker daemon is required.
 """
@@ -19,7 +19,7 @@ def _compose() -> dict[str, Any]:
 
 
 def test_postgres_mounts_the_image_data_parent() -> None:
-    """PostgreSQL 18 keeps its cluster below /var/lib/postgresql, not in /data."""
+    """PostgreSQL 19 keeps its cluster below /var/lib/postgresql, not in /data."""
     volumes = _compose()["services"]["postgres"]["volumes"]
 
     assert "pgdata:/var/lib/postgresql" in volumes

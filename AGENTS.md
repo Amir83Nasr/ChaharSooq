@@ -28,6 +28,7 @@ This file is the single source of agent rules. Other documents:
 | Local volumes (025)      | [No anonymous volumes in the local stack](docs/adr/025-local-compose-no-anonymous-volumes.md)                                                                                                                                                                                                                                                                          |
 | Restore execution (026)  | [Direct owner restore](docs/adr/026-direct-owner-restore.md)                                                                                                                                                                                                                                                                                                           |
 | Schedule defaults (027)  | [Backup schedule defaults in days](docs/adr/027-backup-schedule-defaults.md) (overrides schedule defaults in 023)                                                                                                                                                                                                                                                      |
+| PostgreSQL 19 (028)      | [PostgreSQL 19 upgrade readiness](docs/adr/028-postgresql-19-upgrade-readiness.md) (supersedes version statements in 003/008/014/023)                                                                                                                                                                                                                                  |
 
 ## 1. Repository map
 
@@ -96,6 +97,9 @@ Charsooq has exactly three independent environments
 - Every environment owns its variables, secrets, and `DATABASE_URL`. Never share them or put real
   values in Git, docs, or `.env.example`. Secrets are file-backed outside the repo (default
   `/etc/charsooq/secrets`), never baked into images; never enter Production credentials in Swagger.
+- Production pins the exact PostgreSQL minor (`postgres:19.0-trixie`); Development and CI follow
+  the same major. A major bump is a data migration with a rehearsal, never only an image-tag change
+  ([ADR 028](docs/adr/028-postgresql-19-upgrade-readiness.md)).
 - Migrations run only against the environment's own database via the locked runner
   (`backend/api/scripts/migrate.py`, `MIGRATION_DATABASE_URL`). Production order: secrets/config →
   DB reachability → migration → verify → explicit owner bootstrap if needed → API with
@@ -145,8 +149,14 @@ Charsooq has exactly three independent environments
   and alignment in RTL.
 - Main UI font: **IRANYekanX**, defined only in `apps/web/app/fonts.ts`. Do not substitute another
   Persian font while it is available.
-- Toman glyph: render prices only through `<Price />` in `packages/ui`; do not copy glyph markup
-  into features. The glyph font file is not in the repo yet, so `.toman-glyph` falls back
+- Toman glyph: every **visible** Toman unit in the UI must be rendered through `<TomanGlyph />` in
+  `packages/ui` (`<Price />` already uses it), including input suffixes, badges, and table cells.
+  The component renders `تومانءء`: the two trailing hamzas are required by IRANYekanX's `rlig`
+  ligature that produces the `tomaan` glyph — plain `تومان` does **not** activate the glyph.
+  Never write the ligature string or copy glyph markup into features; `.toman-glyph` is the only
+  font hook (it resolves to IRANYekanX via `--font-sans`; an optional `--font-toman` override belongs
+  once in `apps/web/app/fonts.ts`, not in features). Accessible text (`aria-label`, `sr-only`) stays
+  plain `تومان` so screen readers announce the unit, not the hamzas
   ([ADR 004](docs/adr/004-persian-formatting.md)).
 
 ## 6. Numbers, dates, currency
@@ -160,7 +170,8 @@ Machine and display representations are separate.
   - Thousands separator: `٬` (U+066C). Example: `۱٬۰۰۰٬۰۰۰`. Never `,`.
   - Dates: Jalali calendar with `٫` (U+066B) as the separator. Example: `۱۴۰۵٫۰۵٫۰۵`. Never
     `/`, `-`, or `.`.
-  - Currency: تومان. Use `<Price value={…} />` with the numeric source value.
+  - Currency: تومان. Use `<Price value={…} />` with the numeric source value; for a standalone
+    Toman unit, use `<TomanGlyph />`.
 
 Do not write digit conversion, date formatting, or raw `تومان` strings in feature files.
 
@@ -252,7 +263,7 @@ before touching header blur, grid placement, sidebar duration, or global transit
   `make build` is the production web build. CI runs the same gates plus Playwright e2e.
 - Frontend: `pnpm --filter @workspace/ui test` (Persian digits, `٬` grouping, `٫` Jalali dates,
   `<Price />`); `pnpm --filter web test:e2e` runs against the production build without a backend.
-- Backend: `cd backend/api && uv run --no-sync pytest -q` (in-memory SQLite; CI adds PostgreSQL 18).
+- Backend: `cd backend/api && uv run --no-sync pytest -q` (in-memory SQLite; CI adds PostgreSQL 19).
 - Lefthook runs fast checks on commit and broader checks on push. Do not bypass with `--no-verify`
   unless a maintainer asks.
 

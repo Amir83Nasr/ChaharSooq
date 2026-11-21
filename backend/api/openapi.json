@@ -2253,6 +2253,7 @@
               "anyOf": [
                 {
                   "enum": [
+                    "best",
                     "digikala",
                     "technolife",
                     "sofa",
@@ -4693,6 +4694,14 @@
         "title": "DashboardSummaryOut",
         "description": "Single-call dashboard payload — overview + gaps + catalog breakdown.\n\nReplaces three sequential client fetches with one round-trip; the\nindividual endpoints stay for backwards compatibility."
       },
+      "DefaultCompetitorStore": {
+        "type": "string",
+        "enum": [
+          "best",
+          "digikala",
+          "technolife"
+        ]
+      },
       "ErrorBody": {
         "properties": {
           "code": {
@@ -5336,13 +5345,8 @@
             "description": "Bulk competitor refresh interval."
           },
           "default_competitor_store": {
-            "type": "string",
-            "enum": [
-              "digikala",
-              "technolife"
-            ],
-            "title": "Default Competitor Store",
-            "description": "Store pre-selected when adding a competitor link."
+            "$ref": "#/components/schemas/DefaultCompetitorStore",
+            "description": "Competitor market shown by default; best picks the available/cheapest price."
           },
           "suggested_price_formulas": {
             "items": {
@@ -5440,18 +5444,13 @@
           "default_competitor_store": {
             "anyOf": [
               {
-                "type": "string",
-                "enum": [
-                  "digikala",
-                  "technolife"
-                ]
+                "$ref": "#/components/schemas/DefaultCompetitorStore"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Default Competitor Store",
-            "description": "Store pre-selected when adding a competitor link."
+            "description": "Competitor market shown by default; best picks the available/cheapest price."
           },
           "suggested_price_formulas": {
             "anyOf": [
@@ -5489,7 +5488,7 @@
         "examples": [
           {
             "competitor_sync_interval_minutes": 1440,
-            "default_competitor_store": "digikala",
+            "default_competitor_store": "best",
             "default_page_size": 20,
             "low_stock_threshold": 10,
             "product_table_columns": [

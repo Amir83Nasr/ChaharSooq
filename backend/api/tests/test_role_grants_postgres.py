@@ -4,7 +4,7 @@
 
 Set ``CHARSOOQ_TEST_POSTGRES_ADMIN_URL`` to a throwaway PostgreSQL instance
 (for example ``docker run --rm -e POSTGRES_PASSWORD=test -e POSTGRES_DB=charsooq_test
--p 55432:5432 postgres:18``) and run pytest. The test creates the two
+-p 55432:5432 postgres:19``) and run pytest. The test creates the two
 non-administrative roles and proves their real privileges, including a second
 idempotent provisioning run. It is skipped by default so no test can reach a
 real database.

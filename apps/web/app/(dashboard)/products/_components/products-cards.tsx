@@ -12,11 +12,15 @@ import { EmptyState } from "@workspace/ui/feedback/state"
 import { Skeleton } from "@workspace/ui/primitives/skeleton"
 import { PackageSearch } from "lucide-react"
 import { StockCell } from "@/components/data/products-stock-cell"
+import {
+  competitorForRow,
+  showsCompetitorPrice,
+  STORE_MARKET_LABELS,
+  type CompetitorMarket,
+} from "@/lib/competitor-price"
 import { toTomanAmount } from "@/lib/money"
 import type { ProductOut, ProductSort } from "@/lib/api"
 import { comparesWithCompetitor } from "@/lib/top-groups"
-import type { CompetitorMarket } from "./products-table"
-import { STORE_MARKET_LABELS } from "./products-table"
 import { initialRowWindow, useWindowedRows } from "./use-windowed-rows"
 
 // Mobile cards are taller than table rows; a small first window keeps the
@@ -40,22 +44,16 @@ export function ProductMobileCard({
   threshold: number
   onSelect: (item: ProductOut) => void
 }) {
-  const marketLabel = STORE_MARKET_LABELS[market]
   const top = item.top_group
   const comparesCompetitor = comparesWithCompetitor(top)
-  const trackedStore =
-    comparesCompetitor || top === null
-      ? market
-      : top === "مبلمان"
-        ? "sofa"
-        : "digifresh"
-  const showCompetitor = comparesCompetitor
-    ? market === "digikala" || market === "technolife"
-    : market === trackedStore
+  const showCompetitor = showsCompetitorPrice(market, top)
   const competitor = showCompetitor
-    ? (item.competitor_prices.find((price) => price.store === trackedStore) ??
-      null)
+    ? competitorForRow(item.competitor_prices, market, top)
     : null
+  const marketLabel =
+    market === "best" && competitor
+      ? STORE_MARKET_LABELS[competitor.store]
+      : STORE_MARKET_LABELS[market]
   const amount = toTomanAmount(
     competitor?.price ?? null,
     competitor?.currency ?? null

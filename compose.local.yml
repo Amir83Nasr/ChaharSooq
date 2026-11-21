@@ -39,7 +39,7 @@ x-api-image: &api-image
 
 services:
   postgres:
-    image: postgres:18
+    image: postgres:19
     restart: unless-stopped
     environment:
       POSTGRES_USER: charsooq
@@ -47,10 +47,11 @@ services:
       POSTGRES_DB: charsooq
     ports:
       - "5433:5432"
-    # PostgreSQL 18 stores its cluster in /var/lib/postgresql/18/docker and
-    # declares /var/lib/postgresql as the image volume. Mount the parent: the
-    # old /var/lib/postgresql/data path leaves that cluster hidden behind an
-    # auto-created anonymous volume and makes the entrypoint refuse to start.
+    # PostgreSQL 19 stores its cluster under a versioned subdirectory of
+    # /var/lib/postgresql and declares the parent as the image volume. Mount the
+    # parent: the old /var/lib/postgresql/data path leaves that cluster hidden
+    # behind an auto-created anonymous volume and makes the entrypoint refuse to
+    # start. A major upgrade needs an explicit data migration, not just a new tag.
     volumes:
       - pgdata:/var/lib/postgresql
     healthcheck:
@@ -156,5 +157,8 @@ services:
       start_period: 60s
 
 volumes:
+  # A fresh volume for the PostgreSQL 19 cluster. The old chaharsooq_pgdata
+  # volume (PostgreSQL 18) is intentionally kept untouched for rollback.
   pgdata:
+    name: chaharsooq_pgdata19
   backups:

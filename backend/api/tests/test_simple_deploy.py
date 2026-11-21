@@ -117,10 +117,12 @@ def _fake_bin(
     migration_check_fails: bool = False,
     migration_check_unsupported: bool = False,
     previous_version: str = PREVIOUS_VERSION,
+    cluster_major: str = "19",
+    db_image: str = "postgres:19.0-trixie",
 ) -> tuple[Path, Path]:
     """Install fake docker/curl. The docker fake answers digest lookups, OCI
-    label reads, container state, and the migration check used to avoid a
-    redundant upgrade run."""
+    label reads, container state, the cluster-version guard, and the migration
+    check used to avoid a redundant upgrade run."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
     docker_log = tmp_path / "docker.log"
@@ -130,6 +132,7 @@ def _fake_bin(
     answer_digest = digest or "sha256:" + "1" * 64
     release = release_json if release_json is not None else _release_json()
     check_message = CHECK_PENDING if migration_pending else CHECK_AT_HEAD
+    compose_json = json.dumps({"services": {"db": {"image": db_image}}})
 
     def label_json(version: str, revision: str) -> str:
         labels = {
@@ -158,6 +161,8 @@ def _fake_bin(
                 "#!/bin/sh",
                 f'printf "%s\\n" "$*" >> "{docker_log}"',
                 'case "$*" in',
+                f"  *\"config --format json\"*) printf '%s\\n' '{compose_json}' ;;",
+                f'  *"--entrypoint sh db"*) printf "%s\\n" "{cluster_major}" ;;',
                 '  *" imagetools inspect "*)',
                 '    case "$*" in',
                 '      *"{{json .Image}}"*)',
@@ -282,6 +287,31 @@ def test_fail_closed_when_a_tag_cannot_be_resolved_to_a_digest(tmp_path: Path) -
 
     assert result.returncode != 0
     assert "cannot resolve a digest" in result.stderr
+
+
+def test_cluster_major_mismatch_stops_the_deploy_before_any_change(tmp_path: Path) -> None:
+    env = _fixture(tmp_path)
+    docker_log, curl_log = _fake_bin(tmp_path, env, cluster_major="18")
+
+    result = _run(["v1.2.3"], env)
+
+    assert result.returncode != 0
+    assert "cluster is PostgreSQL 18 but the image is postgres:19.0-trixie" in result.stderr
+    commands = docker_log.read_text()
+    assert "/var/lib/postgresql/19/docker/PG_VERSION" in commands
+    assert "pull api web" not in commands
+    assert "up -d --no-build --remove-orphans" not in commands
+    assert not curl_log.exists()
+
+
+def test_missing_cluster_stops_the_deploy(tmp_path: Path) -> None:
+    env = _fixture(tmp_path)
+    _fake_bin(tmp_path, env, cluster_major="")
+
+    result = _run([], env)
+
+    assert result.returncode != 0
+    assert "no PostgreSQL 19 cluster in the pgdata volume" in result.stderr
 
 
 def test_no_argument_uses_the_newest_published_github_release(tmp_path: Path) -> None:
@@ -493,8 +523,8 @@ def test_progress_and_completion_report_services_health_and_rollback(tmp_path: P
 
     assert result.returncode == 0, result.stderr + result.stdout
     for marker in (
-        "[1/9]",
-        "[9/9]",
+        "[1/10]",
+        "[10/10]",
         "Deployment summary",
         "db=healthy",
         "api=healthy",

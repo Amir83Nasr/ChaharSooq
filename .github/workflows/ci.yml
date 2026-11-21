@@ -53,7 +53,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:18
+        image: postgres:19
         env:
           POSTGRES_USER: charsooq
           POSTGRES_PASSWORD: charsooq
@@ -86,9 +86,21 @@ jobs:
 
   migrations:
     runs-on: ubuntu-latest
+    # The 19 leg matches Production's major and is blocking. The 18 leg only
+    # proves migrations still run against the rollback target; it is temporary
+    # and removed once the upgrade is verified (see ADR 028).
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - postgres: postgres:19
+            transition: false
+          - postgres: postgres:18.6-trixie
+            transition: true
+    continue-on-error: ${{ matrix.transition }}
     services:
       postgres:
-        image: postgres:18
+        image: ${{ matrix.postgres }}
         env:
           POSTGRES_USER: charsooq
           POSTGRES_PASSWORD: charsooq

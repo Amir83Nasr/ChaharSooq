@@ -24,6 +24,12 @@ import { formatPersianRelativeTime } from "@workspace/ui/lib/relative-time"
 import { Skeleton } from "@workspace/ui/primitives/skeleton"
 import { CircleAlert, PackageSearch, RefreshCw } from "lucide-react"
 import { StockCell } from "@/components/data/products-stock-cell"
+import {
+  competitorForRow,
+  showsCompetitorPrice,
+  STORE_MARKET_LABELS,
+  type CompetitorMarket,
+} from "@/lib/competitor-price"
 import { toTomanAmount } from "@/lib/money"
 import type {
   ProductOut,
@@ -63,25 +69,6 @@ interface TableProps {
   onPageChange: (p: number) => void
   onPageSize: (n: number) => void
 }
-
-// Top-level groups for the catalog display: carpet, furniture, home
-// appliances, and digital goods (shared helper in `lib/top-groups`).
-
-export type CompetitorMarket = "digikala" | "technolife" | "sofa" | "digifresh"
-
-export const STORE_MARKET_LABELS: Record<CompetitorMarket, string> = {
-  digikala: "دیجی‌کالا",
-  technolife: "تکنولایف",
-  sofa: "سوفا",
-  digifresh: "دیجی‌فرش",
-}
-
-/** Stores offered by the product toolbar filter (appliances only). */
-export const COMPETITOR_MARKETS: { store: CompetitorMarket; label: string }[] =
-  [
-    { store: "digikala", label: "دیجی‌کالا" },
-    { store: "technolife", label: "تکنولایف" },
-  ]
 
 const COMPETITOR_STATUS_LABELS: Record<string, string> = {
   pending: "در انتظار بررسی",
@@ -331,23 +318,10 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
               1
             const top = item.top_group
             const comparesCompetitor = comparesWithCompetitor(top)
-            const trackedStore: CompetitorMarket | null = comparesCompetitor
-              ? market
-              : top === "مبلمان"
-                ? "sofa"
-                : top === "فرش"
-                  ? "digifresh"
-                  : null
-            const competitor = trackedStore
-              ? (item.competitor_prices.find(
-                  (price) => price.store === trackedStore
-                ) ?? null)
+            const showCompetitorCell = showsCompetitorPrice(market, top)
+            const competitor = showCompetitorCell
+              ? competitorForRow(item.competitor_prices, market, top)
               : null
-            const showCompetitorCell =
-              trackedStore !== null &&
-              (comparesCompetitor
-                ? market === "digikala" || market === "technolife"
-                : market === trackedStore)
             const amount = toTomanAmount(
               competitor?.price ?? null,
               competitor?.currency ?? null
@@ -446,6 +420,11 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                 ) : null}
                 {shown.has("competitor_price") ? (
                   <TableCell className="text-center">
+                    {market === "best" && competitor ? (
+                      <span className="mb-0.5 block text-[11px] text-muted-foreground">
+                        {STORE_MARKET_LABELS[competitor.store]}
+                      </span>
+                    ) : null}
                     {!showCompetitorCell ? (
                       <span className="text-muted-foreground">—</span>
                     ) : competitor?.price !== null &&

@@ -7,12 +7,8 @@ import { formatPersianDateTime } from "@workspace/ui/lib/date"
 import { formatPersianNumber } from "@workspace/ui/lib/number"
 
 import { api, type SettingsOut } from "@/lib/api"
+import { STORE_MARKET_LABELS } from "@/lib/competitor-price"
 import { SettingsOverviewCard } from "@/components/settings/settings-overview-card"
-
-const STORE_LABELS: Record<SettingsOut["default_competitor_store"], string> = {
-  digikala: "دیجی‌کالا",
-  technolife: "تکنولایف",
-}
 
 function intervalLabel(minutes: number): string {
   const hours = minutes / 60
@@ -71,7 +67,7 @@ export function SettingsOverview({ owner }: { owner: boolean }) {
         summary={
           settings
             ? `${formatPersianNumber(settings.suggested_price_formulas.length)} دسته‌بندی وزن‌دار · بازار پیش‌فرض: ${
-                STORE_LABELS[settings.default_competitor_store]
+                STORE_MARKET_LABELS[settings.default_competitor_store]
               }`
             : "وزن فرمول‌های قیمت پیشنهادی و بازار پیش‌فرض رقبا"
         }

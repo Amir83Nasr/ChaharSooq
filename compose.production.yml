@@ -157,7 +157,7 @@ x-web-service: &web-service
 
 services:
   db:
-    image: postgres:18.6-trixie
+    image: postgres:19.0-trixie
     restart: unless-stopped
     logging: *default-logging
     environment:
@@ -166,9 +166,11 @@ services:
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
     secrets:
       - postgres_password
-    # PostgreSQL 18 changed PGDATA to /var/lib/postgresql/18/docker and the
+    # PostgreSQL 19 stores its cluster in /var/lib/postgresql/19/docker and the
     # image's declared volume is the /var/lib/postgresql parent. Mounting the
-    # old /var/lib/postgresql/data path would persist an empty directory.
+    # old /var/lib/postgresql/data path would persist an empty directory. Never
+    # start a 19 image against an 18 cluster — the entrypoint would create an
+    # empty 19 cluster beside it and the app would see no data.
     volumes:
       - pgdata:/var/lib/postgresql
     networks:

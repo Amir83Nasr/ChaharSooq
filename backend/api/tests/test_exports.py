@@ -285,6 +285,48 @@ def test_products_csv_all_export_shows_both_competitor_markets(client: TestClien
     assert "قیمت رقبا (تکنولایف)" not in filtered_headers
 
 
+def test_products_csv_best_market_uses_available_or_cheaper_price(client: TestClient) -> None:
+    from sqlalchemy.orm import Session
+
+    from app.core.database import get_engine
+    from app.models import Product
+
+    product_id = _product_id(client)
+    # Only synced rows carry a group; manual creation ignores main_group_name.
+    with Session(get_engine()) as db:
+        product = db.get(Product, product_id)
+        assert product is not None
+        product.main_group_name = "لوازم خانگی یخچال"
+        db.commit()
+
+    digikala_id = _add_manual_listing(client, product_id, price=25_000_000)
+    _add_manual_listing(
+        client,
+        product_id,
+        store="technolife",
+        url="https://www.technolife.com/product-123456",
+        price=26_000_000,
+    )
+
+    def best_price() -> tuple[list[str], list[str]]:
+        response = client.get(
+            "/api/v1/exports/products.csv",
+            params={"columns": "name,competitor_price", "market": "best", "q": "FR-1"},
+        )
+        assert response.status_code == 200, response.text
+        rows = _rows(response)
+        return rows[0], rows[1]
+
+    headers, row = best_price()
+    label = "قیمت رقبا (ارزانترین رقیب)"
+    assert label in headers
+    assert row[headers.index(label)] == "۲۵۰۰۰۰۰۰"  # cheaper of the two listings
+
+    assert client.delete(f"/api/v1/competitors/{digikala_id}").status_code == 204
+    headers, row = best_price()
+    assert row[headers.index(label)] == "۲۶۰۰۰۰۰۰"  # the only remaining link
+
+
 def test_persian_format_helpers() -> None:
     assert format_amount(Decimal("1000000.00")) == "۱۰۰۰۰۰۰"
     assert format_amount(Decimal("12.500")) == "۱۲٫۵"

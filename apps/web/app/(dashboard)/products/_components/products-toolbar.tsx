@@ -13,14 +13,15 @@ import {
   formatPersianNumber,
   parsePriceFilterInput,
 } from "@workspace/ui/lib/number"
+import { TomanGlyph } from "@workspace/ui/persian/toman-glyph"
 import {
   DataTableToolbar,
   SearchInput,
 } from "@/components/data/data-table-toolbar"
 import type { DefaultCompetitorStore, ProductSort, TopGroup } from "@/lib/api"
+import { COMPETITOR_MARKETS } from "@/lib/competitor-price"
 import type { StockFilter } from "@/lib/products-store"
 import { TOP_GROUPS, isTopGroup } from "@/lib/top-groups"
-import { COMPETITOR_MARKETS } from "./products-table"
 
 export const SORT_LABELS: Record<ProductSort, string> = {
   category: "تفکیک دسته‌بندی",
@@ -181,12 +182,7 @@ export function ProductsToolbar(props: ToolbarProps) {
           className="w-full pe-12 max-md:h-11"
         />
         {minPrice !== "" ? (
-          <span
-            aria-hidden="true"
-            className="inset-e-2.5 pointer-events-none absolute top-1/2 -translate-y-1/2 text-xs text-muted-foreground"
-          >
-            تومان
-          </span>
+          <TomanGlyph className="inset-e-2.5 pointer-events-none absolute top-1/2 -translate-y-1/2 text-xs text-muted-foreground" />
         ) : null}
       </div>
       <div className="relative w-full sm:w-40">
@@ -199,12 +195,7 @@ export function ProductsToolbar(props: ToolbarProps) {
           className="w-full pe-12 max-md:h-11"
         />
         {maxPrice !== "" ? (
-          <span
-            aria-hidden="true"
-            className="inset-e-2.5 pointer-events-none absolute top-1/2 -translate-y-1/2 text-xs text-muted-foreground"
-          >
-            تومان
-          </span>
+          <TomanGlyph className="inset-e-2.5 pointer-events-none absolute top-1/2 -translate-y-1/2 text-xs text-muted-foreground" />
         ) : null}
       </div>
       {hasFilters ? (

@@ -66,7 +66,7 @@ const INITIAL_VIEW: ProductsView = {
   maxPrice: "",
   page: 1,
   pageSize: 0,
-  market: "digikala",
+  market: "best",
 }
 
 /** Page-size values the settings endpoint accepts. */
@@ -188,7 +188,8 @@ function applySettings(settings: SettingsOut, initial: boolean): void {
   }
   if (
     (initial || !marketUserSet) &&
-    (settings.default_competitor_store === "digikala" ||
+    (settings.default_competitor_store === "best" ||
+      settings.default_competitor_store === "digikala" ||
       settings.default_competitor_store === "technolife")
   ) {
     nextView.market = settings.default_competitor_store
@@ -334,7 +335,7 @@ export function setProductsView(patch: Partial<ProductsView>): void {
   }
   if (
     patch.market !== undefined &&
-    patch.market !== (state.settings?.default_competitor_store ?? "digikala")
+    patch.market !== (state.settings?.default_competitor_store ?? "best")
   ) {
     marketUserSet = true
   }
@@ -394,7 +395,7 @@ export function resetProductsView(): void {
     pageSize: PAGE_SIZES.has(settings?.default_page_size ?? 0)
       ? (settings?.default_page_size ?? 0)
       : 0,
-    market: settings?.default_competitor_store ?? "digikala",
+    market: settings?.default_competitor_store ?? "best",
   }
   const previousKey = currentKey()
   const nextKey = keyFor(next)

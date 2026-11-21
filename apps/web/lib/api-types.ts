@@ -300,7 +300,7 @@ export interface BackupRecord {
 
 export type TopGroup = "کالای دیجیتال" | "لوازم خانگی" | "فرش" | "مبلمان"
 
-export type DefaultCompetitorStore = "digikala" | "technolife"
+export type DefaultCompetitorStore = "best" | "digikala" | "technolife"
 
 export interface SuggestedPriceFormula {
   top_group: TopGroup

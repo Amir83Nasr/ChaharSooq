@@ -150,7 +150,7 @@
     display: none;
   }
   .toman-glyph {
-    font-family: var(--font-toman), var(--font-sans), Tahoma, sans-serif;
+    font-family: var(--font-toman, var(--font-sans, Tahoma)), sans-serif;
   }
   button:not(:disabled),
   [role="button"]:not(:disabled) {

@@ -34,10 +34,17 @@ must never contain secret values, private keys, or certificates.
   newest published GitHub Release, resolves its version tag to two image
   digests, checks that both images report that release version and commit, then
   pulls, provisions, checks migrations (applying only when pending), starts the
-  single `api`/`web` pair, and verifies container and external health. A specific
-  version tag or two explicit digests are also accepted. It prints numbered
-  progress and a final health/status summary, is fail-closed, and never reads a
-  secret value or removes a volume, database, or image.
+  single `api`/`web` pair, and verifies container and external health. It first
+  compares the configured database image major with the on-disk `PG_VERSION` and
+  refuses to start if they differ (a major bump needs a data migration). A
+  specific version tag or two explicit digests are also accepted. It prints
+  numbered progress and a final health/status summary, is fail-closed, and never
+  reads a secret value or removes a volume, database, or image.
+- `scripts/pg_upgrade_drill.sh` — rehearses the 18 → 19 logical upgrade against
+  throwaway containers and volumes only, using a full administrative-role dump
+  supplied by the operator. It compares version, data directory, migration
+  revision and row counts, and removes only its own scratch resources (see
+  [ADR 028](../docs/adr/028-postgresql-19-upgrade-readiness.md)).
 
 ## What must stay outside this directory/repository
 

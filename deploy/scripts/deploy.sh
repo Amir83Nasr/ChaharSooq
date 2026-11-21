@@ -17,7 +17,7 @@ set -euo pipefail
 
 COMPOSE_FILE="${CHARSOOQ_COMPOSE_FILE:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/compose.production.yml}"
 ENV_FILE="${CHARSOOQ_ENV_FILE:-/etc/charsooq/production.env}"
-TOTAL_STEPS=9
+TOTAL_STEPS=10
 STEP=0
 START_SECONDS=$SECONDS
 BOLD=""
@@ -75,6 +75,35 @@ command -v docker >/dev/null 2>&1 || fail "docker is required"
 command -v curl >/dev/null 2>&1 || fail "curl is required for the GitHub API and health probes"
 command -v jq >/dev/null 2>&1 || fail "jq is required to read the release and image labels"
 note "host configuration, secret directory and command dependencies are valid"
+
+COMPOSE=(docker compose -f "$COMPOSE_FILE")
+
+step "Checking database cluster version"
+
+# A major-version bump is a data migration, not just a new image tag: a newer
+# image would initialise an empty cluster beside the old one and the API would
+# silently see an empty database. Refuse to start until the on-disk cluster and
+# the configured image agree on the major version.
+db_image="$("${COMPOSE[@]}" config --format json 2>/dev/null |
+  jq -r '.services.db.image // empty')" || fail "cannot read the database image from $COMPOSE_FILE"
+case "$db_image" in
+  postgres:*) ;;
+  *) fail "unexpected database image in $COMPOSE_FILE: ${db_image:-<none>}" ;;
+esac
+image_major="${db_image#postgres:}"
+image_major="${image_major%%.*}"
+
+# Read only the cluster directory for this image's major: after a logical
+# upgrade the old major's datadir stays in the same volume for rollback.
+cluster_major="$("${COMPOSE[@]}" run --rm --no-deps --entrypoint sh db -c \
+  "test -f '/var/lib/postgresql/$image_major/docker/PG_VERSION' && \
+   cat '/var/lib/postgresql/$image_major/docker/PG_VERSION' || true" 2>/dev/null)" || fail "cannot read the database cluster version from the pgdata volume"
+case "$cluster_major" in
+  "$image_major") ;;
+  "") fail "no PostgreSQL $image_major cluster in the pgdata volume; migrate the data before deploying $db_image" ;;
+  *) fail "cluster is PostgreSQL $cluster_major but the image is $db_image; migrate the data before deploying" ;;
+esac
+note "cluster and image agree on PostgreSQL major $image_major"
 
 # ─── RELEASE DISCOVERY ───────────────────────────────────────────────────────
 
@@ -203,8 +232,6 @@ fi
 note "version $api_version, commit $api_revision"
 
 # ─── DEPLOY ──────────────────────────────────────────────────────────────────
-
-COMPOSE=(docker compose -f "$COMPOSE_FILE")
 
 step "Validating the production Compose file"
 "${COMPOSE[@]}" config --quiet || fail "compose configuration is invalid"

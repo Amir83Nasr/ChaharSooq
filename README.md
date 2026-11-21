@@ -8,7 +8,7 @@ Three independent environments: Development (local), Staging (Vercel + FastAPI C
 
 - Frontend: Next.js 16, React 19, TypeScript (strict), Tailwind CSS 4, shadcn/ui, pnpm
 - Backend: FastAPI, SQLAlchemy 2.x, Alembic, Pydantic, uv
-- Database: PostgreSQL (Production pins `postgres:18.6-trixie`)
+- Database: PostgreSQL (Production pins `postgres:19.0-trixie`; see [ADR 028](docs/adr/028-postgresql-19-upgrade-readiness.md))
 
 See [AGENTS.md](AGENTS.md) for architecture and agent rules.
 
@@ -362,15 +362,16 @@ section 3; no certificate is installed and the proxy is not deployed yet. Contai
 (`json-file`, 10 MB × 5 per service) so an unrotated stream cannot fill the host disk. The owner-only **Settings → پشتیبان‌گیری** page enables automatic backups (off by default, then every
 7 days), queues a manual dump, uploads and downloads `pg_dump --format=custom` archives, and
 restores shop data from a verified version. A background worker inside the API container runs the
-pinned PostgreSQL 18 client with the application role (never the admin or migration credential) and
+pinned PostgreSQL 19 client with the application role (never the admin or migration credential) and
 stores archives in the `chaharsooq-production_backups` volume; the restore is data-only and atomic,
 runs behind a mandatory verified pre-restore dump, and leaves accounts, sessions, and backup history
 untouched (see [ADR 023](docs/adr/023-in-app-backup-and-data-restore.md)). Archives are
 **unencrypted and same-host only**: encryption/key custody, off-host transfer, PITR, and a rehearsed
 restore drill remain unapproved and unimplemented (see
 [ADR 014](docs/adr/014-production-backup-and-recovery.md)). PostgreSQL data
-lives in the `chaharsooq-production_pgdata` volume at `/var/lib/postgresql` (the PostgreSQL 18 image
-path), and `make prod-down` never removes either volume.
+lives in the `chaharsooq-production_pgdata` volume at `/var/lib/postgresql` (the PostgreSQL 19
+image's parent path; the cluster lives in a versioned subdirectory), and `make prod-down` never
+removes either volume.
 
 Operational rules: [AGENTS.md](AGENTS.md) section 3; decisions: [docs/adr/](docs/adr/).
 
@@ -378,6 +379,6 @@ Operational rules: [AGENTS.md](AGENTS.md) section 3; decisions: [docs/adr/](docs
 
 Charsooq has three independent environments — Development, Staging, and Production. Each has its own secrets, database credentials (`DATABASE_URL`, plus `MIGRATION_DATABASE_URL` where role separation is used), and configuration; no Production data is copied automatically to Staging or Development. A push to `main` is not a Production release. See [AGENTS.md](AGENTS.md) section 3 for the rules.
 
-- Development: local Next.js + FastAPI + PostgreSQL; `make local-up` / `make local-down` (short aliases of `make docker-up` / `make docker-down`) start/stop `web` + `api` + `postgres` from [compose.local.yml](compose.local.yml). It runs the locked migration runner first with `docker compose run --rm migrate`, so the one-shot container is removed when it finishes; a plain `docker compose up` is also safe because the API migrates in its Development lifespan. The development stack sets `APP_ENV=production` to exercise production behavior locally and `DEPLOYMENT_ENV=development` so it is never mistaken for Production. Both apps run in dev mode (`uvicorn --reload` and `next dev`) with the source bind-mounted, so code edits appear live without rebuilding the images; build once with `make docker-build` (Compose also builds a missing image on first up). `compose.local.yml` is the development stack, not a Production file. It declares only two volumes — `pgdata` for the database and `backups` for archives — and mounts source directories individually so Docker creates no anonymous volumes (ADR 025).
+- Development: local Next.js + FastAPI + PostgreSQL; `make local-up` / `make local-down` (short aliases of `make docker-up` / `make docker-down`) start/stop `web` + `api` + `postgres` from [compose.local.yml](compose.local.yml). It runs the locked migration runner first with `docker compose run --rm migrate`, so the one-shot container is removed when it finishes; a plain `docker compose up` is also safe because the API migrates in its Development lifespan. The development stack sets `APP_ENV=production` to exercise production behavior locally and `DEPLOYMENT_ENV=development` so it is never mistaken for Production. Both apps run in dev mode (`uvicorn --reload` and `next dev`) with the source bind-mounted, so code edits appear live without rebuilding the images; build once with `make docker-build` (Compose also builds a missing image on first up). `compose.local.yml` is the development stack, not a Production file. It declares only two volumes — `pgdata` (externally named `chaharsooq_pgdata19` for the PostgreSQL 19 cluster; the old `chaharsooq_pgdata` volume is kept untouched) and `backups` for archives — and mounts source directories individually so Docker creates no anonymous volumes (ADR 025).
 - Staging: Vercel frontend (`vercel.json` pins pnpm install/build for the monorepo) + FastAPI Cloud backend (`make deploy-api`) + Neon database. Set `API_URL_INTERNAL` + `NEXT_PUBLIC_API_URL` to the Staging API origin in Vercel — the build fails fast if they still point at localhost. Browser calls same-origin `/api/*`; Next rewrites to the API origin, so the session cookie stays first-party. The API auto-migrates on boot in Staging.
-- Production: Docker Engine + Docker Compose on Ubuntu `market-linux` (`172.30.2.2`): Next.js, FastAPI, and PostgreSQL 18.6, with separate administrative, migration, and application database roles. [compose.production.yml](compose.production.yml) encodes the service order (`db` → `provision` → `migrate` → `api` → `web` → `caddy`), file-backed secrets, internal networks, and health checks. The Caddy reverse proxy, TLS modes, and trusted-proxy design are implemented in [deploy/caddy](deploy/caddy) and [ADR 012](docs/adr/012-internal-reverse-proxy-and-tls.md) but not enabled against a real certificate. Backup execution (manual/scheduled dumps and transactional restores in the API container; see ADR 023), image registry/promotion, the IT-owned DNS/CA/IP decisions, and the actual server deployment remain open. Production is not live yet; see [AGENTS.md](AGENTS.md) section 3.
+- Production: Docker Engine + Docker Compose on Ubuntu `market-linux` (`172.30.2.2`): Next.js, FastAPI, and PostgreSQL 19.0, with separate administrative, migration, and application database roles. [compose.production.yml](compose.production.yml) encodes the service order (`db` → `provision` → `migrate` → `api` → `web` → `caddy`), file-backed secrets, internal networks, and health checks. The Caddy reverse proxy, TLS modes, and trusted-proxy design are implemented in [deploy/caddy](deploy/caddy) and [ADR 012](docs/adr/012-internal-reverse-proxy-and-tls.md) but not enabled against a real certificate. Backup execution (manual/scheduled dumps and transactional restores in the API container; see ADR 023), image registry/promotion, the IT-owned DNS/CA/IP decisions, and the actual server deployment remain open. Production is not live yet; see [AGENTS.md](AGENTS.md) section 3.

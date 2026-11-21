@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Literal
+from typing import cast
 
 from sqlalchemy.orm import Session
 
 from app.models import SuggestedPriceFormula
 from app.repositories import SettingsRepository, SuggestedPriceFormulaRepository
 from app.schemas import SuggestedPriceFormulaIn
-from app.schemas.settings import ProductTableColumn
+from app.schemas.settings import DefaultCompetitorStore, ProductTableColumn
 
 LOW_STOCK_THRESHOLD_KEY = "low_stock_threshold"
 DEFAULT_LOW_STOCK_THRESHOLD = 5
@@ -40,8 +40,9 @@ MIN_BACKUP_INTERVAL_MINUTES = 60
 MAX_BACKUP_INTERVAL_MINUTES = 10080
 
 DEFAULT_COMPETITOR_STORE_KEY = "default_competitor_store"
-DEFAULT_COMPETITOR_STORE: Literal["digikala", "technolife"] = "digikala"
-ALLOWED_COMPETITOR_STORES: tuple[Literal["digikala", "technolife"], ...] = (
+DEFAULT_COMPETITOR_STORE: DefaultCompetitorStore = "best"
+ALLOWED_COMPETITOR_STORES: tuple[DefaultCompetitorStore, ...] = (
+    "best",
     "digikala",
     "technolife",
 )
@@ -186,18 +187,16 @@ class SettingsService:
         self._settings.upsert(BACKUP_INTERVAL_MINUTES_KEY, str(minutes))
         return minutes
 
-    def get_competitor_store(self) -> Literal["digikala", "technolife"]:
+    def get_competitor_store(self) -> DefaultCompetitorStore:
         row = self._settings.get(DEFAULT_COMPETITOR_STORE_KEY)
         if row is None:
             return DEFAULT_COMPETITOR_STORE
         value = row.value.strip()
-        if value == "technolife":
-            return "technolife"
-        return "digikala"
+        if value in ALLOWED_COMPETITOR_STORES:
+            return cast(DefaultCompetitorStore, value)
+        return DEFAULT_COMPETITOR_STORE
 
-    def update_competitor_store(
-        self, store: Literal["digikala", "technolife"]
-    ) -> Literal["digikala", "technolife"]:
+    def update_competitor_store(self, store: DefaultCompetitorStore) -> DefaultCompetitorStore:
         self._settings.upsert(DEFAULT_COMPETITOR_STORE_KEY, store)
         return store
 

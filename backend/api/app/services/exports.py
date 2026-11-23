@@ -290,7 +290,8 @@ class ExportService:
             weight = item.get("weight")
             if isinstance(top_group, str) and weight is not None:
                 weights[top_group] = float(str(weight))
-        selected_market = market or settings.get_competitor_store()
+        # The catalog always defaults to the cheapest available competitor price.
+        selected_market = market or "best"
         if selected_market not in MARKET_LABELS:
             selected_market = "digikala"
         selected_columns = _normalize_columns(columns)

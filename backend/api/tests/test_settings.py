@@ -32,7 +32,6 @@ def test_settings_default_update_and_partial_keep(client: TestClient) -> None:
         "default_page_size": 0,
         "sync_interval_minutes": 1440,
         "competitor_sync_interval_minutes": 1440,
-        "default_competitor_store": "best",
         "suggested_price_formulas": [],
         "product_table_columns": DEFAULT_PRODUCT_TABLE_COLUMNS,
     }
@@ -49,7 +48,6 @@ def test_settings_default_update_and_partial_keep(client: TestClient) -> None:
         "default_page_size": 500,
         "sync_interval_minutes": 1440,
         "competitor_sync_interval_minutes": 1440,
-        "default_competitor_store": "best",
         "suggested_price_formulas": [],
         "product_table_columns": DEFAULT_PRODUCT_TABLE_COLUMNS,
     }
@@ -158,22 +156,13 @@ def test_settings_suggested_price_weight_update_and_reject(client: TestClient) -
     )
 
 
-def test_settings_competitor_store_update_and_reject(client: TestClient) -> None:
+def test_settings_removed_competitor_store_is_ignored(client: TestClient) -> None:
+    """The competitor market is no longer a setting; old clients must not break."""
     login(client)
     r = client.put("/api/v1/settings", json={"default_competitor_store": "technolife"})
     assert r.status_code == 200, r.text
-    assert r.json()["default_competitor_store"] == "technolife"
-    best = client.put("/api/v1/settings", json={"default_competitor_store": "best"})
-    assert best.status_code == 200, best.text
-    assert best.json()["default_competitor_store"] == "best"
-    assert (
-        client.put("/api/v1/settings", json={"default_competitor_store": "other"}).status_code
-        == 422
-    )
-    assert (
-        client.put("/api/v1/settings", json={"default_competitor_store": "digifresh"}).status_code
-        == 422
-    )
+    assert "default_competitor_store" not in r.json()
+    assert client.get("/api/v1/settings").json().get("default_competitor_store") is None
 
 
 def test_database_url_trailing_whitespace_stripped() -> None:

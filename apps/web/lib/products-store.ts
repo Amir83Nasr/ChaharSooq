@@ -16,7 +16,6 @@ import {
   api,
   ApiRequestError,
   GENERIC_ERROR_MESSAGE,
-  type DefaultCompetitorStore,
   type ProductFilters,
   type ProductPage,
   type ProductSort,
@@ -25,9 +24,13 @@ import {
 } from "./api"
 import { buildProductParams } from "./api-params"
 import { leaveToLogin } from "./auth-navigation"
+import { type CompetitorMarketOption } from "./competitor-price"
 import { DEFAULT_LOW_STOCK_THRESHOLD } from "./inventory"
 
 export type StockFilter = "all" | "in" | "out" | "low"
+
+/** `missing` is the toolbar's "بدون قیمت رقیب" choice; it is not an API store. */
+export type CompetitorMarketFilter = CompetitorMarketOption | "missing"
 
 export interface ProductsView {
   q: string
@@ -38,7 +41,7 @@ export interface ProductsView {
   maxPrice: string
   page: number
   pageSize: number
-  market: DefaultCompetitorStore
+  market: CompetitorMarketFilter
 }
 
 export type ProductsStatus = "idle" | "loading" | "refreshing"
@@ -96,7 +99,6 @@ let loadedKey: string | null = null
 let initialized = false
 let dirty = false
 let pageSizeUserSet = false
-let marketUserSet = false
 let requestSeq = 0
 let inflight: { key: string; promise: Promise<void> } | null = null
 
@@ -149,12 +151,25 @@ function paramsFromView(view: ProductsView): ProductFilters {
     stockParams.in_stock = true
     stockParams.max_stock = threshold()
   }
+  // "best" is display-only (cheapest competitor wins, no row filtering).
+  // Specific stores filter to products with a fresh price from that store;
+  // "missing" filters to products the owner ticked as having no competitor.
+  const marketFilter: Pick<
+    ProductFilters,
+    "competitor_store" | "no_competitor_price"
+  > =
+    view.market === "missing"
+      ? { no_competitor_price: true }
+      : view.market === "best"
+        ? {}
+        : { competitor_store: view.market }
   return {
     q: view.q || undefined,
     top_group: view.topGroup ?? undefined,
     min_price: priceParam(view.minPrice),
     max_price: priceParam(view.maxPrice),
     ...stockParams,
+    ...marketFilter,
     sort: view.sort,
     page: view.page,
     page_size: view.pageSize,
@@ -185,15 +200,6 @@ function applySettings(settings: SettingsOut, initial: boolean): void {
     PAGE_SIZES.has(settings.default_page_size)
   ) {
     nextView.pageSize = settings.default_page_size
-  }
-  if (
-    (initial || !marketUserSet) &&
-    (settings.default_competitor_store === "best" ||
-      settings.default_competitor_store === "digikala" ||
-      settings.default_competitor_store === "technolife" ||
-      settings.default_competitor_store === "torob")
-  ) {
-    nextView.market = settings.default_competitor_store
   }
 
   emit({ settings, view: nextView })
@@ -322,6 +328,7 @@ export function setProductsView(patch: Partial<ProductsView>): void {
     (patch.stock !== undefined && patch.stock !== previous.stock) ||
     (patch.minPrice !== undefined && patch.minPrice !== previous.minPrice) ||
     (patch.maxPrice !== undefined && patch.maxPrice !== previous.maxPrice) ||
+    (patch.market !== undefined && patch.market !== previous.market) ||
     (patch.pageSize !== undefined && patch.pageSize !== previous.pageSize)
 
   // Any filter/page-size change returns to the first page unless the caller
@@ -334,13 +341,6 @@ export function setProductsView(patch: Partial<ProductsView>): void {
   ) {
     pageSizeUserSet = true
   }
-  if (
-    patch.market !== undefined &&
-    patch.market !== (state.settings?.default_competitor_store ?? "best")
-  ) {
-    marketUserSet = true
-  }
-
   if (!hasViewChanged(previous, next)) return
 
   const nextKey = keyFor(next)
@@ -380,6 +380,7 @@ export function primeProductsView(patch: Partial<ProductsView>): void {
     (patch.stock !== undefined && patch.stock !== previous.stock) ||
     (patch.minPrice !== undefined && patch.minPrice !== previous.minPrice) ||
     (patch.maxPrice !== undefined && patch.maxPrice !== previous.maxPrice) ||
+    (patch.market !== undefined && patch.market !== previous.market) ||
     (patch.pageSize !== undefined && patch.pageSize !== previous.pageSize)
   if (changesFilters && patch.page === undefined) next.page = 1
   if (!hasViewChanged(previous, next)) return
@@ -389,14 +390,12 @@ export function primeProductsView(patch: Partial<ProductsView>): void {
 /** Restore the default view (settings defaults) and load it if needed. */
 export function resetProductsView(): void {
   pageSizeUserSet = false
-  marketUserSet = false
   const settings = state.settings
   const next: ProductsView = {
     ...INITIAL_VIEW,
     pageSize: PAGE_SIZES.has(settings?.default_page_size ?? 0)
       ? (settings?.default_page_size ?? 0)
       : 0,
-    market: settings?.default_competitor_store ?? "best",
   }
   const previousKey = currentKey()
   const nextKey = keyFor(next)
@@ -490,7 +489,6 @@ export function resetProductsStore(): void {
   initialized = false
   dirty = false
   pageSizeUserSet = false
-  marketUserSet = false
   state = initialState()
   for (const listener of listeners) listener()
 }

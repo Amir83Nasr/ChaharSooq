@@ -25,7 +25,6 @@ import type {
   CompetitorSyncStatus,
   DashboardOverview,
   DashboardSummary,
-  DefaultCompetitorStore,
   InventorySummary,
   MeOut,
   ProductFilters,
@@ -253,6 +252,12 @@ export const api = {
     return request<ProductOut>(`/api/v1/products/${id}/price-bounds`, {
       method: "PATCH",
       body: JSON.stringify(payload),
+    })
+  },
+  setNoCompetitorPrice(id: number, value: boolean) {
+    return request<ProductOut>(`/api/v1/products/${id}/no-competitor-price`, {
+      method: "PATCH",
+      body: JSON.stringify({ no_competitor_price: value }),
     })
   },
   competitorListings(productId: number) {

@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import cast
 
 from sqlalchemy.orm import Session
 
 from app.models import SuggestedPriceFormula
 from app.repositories import SettingsRepository, SuggestedPriceFormulaRepository
 from app.schemas import SuggestedPriceFormulaIn
-from app.schemas.settings import DefaultCompetitorStore, ProductTableColumn
+from app.schemas.settings import ProductTableColumn
 
 LOW_STOCK_THRESHOLD_KEY = "low_stock_threshold"
 DEFAULT_LOW_STOCK_THRESHOLD = 5
@@ -38,15 +37,6 @@ BACKUP_INTERVAL_MINUTES_KEY = "backup_interval_minutes"
 DEFAULT_BACKUP_INTERVAL_MINUTES = 10080
 MIN_BACKUP_INTERVAL_MINUTES = 60
 MAX_BACKUP_INTERVAL_MINUTES = 10080
-
-DEFAULT_COMPETITOR_STORE_KEY = "default_competitor_store"
-DEFAULT_COMPETITOR_STORE: DefaultCompetitorStore = "best"
-ALLOWED_COMPETITOR_STORES: tuple[DefaultCompetitorStore, ...] = (
-    "best",
-    "digikala",
-    "technolife",
-    "torob",
-)
 
 PRODUCT_TABLE_COLUMNS_KEY = "product_table_columns"
 # Canonical table order; also the default when nothing is stored yet.
@@ -79,7 +69,6 @@ class SettingsService:
             "default_page_size": self.get_page_size(),
             "sync_interval_minutes": self.get_sync_interval(),
             "competitor_sync_interval_minutes": self.get_competitor_sync_interval(),
-            "default_competitor_store": self.get_competitor_store(),
             "suggested_price_formulas": self.get_suggested_price_formulas(),
             "product_table_columns": self.get_product_table_columns(),
         }
@@ -188,19 +177,6 @@ class SettingsService:
     def update_backup_interval_minutes(self, minutes: int) -> int:
         self._settings.upsert(BACKUP_INTERVAL_MINUTES_KEY, str(minutes))
         return minutes
-
-    def get_competitor_store(self) -> DefaultCompetitorStore:
-        row = self._settings.get(DEFAULT_COMPETITOR_STORE_KEY)
-        if row is None:
-            return DEFAULT_COMPETITOR_STORE
-        value = row.value.strip()
-        if value in ALLOWED_COMPETITOR_STORES:
-            return cast(DefaultCompetitorStore, value)
-        return DEFAULT_COMPETITOR_STORE
-
-    def update_competitor_store(self, store: DefaultCompetitorStore) -> DefaultCompetitorStore:
-        self._settings.upsert(DEFAULT_COMPETITOR_STORE_KEY, store)
-        return store
 
     def get_product_table_columns(self) -> list[ProductTableColumn]:
         row = self._settings.get(PRODUCT_TABLE_COLUMNS_KEY)

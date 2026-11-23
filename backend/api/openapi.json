@@ -1154,6 +1154,18 @@
             "description": "Maximum fresh competitor price."
           },
           {
+            "name": "no_competitor_price",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Only products marked by the owner as having no competitor price.",
+              "default": false,
+              "title": "No Competitor Price"
+            },
+            "description": "Only products marked by the owner as having no competitor price."
+          },
+          {
             "name": "min_stock",
             "in": "query",
             "required": false,
@@ -1375,6 +1387,84 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ProductPriceBoundsUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource does not exist (`not_found`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/products/{product_id}/no-competitor-price": {
+      "patch": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Mark a product as having no competitor price",
+        "description": "Sets the owner-marker used to note that a product genuinely has no comparable competitor price (distinct from a missing or stale link). Admin-only; viewers receive `403`.",
+        "operationId": "update_no_competitor_price",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Product Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductCompetitorFlagUpdate"
               }
             }
           }
@@ -2153,6 +2243,18 @@
               "title": "Max Competitor Price"
             },
             "description": "Maximum fresh competitor price."
+          },
+          {
+            "name": "no_competitor_price",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Only products marked by the owner as having no competitor price.",
+              "default": false,
+              "title": "No Competitor Price"
+            },
+            "description": "Only products marked by the owner as having no competitor price."
           },
           {
             "name": "min_stock",
@@ -3110,7 +3212,7 @@
           "Settings"
         ],
         "summary": "Read settings",
-        "description": "Admin preferences: low-stock threshold, default page size, sync intervals, default competitor store, suggested-price weights, and the visible product-table columns.",
+        "description": "Admin preferences: low-stock threshold, default page size, sync intervals, suggested-price weights, and the visible product-table columns.",
         "operationId": "get_settings_view",
         "responses": {
           "200": {
@@ -4702,15 +4804,6 @@
         "title": "DashboardSummaryOut",
         "description": "Single-call dashboard payload — overview + gaps + catalog breakdown.\n\nReplaces three sequential client fetches with one round-trip; the\nindividual endpoints stay for backwards compatibility."
       },
-      "DefaultCompetitorStore": {
-        "type": "string",
-        "enum": [
-          "best",
-          "digikala",
-          "technolife",
-          "torob"
-        ]
-      },
       "ErrorBody": {
         "properties": {
           "code": {
@@ -5019,6 +5112,21 @@
         "title": "ParsinaConnectionOut",
         "description": "Current Parsina connection as visible to the super admin.\n\nThe password is never returned; `password_set` indicates whether one is\nstored (in the database or provided via env/secrets)."
       },
+      "ProductCompetitorFlagUpdate": {
+        "properties": {
+          "no_competitor_price": {
+            "type": "boolean",
+            "title": "No Competitor Price",
+            "description": "True marks the product as having no comparable competitor price."
+          }
+        },
+        "type": "object",
+        "required": [
+          "no_competitor_price"
+        ],
+        "title": "ProductCompetitorFlagUpdate",
+        "description": "Toggle the owner-marked 'no competitor price' flag for one product."
+      },
       "ProductIn": {
         "properties": {
           "name": {
@@ -5202,6 +5310,18 @@
             "type": "array",
             "title": "Competitor Prices"
           },
+          "has_competitor_price": {
+            "type": "boolean",
+            "title": "Has Competitor Price",
+            "description": "True when at least one active competitor link has a fresh price; false for products with no link or only stale/failed data.",
+            "default": false
+          },
+          "no_competitor_price": {
+            "type": "boolean",
+            "title": "No Competitor Price",
+            "description": "Owner-marked: this product genuinely has no comparable competitor price. Distinct from stale or missing price data.",
+            "default": false
+          },
           "allowed_decrease_percent": {
             "anyOf": [
               {
@@ -5353,10 +5473,6 @@
             "title": "Competitor Sync Interval Minutes",
             "description": "Bulk competitor refresh interval."
           },
-          "default_competitor_store": {
-            "$ref": "#/components/schemas/DefaultCompetitorStore",
-            "description": "Competitor market shown by default; best picks the available/cheapest price."
-          },
           "suggested_price_formulas": {
             "items": {
               "$ref": "#/components/schemas/SuggestedPriceFormulaOut"
@@ -5380,7 +5496,6 @@
           "default_page_size",
           "sync_interval_minutes",
           "competitor_sync_interval_minutes",
-          "default_competitor_store",
           "suggested_price_formulas",
           "product_table_columns"
         ],
@@ -5450,17 +5565,6 @@
             "title": "Competitor Sync Interval Minutes",
             "description": "Bulk competitor refresh interval, in minutes."
           },
-          "default_competitor_store": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DefaultCompetitorStore"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Competitor market shown by default; best picks the available/cheapest price."
-          },
           "suggested_price_formulas": {
             "anyOf": [
               {
@@ -5497,7 +5601,6 @@
         "examples": [
           {
             "competitor_sync_interval_minutes": 1440,
-            "default_competitor_store": "best",
             "default_page_size": 20,
             "low_stock_threshold": 10,
             "product_table_columns": [

@@ -6,9 +6,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.schemas.suggested_price import SuggestedPriceFormulaIn, SuggestedPriceFormulaOut
 
-# Display choice for the competitor price: auto-pick, or one fixed market.
-type DefaultCompetitorStore = Literal["best", "digikala", "technolife", "torob"]
-
 # Stable ids for the product table columns the admin can show or hide.
 type ProductTableColumn = Literal[
     "row",
@@ -31,9 +28,6 @@ class SettingsOut(BaseModel):
     default_page_size: int = Field(description="Products per page; 0 means show all.")
     sync_interval_minutes: int = Field(description="Product sync interval.")
     competitor_sync_interval_minutes: int = Field(description="Bulk competitor refresh interval.")
-    default_competitor_store: DefaultCompetitorStore = Field(
-        description="Competitor market shown by default; best picks the available/cheapest price."
-    )
     suggested_price_formulas: list[SuggestedPriceFormulaOut] = Field(
         description="Per-group competitor weight for the suggested price."
     )
@@ -52,7 +46,6 @@ class SettingsUpdateIn(BaseModel):
                     "default_page_size": 20,
                     "sync_interval_minutes": 720,
                     "competitor_sync_interval_minutes": 1440,
-                    "default_competitor_store": "best",
                     "suggested_price_formulas": [{"top_group": "فرش", "weight": 0.4}],
                     "product_table_columns": ["name", "price", "stock"],
                 }
@@ -71,10 +64,6 @@ class SettingsUpdateIn(BaseModel):
     )
     competitor_sync_interval_minutes: int | None = Field(
         default=None, ge=15, le=10080, description="Bulk competitor refresh interval, in minutes."
-    )
-    default_competitor_store: DefaultCompetitorStore | None = Field(
-        default=None,
-        description="Competitor market shown by default; best picks the available/cheapest price.",
     )
     suggested_price_formulas: list[SuggestedPriceFormulaIn] | None = Field(
         default=None, description="Replaces the saved list; omit to keep the current weights."

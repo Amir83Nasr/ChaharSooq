@@ -1,15 +1,14 @@
 /** Which competitor price a catalog row shows, and how it is picked. */
 
-import type {
-  CompetitorPrice,
-  CompetitorStore,
-  DefaultCompetitorStore,
-  TopGroup,
-} from "./api-types"
+import type { CompetitorPrice, CompetitorStore, TopGroup } from "./api-types"
 import { toTomanAmount } from "./money"
 import { comparesWithCompetitor } from "./top-groups"
 
 export type CompetitorMarket = CompetitorStore | "best"
+
+/** Markets offered by the products toolbar (the cheapest option plus direct rivals). */
+export type CompetitorMarketOption =
+  "best" | "digikala" | "technolife" | "torob"
 
 export const STORE_MARKET_LABELS: Record<CompetitorMarket, string> = {
   best: "ارزانترین رقیب",
@@ -21,9 +20,9 @@ export const STORE_MARKET_LABELS: Record<CompetitorMarket, string> = {
   other: "دیگر",
 }
 
-/** Markets offered by the products toolbar / settings (the two direct rivals). */
+/** Markets offered by the products toolbar. */
 export const COMPETITOR_MARKETS: {
-  store: DefaultCompetitorStore
+  store: CompetitorMarketOption
   label: string
 }[] = [
   { store: "best", label: STORE_MARKET_LABELS.best },

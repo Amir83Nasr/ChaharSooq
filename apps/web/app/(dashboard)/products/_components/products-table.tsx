@@ -105,7 +105,7 @@ function ProductsTableHead(props: {
   market?: CompetitorMarket
   columns?: readonly ProductTableColumn[]
 }) {
-  const { market = "digikala", columns = DEFAULT_PRODUCT_TABLE_COLUMNS } = props
+  const { market = "best", columns = DEFAULT_PRODUCT_TABLE_COLUMNS } = props
   const shown = new Set(columns)
   const marketLabel = STORE_MARKET_LABELS[market]
   return (
@@ -437,60 +437,71 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                 ) : null}
                 {shown.has("competitor_price") ? (
                   <TableCell className="text-center">
-                    {market === "best" && competitor ? (
-                      <span className="mb-0.5 block text-[11px] text-muted-foreground">
-                        {STORE_MARKET_LABELS[competitor.store]}
-                      </span>
-                    ) : null}
-                    {!showCompetitorCell ? (
-                      <span className="text-muted-foreground">—</span>
-                    ) : competitor?.price !== null &&
-                      competitor?.price !== undefined &&
-                      amount !== null &&
-                      amount !== undefined ? (
-                      <span className="inline-flex flex-col items-center gap-0.5">
-                        <Price value={amount} />
-                        {!comparesCompetitor &&
-                        competitor.price_change_percent !== null ? (
-                          <span
-                            className={`text-[11px] ${
-                              competitor.price_change_percent > 0
-                                ? "text-destructive"
-                                : competitor.price_change_percent < 0
-                                  ? "text-success"
-                                  : "text-muted-foreground"
-                            }`}
-                            title="تغییر قیمت نسبت به مشاهدهٔ روز قبل"
-                          >
-                            تغییر روزانه{" "}
-                            {formatPercentMagnitude(
-                              competitor.price_change_percent
-                            )}
-                          </span>
-                        ) : !competitor.is_fresh ? (
-                          <span
-                            className="text-[11px] text-muted-foreground"
-                            title={
-                              competitor.last_checked_at
-                                ? `آخرین بررسی: ${competitor.last_checked_at}`
-                                : "قیمت تازه دریافت نشده"
-                            }
-                          >
-                            {competitor.last_checked_at
-                              ? (formatPersianRelativeTime(
-                                  competitor.last_checked_at
-                                ) ?? "قیمت قدیمی")
-                              : "قیمت قدیمی"}
-                          </span>
-                        ) : null}
+                    {item.no_competitor_price ? (
+                      <span
+                        className="block text-xs font-medium text-destructive"
+                        title="این کالا توسط مدیر بهعنوان فاقد قیمت رقیب علامتگذاری شده است"
+                      >
+                        قیمت رقیب وجود ندارد
                       </span>
                     ) : (
-                      <span className="text-xs text-muted-foreground">
-                        {competitor
-                          ? (COMPETITOR_STATUS_LABELS[competitor.status] ??
-                            "نیازمند بررسی")
-                          : "لینک ثبت نشده"}
-                      </span>
+                      <>
+                        {market === "best" && competitor ? (
+                          <span className="mb-0.5 block text-[11px] text-muted-foreground">
+                            {STORE_MARKET_LABELS[competitor.store]}
+                          </span>
+                        ) : null}
+                        {!showCompetitorCell ? (
+                          <span className="text-muted-foreground">—</span>
+                        ) : competitor?.price !== null &&
+                          competitor?.price !== undefined &&
+                          amount !== null &&
+                          amount !== undefined ? (
+                          <span className="inline-flex flex-col items-center gap-0.5">
+                            <Price value={amount} />
+                            {!comparesCompetitor &&
+                            competitor.price_change_percent !== null ? (
+                              <span
+                                className={`text-[11px] ${
+                                  competitor.price_change_percent > 0
+                                    ? "text-destructive"
+                                    : competitor.price_change_percent < 0
+                                      ? "text-success"
+                                      : "text-muted-foreground"
+                                }`}
+                                title="تغییر قیمت نسبت به مشاهدهٔ روز قبل"
+                              >
+                                تغییر روزانه{" "}
+                                {formatPercentMagnitude(
+                                  competitor.price_change_percent
+                                )}
+                              </span>
+                            ) : !competitor.is_fresh ? (
+                              <span
+                                className="text-[11px] text-muted-foreground"
+                                title={
+                                  competitor.last_checked_at
+                                    ? `آخرین بررسی: ${competitor.last_checked_at}`
+                                    : "قیمت تازه دریافت نشده"
+                                }
+                              >
+                                {competitor.last_checked_at
+                                  ? (formatPersianRelativeTime(
+                                      competitor.last_checked_at
+                                    ) ?? "قیمت قدیمی")
+                                  : "قیمت قدیمی"}
+                              </span>
+                            ) : null}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            {competitor
+                              ? (COMPETITOR_STATUS_LABELS[competitor.status] ??
+                                "نیازمند بررسی")
+                              : "لینک ثبت نشده"}
+                          </span>
+                        )}
+                      </>
                     )}
                   </TableCell>
                 ) : null}

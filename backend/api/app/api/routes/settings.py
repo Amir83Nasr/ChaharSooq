@@ -18,8 +18,7 @@ router = APIRouter(tags=["Settings"], responses={401: UNAUTHORIZED})
     summary="Read settings",
     description=(
         "Admin preferences: low-stock threshold, default page size, sync "
-        "intervals, default competitor store, suggested-price weights, and "
-        "the visible product-table columns."
+        "intervals, suggested-price weights, and the visible product-table columns."
     ),
 )
 def get_settings_view(
@@ -49,7 +48,6 @@ def update_settings(
     page_size = svc.get_page_size()
     interval = svc.get_sync_interval()
     competitor_interval = svc.get_competitor_sync_interval()
-    competitor_store = svc.get_competitor_store()
     formulas = svc.get_suggested_price_formulas()
     product_columns = svc.get_product_table_columns()
     if payload.low_stock_threshold is not None:
@@ -62,8 +60,6 @@ def update_settings(
         competitor_interval = svc.update_competitor_sync_interval(
             payload.competitor_sync_interval_minutes
         )
-    if payload.default_competitor_store is not None:
-        competitor_store = svc.update_competitor_store(payload.default_competitor_store)
     if payload.suggested_price_formulas is not None:
         formulas = svc.update_suggested_price_formulas(payload.suggested_price_formulas)
     if payload.product_table_columns is not None:
@@ -74,7 +70,6 @@ def update_settings(
             "default_page_size": page_size,
             "sync_interval_minutes": interval,
             "competitor_sync_interval_minutes": competitor_interval,
-            "default_competitor_store": competitor_store,
             "suggested_price_formulas": formulas,
             "product_table_columns": product_columns,
         }

@@ -14,6 +14,10 @@ export interface ProductOut {
   id: number
   external_id: number | null
   name: string
+  /** True when an active competitor link has a fresh price (any store). */
+  has_competitor_price: boolean
+  /** Owner-marked: this product has no comparable competitor price. */
+  no_competitor_price: boolean
   sku: string
   price: number
   stock: number
@@ -251,7 +255,6 @@ export interface SettingsOut {
   default_page_size: number
   sync_interval_minutes: number
   competitor_sync_interval_minutes: number
-  default_competitor_store: DefaultCompetitorStore
   suggested_price_formulas: SuggestedPriceFormula[]
   product_table_columns: ProductTableColumn[]
 }
@@ -300,9 +303,6 @@ export interface BackupRecord {
 
 export type TopGroup = "کالای دیجیتال" | "لوازم خانگی" | "فرش" | "مبلمان"
 
-export type DefaultCompetitorStore =
-  "best" | "digikala" | "technolife" | "torob"
-
 export interface SuggestedPriceFormula {
   top_group: TopGroup
   /**
@@ -317,7 +317,6 @@ export interface SettingsUpdate {
   default_page_size?: number
   sync_interval_minutes?: number
   competitor_sync_interval_minutes?: number
-  default_competitor_store?: DefaultCompetitorStore
   suggested_price_formulas?: SuggestedPriceFormula[]
   product_table_columns?: ProductTableColumn[]
 }
@@ -330,6 +329,7 @@ export interface ProductFilters {
   min_price?: number
   max_price?: number
   competitor_store?: CompetitorStore
+  no_competitor_price?: boolean
   min_competitor_price?: number
   max_competitor_price?: number
   min_stock?: number

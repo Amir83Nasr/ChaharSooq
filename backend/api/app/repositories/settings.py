@@ -35,14 +35,12 @@ class SuggestedPriceFormulaRepository:
     def list_ordered(self) -> list[SuggestedPriceFormula]:
         return list(
             self._session.scalars(
-                select(SuggestedPriceFormula).order_by(SuggestedPriceFormula.top_group)
+                select(SuggestedPriceFormula).order_by(SuggestedPriceFormula.mode)
             ).all()
         )
 
     def get_map(self) -> dict[str, SuggestedPriceFormula]:
-        return {
-            row.top_group: row for row in self._session.scalars(select(SuggestedPriceFormula)).all()
-        }
+        return {row.mode: row for row in self._session.scalars(select(SuggestedPriceFormula)).all()}
 
     def add(self, row: SuggestedPriceFormula) -> SuggestedPriceFormula:
         self._session.add(row)

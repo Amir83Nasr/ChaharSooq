@@ -37,6 +37,11 @@ const DIRECT_STORES: readonly CompetitorStore[] = [
   "torob",
 ]
 
+/**
+ * Stores shown for a competitor market. The exact-vs-similar decision is no
+ * longer made here: it comes from `product.pricing_mode`. This helper only
+ * picks which similar-product store to display for a catalog section.
+ */
 function trackedStores(
   market: CompetitorMarket,
   top: TopGroup | null

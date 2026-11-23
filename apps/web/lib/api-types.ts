@@ -10,6 +10,9 @@ export interface CategoryOut {
 export type ProductSort =
   "category" | "alphabetical" | "newest" | "cheapest" | "most_expensive"
 
+/** Which competitor source drives this product's suggested price. */
+export type PricingMode = "exact_competitor" | "similar_product"
+
 export interface ProductOut {
   id: number
   external_id: number | null
@@ -18,6 +21,8 @@ export interface ProductOut {
   has_competitor_price: boolean
   /** Owner-marked: this product has no comparable competitor price. */
   no_competitor_price: boolean
+  /** Per-product formula switch; independent of the catalog top group. */
+  pricing_mode: PricingMode
   sku: string
   price: number
   stock: number
@@ -304,10 +309,11 @@ export interface BackupRecord {
 export type TopGroup = "کالای دیجیتال" | "لوازم خانگی" | "فرش" | "مبلمان"
 
 export interface SuggestedPriceFormula {
-  top_group: TopGroup
+  /** Per-product pricing mode this weight applies to. */
+  mode: PricingMode
   /**
-   * Share applied to the source: competitor price for لوازم خانگی/کالای
-   * دیجیتال, daily price change for مبلمان/فرش. Always 0–1.
+   * Share applied to the source: competitor price for `exact_competitor`,
+   * daily price change for `similar_product`. Always 0–1.
    */
   weight: number
 }
@@ -344,4 +350,8 @@ export interface ProductFilters {
 export interface ProductPriceBoundsUpdate {
   allowed_decrease_percent: number | null
   allowed_increase_percent: number | null
+}
+
+export interface ProductPricingModeUpdate {
+  pricing_mode: PricingMode
 }

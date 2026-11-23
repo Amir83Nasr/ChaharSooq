@@ -1,7 +1,7 @@
-import type { SuggestedPriceFormula, TopGroup } from "./api"
+import type { PricingMode, SuggestedPriceFormula } from "./api"
 
-/** Competitor weight per top group — absent means "not configured". */
-export type SuggestedPriceWeights = Partial<Record<TopGroup, number>>
+/** Source weight per pricing mode — absent means "not configured". */
+export type SuggestedPriceWeights = Partial<Record<PricingMode, number>>
 
 export function toSuggestedPriceWeights(
   formulas: SuggestedPriceFormula[]
@@ -13,7 +13,7 @@ export function toSuggestedPriceWeights(
       formula.weight >= 0 &&
       formula.weight <= 1
     ) {
-      weights[formula.top_group] = formula.weight
+      weights[formula.mode] = formula.weight
     }
   }
   return weights
@@ -44,8 +44,8 @@ export function suggestedPriceFor(
 }
 
 /**
- * Furniture/carpet formula: the linked Sofa/DigiFresh product has no direct
- * competitor price to blend. Its daily price change replaces `Pc`:
+ * Similar-product formula: the linked product has no direct competitor price
+ * to blend. Its daily price change replaces `Pc`:
  * `P = Pb × (1 + w × Δ)`, where `Δ` is the daily change in percent.
  */
 export function suggestedPriceFromDailyChange(

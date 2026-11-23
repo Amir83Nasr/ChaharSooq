@@ -8,52 +8,42 @@ import { Badge } from "@workspace/ui/primitives/badge"
 import { BusyLabel } from "@workspace/ui/primitives/busy-label"
 import { Button } from "@workspace/ui/primitives/button"
 import { Input } from "@workspace/ui/primitives/input"
+import { toast } from "@workspace/ui/primitives/sonner"
 
-import { api, type SuggestedPriceFormula, type TopGroup } from "@/lib/api"
-import { comparesWithCompetitor } from "@/lib/top-groups"
+import { api, type PricingMode, type SuggestedPriceFormula } from "@/lib/api"
 
-type WeightInputs = Partial<Record<TopGroup, string>>
-type FieldErrors = Partial<Record<TopGroup, string>>
+type WeightInputs = Partial<Record<PricingMode, string>>
+type FieldErrors = Partial<Record<PricingMode, string>>
 
 const WEIGHT_STEP = 0.05
 
-interface GroupConfig {
-  group: TopGroup
+interface ModeConfig {
+  mode: PricingMode
   id: string
+  label: string
   range: string
   hint: string
 }
 
-const GROUPS: GroupConfig[] = [
+const MODES: ModeConfig[] = [
   {
-    group: "فرش",
-    id: "carpet",
-    range: "۰٫۱ تا ۰٫۳",
-    hint: "وزن اعمال تغییر روزانه قیمت محصول دیجی‌فرش روی قیمت پایه.",
-  },
-  {
-    group: "مبلمان",
-    id: "furniture",
-    range: "۰٫۱ تا ۰٫۳",
-    hint: "وزن اعمال تغییر روزانه قیمت محصول سوفا روی قیمت پایه.",
-  },
-  {
-    group: "لوازم خانگی",
-    id: "appliance",
+    mode: "exact_competitor",
+    id: "exact_competitor",
+    label: "قیمت رقیب",
     range: "۰٫۴ تا ۰٫۶",
-    hint: "کالا قابل‌مقایسه‌تر است؛ وزن بالاتر منطقی است.",
+    hint: "وزن سهم قیمت رقیب دقیق در فرمول پیشنهادی.",
   },
   {
-    group: "کالای دیجیتال",
-    id: "digital",
-    range: "۰٫۴ تا ۰٫۶",
-    hint: "کالای دیجیتال در دیجی‌کالا و تکنولایف قابل مقایسه است.",
+    mode: "similar_product",
+    id: "similar_product",
+    label: "محصول مشابه",
+    range: "۰٫۱ تا ۰٫۳",
+    hint: "وزن سهم تغییر روزانه قیمت محصول مشابه در فرمول پیشنهادی.",
   },
 ]
 
-/** Furniture/carpet follow the linked product's daily change, not Pc. */
-function isTrackingGroup(group: TopGroup): boolean {
-  return !comparesWithCompetitor(group)
+function isTrackingMode(mode: PricingMode): boolean {
+  return mode === "similar_product"
 }
 
 interface ParsedWeight {
@@ -91,7 +81,7 @@ function stepWeight(current: string, delta: number): string {
 function inputsFromFormulas(formulas: SuggestedPriceFormula[]): WeightInputs {
   const inputs: WeightInputs = {}
   for (const formula of formulas) {
-    inputs[formula.top_group] = String(formula.weight)
+    inputs[formula.mode] = String(formula.weight)
   }
   return inputs
 }
@@ -104,8 +94,6 @@ export function SuggestedPriceSettings() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
   const [busy, setBusy] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -123,7 +111,9 @@ export function SuggestedPriceSettings() {
       })
       .catch((err: unknown) => {
         if (cancelled) return
-        setLoadError(err instanceof Error ? err.message : "خطایی رخ داد.")
+        const message = err instanceof Error ? err.message : "خطایی رخ داد."
+        setLoadError(message)
+        toast.error(message)
         setLoaded(true)
       })
     return () => {
@@ -131,35 +121,31 @@ export function SuggestedPriceSettings() {
     }
   }, [reloadToken])
 
-  function updateWeight(topGroup: TopGroup, value: string) {
-    setWeights((current) => ({ ...current, [topGroup]: value }))
-    setFieldErrors((current) => ({ ...current, [topGroup]: undefined }))
-    setSaveError(null)
-    setSaved(false)
+  function updateWeight(mode: PricingMode, value: string) {
+    setWeights((current) => ({ ...current, [mode]: value }))
+    setFieldErrors((current) => ({ ...current, [mode]: undefined }))
   }
 
-  function validateField(topGroup: TopGroup) {
-    const { value, error } = parseWeight(weights[topGroup] ?? "")
+  function validateField(mode: PricingMode) {
+    const { value, error } = parseWeight(weights[mode] ?? "")
     setFieldErrors((current) => ({
       ...current,
-      [topGroup]: error ?? undefined,
+      [mode]: error ?? undefined,
     }))
     if (value === null) return
     const normalized = String(clampWeight(value))
-    if (normalized !== (weights[topGroup] ?? "").trim()) {
-      setWeights((current) => ({ ...current, [topGroup]: normalized }))
+    if (normalized !== (weights[mode] ?? "").trim()) {
+      setWeights((current) => ({ ...current, [mode]: normalized }))
     }
   }
 
-  function nudgeWeight(topGroup: TopGroup, delta: number) {
-    updateWeight(topGroup, stepWeight(weights[topGroup] ?? "", delta))
+  function nudgeWeight(mode: PricingMode, delta: number) {
+    updateWeight(mode, stepWeight(weights[mode] ?? "", delta))
   }
 
-  function clearWeight(topGroup: TopGroup) {
-    setWeights((current) => ({ ...current, [topGroup]: "" }))
-    setFieldErrors((current) => ({ ...current, [topGroup]: undefined }))
-    setSaveError(null)
-    setSaved(false)
+  function clearWeight(mode: PricingMode) {
+    setWeights((current) => ({ ...current, [mode]: "" }))
+    setFieldErrors((current) => ({ ...current, [mode]: undefined }))
   }
 
   async function save() {
@@ -167,28 +153,24 @@ export function SuggestedPriceSettings() {
     const nextErrors: FieldErrors = {}
     let firstInvalidId: string | null = null
 
-    for (const config of GROUPS) {
-      const { value, error } = parseWeight(weights[config.group] ?? "")
+    for (const config of MODES) {
+      const { value, error } = parseWeight(weights[config.mode] ?? "")
       if (error) {
-        nextErrors[config.group] = error
+        nextErrors[config.mode] = error
         firstInvalidId ??= config.id
       } else if (value !== null) {
-        payload.push({ top_group: config.group, weight: value })
+        payload.push({ mode: config.mode, weight: value })
       }
     }
 
     if (firstInvalidId !== null) {
       setFieldErrors(nextErrors)
-      setSaveError(null)
-      setSaved(false)
       document.getElementById(`weight-${firstInvalidId}`)?.focus()
       return
     }
 
     setBusy(true)
     setFieldErrors({})
-    setSaveError(null)
-    setSaved(false)
     try {
       const data = await api.updateSettings({
         suggested_price_formulas: payload,
@@ -196,9 +178,9 @@ export function SuggestedPriceSettings() {
       const next = inputsFromFormulas(data.suggested_price_formulas)
       setWeights(next)
       setSavedWeights(next)
-      setSaved(true)
+      toast.success("وزن‌ها ذخیره شدند.")
     } catch (err: unknown) {
-      setSaveError(err instanceof Error ? err.message : "خطایی رخ داد.")
+      toast.error(err instanceof Error ? err.message : "خطایی رخ داد.")
     } finally {
       setBusy(false)
     }
@@ -235,13 +217,13 @@ export function SuggestedPriceSettings() {
     )
   }
 
-  const isDirty = GROUPS.some(
+  const isDirty = MODES.some(
     (config) =>
-      (weights[config.group] ?? "").trim() !==
-      (savedWeights[config.group] ?? "").trim()
+      (weights[config.mode] ?? "").trim() !==
+      (savedWeights[config.mode] ?? "").trim()
   )
-  const configuredCount = GROUPS.filter(
-    (config) => parseWeight(weights[config.group] ?? "").value !== null
+  const configuredCount = MODES.filter(
+    (config) => parseWeight(weights[config.mode] ?? "").value !== null
   ).length
 
   return (
@@ -264,15 +246,15 @@ export function SuggestedPriceSettings() {
             </h3>
             <p className="text-sm leading-6 text-muted-foreground">
               <span className="hidden sm:inline">
-                لوازم خانگی و کالای دیجیتال از ترکیب وزنی قیمت پایه پارسینا و
-                قیمت رقیب ساخته می‌شوند. مبلمان و فرش قیمت رقیب مستقیم ندارند؛
-                تغییر روزانه قیمت محصول لینک‌شده (سوفا یا دیجی‌فرش) با همان وزن
-                روی قیمت پایه اعمال می‌شود. وزن خالی یعنی برای آن دسته قیمت
+                هر کالا حالت قیمتگذاری خود را انتخاب می‌کند. حالت «قیمت رقیب» از
+                ترکیب وزنی قیمت پایه پارسینا و قیمت رقیب دقیق استفاده می‌کند و
+                حالت «محصول مشابه» تغییر روزانه قیمت محصول لینک‌شده را با همان
+                وزن روی قیمت پایه اعمال می‌کند. وزن خالی یعنی برای آن حالت قیمت
                 پیشنهادی نمایش داده نمی‌شود.
               </span>
               <span className="sm:hidden">
-                لوازم خانگی/کالای دیجیتال: وزن رقیب؛ مبلمان/فرش: وزن تغییر
-                روزانه. وزن خالی یعنی بدون قیمت پیشنهادی.
+                قیمت رقیب: وزن رقیب؛ محصول مشابه: وزن تغییر روزانه. وزن خالی
+                یعنی بدون قیمت پیشنهادی.
               </span>
             </p>
           </div>
@@ -280,7 +262,7 @@ export function SuggestedPriceSettings() {
         <div className="mt-4 grid gap-2 sm:grid-cols-2">
           <div className="rounded-xl border border-border/70 bg-background px-4 py-3">
             <p className="text-xs font-medium text-muted-foreground">
-              لوازم خانگی و کالای دیجیتال
+              حالت «قیمت رقیب»
             </p>
             <p
               dir="ltr"
@@ -291,7 +273,7 @@ export function SuggestedPriceSettings() {
           </div>
           <div className="rounded-xl border border-border/70 bg-background px-4 py-3">
             <p className="text-xs font-medium text-muted-foreground">
-              مبلمان و فرش
+              حالت «محصول مشابه»
             </p>
             <p
               dir="ltr"
@@ -329,19 +311,19 @@ export function SuggestedPriceSettings() {
         </dl>
       </section>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {GROUPS.map((config) => {
-          const parsed = parseWeight(weights[config.group] ?? "")
+      <div className="grid gap-3 sm:grid-cols-2">
+        {MODES.map((config) => {
+          const parsed = parseWeight(weights[config.mode] ?? "")
           const weight = parsed.value
-          const fieldError = fieldErrors[config.group]
+          const fieldError = fieldErrors[config.mode]
           const helpId = `weight-${config.id}-help`
           const errorId = `weight-${config.id}-error`
           const competitorShare =
             weight === null ? 0 : Math.min(Math.max(weight, 0), 1)
-          const tracking = isTrackingGroup(config.group)
+          const tracking = isTrackingMode(config.mode)
           return (
             <div
-              key={config.group}
+              key={config.mode}
               className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-background p-4"
             >
               <div className="flex items-start justify-between gap-2">
@@ -350,7 +332,7 @@ export function SuggestedPriceSettings() {
                     htmlFor={`weight-${config.id}`}
                     className="text-sm font-semibold"
                   >
-                    {config.group}
+                    {config.label}
                   </label>
                   <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
                     {config.hint}
@@ -377,25 +359,25 @@ export function SuggestedPriceSettings() {
                     step={WEIGHT_STEP}
                     dir="ltr"
                     className="h-12 [appearance:textfield] px-12 text-center text-lg font-semibold tabular-nums [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                    value={weights[config.group] ?? ""}
+                    value={weights[config.mode] ?? ""}
                     onChange={(event) =>
-                      updateWeight(config.group, event.target.value)
+                      updateWeight(config.mode, event.target.value)
                     }
-                    onBlur={() => validateField(config.group)}
+                    onBlur={() => validateField(config.mode)}
                     onKeyDown={(event) => {
                       if (event.key === "ArrowUp") {
                         event.preventDefault()
-                        nudgeWeight(config.group, WEIGHT_STEP)
+                        nudgeWeight(config.mode, WEIGHT_STEP)
                       } else if (event.key === "ArrowDown") {
                         event.preventDefault()
-                        nudgeWeight(config.group, -WEIGHT_STEP)
+                        nudgeWeight(config.mode, -WEIGHT_STEP)
                       }
                     }}
                     placeholder="0.6"
                     aria-label={
                       tracking
-                        ? `وزن تغییر روزانه برای ${config.group}`
-                        : `وزن قیمت رقیب برای ${config.group}`
+                        ? `وزن تغییر روزانه برای ${config.label}`
+                        : `وزن قیمت رقیب برای ${config.label}`
                     }
                     aria-invalid={fieldError ? true : undefined}
                     aria-describedby={
@@ -406,9 +388,9 @@ export function SuggestedPriceSettings() {
                     type="button"
                     variant="ghost"
                     size="icon"
-                    onClick={() => nudgeWeight(config.group, -WEIGHT_STEP)}
+                    onClick={() => nudgeWeight(config.mode, -WEIGHT_STEP)}
                     disabled={weight !== null && weight <= 0}
-                    aria-label={`کاهش وزن ${config.group}`}
+                    aria-label={`کاهش وزن ${config.label}`}
                     className="absolute inset-y-0 start-1 my-auto text-muted-foreground hover:text-foreground"
                   >
                     <Minus aria-hidden="true" />
@@ -417,9 +399,9 @@ export function SuggestedPriceSettings() {
                     type="button"
                     variant="ghost"
                     size="icon"
-                    onClick={() => nudgeWeight(config.group, WEIGHT_STEP)}
+                    onClick={() => nudgeWeight(config.mode, WEIGHT_STEP)}
                     disabled={weight !== null && weight >= 1}
-                    aria-label={`افزایش وزن ${config.group}`}
+                    aria-label={`افزایش وزن ${config.label}`}
                     className="absolute inset-y-0 end-1 my-auto text-muted-foreground hover:text-foreground"
                   >
                     <Plus aria-hidden="true" />
@@ -430,8 +412,8 @@ export function SuggestedPriceSettings() {
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    onClick={() => clearWeight(config.group)}
-                    aria-label={`پاک کردن وزن ${config.group}`}
+                    onClick={() => clearWeight(config.mode)}
+                    aria-label={`پاک کردن وزن ${config.label}`}
                     className="shrink-0 text-muted-foreground hover:text-foreground"
                   >
                     <X aria-hidden="true" />
@@ -497,26 +479,17 @@ export function SuggestedPriceSettings() {
 
       <div className="flex flex-col gap-3 border-t border-border/70 pt-4 sm:flex-row sm:items-center sm:justify-between">
         <p
-          role={saveError ? "alert" : saved ? "status" : undefined}
           className={`min-h-5 text-xs ${
-            saveError
-              ? "text-destructive"
-              : saved
-                ? "text-success"
-                : isDirty
-                  ? "text-amber-700 dark:text-amber-300"
-                  : "text-muted-foreground"
+            isDirty
+              ? "text-amber-700 dark:text-amber-300"
+              : "text-muted-foreground"
           }`}
         >
-          {saveError
-            ? saveError
-            : saved
-              ? "وزن‌ها ذخیره شدند."
-              : isDirty
-                ? "تغییرات ذخیره نشده است."
-                : configuredCount === 0
-                  ? "هنوز وزنی تنظیم نشده؛ ستون قیمت پیشنهادی خالی می‌ماند."
-                  : "وزن‌ها ذخیره شده‌اند."}
+          {isDirty
+            ? "تغییرات ذخیره نشده است."
+            : configuredCount === 0
+              ? "هنوز وزنی تنظیم نشده؛ ستون قیمت پیشنهادی خالی می‌ماند."
+              : "وزن‌ها ذخیره شده‌اند."}
         </p>
         <Button
           type="submit"

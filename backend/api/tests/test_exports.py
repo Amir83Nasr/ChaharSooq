@@ -461,6 +461,105 @@ def test_products_csv_percent_precision_and_daily_change(client: TestClient) -> 
     assert row[headers.index("تغییرات قیمت رقبا")] == "۳.۸٪ کاهش"
 
 
+def test_products_csv_uses_pricing_mode_and_suppresses_no_competitor_price(
+    client: TestClient,
+) -> None:
+    from sqlalchemy.orm import Session
+
+    from app.core.database import get_engine
+    from app.models import CompetitorListing, CompetitorPriceObservation, Product
+
+    login(client)
+    saved = client.put(
+        "/api/v1/settings",
+        json={
+            "suggested_price_formulas": [
+                {"mode": "exact_competitor", "weight": 0.5},
+                {"mode": "similar_product", "weight": 0.5},
+            ]
+        },
+    )
+    assert saved.status_code == 200, saved.text
+
+    exact_id = _product_id(client, name="یخچال", sku="MODE-EXACT", main_group_name="لوازم خانگی")
+    similar_id = _product_id(client, name="فرش", sku="MODE-SIMILAR", main_group_name="فرش دستباف")
+    with Session(get_engine()) as db:
+        for product_id in (exact_id, similar_id):
+            product = db.get(Product, product_id)
+            assert product is not None
+            product.price = Decimal("100000000")
+        carpet = db.get(Product, similar_id)
+        assert carpet is not None
+        carpet.main_group_name = "فرش دستباف"
+        db.commit()
+
+    switched = client.patch(
+        f"/api/v1/products/{similar_id}/pricing-mode",
+        json={"pricing_mode": "similar_product"},
+    )
+    assert switched.status_code == 200, switched.text
+
+    _add_manual_listing(client, exact_id, price=200_000_000)
+    created = client.post(
+        f"/api/v1/products/{similar_id}/competitors",
+        json={"store": "digifresh", "url": "https://www.digifarsh.com/product/demo-1/"},
+    )
+    assert created.status_code == 201, created.text
+    similar_listing = int(created.json()["id"])
+    with Session(get_engine()) as db:
+        listing = db.get(CompetitorListing, similar_listing)
+        assert listing is not None
+        listing.fetched_price = Decimal("100000000")
+        listing.fetched_currency = "IRT"
+        listing.last_success_at = datetime.now(UTC)
+        listing.status = "success"
+        db.add(
+            CompetitorPriceObservation(
+                listing_id=similar_listing,
+                price=Decimal("125000000"),
+                currency="IRT",
+                in_stock=True,
+                observed_at=datetime.now(UTC) - timedelta(days=1),
+            )
+        )
+        db.add(
+            CompetitorPriceObservation(
+                listing_id=similar_listing,
+                price=Decimal("100000000"),
+                currency="IRT",
+                in_stock=True,
+                observed_at=datetime.now(UTC),
+            )
+        )
+        db.commit()
+
+    def row_for(sku: str) -> tuple[list[str], list[str]]:
+        rows = _rows(client.get("/api/v1/exports/products.csv", params={"q": sku}))
+        return rows[0], rows[1]
+
+    headers, exact_row = row_for("MODE-EXACT")
+    # exact_competitor: 0.5 × 200M + 0.5 × 100M = 150M.
+    assert exact_row[headers.index("قیمت پیشنهادی (تومان)")] == "۱۵۰۰۰۰۰۰۰"
+
+    headers, similar_row = row_for("MODE-SIMILAR")
+    # similar_product: 100M × (1 + 0.5 × (−20%)) = 90M.
+    assert similar_row[headers.index("قیمت پیشنهادی (تومان)")] == "۹۰۰۰۰۰۰۰"
+
+    flagged = client.patch(
+        f"/api/v1/products/{similar_id}/no-competitor-price",
+        json={"no_competitor_price": True},
+    )
+    assert flagged.status_code == 200, flagged.text
+    headers, similar_row = row_for("MODE-SIMILAR")
+    for column in (
+        "قیمت ارزانترین رقیب",
+        "قیمت پیشنهادی (تومان)",
+        "اختلاف قیمت با ارزانترین رقیب",
+        "تغییرات قیمت ارزانترین رقیب",
+    ):
+        assert similar_row[headers.index(column)] == "—"
+
+
 def test_persian_format_helpers() -> None:
     assert format_amount(Decimal("1000000.00")) == "۱۰۰۰۰۰۰"
     assert format_amount(Decimal("12.500")) == "۱۲٫۵"

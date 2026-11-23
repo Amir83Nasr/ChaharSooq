@@ -48,7 +48,7 @@ import {
   suggestedPriceFromDailyChange,
   type SuggestedPriceWeights,
 } from "@/lib/suggested-price"
-import { brandOf, comparesWithCompetitor } from "@/lib/top-groups"
+import { brandOf } from "@/lib/top-groups"
 import { useWindowedRows, initialRowWindow } from "./use-windowed-rows"
 
 import { PAGE_SIZE_OPTIONS } from "@/components/settings/page-size-settings"
@@ -316,7 +316,10 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
               i +
               1
             const top = item.top_group
-            const comparesCompetitor = comparesWithCompetitor(top)
+            // The formula switch is per product; the category only hints which
+            // similar-product store to display.
+            const exact = item.pricing_mode === "exact_competitor"
+            const noCompetitor = item.no_competitor_price
             const showCompetitorCell = showsCompetitorPrice(market, top)
             const competitor = showCompetitorCell
               ? competitorForRow(item.competitor_prices, market, top)
@@ -326,13 +329,13 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
               competitor?.currency ?? null
             )
             const pct =
-              comparesCompetitor && competitor?.is_fresh === true
+              !noCompetitor && exact && competitor?.is_fresh === true
                 ? diffPercent(item.price, amount)
                 : null
-            const weight = top === null ? null : (weights[top] ?? null)
+            const weight = weights[item.pricing_mode] ?? null
             const rawSuggested =
-              competitor?.is_fresh === true
-                ? comparesCompetitor
+              !noCompetitor && competitor?.is_fresh === true
+                ? exact
                   ? suggestedPriceFor(item.price, amount, weight)
                   : suggestedPriceFromDailyChange(
                       item.price,
@@ -347,7 +350,9 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
               item.allowed_increase_percent
             )
             // Daily change of the competitor price against the previous day.
-            const dailyChange = competitor?.price_change_percent ?? null
+            const dailyChange = noCompetitor
+              ? null
+              : (competitor?.price_change_percent ?? null)
             return (
               <TableRow
                 key={entry.key}
@@ -413,7 +418,7 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                 ) : null}
                 {shown.has("price_diff") ? (
                   <TableCell className="text-center">
-                    {!comparesCompetitor || pct === null ? (
+                    {!exact || pct === null ? (
                       <span className="text-muted-foreground">—</span>
                     ) : Math.round(pct) === 0 ? (
                       <span
@@ -437,13 +442,8 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                 ) : null}
                 {shown.has("competitor_price") ? (
                   <TableCell className="text-center">
-                    {item.no_competitor_price ? (
-                      <span
-                        className="block text-xs font-medium text-destructive"
-                        title="این کالا توسط مدیر بهعنوان فاقد قیمت رقیب علامتگذاری شده است"
-                      >
-                        قیمت رقیب وجود ندارد
-                      </span>
+                    {noCompetitor ? (
+                      <span className="text-muted-foreground">—</span>
                     ) : (
                       <>
                         {market === "best" && competitor ? (
@@ -459,7 +459,7 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                           amount !== undefined ? (
                           <span className="inline-flex flex-col items-center gap-0.5">
                             <Price value={amount} />
-                            {!comparesCompetitor &&
+                            {!exact &&
                             competitor.price_change_percent !== null ? (
                               <span
                                 className={`text-[11px] ${

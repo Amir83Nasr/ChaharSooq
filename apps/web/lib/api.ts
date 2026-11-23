@@ -37,6 +37,7 @@ import type {
   SyncStatus,
   ParsinaConnectionOut,
   ParsinaConnectionUpdate,
+  PricingMode,
   UserCreate,
   UserOut,
 } from "./api-types"
@@ -258,6 +259,12 @@ export const api = {
     return request<ProductOut>(`/api/v1/products/${id}/no-competitor-price`, {
       method: "PATCH",
       body: JSON.stringify({ no_competitor_price: value }),
+    })
+  },
+  setPricingMode(id: number, pricingMode: PricingMode) {
+    return request<ProductOut>(`/api/v1/products/${id}/pricing-mode`, {
+      method: "PATCH",
+      body: JSON.stringify({ pricing_mode: pricingMode }),
     })
   },
   competitorListings(productId: number) {

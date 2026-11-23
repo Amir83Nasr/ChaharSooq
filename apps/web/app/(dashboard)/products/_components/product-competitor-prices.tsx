@@ -9,6 +9,7 @@ import { BusyRefreshIcon } from "@workspace/ui/primitives/busy-refresh-icon"
 import { Button } from "@workspace/ui/primitives/button"
 import { Input } from "@workspace/ui/primitives/input"
 import { Skeleton } from "@workspace/ui/primitives/skeleton"
+import { toast } from "@workspace/ui/primitives/sonner"
 import { Price } from "@workspace/ui/persian/price"
 import { PersianDateTime } from "@workspace/ui/persian/persian-date"
 import { formatPersianNumber } from "@workspace/ui/lib/number"
@@ -21,7 +22,23 @@ import {
   type TopGroup,
 } from "@/lib/api"
 
-/** Links a product group can track in the detail dialog. */
+/** Exact-competitor links offered by the detail dialog. */
+export const EXACT_STORES: readonly CompetitorStore[] = [
+  "digikala",
+  "technolife",
+  "torob",
+  "other",
+]
+
+/** Similar-product links offered by the detail dialog (picked by section). */
+export const SIMILAR_STORES: Record<TopGroup, readonly CompetitorStore[]> = {
+  "لوازم خانگی": ["digikala", "torob", "other"],
+  "کالای دیجیتال": ["digikala", "torob", "other"],
+  مبلمان: ["sofa", "torob", "other"],
+  فرش: ["digifresh", "torob", "other"],
+}
+
+/** Compatibility alias for callers that still use the per-section map. */
 export const DIALOG_STORES: Record<TopGroup, CompetitorStore[]> = {
   "لوازم خانگی": ["digikala", "technolife", "torob"],
   "کالای دیجیتال": ["digikala", "technolife", "torob"],
@@ -497,8 +514,8 @@ export function ProductCompetitorPrices({
   onNoCompetitorPriceChange,
 }: {
   productId: number
-  /** Stores valid for this product's top group. */
-  stores: CompetitorStore[]
+  /** Stores offered by the active pricing-mode tab. */
+  stores: readonly CompetitorStore[]
   onChanged?: () => void
   /** Latest listings, so the parent can recompute the suggested price. */
   onListingsChanged?: (listings: CompetitorListing[]) => void
@@ -508,12 +525,13 @@ export function ProductCompetitorPrices({
   noCompetitorPrice?: boolean
   onNoCompetitorPriceChange?: (value: boolean) => void
 }) {
-  const trackingOnly = stores.every((store) => TRACKING_STORES.has(store))
+  // "sofa"/"digifresh" only appear in the similar-product tab, so their
+  // presence identifies that tab (torob/other are shared with exact mode).
+  const trackingOnly = stores.some((store) => TRACKING_STORES.has(store))
   const [listings, setListings] = useState<CompetitorListing[]>([])
   const [loading, setLoading] = useState(true)
   const [busyKey, setBusyKey] = useState<number | string | null>(null)
   const [checkAllBusy, setCheckAllBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [flagBusy, setFlagBusy] = useState(false)
   const [localNoPrice, setLocalNoPrice] = useState(noCompetitorPrice)
 
@@ -528,10 +546,14 @@ export function ProductCompetitorPrices({
       await api.setNoCompetitorPrice(productId, value)
       onNoCompetitorPriceChange?.(value)
       onChanged?.()
-      setError(null)
+      toast.success(
+        value
+          ? "علامت «بدون قیمت رقیب» ثبت شد."
+          : "علامت «بدون قیمت رقیب» برداشته شد."
+      )
     } catch (err) {
       setLocalNoPrice(!value)
-      setError(toPersianError(err))
+      toast.error(toPersianError(err))
     } finally {
       setFlagBusy(false)
     }
@@ -541,9 +563,8 @@ export function ProductCompetitorPrices({
     setLoading(true)
     try {
       setListings(await api.competitorListings(productId))
-      setError(null)
     } catch (err) {
-      setError(toPersianError(err))
+      toast.error(toPersianError(err))
     } finally {
       setLoading(false)
     }
@@ -564,10 +585,10 @@ export function ProductCompetitorPrices({
       setListings((current) =>
         current.map((listing) => (listing.id === id ? updated : listing))
       )
-      setError(null)
       onChanged?.()
+      toast.success("لینک رقیب به‌روزرسانی شد.")
     } catch (err) {
-      setError(toPersianError(err))
+      toast.error(toPersianError(err))
     } finally {
       setBusyKey(null)
     }
@@ -584,8 +605,8 @@ export function ProductCompetitorPrices({
         trimmed
       )
       setListings((current) => [...current, created])
-      setError(null)
       onChanged?.()
+      toast.success("لینک رقیب اضافه شد.")
       // بررسی خودکار دفعهٔ اول در پس‌زمینه: خطای آن داخل کارت (last_error)
       // می‌نشیند و پیام سراسری موفقیت ساخت را خراب نمی‌کند.
       try {
@@ -608,7 +629,7 @@ export function ProductCompetitorPrices({
         setBusyKey(null)
       }
     } catch (err) {
-      setError(toPersianError(err))
+      toast.error(toPersianError(err))
       setBusyKey(null)
     }
   }
@@ -618,10 +639,10 @@ export function ProductCompetitorPrices({
     try {
       await api.deleteCompetitorListing(id)
       setListings((current) => current.filter((listing) => listing.id !== id))
-      setError(null)
       onChanged?.()
+      toast.success("لینک رقیب حذف شد.")
     } catch (err) {
-      setError(toPersianError(err))
+      toast.error(toPersianError(err))
     } finally {
       setBusyKey(null)
     }
@@ -632,10 +653,10 @@ export function ProductCompetitorPrices({
     setCheckAllBusy(true)
     try {
       setListings(await api.checkAllCompetitorListings(productId))
-      setError(null)
       onChanged?.()
+      toast.success("قیمت تمام رقبا به‌روزرسانی شد.")
     } catch (err) {
-      setError(toPersianError(err))
+      toast.error(toPersianError(err))
     } finally {
       setCheckAllBusy(false)
     }
@@ -665,7 +686,7 @@ export function ProductCompetitorPrices({
                 : "قیمت‌ها و وضعیت ثبت‌شدهٔ فروشگاه‌ها را می‌بینید."}
           </p>
         </div>
-        {canEdit ? (
+        {canEdit && !localNoPrice ? (
           <Button
             size="sm"
             variant="outline"
@@ -723,7 +744,7 @@ export function ProductCompetitorPrices({
           </span>
           <span className="mt-0.5 block text-[11px] leading-4 text-muted-foreground">
             {localNoPrice
-              ? "این کالا علامتگذاری شد؛ در جدول به رنگ قرمز نمایش داده میشود."
+              ? "با تیک زدن، ورود لینکها بسته میشود و ستونهای رقیب در جدول خط تیره نشان داده میشوند."
               : "برای کالاهایی که رقیب قیمتی ندارند، تیک بزنید."}
           </span>
         </span>
@@ -735,12 +756,12 @@ export function ProductCompetitorPrices({
         ) : null}
       </label>
 
-      {error ? (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
+      {localNoPrice ? (
+        <p className="rounded-2xl border border-dashed border-border bg-background px-3 py-4 text-center text-xs leading-6 text-muted-foreground">
+          این کالا بهعنوان فاقد قیمت رقیب علامتگذاری شده است؛ لینکهای رقیب فعال
+          نیستند.
         </p>
-      ) : null}
-      {loading ? (
+      ) : loading ? (
         <div className="space-y-3" aria-label="در حال بارگذاری منابع قیمت">
           {stores.map((store) => (
             <div

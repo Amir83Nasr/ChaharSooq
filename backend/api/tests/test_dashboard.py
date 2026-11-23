@@ -134,6 +134,8 @@ def test_dashboard_coverage_counts_appliances_only(client: TestClient, session: 
         price=Decimal(100),
         stock=Decimal(1),
         main_group_name="فرش نگین",
+        # DigiFresh is a similar-product tracker, not an exact-competitor link.
+        pricing_mode="similar_product",
     )
     session.add_all([fridge, rug])
     session.commit()

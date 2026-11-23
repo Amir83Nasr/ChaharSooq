@@ -43,9 +43,11 @@ export function brandOf(
 }
 
 /**
- * Direct competitor sections: a fresh Digikala/Technolife price is blended
- * into the suggested price. Carpet/furniture instead track a linked product's
- * daily change.
+ * Legacy display hint: the sections that historically blended a direct
+ * competitor price. It is no longer the pricing formula switch — each product
+ * chooses its formula through `ProductOut.pricing_mode`. Kept for category
+ * display/branding and as a hint when choosing which similar-product store to
+ * offer.
  */
 export function comparesWithCompetitor(top: TopGroup | null): boolean {
   return top === "لوازم خانگی" || top === "کالای دیجیتال"

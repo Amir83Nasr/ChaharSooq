@@ -16,7 +16,6 @@ import {
   toSuggestedPriceWeights,
   type SuggestedPriceWeights,
 } from "@/lib/suggested-price"
-import { comparesWithCompetitor } from "@/lib/top-groups"
 
 function formatPercent(value: number): string {
   const rounded = Math.round(value * 10) / 10
@@ -47,30 +46,33 @@ export function ProductSuggestedPrice({ product }: { product: ProductOut }) {
   }, [])
 
   const topGroup = product.top_group ?? "لوازم خانگی"
-  const tracking = !comparesWithCompetitor(topGroup)
-  const weight = weights?.[topGroup] ?? null
+  // The formula follows the per-product mode; the category only picks which
+  // similar-product store to display.
+  const exact = product.pricing_mode === "exact_competitor"
+  const noCompetitor = product.no_competitor_price
+  const weight = weights?.[product.pricing_mode] ?? null
   const fresh = product.competitor_prices.filter(
     (price) => price.is_fresh && price.price !== null
   )
-  const competitor = tracking
-    ? (product.competitor_prices.find(
+  const competitor = exact
+    ? competitorForRow(fresh, "best", topGroup)
+    : (product.competitor_prices.find(
         (price) =>
           price.store === (topGroup === "مبلمان" ? "sofa" : "digifresh")
       ) ?? null)
-    : competitorForRow(fresh, "best", topGroup)
   const amount = toTomanAmount(
     competitor?.price ?? null,
     competitor?.currency ?? null
   )
   const rawSuggested =
-    competitor?.is_fresh === true
-      ? tracking
-        ? suggestedPriceFromDailyChange(
+    !noCompetitor && competitor?.is_fresh === true
+      ? exact
+        ? suggestedPriceFor(product.price, amount, weight)
+        : suggestedPriceFromDailyChange(
             product.price,
             competitor?.price_change_percent,
             weight
           )
-        : suggestedPriceFor(product.price, amount, weight)
       : null
   const suggested = applyPriceBounds(
     product.price,
@@ -83,17 +85,20 @@ export function ProductSuggestedPrice({ product }: { product: ProductOut }) {
       ? ((suggested - product.price) / product.price) * 100
       : null
 
+  const modeLabel = exact ? "قیمت رقیب" : "محصول مشابه"
   const hint = error
     ? "دریافت تنظیمات ممکن نشد."
     : weights === null
       ? "در حال خواندن وزن‌ها…"
-      : weight === null
-        ? `برای گروه ${topGroup} وزنی ثبت نشده است.`
-        : suggested === null
-          ? tracking
-            ? "برای محاسبه، لینک تازه و تغییر قیمت دو روز لازم است."
-            : "قیمت تازه‌ای از فروشگاه رقیب ثبت نشده است."
-          : null
+      : noCompetitor
+        ? "این کالا فاقد قیمت رقیب است؛ قیمت پیشنهادی محاسبه نمیشود."
+        : weight === null
+          ? `برای حالت ${modeLabel} وزنی ثبت نشده است.`
+          : suggested === null
+            ? exact
+              ? "قیمت تازه‌ای از فروشگاه رقیب ثبت نشده است."
+              : "برای محاسبه، لینک تازه و تغییر قیمت دو روز لازم است."
+            : null
 
   return (
     <section className="rounded-2xl border border-border bg-card px-3 py-2.5 text-start">

@@ -8,6 +8,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.core.top_groups import TopGroup
 from app.schemas.competitor import CompetitorPriceOut
 
+# Which suggested-price formula applies to a product. `no_competitor_price` is
+# a separate owner marker, not a third mode.
+type PricingMode = Literal["exact_competitor", "similar_product"]
+
 
 class CategoryIn(BaseModel):
     model_config = ConfigDict(json_schema_extra={"examples": [{"name": "فرش"}]})
@@ -75,6 +79,14 @@ class ProductOut(BaseModel):
             "false for products with no link or only stale/failed data."
         ),
     )
+    pricing_mode: PricingMode = Field(
+        default="exact_competitor",
+        description=(
+            "Formula selector: `exact_competitor` blends the base price with a "
+            "direct competitor price; `similar_product` uses a linked product's "
+            "daily price change."
+        ),
+    )
     no_competitor_price: bool = Field(
         default=False,
         description=(
@@ -106,6 +118,17 @@ class ProductCompetitorFlagUpdate(BaseModel):
 
     no_competitor_price: bool = Field(
         description="True marks the product as having no comparable competitor price."
+    )
+
+
+class ProductPricingModeUpdate(BaseModel):
+    """Select the suggested-price formula for one product."""
+
+    pricing_mode: PricingMode = Field(
+        description=(
+            "`exact_competitor` blends the base with a direct competitor price; "
+            "`similar_product` scales a linked product's daily price change."
+        )
     )
 
 

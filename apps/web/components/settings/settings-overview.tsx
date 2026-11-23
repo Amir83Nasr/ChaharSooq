@@ -40,10 +40,10 @@ export function SettingsOverview() {
         href="/settings/pricing"
         icon={Sigma}
         title="قیمت‌گذاری"
-        description="وزن سهم قیمت رقیب برای هر دسته‌بندی"
+        description="وزن سهم منبع price برای هر حالت price‌گذاری"
         summary={
           settings
-            ? `${formatPersianNumber(settings.suggested_price_formulas.length)} دسته‌بندی وزن‌دار`
+            ? `${formatPersianNumber(settings.suggested_price_formulas.length)} حالت وزن‌دار`
             : "وزن فرمول‌های قیمت پیشنهادی"
         }
       />

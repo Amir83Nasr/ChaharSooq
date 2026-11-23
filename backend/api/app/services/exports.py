@@ -23,7 +23,6 @@ from app.core.persian_format import (
     to_persian_digits,
 )
 from app.core.top_groups import brand_of as _brand_of
-from app.core.top_groups import compares_with_competitor
 from app.core.top_groups import top_group_of as _top_group
 from app.models import CompetitorListing, Product
 from app.repositories import (
@@ -109,6 +108,7 @@ def _has_filters(filters: ProductFilters) -> bool:
             bool(filters.competitor_store),
             filters.min_competitor_price is not None,
             filters.max_competitor_price is not None,
+            filters.no_competitor_price,
             filters.min_stock is not None,
             filters.max_stock is not None,
             filters.in_stock is not None,
@@ -286,10 +286,10 @@ class ExportService:
         formulas = settings.get_suggested_price_formulas()
         weights: dict[str, float] = {}
         for item in formulas:
-            top_group = item.get("top_group")
+            mode = item.get("mode")
             weight = item.get("weight")
-            if isinstance(top_group, str) and weight is not None:
-                weights[top_group] = float(str(weight))
+            if isinstance(mode, str) and weight is not None:
+                weights[mode] = float(str(weight))
         # The catalog always defaults to the cheapest available competitor price.
         selected_market = market or "best"
         if selected_market not in MARKET_LABELS:
@@ -357,10 +357,15 @@ class ExportService:
         brand = _brand_of(product.main_group_name, top)
         base_price = float(product.price or 0)
 
-        compares_competitor = compares_with_competitor(top)
+        exact_mode = product.pricing_mode == "exact_competitor"
+        # An owner-marked product has no comparable price at all: suppress every
+        # competitor-derived cell and the suggested price, regardless of links.
+        show_competitor = not product.no_competitor_price
+        # Similar-product tracking still picks a store per catalog section,
+        # because those stores (Sofa/DigiFresh) are themselves category-specific.
         tracked_stores: tuple[str, ...] = (
             ()
-            if compares_competitor
+            if exact_mode
             else (
                 ("sofa", "torob")
                 if top == "مبلمان"
@@ -383,13 +388,14 @@ class ExportService:
             status = competitor.status if competitor else None
             return COMPETITOR_STATUS_LABELS.get(str(status) if status else "", "لینک ثبت نشده")
 
-        if compares_competitor:
+        if not show_competitor:
+            competitor = None
+        elif exact_mode:
             competitor = (
                 _cheapest_price(prices, ("digikala", "technolife", "torob"))
                 if market == "best"
                 else next((p for p in prices if p.store == market), None)
             )
-            show_competitor = True
         else:
             if market == "best":
                 competitor = (
@@ -403,8 +409,10 @@ class ExportService:
                     if market in tracked_stores
                     else None
                 )
-            show_competitor = bool(tracked_stores) and (
-                market == "best" or market in tracked_stores
+            show_competitor = (
+                show_competitor
+                and bool(tracked_stores)
+                and (market == "best" or market in tracked_stores)
             )
         amount: float | None = None
         if competitor and competitor.price is not None:
@@ -423,8 +431,10 @@ class ExportService:
                 str(status) if status else "", "لینک ثبت نشده"
             )
 
-        pct = _diff_percent(base_price, amount) if compares_competitor and fresh else None
-        if not compares_competitor or pct is None:
+        pct = (
+            _diff_percent(base_price, amount) if exact_mode and fresh and show_competitor else None
+        )
+        if not exact_mode or pct is None:
             price_diff_text = "—"
         else:
             rounded = round(pct)
@@ -434,9 +444,9 @@ class ExportService:
                 word = "گران‌تر" if pct > 0 else "ارزان‌تر"
                 price_diff_text = f"{_format_whole_percent_magnitude(pct)} {word}"
 
-        weight = weights.get(top) if top is not None else None
-        if fresh:
-            if compares_competitor:
+        weight = weights.get(product.pricing_mode)
+        if fresh and show_competitor:
+            if exact_mode:
                 raw_suggested = _suggested_price_for(base_price, amount, weight)
             else:
                 raw_suggested = _suggested_price_from_daily_change(
@@ -484,10 +494,10 @@ class ExportService:
             "price": format_amount(product.price),
             "competitor_price": competitor_price_text,
             "competitor_price_digikala": (
-                competitor_text("digikala") if compares_competitor else "—"
+                competitor_text("digikala") if exact_mode and show_competitor else "—"
             ),
             "competitor_price_technolife": (
-                competitor_text("technolife") if compares_competitor else "—"
+                competitor_text("technolife") if exact_mode and show_competitor else "—"
             ),
             "price_diff": price_diff_text,
             "suggested_price": suggested_text,

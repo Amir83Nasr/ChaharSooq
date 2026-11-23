@@ -17,6 +17,7 @@ from app.schemas import (
     ProductOut,
     ProductPage,
     ProductPriceBoundsUpdate,
+    ProductPricingModeUpdate,
 )
 from app.services import (
     INVALID_CATEGORY_ERROR,
@@ -200,6 +201,34 @@ def update_no_competitor_price(
 ) -> ProductOut:
     try:
         product = ProductService(session).set_no_competitor_price(product_id, payload)
+    except ProductNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="کالا پیدا نشد",
+        ) from None
+    return ProductOut.model_validate(product)
+
+
+@router.patch(
+    "/products/{product_id}/pricing-mode",
+    response_model=ProductOut,
+    summary="Set a product's pricing mode",
+    description=(
+        "Selects the suggested-price formula for one product: "
+        "`exact_competitor` (weighted blend with a direct competitor price) or "
+        "`similar_product` (daily price change of a linked similar product). "
+        "Admin-only; viewers receive `403`."
+    ),
+    responses={404: NOT_FOUND, 422: VALIDATION_ERROR},
+)
+def update_product_pricing_mode(
+    product_id: int,
+    payload: ProductPricingModeUpdate,
+    _admin: Admin = Depends(require_admin),  # noqa: B008
+    session: Session = Depends(get_db),  # noqa: B008
+) -> ProductOut:
+    try:
+        product = ProductService(session).set_pricing_mode(product_id, payload)
     except ProductNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

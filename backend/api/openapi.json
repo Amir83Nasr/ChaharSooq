@@ -1513,6 +1513,84 @@
         }
       }
     },
+    "/api/v1/products/{product_id}/pricing-mode": {
+      "patch": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Set a product's pricing mode",
+        "description": "Selects the suggested-price formula for one product: `exact_competitor` (weighted blend with a direct competitor price) or `similar_product` (daily price change of a linked similar product). Admin-only; viewers receive `403`.",
+        "operationId": "update_product_pricing_mode",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Product Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductPricingModeUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource does not exist (`not_found`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/products/summary": {
       "get": {
         "tags": [
@@ -5112,6 +5190,13 @@
         "title": "ParsinaConnectionOut",
         "description": "Current Parsina connection as visible to the super admin.\n\nThe password is never returned; `password_set` indicates whether one is\nstored (in the database or provided via env/secrets)."
       },
+      "PricingMode": {
+        "type": "string",
+        "enum": [
+          "exact_competitor",
+          "similar_product"
+        ]
+      },
       "ProductCompetitorFlagUpdate": {
         "properties": {
           "no_competitor_price": {
@@ -5316,6 +5401,11 @@
             "description": "True when at least one active competitor link has a fresh price; false for products with no link or only stale/failed data.",
             "default": false
           },
+          "pricing_mode": {
+            "$ref": "#/components/schemas/PricingMode",
+            "description": "Formula selector: `exact_competitor` blends the base price with a direct competitor price; `similar_product` uses a linked product's daily price change.",
+            "default": "exact_competitor"
+          },
           "no_competitor_price": {
             "type": "boolean",
             "title": "No Competitor Price",
@@ -5434,6 +5524,20 @@
         "title": "ProductPriceBoundsUpdate",
         "description": "Per-product suggested-price clamp: m% below and n% above the base."
       },
+      "ProductPricingModeUpdate": {
+        "properties": {
+          "pricing_mode": {
+            "$ref": "#/components/schemas/PricingMode",
+            "description": "`exact_competitor` blends the base with a direct competitor price; `similar_product` scales a linked product's daily price change."
+          }
+        },
+        "type": "object",
+        "required": [
+          "pricing_mode"
+        ],
+        "title": "ProductPricingModeUpdate",
+        "description": "Select the suggested-price formula for one product."
+      },
       "ProductTableColumn": {
         "type": "string",
         "enum": [
@@ -5479,7 +5583,7 @@
             },
             "type": "array",
             "title": "Suggested Price Formulas",
-            "description": "Per-group competitor weight for the suggested price."
+            "description": "Per-pricing-mode weight for the suggested price."
           },
           "product_table_columns": {
             "items": {
@@ -5610,8 +5714,8 @@
             ],
             "suggested_price_formulas": [
               {
-                "top_group": "فرش",
-                "weight": 0.4
+                "mode": "exact_competitor",
+                "weight": 0.5
               }
             ],
             "sync_interval_minutes": 720
@@ -5620,56 +5724,42 @@
       },
       "SuggestedPriceFormulaIn": {
         "properties": {
-          "top_group": {
-            "type": "string",
-            "enum": [
-              "کالای دیجیتال",
-              "لوازم خانگی",
-              "فرش",
-              "مبلمان"
-            ],
-            "title": "Top Group",
-            "description": "Catalog section the weight applies to."
+          "mode": {
+            "$ref": "#/components/schemas/PricingMode",
+            "description": "Pricing mode the weight applies to: `exact_competitor` (weighted blend with a direct competitor price) or `similar_product` (base adjusted by the linked product's daily price change)."
           },
           "weight": {
             "type": "number",
             "maximum": 1.0,
             "minimum": 0.0,
             "title": "Weight",
-            "description": "Source share (0–1): competitor price for لوازم خانگی/کالای دیجیتال, daily price change for مبلمان/فرش."
+            "description": "Source share (0–1): competitor price for `exact_competitor`, daily price change for `similar_product`."
           }
         },
         "type": "object",
         "required": [
-          "top_group",
+          "mode",
           "weight"
         ],
         "title": "SuggestedPriceFormulaIn"
       },
       "SuggestedPriceFormulaOut": {
         "properties": {
-          "top_group": {
-            "type": "string",
-            "enum": [
-              "کالای دیجیتال",
-              "لوازم خانگی",
-              "فرش",
-              "مبلمان"
-            ],
-            "title": "Top Group",
-            "description": "Catalog section the weight applies to."
+          "mode": {
+            "$ref": "#/components/schemas/PricingMode",
+            "description": "Pricing mode the weight applies to: `exact_competitor` (weighted blend with a direct competitor price) or `similar_product` (base adjusted by the linked product's daily price change)."
           },
           "weight": {
             "type": "number",
             "maximum": 1.0,
             "minimum": 0.0,
             "title": "Weight",
-            "description": "Source share (0–1): competitor price for لوازم خانگی/کالای دیجیتال, daily price change for مبلمان/فرش."
+            "description": "Source share (0–1): competitor price for `exact_competitor`, daily price change for `similar_product`."
           }
         },
         "type": "object",
         "required": [
-          "top_group",
+          "mode",
           "weight"
         ],
         "title": "SuggestedPriceFormulaOut"

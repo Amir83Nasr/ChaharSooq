@@ -20,7 +20,6 @@ import {
 } from "@/lib/competitor-price"
 import { toTomanAmount } from "@/lib/money"
 import type { ProductOut, ProductSort } from "@/lib/api"
-import { comparesWithCompetitor } from "@/lib/top-groups"
 import { initialRowWindow, useWindowedRows } from "./use-windowed-rows"
 
 // Mobile cards are taller than table rows; a small first window keeps the
@@ -45,7 +44,9 @@ export function ProductMobileCard({
   onSelect: (item: ProductOut) => void
 }) {
   const top = item.top_group
-  const comparesCompetitor = comparesWithCompetitor(top)
+  // The pricing formula comes from the product, not its catalog section.
+  const exact = item.pricing_mode === "exact_competitor"
+  const noCompetitor = item.no_competitor_price
   const showCompetitor = showsCompetitorPrice(market, top)
   const competitor = showCompetitor
     ? competitorForRow(item.competitor_prices, market, top)
@@ -59,7 +60,7 @@ export function ProductMobileCard({
     competitor?.currency ?? null
   )
   const pct =
-    comparesCompetitor && competitor?.is_fresh === true
+    !noCompetitor && exact && competitor?.is_fresh === true
       ? diffPercent(item.price, amount)
       : null
 
@@ -103,15 +104,13 @@ export function ProductMobileCard({
             <span className="text-[11px] text-muted-foreground">قیمت ما</span>
             <Price value={item.price} className="text-base font-bold" />
           </span>
-          {showCompetitor ? (
+          {showCompetitor || noCompetitor ? (
             <span className="flex flex-col items-end gap-0.5">
               <span className="text-[11px] text-muted-foreground">
                 {marketLabel}
               </span>
-              {item.no_competitor_price ? (
-                <span className="text-xs font-medium text-destructive">
-                  قیمت رقیب وجود ندارد
-                </span>
+              {noCompetitor ? (
+                <span className="text-sm text-muted-foreground">—</span>
               ) : competitor?.price !== null &&
                 competitor?.price !== undefined &&
                 amount !== null &&
@@ -139,7 +138,8 @@ export function ProductMobileCard({
             >
               {formatDiffCompact(pct)} {pct > 0 ? "گران‌تر" : "ارزان‌تر"}
             </span>
-          ) : !comparesCompetitor &&
+          ) : !noCompetitor &&
+            !exact &&
             competitor?.price_change_percent != null ? (
             <span
               className={cn(

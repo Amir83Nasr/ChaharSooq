@@ -65,9 +65,8 @@ STORE_URLS = {
 # store (Sofa/DigiFresh) or the appliance rivals (Digikala/Technolife).
 APPLIANCE_STORES = ("digikala", "technolife", "torob")
 TARGET_WEIGHTS = {
-    "فرش": Decimal("0.4000"),
-    "مبلمان": Decimal("0.5000"),
-    "لوازم خانگی": Decimal("0.2000"),
+    "exact_competitor": Decimal("0.2000"),
+    "similar_product": Decimal("0.4000"),
 }
 TOMAN = Decimal("1")
 
@@ -337,12 +336,12 @@ def seed_demo_competitors(session: Session, *, now: datetime | None = None) -> S
         )
         observations_added += 2
 
-    weights = {row.top_group for row in session.scalars(select(SuggestedPriceFormula))}
+    weights = {row.mode for row in session.scalars(select(SuggestedPriceFormula))}
     weights_added = 0
-    for top_group, weight in TARGET_WEIGHTS.items():
-        if top_group in weights:
+    for mode, weight in TARGET_WEIGHTS.items():
+        if mode in weights:
             continue
-        session.add(SuggestedPriceFormula(top_group=top_group, weight=weight))
+        session.add(SuggestedPriceFormula(mode=mode, weight=weight))
         weights_added += 1
 
     session.commit()

@@ -75,21 +75,21 @@ class SettingsService:
 
     def get_suggested_price_formulas(self) -> list[dict[str, object]]:
         rows = self._formulas.list_ordered()
-        return [{"top_group": row.top_group, "weight": float(row.weight)} for row in rows]
+        return [{"mode": row.mode, "weight": float(row.weight)} for row in rows]
 
     def update_suggested_price_formulas(
         self, formulas: list[SuggestedPriceFormulaIn]
     ) -> list[dict[str, object]]:
         existing = self._formulas.get_map()
-        submitted = {item.top_group: item.weight for item in formulas}
-        for top_group, row in existing.items():
-            if top_group not in submitted:
+        submitted = {item.mode: item.weight for item in formulas}
+        for mode, row in existing.items():
+            if mode not in submitted:
                 self._formulas.delete(row)
-        for top_group, weight in submitted.items():
-            row = existing.get(top_group)
+        for mode, weight in submitted.items():
+            row = existing.get(mode)
             decimal_weight = Decimal(str(weight))
             if row is None:
-                new_row = SuggestedPriceFormula(top_group=top_group, weight=decimal_weight)
+                new_row = SuggestedPriceFormula(mode=mode, weight=decimal_weight)
                 self._formulas.add(new_row)
             else:
                 self._formulas.update_weight(row, decimal_weight)

@@ -5,13 +5,11 @@ import { useEffect, useState } from "react"
 import { BusyLabel } from "@workspace/ui/primitives/busy-label"
 import { Button } from "@workspace/ui/primitives/button"
 import { Input } from "@workspace/ui/primitives/input"
-import {
-  formatPersianNumber,
-  toLatinDigits,
-  toPersianDigits,
-} from "@workspace/ui/lib/number"
+import { toast } from "@workspace/ui/primitives/sonner"
+import { formatPersianNumber, toLatinDigits } from "@workspace/ui/lib/number"
 
 import { api, type BackupSettings } from "@/lib/api"
+import { BackupUnavailableNotice } from "./backup-unavailable-notice"
 
 const MINUTES_PER_DAY = 1440
 const MIN_DAYS = 1
@@ -34,8 +32,7 @@ export function BackupSettingsForm() {
   const [enabled, setEnabled] = useState(false)
   const [days, setDays] = useState("")
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -46,10 +43,13 @@ export function BackupSettingsForm() {
         setSettings(data)
         setEnabled(data.enabled)
         setDays(minutesToDays(data.interval_minutes))
+        setLoaded(true)
       })
       .catch((err: unknown) => {
-        if (!cancelled)
-          setError(err instanceof Error ? err.message : "خطایی رخ داد.")
+        if (!cancelled) {
+          toast.error(err instanceof Error ? err.message : "خطایی رخ داد.")
+          setLoaded(true)
+        }
       })
     return () => {
       cancelled = true
@@ -64,15 +64,12 @@ export function BackupSettingsForm() {
       interval < MIN_DAYS ||
       interval > MAX_DAYS
     ) {
-      setError(
+      toast.error(
         `فاصله باید ${formatPersianNumber(MIN_DAYS)} تا ${formatPersianNumber(MAX_DAYS)} روز باشد.`
       )
-      setSaved(false)
       return
     }
     setBusy(true)
-    setError(null)
-    setSaved(false)
     try {
       const data = await api.updateBackupSettings({
         enabled,
@@ -81,15 +78,15 @@ export function BackupSettingsForm() {
       setSettings(data)
       setEnabled(data.enabled)
       setDays(minutesToDays(data.interval_minutes))
-      setSaved(true)
+      toast.success("تنظیمات پشتیبان خودکار ذخیره شد.")
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "خطایی رخ داد.")
+      toast.error(err instanceof Error ? err.message : "خطایی رخ داد.")
     } finally {
       setBusy(false)
     }
   }
 
-  if (settings === null && error === null) {
+  if (!loaded) {
     return (
       <div
         className="h-20 animate-pulse rounded-2xl bg-muted"
@@ -98,17 +95,27 @@ export function BackupSettingsForm() {
     )
   }
 
+  const unavailable = settings
+    ? !settings.tools_available || !settings.storage_ready
+    : false
+
   return (
     <div className="flex flex-col gap-4">
+      {settings ? (
+        <BackupUnavailableNotice
+          toolsAvailable={settings.tools_available}
+          storageReady={settings.storage_ready}
+        />
+      ) : null}
       <div className="flex flex-wrap items-center gap-3">
         <span className="text-sm font-medium">پشتیبان خودکار</span>
         <Button
           type="button"
           variant={enabled ? "default" : "outline"}
           aria-pressed={enabled}
+          disabled={unavailable}
           onClick={() => {
             setEnabled((current) => !current)
-            setSaved(false)
           }}
           className="h-9"
         >
@@ -120,7 +127,6 @@ export function BackupSettingsForm() {
           value={days === "" ? "" : formatPersianNumber(days)}
           onChange={(event) => {
             setDays(parseDaysInput(event.target.value))
-            setSaved(false)
           }}
           placeholder="مثلاً ۷"
           aria-label="فاصله پشتیبان گیری خودکار (روز)"
@@ -131,7 +137,7 @@ export function BackupSettingsForm() {
         <span className="shrink-0 text-sm text-muted-foreground">روز</span>
         <Button
           onClick={() => void save()}
-          disabled={busy}
+          disabled={busy || unavailable}
           aria-busy={busy}
           className="h-11 gap-2 md:h-9"
         >
@@ -143,29 +149,6 @@ export function BackupSettingsForm() {
           />
         </Button>
       </div>
-      {settings && (!settings.tools_available || !settings.storage_ready) ? (
-        <div
-          role="alert"
-          className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm leading-6 text-destructive ring-1 ring-destructive/20"
-        >
-          {!settings.tools_available
-            ? "ابزارهای PostgreSQL نصب نیستند؛ ساخت و بازیابی نسخه ممکن نیست."
-            : null}
-          {!settings.storage_ready
-            ? "پوشه ذخیره پشتیبان قابل نوشتن نیست."
-            : null}
-        </div>
-      ) : null}
-      {error ? (
-        <p role="alert" className="text-sm text-destructive">
-          {toPersianDigits(error)}
-        </p>
-      ) : null}
-      {saved ? (
-        <p role="status" className="text-sm text-success">
-          ذخیره شد.
-        </p>
-      ) : null}
     </div>
   )
 }

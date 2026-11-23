@@ -16,7 +16,12 @@ from app.repositories import (
     ProductRepository,
     ProductSort,
 )
-from app.schemas import ProductCompetitorFlagUpdate, ProductIn, ProductPriceBoundsUpdate
+from app.schemas import (
+    ProductCompetitorFlagUpdate,
+    ProductIn,
+    ProductPriceBoundsUpdate,
+    ProductPricingModeUpdate,
+)
 
 INVALID_CATEGORY_ERROR = "دسته‌بندی نامعتبر است"
 
@@ -149,6 +154,13 @@ class ProductService:
             allowed_decrease_percent=(Decimal(str(decrease)) if decrease is not None else None),
             allowed_increase_percent=(Decimal(str(increase)) if increase is not None else None),
         )
+        return product
+
+    def set_pricing_mode(self, product_id: int, payload: ProductPricingModeUpdate) -> Product:
+        product = self._repos.get(product_id)
+        if product is None:
+            raise ProductNotFoundError
+        self._repos.set_pricing_mode(product, value=payload.pricing_mode)
         return product
 
     def set_no_competitor_price(

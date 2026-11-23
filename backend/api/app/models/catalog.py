@@ -96,6 +96,11 @@ class Product(Base):
     weight: Mapped[Decimal | None] = mapped_column(Numeric(18, 3), nullable=True, default=None)
     is_special: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Which formula computes the suggested price: a direct competitor price
+    # blend, or the daily change of a similar product's linked listing.
+    pricing_mode: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="exact_competitor"
+    )
     # Owner-marked: this product genuinely has no competitor price to track.
     # Distinct from a missing/stale link, which just means data is not ready.
     no_competitor_price: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

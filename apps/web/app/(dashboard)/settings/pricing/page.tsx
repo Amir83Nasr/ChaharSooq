@@ -10,8 +10,8 @@ export default function PricingSettingsPage() {
   return (
     <SettingsSection
       icon={Sigma}
-      title="قیمت پیشنهادی"
-      description="وزن سهم قیمت رقیب برای هر دسته‌بندی (۰ تا ۱) با پیش‌نمایش زنده"
+      title="روش تعیین قیمت"
+      description="وزن سهم منبع قیمت برای هر حالت قیمت‌گذاری (۰ تا ۱)؛ هر کالا حالت خود را انتخاب می‌کند."
     >
       <SuggestedPriceSettings />
     </SettingsSection>

@@ -15,7 +15,9 @@ from app.models import CompetitorPriceObservation, Product
 from tests.helpers import login
 
 
-def _group_product_id(client: TestClient, group: str) -> int:
+def _group_product_id(
+    client: TestClient, group: str, *, pricing_mode: str = "similar_product"
+) -> int:
     login(client)
     with Session(get_engine()) as session:
         product = Product(
@@ -24,6 +26,9 @@ def _group_product_id(client: TestClient, group: str) -> int:
             price=1_000_000,
             stock=1,
             main_group_name=group,
+            # Tracking links (Sofa/DigiFresh) require the similar-product mode;
+            # the catalog section alone no longer selects the formula.
+            pricing_mode=pricing_mode,
             is_active=True,
         )
         session.add(product)
@@ -63,6 +68,37 @@ def test_links_for_the_wrong_group_are_rejected(client: TestClient, group: str, 
         json={"store": store, "url": "https://www.digikala.com/product/dkp-123456/"},
     )
     assert response.status_code == 422
+
+
+def test_link_stores_follow_pricing_mode_not_catalog_section(client: TestClient) -> None:
+    """An exact rival link is allowed for a carpet; a tracker link is not."""
+    exact_id = _group_product_id(client, "فرش ماشینی", pricing_mode="exact_competitor")
+    exact_link = client.post(
+        f"/api/v1/products/{exact_id}/competitors",
+        json={"store": "digikala", "url": "https://www.digikala.com/product/dkp-123456/"},
+    )
+    assert exact_link.status_code == 201, exact_link.text
+    rejected = client.post(
+        f"/api/v1/products/{exact_id}/competitors",
+        json={"store": "digifresh", "url": "https://digifarsh.com/product/test-carpet/"},
+    )
+    assert rejected.status_code == 422
+
+    switched = client.patch(
+        f"/api/v1/products/{exact_id}/pricing-mode",
+        json={"pricing_mode": "similar_product"},
+    )
+    assert switched.status_code == 200, switched.text
+    similar_link = client.post(
+        f"/api/v1/products/{exact_id}/competitors",
+        json={"store": "digifresh", "url": "https://digifarsh.com/product/test-carpet/"},
+    )
+    assert similar_link.status_code == 201, similar_link.text
+    wrong_store = client.post(
+        f"/api/v1/products/{exact_id}/competitors",
+        json={"store": "technolife", "url": "https://www.technolife.ir/product/x"},
+    )
+    assert wrong_store.status_code == 422
 
 
 def test_daily_change_compares_with_previous_day(

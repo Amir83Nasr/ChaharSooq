@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models import CompetitorListing
+from app.models import CompetitorListing, Product
 from app.repositories.competitor import CompetitorRepository, DailyPriceChange
 from app.schemas.competitor import (
     CompetitorListingCreate,
@@ -99,24 +99,25 @@ def validate_url(url: str, store: str) -> str:
     return raw
 
 
-def _allowed_stores(main_group_name: str | None) -> frozenset[str]:
-    name = (main_group_name or "").strip()
+def _allowed_stores(product: Product) -> frozenset[str]:
+    """Stores valid for a product's pricing mode, not just its section.
+
+    Exact-competitor links can point at any direct rival regardless of the
+    catalog section. Similar-product links stay section-specific because the
+    trackers themselves (Sofa/DigiFresh) only cover those sections.
+    """
+    if product.pricing_mode == "exact_competitor":
+        return APPLIANCE_STORES
+    name = (product.main_group_name or "").strip()
     for prefix, stores in GROUP_STORES.items():
         if name.startswith(prefix):
-            return stores
-    return APPLIANCE_STORES
+            return stores | {"other"}
+    return frozenset({"digikala", "torob", "other"})
 
 
 def _store_error(stores: frozenset[str]) -> str:
     labels = " یا ".join(STORE_LABELS[store] for store in sorted(stores))
-    return f"برای این دسته‌بندی فقط لینک {labels} مجاز است"
-
-
-def _is_appliance(main_group_name: str | None) -> bool:
-    if main_group_name is None:
-        return True
-    name = main_group_name.strip()
-    return not name.startswith(("فرش", "مبلمان"))
+    return f"برای این حالت قیمتگذاری فقط لینک {labels} مجاز است"
 
 
 class CompetitorService:
@@ -239,7 +240,7 @@ class CompetitorService:
         product = self._repo.product(product_id)
         if product is None:
             raise CompetitorNotFoundError
-        allowed = _allowed_stores(product.main_group_name)
+        allowed = _allowed_stores(product)
         if payload.store not in allowed:
             raise InvalidCompetitorProductError(_store_error(allowed))
         # At most one manual link per store for every group.
@@ -269,7 +270,7 @@ class CompetitorService:
         target_url = values.get("url") or row.url
         if "store" in values or "url" in values:
             product = self._repo.product(row.product_id)
-            allowed = _allowed_stores(product.main_group_name if product else None)
+            allowed = _allowed_stores(product) if product else APPLIANCE_STORES
             if target_store not in allowed:
                 raise InvalidCompetitorProductError(_store_error(allowed))
             try:
@@ -299,8 +300,10 @@ class CompetitorService:
         )
         if manual_fields_changed:
             product = self._repo.product(row.product_id)
-            if not _is_appliance(product.main_group_name if product else None):
-                raise InvalidCompetitorProductError("برای این دسته‌بندی ثبت قیمت دستی مجاز نیست")
+            if product is None or product.pricing_mode != "exact_competitor":
+                raise InvalidCompetitorProductError(
+                    "برای این حالت قیمتگذاری ثبت قیمت دستی مجاز نیست"
+                )
         if "is_active" in values and values["is_active"] is not None:
             row.is_active = values["is_active"]
         if "manual_price" in values:

@@ -114,31 +114,34 @@ def test_settings_suggested_price_weight_update_and_reject(client: TestClient) -
         "/api/v1/settings",
         json={
             "suggested_price_formulas": [
-                {"top_group": "لوازم خانگی", "weight": 0.6},
-                {"top_group": "کالای دیجیتال", "weight": 0.5},
-                {"top_group": "مبلمان", "weight": 0.2},
+                {"mode": "exact_competitor", "weight": 0.6},
+                {"mode": "similar_product", "weight": 0.2},
             ]
         },
     )
     assert r.status_code == 200, r.text
-    assert {
-        (item["top_group"], item["weight"]) for item in r.json()["suggested_price_formulas"]
-    } == {
-        ("لوازم خانگی", 0.6),
-        ("کالای دیجیتال", 0.5),
-        ("مبلمان", 0.2),
+    assert {(item["mode"], item["weight"]) for item in r.json()["suggested_price_formulas"]} == {
+        ("exact_competitor", 0.6),
+        ("similar_product", 0.2),
     }
     assert (
         client.put(
             "/api/v1/settings",
-            json={"suggested_price_formulas": [{"top_group": "فرش", "weight": 1.5}]},
+            json={"suggested_price_formulas": [{"mode": "exact_competitor", "weight": 1.5}]},
         ).status_code
         == 422
     )
     assert (
         client.put(
             "/api/v1/settings",
-            json={"suggested_price_formulas": [{"top_group": "فرش", "weight": -0.1}]},
+            json={"suggested_price_formulas": [{"mode": "exact_competitor", "weight": -0.1}]},
+        ).status_code
+        == 422
+    )
+    assert (
+        client.put(
+            "/api/v1/settings",
+            json={"suggested_price_formulas": [{"mode": "غیرمجاز", "weight": 0.1}]},
         ).status_code
         == 422
     )
@@ -147,10 +150,22 @@ def test_settings_suggested_price_weight_update_and_reject(client: TestClient) -
             "/api/v1/settings",
             json={
                 "suggested_price_formulas": [
-                    {"top_group": "فرش", "weight": 0.1},
-                    {"top_group": "فرش", "weight": 0.3},
+                    {"mode": "similar_product", "weight": 0.1},
+                    {"mode": "similar_product", "weight": 0.3},
                 ]
             },
+        ).status_code
+        == 422
+    )
+
+
+def test_settings_old_top_group_formulas_are_rejected(client: TestClient) -> None:
+    """A legacy `top_group` item lacks the required `mode` and is rejected."""
+    login(client)
+    assert (
+        client.put(
+            "/api/v1/settings",
+            json={"suggested_price_formulas": [{"top_group": "فرش", "weight": 0.9}]},
         ).status_code
         == 422
     )

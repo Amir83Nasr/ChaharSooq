@@ -99,6 +99,46 @@ def test_no_competitor_price_flag_toggles(client: TestClient) -> None:
     assert off.json()["no_competitor_price"] is False
 
 
+def test_product_pricing_mode_toggles(client: TestClient) -> None:
+    login(client)
+    created = client.post(
+        "/api/v1/products",
+        json={"name": "قالیچه", "sku": "MODE-1", "price": 1000000},
+    )
+    assert created.status_code == 201, created.text
+    product_id = created.json()["id"]
+    assert created.json()["pricing_mode"] == "exact_competitor"
+
+    changed = client.patch(
+        f"/api/v1/products/{product_id}/pricing-mode",
+        json={"pricing_mode": "similar_product"},
+    )
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["pricing_mode"] == "similar_product"
+    listed = client.get("/api/v1/products", params={"q": "MODE-1"}).json()
+    assert listed["items"][0]["pricing_mode"] == "similar_product"
+
+    back = client.patch(
+        f"/api/v1/products/{product_id}/pricing-mode",
+        json={"pricing_mode": "exact_competitor"},
+    )
+    assert back.json()["pricing_mode"] == "exact_competitor"
+    assert (
+        client.patch(
+            f"/api/v1/products/{product_id}/pricing-mode",
+            json={"pricing_mode": "نامعتبر"},
+        ).status_code
+        == 422
+    )
+    assert (
+        client.patch(
+            "/api/v1/products/999999/pricing-mode",
+            json={"pricing_mode": "similar_product"},
+        ).status_code
+        == 404
+    )
+
+
 def test_products_summary_counts(client: TestClient) -> None:
     seed(client)
     body = client.get("/api/v1/products/summary", params={"threshold": 5}).json()

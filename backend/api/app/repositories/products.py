@@ -478,6 +478,10 @@ class ProductRepository:
         product.allowed_increase_percent = allowed_increase_percent
         self._session.flush()
 
+    def set_pricing_mode(self, product: Product, *, value: str) -> None:
+        product.pricing_mode = value
+        self._session.flush()
+
     def set_no_competitor_price(self, product: Product, *, value: bool) -> None:
         product.no_competitor_price = value
         self._session.flush()

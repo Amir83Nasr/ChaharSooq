@@ -45,6 +45,7 @@ ALLOWED_COMPETITOR_STORES: tuple[DefaultCompetitorStore, ...] = (
     "best",
     "digikala",
     "technolife",
+    "torob",
 )
 
 PRODUCT_TABLE_COLUMNS_KEY = "product_table_columns"

@@ -1101,6 +1101,7 @@
                     "technolife",
                     "sofa",
                     "digifresh",
+                    "torob",
                     "other"
                   ],
                   "type": "string"
@@ -2101,6 +2102,7 @@
                     "technolife",
                     "sofa",
                     "digifresh",
+                    "torob",
                     "other"
                   ],
                   "type": "string"
@@ -2257,7 +2259,8 @@
                     "digikala",
                     "technolife",
                     "sofa",
-                    "digifresh"
+                    "digifresh",
+                    "torob"
                   ],
                   "type": "string"
                 },
@@ -2532,6 +2535,7 @@
                     "technolife",
                     "sofa",
                     "digifresh",
+                    "torob",
                     "other"
                   ],
                   "type": "string"
@@ -3893,10 +3897,11 @@
               "technolife",
               "sofa",
               "digifresh",
+              "torob",
               "other"
             ],
             "title": "Store",
-            "description": "`digikala` and `technolife` are fetched automatically; `other` is manual-only."
+            "description": "`digikala`, `technolife` and `torob` are fetched automatically; `other` is manual-only."
           },
           "url": {
             "type": "string",
@@ -3936,6 +3941,7 @@
               "technolife",
               "sofa",
               "digifresh",
+              "torob",
               "other"
             ],
             "title": "Store"
@@ -4221,6 +4227,7 @@
                   "technolife",
                   "sofa",
                   "digifresh",
+                  "torob",
                   "other"
                 ]
               },
@@ -4314,6 +4321,7 @@
               "technolife",
               "sofa",
               "digifresh",
+              "torob",
               "other"
             ],
             "title": "Store"
@@ -4699,7 +4707,8 @@
         "enum": [
           "best",
           "digikala",
-          "technolife"
+          "technolife",
+          "torob"
         ]
       },
       "ErrorBody": {

@@ -2,7 +2,7 @@
 
 Never run against production. Every active product gets the competitor links
 its group uses in the table — Digikala/Technolife for appliances, Sofa for
-furniture, DigiFresh for carpets — plus a fresh price and two daily
+furniture, DigiFresh for carpets, plus Torob for every section — and a fresh price and two daily
 observations, so the products table shows competitor price, price difference,
 suggested price and daily change instead of empty cells.
 
@@ -59,8 +59,11 @@ STORE_URLS = {
     "technolife": "https://www.technolife.ir/product/demo-{product_id}/",
     "sofa": "https://www.sofamobl.com/product/demo-{product_id}/",
     "digifresh": "https://www.digifarsh.com/product/demo-{product_id}/",
+    "torob": "https://torob.com/p/demo-{product_id}/",
 }
-APPLIANCE_STORES = ("digikala", "technolife")
+# Torob is a marketplace linked for every section, alongside the group-specific
+# store (Sofa/DigiFresh) or the appliance rivals (Digikala/Technolife).
+APPLIANCE_STORES = ("digikala", "technolife", "torob")
 TARGET_WEIGHTS = {
     "فرش": Decimal("0.4000"),
     "مبلمان": Decimal("0.5000"),
@@ -91,9 +94,9 @@ def stores_for(product: Product) -> tuple[str, ...]:
     """Stores the products table expects for this product's top group."""
     name = (product.main_group_name or "").strip()
     if name.startswith("فرش"):
-        return ("digifresh",)
+        return ("digifresh", "torob")
     if name.startswith("مبلمان"):
-        return ("sofa",)
+        return ("sofa", "torob")
     return APPLIANCE_STORES
 
 

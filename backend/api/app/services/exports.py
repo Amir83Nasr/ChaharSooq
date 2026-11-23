@@ -40,6 +40,7 @@ MARKET_LABELS = {
     "best": "ارزانترین رقیب",
     "digikala": "دیجی‌کالا",
     "technolife": "تکنولایف",
+    "torob": "ترب",
     "sofa": "سوفا",
     "digifresh": "دیجی‌فرش",
 }
@@ -356,10 +357,16 @@ class ExportService:
         base_price = float(product.price or 0)
 
         compares_competitor = compares_with_competitor(top)
-        tracked_store = (
-            None
+        tracked_stores: tuple[str, ...] = (
+            ()
             if compares_competitor
-            else ("sofa" if top == "مبلمان" else ("digifresh" if top == "فرش" else None))
+            else (
+                ("sofa", "torob")
+                if top == "مبلمان"
+                else ("digifresh", "torob")
+                if top == "فرش"
+                else ("torob",)
+            )
         )
 
         def competitor_text(store: str | None) -> str:
@@ -377,18 +384,27 @@ class ExportService:
 
         if compares_competitor:
             competitor = (
-                _cheapest_price(prices, ("digikala", "technolife"))
+                _cheapest_price(prices, ("digikala", "technolife", "torob"))
                 if market == "best"
                 else next((p for p in prices if p.store == market), None)
             )
             show_competitor = True
         else:
-            competitor = (
-                next((p for p in prices if p.store == tracked_store), None)
-                if tracked_store
-                else None
+            if market == "best":
+                competitor = (
+                    next((p for p in prices if p.store == tracked_stores[0]), None)
+                    if tracked_stores
+                    else None
+                )
+            else:
+                competitor = (
+                    next((p for p in prices if p.store == market), None)
+                    if market in tracked_stores
+                    else None
+                )
+            show_competitor = bool(tracked_stores) and (
+                market == "best" or market in tracked_stores
             )
-            show_competitor = tracked_store is not None and market in ("best", tracked_store)
         amount: float | None = None
         if competitor and competitor.price is not None:
             toman = _to_toman(competitor.price, competitor.currency)

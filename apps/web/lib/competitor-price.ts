@@ -16,6 +16,7 @@ export const STORE_MARKET_LABELS: Record<CompetitorMarket, string> = {
   digikala: "دیجی‌کالا",
   technolife: "تکنولایف",
   sofa: "سوفا",
+  torob: "ترب",
   digifresh: "دیجی‌فرش",
   other: "دیگر",
 }
@@ -28,9 +29,14 @@ export const COMPETITOR_MARKETS: {
   { store: "best", label: STORE_MARKET_LABELS.best },
   { store: "digikala", label: STORE_MARKET_LABELS.digikala },
   { store: "technolife", label: STORE_MARKET_LABELS.technolife },
+  { store: "torob", label: STORE_MARKET_LABELS.torob },
 ]
 
-const DIRECT_STORES: readonly CompetitorStore[] = ["digikala", "technolife"]
+const DIRECT_STORES: readonly CompetitorStore[] = [
+  "digikala",
+  "technolife",
+  "torob",
+]
 
 function trackedStores(
   market: CompetitorMarket,
@@ -38,12 +44,18 @@ function trackedStores(
 ): readonly CompetitorStore[] {
   if (comparesWithCompetitor(top) || top === null) {
     if (market === "best") return DIRECT_STORES
-    return market === "digikala" || market === "technolife" ? [market] : []
+    return DIRECT_STORES.includes(market as CompetitorStore)
+      ? [market as CompetitorStore]
+      : []
   }
-  if (top === "مبلمان")
-    return market === "best" || market === "sofa" ? ["sofa"] : []
+  if (top === "مبلمان") {
+    if (market === "best" || market === "sofa") return ["sofa", "torob"]
+    return market === "torob" ? ["torob"] : []
+  }
   if (top === "فرش") {
-    return market === "best" || market === "digifresh" ? ["digifresh"] : []
+    if (market === "best" || market === "digifresh")
+      return ["digifresh", "torob"]
+    return market === "torob" ? ["torob"] : []
   }
   return []
 }

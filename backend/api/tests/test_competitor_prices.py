@@ -261,6 +261,46 @@ def test_json_ld_offer_shapes_are_parsed(
     assert _price_from_html(_page(**page_kwargs)) == expected  # type: ignore[arg-type]
 
 
+def test_torob_json_ld_irr_is_divided_to_toman() -> None:
+    # Torob labels the 10× Rial figure as IRR; 460000000 → ۴۶٬۰۰۰٬۰۰۰ تومان.
+    page = _page("460000000", "IRR", "InStock", aggregate=True)
+    assert prices._parse_torob(page) == FetchedPrice(Decimal("46000000"), "IRT", True)
+
+
+def test_torob_aggregate_without_nested_offer_is_toman() -> None:
+    page = (
+        '<html><script type="application/ld+json">'
+        '{"@type":"Product","offers":{"@type":"AggregateOffer",'
+        '"priceCurrency":"IRR","lowPrice":1576000000,"highPrice":1576000000,'
+        '"availability":"https://schema.org/InStock"}}'
+        "</script></html>"
+    )
+    assert prices._parse_torob(page) == FetchedPrice(Decimal("157600000"), "IRT", True)
+
+
+def test_torob_next_data_fallback_uses_toman() -> None:
+    page = (
+        '<html><script id="__NEXT_DATA__" type="application/json">'
+        '{"props":{"pageProps":{"baseProduct":{"price":46000000}}}}'
+        "</script></html>"
+    )
+    assert prices._parse_torob(page) == FetchedPrice(Decimal("46000000"), "IRT", True)
+
+
+def test_torob_search_url_is_refused() -> None:
+    with pytest.raises(PriceFetchError):
+        prices._normalise_url("https://torob.com/search/?query=yakhchal", "torob")
+    assert prices._normalise_url("https://torob.com/p/06b6dddf-3721-4b01-987e/", "torob")
+
+
+def test_torob_product_url_validation() -> None:
+    from app.services.competitor import validate_url
+
+    assert validate_url("https://torob.com/p/06b6dddf-3721-4b01-987e/", "torob")
+    with pytest.raises(ValueError, match="صفحهٔ محصول"):
+        validate_url("https://torob.com/search/?query=yakhchal", "torob")
+
+
 def _stub_settings(monkeypatch: MonkeyPatch, interval: float = 0.0) -> None:
     monkeypatch.setattr(
         prices,

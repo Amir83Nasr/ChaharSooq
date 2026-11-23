@@ -38,7 +38,7 @@ export interface ProductPage {
 }
 
 export type CompetitorStore =
-  "digikala" | "technolife" | "sofa" | "digifresh" | "other"
+  "digikala" | "technolife" | "sofa" | "digifresh" | "torob" | "other"
 export type CompetitorCurrency = "IRR" | "IRT"
 export type CompetitorStatus =
   | "pending"
@@ -300,7 +300,8 @@ export interface BackupRecord {
 
 export type TopGroup = "کالای دیجیتال" | "لوازم خانگی" | "فرش" | "مبلمان"
 
-export type DefaultCompetitorStore = "best" | "digikala" | "technolife"
+export type DefaultCompetitorStore =
+  "best" | "digikala" | "technolife" | "torob"
 
 export interface SuggestedPriceFormula {
   top_group: TopGroup

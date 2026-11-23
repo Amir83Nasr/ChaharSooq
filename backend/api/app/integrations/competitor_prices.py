@@ -31,6 +31,7 @@ STORE_HOSTS: dict[str, frozenset[str]] = {
     ),
     "sofa": frozenset({"sofamobl.com", "www.sofamobl.com"}),
     "digifresh": frozenset({"digifarsh.com", "www.digifarsh.com"}),
+    "torob": frozenset({"torob.com", "www.torob.com"}),
 }
 _lock = threading.Lock()
 _robot_cache: dict[str, tuple[float, RobotFileParser]] = {}
@@ -112,6 +113,9 @@ def _normalise_url(url: str, store: str) -> str:
     host = hostname.lower().rstrip(".")
     if host not in STORE_HOSTS.get(store, frozenset()):
         raise PriceFetchError("unavailable", "دامنه برای این فروشگاه پشتیبانی نمی‌شود")
+    if store == "torob" and not parsed.path.startswith("/p/"):
+        # Torob's robots.txt forbids /search/; only product pages are fetched.
+        raise PriceFetchError("unavailable", "فقط صفحات محصول ترب (/p/…) قابل بررسی هستند")
     if parsed.scheme != "https":
         raise PriceFetchError("failed", "برای بررسی صفحه، لینک امن https لازم است")
     return parsed.geturl()
@@ -452,11 +456,50 @@ def _parse_digifresh(html: str) -> FetchedPrice | None:
     return _parse_toman_labelled_irr(html)
 
 
+# Torob's JSON-LD labels prices ``IRR`` but the numbers are 10× the Toman
+# amount shown on the page (e.g. 460000000 for ۴۶٬۰۰۰٬۰۰۰ تومان). Relabelling
+# alone would inflate the price tenfold, so divide here instead.
+_TOROB_IRR_TO_IRT = Decimal(10)
+
+
+def _torob_next_data_price(html: str) -> FetchedPrice | None:
+    """Fallback: Torob's __NEXT_DATA__ carries the cheapest price in Toman."""
+    match = re.search(
+        r'<script[^>]+id=["\']__NEXT_DATA__["\'][^>]*>(.*?)</script>',
+        html,
+        re.DOTALL | re.IGNORECASE,
+    )
+    if match is None:
+        return None
+    try:
+        data = json.loads(match.group(1))
+        base = data["props"]["pageProps"]["baseProduct"]
+        raw_price = base["price"]
+        amount = Decimal(str(raw_price))
+    except (ValueError, TypeError, KeyError, InvalidOperation):
+        return None
+    if not amount.is_finite() or amount <= 0:
+        return None
+    return FetchedPrice(amount, "IRT", True)
+
+
+def _parse_torob(html: str) -> FetchedPrice | None:
+    """Torob marketplace price; JSON-LD IRR is 10× Toman, NEXT_DATA is Toman."""
+    result = _price_from_json_ld(html)
+    if result is None:
+        return _torob_next_data_price(html)
+    if result.currency == "IRR":
+        amount = result.amount / _TOROB_IRR_TO_IRT if result.amount is not None else None
+        return replace(result, amount=amount, currency="IRT")
+    return result
+
+
 STORE_PARSERS = {
     "digikala": _parse_digikala,
     "technolife": _parse_technolife,
     "sofa": _parse_sofa,
     "digifresh": _parse_digifresh,
+    "torob": _parse_torob,
 }
 
 

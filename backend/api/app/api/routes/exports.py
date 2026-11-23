@@ -19,12 +19,12 @@ from app.services import (
 
 router = APIRouter(tags=["Exports"], responses={401: UNAUTHORIZED})
 
-StoreFilter = Literal["digikala", "technolife", "sofa", "digifresh", "other"]
+StoreFilter = Literal["digikala", "technolife", "sofa", "digifresh", "torob", "other"]
 ListingStatus = Literal[
     "pending", "success", "not_found", "unavailable", "blocked", "failed", "manual"
 ]
 ProductSort = Literal["newest", "cheapest", "most_expensive", "alphabetical", "category"]
-MarketFilter = Literal["best", "digikala", "technolife", "sofa", "digifresh"]
+MarketFilter = Literal["best", "digikala", "technolife", "sofa", "digifresh", "torob"]
 ExportScope = Literal["filtered", "all"]
 
 _EXPORT_DESCRIPTION = (

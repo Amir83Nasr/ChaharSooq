@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-CompetitorStore = Literal["digikala", "technolife", "sofa", "digifresh", "other"]
+CompetitorStore = Literal["digikala", "technolife", "sofa", "digifresh", "torob", "other"]
 CompetitorStatus = Literal[
     "pending", "success", "not_found", "unavailable", "blocked", "failed", "manual"
 ]
@@ -25,7 +25,10 @@ class CompetitorListingCreate(BaseModel):
     )
 
     store: CompetitorStore = Field(
-        description="`digikala` and `technolife` are fetched automatically; `other` is manual-only."
+        description=(
+            "`digikala`, `technolife` and `torob` are fetched automatically; "
+            "`other` is manual-only."
+        )
     )
     url: str = Field(min_length=12, max_length=2048, description="Public product page URL.")
 

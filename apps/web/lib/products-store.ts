@@ -190,7 +190,8 @@ function applySettings(settings: SettingsOut, initial: boolean): void {
     (initial || !marketUserSet) &&
     (settings.default_competitor_store === "best" ||
       settings.default_competitor_store === "digikala" ||
-      settings.default_competitor_store === "technolife")
+      settings.default_competitor_store === "technolife" ||
+      settings.default_competitor_store === "torob")
   ) {
     nextView.market = settings.default_competitor_store
   }

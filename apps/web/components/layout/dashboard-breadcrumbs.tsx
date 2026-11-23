@@ -29,6 +29,7 @@ const breadcrumbLabels: Record<string, string> = {
   digifresh: "دیجی‌فرش",
   digikala: "دیجی‌کالا",
   technolife: "تکنولایف",
+  torob: "ترب",
 }
 
 export function DashboardBreadcrumbs() {

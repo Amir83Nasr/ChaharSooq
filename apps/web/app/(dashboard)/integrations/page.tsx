@@ -13,7 +13,13 @@ import {
 
 import { STORES } from "./_components/store-config"
 
-const STORE_ORDER = ["sofa", "digifresh", "digikala", "technolife"] as const
+const STORE_ORDER = [
+  "sofa",
+  "digifresh",
+  "digikala",
+  "technolife",
+  "torob",
+] as const
 
 export default function IntegrationsPage() {
   return (

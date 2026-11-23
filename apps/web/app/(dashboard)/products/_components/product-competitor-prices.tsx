@@ -23,10 +23,10 @@ import {
 
 /** Links a product group can track in the detail dialog. */
 export const DIALOG_STORES: Record<TopGroup, CompetitorStore[]> = {
-  "لوازم خانگی": ["digikala", "technolife"],
-  "کالای دیجیتال": ["digikala", "technolife"],
-  مبلمان: ["sofa"],
-  فرش: ["digifresh"],
+  "لوازم خانگی": ["digikala", "technolife", "torob"],
+  "کالای دیجیتال": ["digikala", "technolife", "torob"],
+  مبلمان: ["sofa", "torob"],
+  فرش: ["digifresh", "torob"],
 }
 
 export const TRACKING_STORES: ReadonlySet<CompetitorStore> = new Set([
@@ -38,6 +38,7 @@ const STORE_LABELS: Record<CompetitorStore, string> = {
   digikala: "دیجی‌کالا",
   technolife: "تکنولایف",
   sofa: "سوفا",
+  torob: "ترب",
   digifresh: "دیجی‌فرش",
   other: "سایر فروشگاه‌ها",
 }
@@ -47,6 +48,7 @@ const STORE_URL_PLACEHOLDERS: Record<CompetitorStore, string> = {
   technolife: "مثلاً https://www.technolife.ir/product/…",
   sofa: "مثلاً https://sofamobl.com/product/…",
   digifresh: "مثلاً https://digifarsh.com/product/…",
+  torob: "مثلاً https://torob.com/p/…",
   other: "مثلاً https://example.com/product/…",
 }
 
@@ -68,6 +70,11 @@ function isUrlMatchingStore(url: string, store: CompetitorStore): boolean {
       return hostname === "sofamobl.com" || hostname === "www.sofamobl.com"
     if (store === "digifresh")
       return hostname === "digifarsh.com" || hostname === "www.digifarsh.com"
+    if (store === "torob") {
+      if (hostname !== "torob.com" && hostname !== "www.torob.com") return false
+      // Torob robots.txt disallows /search/; only product pages are fetched.
+      return new URL(raw).pathname.startsWith("/p/")
+    }
     return true
   } catch {
     return true

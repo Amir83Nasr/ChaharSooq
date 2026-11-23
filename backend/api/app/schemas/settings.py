@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.schemas.suggested_price import SuggestedPriceFormulaIn, SuggestedPriceFormulaOut
 
 # Display choice for the competitor price: auto-pick, or one fixed market.
-type DefaultCompetitorStore = Literal["best", "digikala", "technolife"]
+type DefaultCompetitorStore = Literal["best", "digikala", "technolife", "torob"]
 
 # Stable ids for the product table columns the admin can show or hide.
 type ProductTableColumn = Literal[

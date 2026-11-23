@@ -54,7 +54,7 @@ def list_products(
     ),
     min_price: int | None = Query(default=None, ge=0, description="Minimum unit price, Toman."),
     max_price: int | None = Query(default=None, ge=0, description="Maximum unit price, Toman."),
-    competitor_store: Literal["digikala", "technolife", "sofa", "digifresh", "other"]
+    competitor_store: Literal["digikala", "technolife", "sofa", "digifresh", "torob", "other"]
     | None = Query(default=None, description="Only products with a fresh price from this store."),
     min_competitor_price: int | None = Query(
         default=None, ge=0, description="Minimum fresh competitor price."

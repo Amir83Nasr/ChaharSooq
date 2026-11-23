@@ -25,18 +25,22 @@ STORE_HOSTS: dict[str, frozenset[str]] = {
     ),
     "sofa": frozenset({"sofamobl.com", "www.sofamobl.com"}),
     "digifresh": frozenset({"digifarsh.com", "www.digifarsh.com"}),
+    "torob": frozenset({"torob.com", "www.torob.com"}),
 }
 
+# Torob is a marketplace available for every catalog section; the other stores
+# stay specific to their group. `other` remains the manual-only escape hatch.
 GROUP_STORES: dict[str, frozenset[str]] = {
-    "مبلمان": frozenset({"sofa"}),
-    "فرش": frozenset({"digifresh"}),
+    "مبلمان": frozenset({"sofa", "torob"}),
+    "فرش": frozenset({"digifresh", "torob"}),
 }
-APPLIANCE_STORES = frozenset({"digikala", "technolife", "other"})
+APPLIANCE_STORES = frozenset({"digikala", "technolife", "torob", "other"})
 STORE_LABELS = {
     "sofa": "سوفا",
     "digifresh": "دیجی‌فرش",
     "digikala": "دیجی‌کالا",
     "technolife": "تکنولایف",
+    "torob": "ترب",
     "other": "سایر فروشگاه‌ها",
 }
 
@@ -88,6 +92,10 @@ def validate_url(url: str, store: str) -> str:
         raise ValueError("فروشگاه انتخاب‌شده با دامنهٔ لینک هم‌خوانی ندارد")
     if matching_store is None and store != "other":
         raise ValueError("برای این دامنه، گزینهٔ سایر فروشگاه‌ها را انتخاب کنید")
+    if store == "torob" and not parts.path.startswith("/p/"):
+        # robots.txt disallows /search/ (and the offline PDP paths); only
+        # product pages are safe to fetch automatically.
+        raise ValueError("لینک ترب باید به صفحهٔ محصول (/p/…) اشاره کند")
     return raw
 
 

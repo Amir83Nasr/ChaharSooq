@@ -1,8 +1,9 @@
 import type { TopGroup } from "@/lib/api"
 
-export type StoreKey = "sofa" | "digifresh" | "digikala" | "technolife"
+export type StoreKey =
+  "sofa" | "digifresh" | "digikala" | "technolife" | "torob"
 
-export type AutoStoreKey = "digikala" | "technolife"
+export type AutoStoreKey = "digikala" | "technolife" | "torob"
 
 export interface StoreConfig {
   key: StoreKey
@@ -47,6 +48,14 @@ export const STORES: Record<StoreKey, StoreConfig> = {
       "قیمت لوازم خانگی و کالای دیجیتال در تکنولایف با قیمت فروشگاه مقایسه می‌شود.",
     auto: true,
   },
+  torob: {
+    key: "torob",
+    name: "ترب",
+    topGroups: ["لوازم خانگی", "کالای دیجیتال", "مبلمان", "فرش"],
+    description:
+      "قیمت تمام دستهبندیها در ترب (بازارگاه) با قیمت فروشگاه مقایسه میشود؛ فقط لینک صفحات محصول /p/ پشتیبانی میشود.",
+    auto: true,
+  },
 }
 
 export function isStoreKey(value: string): value is StoreKey {
@@ -54,7 +63,8 @@ export function isStoreKey(value: string): value is StoreKey {
     value === "sofa" ||
     value === "digifresh" ||
     value === "digikala" ||
-    value === "technolife"
+    value === "technolife" ||
+    value === "torob"
   )
 }
 

@@ -82,6 +82,7 @@ const NAV: NavGroup[] = [
           { href: "/integrations/digifresh", label: "دیجی‌فرش" },
           { href: "/integrations/digikala", label: "دیجی‌کالا" },
           { href: "/integrations/technolife", label: "تکنولایف" },
+          { href: "/integrations/torob", label: "ترب" },
         ],
       },
     ],

@@ -17,12 +17,12 @@ from app.core.database import get_engine
 
 # Demo rows use this path segment so seeds can refresh only their own links
 # and the dev → prod sync can leave them behind.
-DEMO_COMPETITOR_URL_MARKER = "/product/demo-"
+DEMO_COMPETITOR_URL_MARKERS = ("/product/demo-", "/p/demo-")
 
 
 def is_demo_competitor_url(url: str) -> bool:
     """True for competitor links created by `seed_demo_competitors.py`."""
-    return DEMO_COMPETITOR_URL_MARKER in url
+    return any(marker in url for marker in DEMO_COMPETITOR_URL_MARKERS)
 
 
 def require_env(name: str) -> str:

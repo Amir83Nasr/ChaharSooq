@@ -14,6 +14,7 @@ from app.models import (
     Product,
     SuggestedPriceFormula,
 )
+from scripts.common import is_demo_competitor_url
 from scripts.seed_demo_competitors import (
     TARGET_WEIGHTS,
     demo_bounds,
@@ -74,21 +75,27 @@ def test_seed_fills_every_group_and_refreshes_only_demo_rows(tmp_path: Path) -> 
         session.commit()
 
         result = seed_demo_competitors(session, now=NOW)
-        assert result.created == 6  # two appliance stores each for two rows + sofa + digifresh
-        assert result.refreshed == 6
-        assert result.observations == 12  # today + yesterday per demo listing
+        assert result.created == 10  # 3 appliance stores × 2 rows + 2 sofa + 2 carpet
+        assert result.refreshed == 10
+        assert result.observations == 20  # today + yesterday per demo listing
         assert result.weights == 2  # فرش and مبلمان; the appliance weight stays
         assert result.bounds == 6  # tight floor+ceiling for two rows, loose pair for one
 
         listings = _all(session, CompetitorListing)
-        demo = [row for row in listings if "/product/demo-" in row.url]
-        assert len(demo) == 6
-        assert {row.store for row in demo} == {"digikala", "technolife", "sofa", "digifresh"}
+        demo = [row for row in listings if is_demo_competitor_url(row.url)]
+        assert len(demo) == 10
+        assert {row.store for row in demo} == {
+            "digikala",
+            "technolife",
+            "sofa",
+            "digifresh",
+            "torob",
+        }
         assert all(row.status == "success" and row.fetched_price for row in demo)
         assert all(row.fetched_currency == "IRT" for row in demo)
 
         observations = _all(session, CompetitorPriceObservation)
-        assert len(observations) == 12
+        assert len(observations) == 20
         assert {row.observed_at.date() for row in observations} == {
             NOW.date(),
             (NOW - timedelta(days=1)).date(),
@@ -129,14 +136,14 @@ def test_seed_fills_every_group_and_refreshes_only_demo_rows(tmp_path: Path) -> 
         # A second run refreshes demo history in place (no duplicated rows).
         again = seed_demo_competitors(session, now=NOW)
         assert again.created == 0
-        assert again.refreshed == 6
-        assert again.observations == 12  # yesterday + today rewritten
+        assert again.refreshed == 10
+        assert again.observations == 20  # yesterday + today rewritten
         assert again.weights == 0
         assert again.bounds == 0
         session.refresh(appliance)
         assert appliance.allowed_decrease_percent == Decimal("3")
-        assert len(_all(session, CompetitorListing)) == 7
-        assert len(_all(session, CompetitorPriceObservation)) == 12
+        assert len(_all(session, CompetitorListing)) == 11
+        assert len(_all(session, CompetitorPriceObservation)) == 20
 
         weights = {row.top_group: row.weight for row in _all(session, SuggestedPriceFormula)}
         assert weights == {
@@ -206,5 +213,5 @@ def test_demo_values_do_not_depend_on_database_ids() -> None:
 
     assert demo_scenario(dev_row) == demo_scenario(staging_row)
     assert demo_bounds(dev_row) == demo_bounds(staging_row)
-    for store in ("digikala", "technolife", "sofa", "digifresh"):
+    for store in ("digikala", "technolife", "sofa", "digifresh", "torob"):
         assert demo_prices(dev_row, store) == demo_prices(staging_row, store)

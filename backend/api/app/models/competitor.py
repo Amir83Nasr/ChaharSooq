@@ -22,7 +22,7 @@ from app.models.base import utcnow
 if TYPE_CHECKING:
     from app.models.catalog import Product
 
-CompetitorStore = Literal["digikala", "technolife", "sofa", "digifresh"]
+CompetitorStore = Literal["digikala", "technolife", "sofa", "digifresh", "torob"]
 CompetitorStatus = Literal[
     "pending", "success", "not_found", "unavailable", "blocked", "failed", "manual"
 ]

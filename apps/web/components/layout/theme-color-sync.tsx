@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import { usePathname } from "next/navigation"
-import { useTheme } from "next-themes"
 
 // Hex approximations of the surfaces in globals.css:
 // page --background: light oklch(1 0 0), dark oklch(0.225 0.012 285).
@@ -13,9 +12,18 @@ const THEME_COLORS = { light: "#ffffff", dark: "#1b1b21" } as const
 const useIsomorphicLayoutEffect =
   typeof window !== "undefined" ? React.useLayoutEffect : React.useEffect
 
-function applyThemeColor(resolvedTheme: string | undefined) {
-  const color =
-    resolvedTheme === "dark" ? THEME_COLORS.dark : THEME_COLORS.light
+function currentThemeColor(): string {
+  // next-themes applies the class synchronously in its blocking script, so
+  // the DOM already knows the right theme on hydration. Never derive this
+  // from useTheme().resolvedTheme: it is undefined for the first commit and
+  // writing the light default at that point is the refresh-time navbar flash.
+  return document.documentElement.classList.contains("dark")
+    ? THEME_COLORS.dark
+    : THEME_COLORS.light
+}
+
+function applyThemeColor() {
+  const color = currentThemeColor()
   document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
     // Guarded write: an unconditional setAttribute would re-trigger the
     // head observer below and loop.
@@ -26,29 +34,37 @@ function applyThemeColor(resolvedTheme: string | undefined) {
 }
 
 function ThemeColorSync() {
-  const { resolvedTheme } = useTheme()
   const pathname = usePathname()
 
   useIsomorphicLayoutEffect(() => {
-    applyThemeColor(resolvedTheme)
-  }, [resolvedTheme, pathname])
+    applyThemeColor()
+  }, [pathname])
 
   React.useEffect(() => {
     // Next rebuilds head metas around client-side navigation — possibly
-    // after layout effects run — restoring the system-media values from
-    // the viewport export and wiping our user-theme override. Re-assert
-    // after paint, and keep a head observer so any later replacement
-    // (route head flush, extension, etc.) gets corrected immediately.
-    applyThemeColor(resolvedTheme)
-    const observer = new MutationObserver(() => applyThemeColor(resolvedTheme))
-    observer.observe(document.head, {
+    // after layout effects run — restoring the static fallback from the
+    // viewport export and wiping our resolved-theme value. Re-assert after
+    // paint, and keep observers so any later replacement (route head flush,
+    // extension, theme toggle) gets corrected immediately.
+    applyThemeColor()
+    const headObserver = new MutationObserver(applyThemeColor)
+    headObserver.observe(document.head, {
       childList: true,
       subtree: true,
       attributes: true,
       attributeFilter: ["content", "media"],
     })
-    return () => observer.disconnect()
-  }, [resolvedTheme, pathname])
+    // Theme changes update <html class> directly, outside React's render.
+    const classObserver = new MutationObserver(applyThemeColor)
+    classObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    })
+    return () => {
+      headObserver.disconnect()
+      classObserver.disconnect()
+    }
+  }, [pathname])
 
   return null
 }

@@ -6,7 +6,6 @@ import { useSearchParams } from "next/navigation"
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react"
 
 import { ErrorState } from "@workspace/ui/feedback/state"
-import { useIsMobile } from "@workspace/ui/hooks/use-mobile"
 import { PageHeader } from "@workspace/ui/layout/page-header"
 import { Button } from "@workspace/ui/primitives/button"
 
@@ -58,7 +57,6 @@ function stockFromParam(value: string | null): StockFilter {
 function ProductsPageContent() {
   const searchParams = useSearchParams()
   const stockParam = searchParams.get("stock")
-  const isMobile = useIsMobile()
   const { canManage } = useSession()
   const { view, page, error, settings, syncBaseline } = useProductsStore()
 
@@ -244,36 +242,34 @@ function ProductsPageContent() {
         title="محصولات"
         subtitle="مدیریت کالاهای فروشگاه"
         actions={
-          !isMobile || canManage ? (
-            <>
-              {isMobile ? null : (
-                <ExportCsvMenu
-                  options={exportOptions}
+          <>
+            {/* Responsive visibility is CSS-only, so the server HTML already
+                matches the device — no hydration-time swap that briefly shows
+                the desktop toolbar (the full filter list) on mobile. */}
+            <div className="hidden md:flex">
+              <ExportCsvMenu options={exportOptions} onUnauthorized={goLogin} />
+            </div>
+            {canManage ? (
+              <>
+                <ParsinaSyncPanel
+                  initialLastSuccess={syncBaseline.parsina}
+                  onStatus={(value) => setSyncBaseline("parsina", value)}
+                  onSynced={refreshProducts}
                   onUnauthorized={goLogin}
                 />
-              )}
-              {canManage ? (
-                <>
-                  <ParsinaSyncPanel
-                    initialLastSuccess={syncBaseline.parsina}
-                    onStatus={(value) => setSyncBaseline("parsina", value)}
-                    onSynced={refreshProducts}
-                    onUnauthorized={goLogin}
-                  />
-                  <CompetitorSyncPanel
-                    initialLastSuccess={syncBaseline.competitor}
-                    onStatus={(value) => setSyncBaseline("competitor", value)}
-                    onSynced={refreshProducts}
-                    onUnauthorized={goLogin}
-                  />
-                </>
-              ) : null}
-            </>
-          ) : undefined
+                <CompetitorSyncPanel
+                  initialLastSuccess={syncBaseline.competitor}
+                  onStatus={(value) => setSyncBaseline("competitor", value)}
+                  onSynced={refreshProducts}
+                  onUnauthorized={goLogin}
+                />
+              </>
+            ) : null}
+          </>
         }
       />
 
-      {isMobile ? (
+      <div className="md:hidden">
         <ProductsMobileFilters
           {...filterProps}
           activeCount={activeFilterCount}
@@ -285,9 +281,10 @@ function ProductsPageContent() {
             />
           }
         />
-      ) : (
+      </div>
+      <div className="hidden md:block">
         <ProductsToolbar {...filterProps} />
-      )}
+      </div>
 
       {refreshFailed ? (
         <div
@@ -301,22 +298,18 @@ function ProductsPageContent() {
         </div>
       ) : null}
 
-      {error !== null && page === null ? (
-        isMobile ? (
+      {/* Both variants ship in the server HTML and CSS picks the right one.
+          While data is loading the mobile branch is a skeleton instead of a
+          live filter list, so a refresh never flashes full filters over an
+          empty page before the cards arrive. */}
+      <div className="md:hidden">
+        {error !== null && page === null ? (
           <ErrorState
             title="خطا در بارگذاری محصولات"
             hint={error}
             action={<Button onClick={refreshProducts}>تلاش مجدد</Button>}
           />
-        ) : (
-          <ProductsTableError
-            message={error}
-            onRetry={refreshProducts}
-            visibleColumns={visibleColumns}
-          />
-        )
-      ) : isMobile ? (
-        page === null ? (
+        ) : page === null ? (
           <ProductsMobileSkeleton />
         ) : page.items.length === 0 ? (
           <ProductsMobileEmpty hasFilters={hasFilters} />
@@ -335,25 +328,34 @@ function ProductsPageContent() {
               onPageChange={changePage}
             />
           </div>
-        )
-      ) : (
-        <ProductsTable
-          page={page}
-          threshold={threshold}
-          pageNum={view.page}
-          totalPages={totalPages}
-          pageSize={view.pageSize}
-          showPageSize
-          hasFilters={hasFilters}
-          sort={view.sort}
-          market={view.market}
-          weights={weights}
-          visibleColumns={visibleColumns}
-          onSelect={setSelected}
-          onPageChange={changePage}
-          onPageSize={changePageSize}
-        />
-      )}
+        )}
+      </div>
+      <div className="hidden md:block">
+        {error !== null && page === null ? (
+          <ProductsTableError
+            message={error}
+            onRetry={refreshProducts}
+            visibleColumns={visibleColumns}
+          />
+        ) : (
+          <ProductsTable
+            page={page}
+            threshold={threshold}
+            pageNum={view.page}
+            totalPages={totalPages}
+            pageSize={view.pageSize}
+            showPageSize
+            hasFilters={hasFilters}
+            sort={view.sort}
+            market={view.market}
+            weights={weights}
+            visibleColumns={visibleColumns}
+            onSelect={setSelected}
+            onPageChange={changePage}
+            onPageSize={changePageSize}
+          />
+        )}
+      </div>
 
       <ProductDetailDialog
         selected={selected}

@@ -17,11 +17,28 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: "cover",
   interactiveWidget: "resizes-content",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#1b1b21" },
-  ],
+  // One meta only. Media-scoped metas make the browser pick a color from the
+  // OS preference, which disagrees with an explicit in-app theme on refresh
+  // and flashes the navbar from one color to the other. The inline script
+  // below overwrites this fallback with the resolved theme before first paint.
+  themeColor: "#ffffff",
 }
+
+// Mirrors next-themes' storage key/default (attribute="class", theme="system").
+// Runs synchronously before paint so the browser navbar starts with the same
+// color as the page instead of flipping once the provider hydrates.
+const THEME_COLOR_BOOTSTRAP = `(() => {
+  const dark = "#1b1b21";
+  const light = "#ffffff";
+  let theme;
+  try { theme = localStorage.getItem("theme") || "system"; } catch {}
+  const isDark = theme === "dark" || (theme === "system" &&
+    window.matchMedia("(prefers-color-scheme: dark)").matches);
+  const color = isDark ? dark : light;
+  document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+    meta.setAttribute("content", color);
+  });
+})();`
 
 export default function RootLayout({
   children,
@@ -36,6 +53,10 @@ export default function RootLayout({
       className={cn("antialiased", iranYekanX.variable, "font-sans")}
     >
       <body>
+        <script
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{ __html: THEME_COLOR_BOOTSTRAP }}
+        />
         <ThemeProvider>
           <ThemeColorSync />
           <div id="charsooq-root" className="relative min-h-dvh">

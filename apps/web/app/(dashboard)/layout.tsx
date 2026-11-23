@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import { SidebarInset, SidebarProvider } from "@workspace/ui/primitives/sidebar"
 
 import { AppSidebar } from "@/components/layout/app-sidebar"
+import { BackToTop } from "@/components/layout/back-to-top"
 import { DashboardHeader } from "@/components/layout/dashboard-header"
 import { LogoutProvider } from "@/components/auth/logout-menu-item"
 import { SessionProvider } from "@/components/auth/session-provider"
@@ -59,6 +60,7 @@ export default async function DashboardLayout({
             >
               {children}
             </div>
+            <BackToTop />
           </SidebarInset>
         </LogoutProvider>
       </SessionProvider>

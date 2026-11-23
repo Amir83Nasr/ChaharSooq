@@ -42,11 +42,12 @@ type NavLinkItem = {
   ownerOnly?: boolean
 }
 
-// Display-only entry: no link, no submenu.
+// Disabled entry: shown for orientation; implementation is planned.
 type NavInfoItem = {
   kind: "info"
   label: string
   icon: LucideIcon
+  tag: string
 }
 
 type NavItem = NavLinkItem | NavInfoItem
@@ -76,6 +77,7 @@ const NAV: NavGroup[] = [
         kind: "info",
         label: "اتصال فروشگاه‌ها",
         icon: Store,
+        tag: "به‌زودی",
       },
     ],
   },
@@ -111,6 +113,44 @@ function isLinkActive(href: string, pathname: string) {
   return href === "/dashboard"
     ? pathname === href
     : pathname === href || pathname.startsWith(`${href}/`)
+}
+
+// Shared presentation for entries that are visible but not yet implemented.
+function DisabledNavItem({
+  icon: Icon,
+  label,
+  tag,
+}: {
+  icon: LucideIcon
+  label: string
+  tag: string
+}) {
+  return (
+    <SidebarMenuItem aria-hidden={false}>
+      <div className="relative">
+        <SidebarMenuButton
+          render={
+            <span
+              aria-disabled="true"
+              tabIndex={-1}
+              aria-label={`${label} — ${tag}`}
+              className="opacity-60"
+            >
+              <Icon className="sidebar-collapse-icon" />
+              <span className="sidebar-collapse-label">{label}</span>
+            </span>
+          }
+          tooltip={`${label} — ${tag}`}
+        />
+        <Badge
+          variant="secondary"
+          className="sidebar-collapse-fade inset-e-2 absolute top-1/2 h-5 -translate-y-1/2 px-1.5 text-[10px]"
+        >
+          {tag}
+        </Badge>
+      </div>
+    </SidebarMenuItem>
+  )
 }
 
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
@@ -194,46 +234,19 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
             <SidebarMenu>
               {entry.items.map((item) =>
                 item.kind === "info" ? (
-                  <SidebarMenuItem key={item.label}>
-                    <SidebarMenuButton
-                      render={
-                        <span>
-                          <item.icon className="sidebar-collapse-icon" />
-                          <span className="sidebar-collapse-label">
-                            {item.label}
-                          </span>
-                        </span>
-                      }
-                      tooltip={item.label}
-                    />
-                  </SidebarMenuItem>
+                  <DisabledNavItem
+                    key={item.label}
+                    icon={item.icon}
+                    label={item.label}
+                    tag={item.tag}
+                  />
                 ) : item.soon ? (
-                  <SidebarMenuItem key={item.href} aria-hidden={false}>
-                    <div className="relative">
-                      <SidebarMenuButton
-                        render={
-                          <span
-                            aria-disabled="true"
-                            tabIndex={-1}
-                            aria-label={`${item.label} — به‌زودی`}
-                            className="opacity-60"
-                          >
-                            <item.icon className="sidebar-collapse-icon" />
-                            <span className="sidebar-collapse-label">
-                              {item.label}
-                            </span>
-                          </span>
-                        }
-                        tooltip={`${item.label} — به‌زودی`}
-                      />
-                      <Badge
-                        variant="secondary"
-                        className="sidebar-collapse-fade inset-e-2 absolute top-1/2 h-5 -translate-y-1/2 px-1.5 text-[10px]"
-                      >
-                        به‌زودی
-                      </Badge>
-                    </div>
-                  </SidebarMenuItem>
+                  <DisabledNavItem
+                    key={item.href}
+                    icon={item.icon}
+                    label={item.label}
+                    tag="به‌زودی"
+                  />
                 ) : (
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton

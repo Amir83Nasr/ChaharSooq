@@ -244,7 +244,7 @@ export function UsersView({
                   aria-describedby={
                     fieldErrors.username ? "new-username-error" : undefined
                   }
-                  className="h-10 bg-background text-left"
+                  className="h-11 bg-background text-left md:h-9"
                   required
                 />
                 {fieldErrors.username ? (
@@ -273,7 +273,7 @@ export function UsersView({
                   aria-describedby={
                     fieldErrors.password ? "new-password-error" : undefined
                   }
-                  className="h-10 bg-background text-left"
+                  className="h-11 bg-background text-left md:h-9"
                   required
                 />
                 {fieldErrors.password ? (
@@ -295,7 +295,7 @@ export function UsersView({
                     onValueChange={(value) => setRole(value as AssignableRole)}
                   >
                     <SelectTrigger
-                      className="h-10 w-full"
+                      className="h-11 w-full md:h-9"
                       aria-label="سطح دسترسی"
                     >
                       <SelectValue>
@@ -312,7 +312,7 @@ export function UsersView({
                     </SelectContent>
                   </Select>
                 ) : (
-                  <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                  <p className="flex h-11 items-center rounded-2xl border border-border bg-muted/40 px-4 text-sm text-muted-foreground md:h-9">
                     کاربر — فقط مشاهده
                   </p>
                 )}

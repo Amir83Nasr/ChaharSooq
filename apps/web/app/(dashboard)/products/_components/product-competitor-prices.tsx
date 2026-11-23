@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { ExternalLink, LoaderCircle, Plus, Trash2 } from "lucide-react"
+import { Check, ExternalLink, LoaderCircle, Plus, Trash2 } from "lucide-react"
 
 import { Badge } from "@workspace/ui/primitives/badge"
 import { BusyLabel } from "@workspace/ui/primitives/busy-label"
@@ -493,6 +493,8 @@ export function ProductCompetitorPrices({
   onChanged,
   onListingsChanged,
   canEdit = true,
+  noCompetitorPrice = false,
+  onNoCompetitorPriceChange,
 }: {
   productId: number
   /** Stores valid for this product's top group. */
@@ -502,6 +504,9 @@ export function ProductCompetitorPrices({
   onListingsChanged?: (listings: CompetitorListing[]) => void
   /** `false` renders the stored prices without any edit controls. */
   canEdit?: boolean
+  /** Owner marker: this product genuinely has no competitor price. */
+  noCompetitorPrice?: boolean
+  onNoCompetitorPriceChange?: (value: boolean) => void
 }) {
   const trackingOnly = stores.every((store) => TRACKING_STORES.has(store))
   const [listings, setListings] = useState<CompetitorListing[]>([])
@@ -509,6 +514,28 @@ export function ProductCompetitorPrices({
   const [busyKey, setBusyKey] = useState<number | string | null>(null)
   const [checkAllBusy, setCheckAllBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [flagBusy, setFlagBusy] = useState(false)
+  const [localNoPrice, setLocalNoPrice] = useState(noCompetitorPrice)
+
+  useEffect(() => {
+    setLocalNoPrice(noCompetitorPrice)
+  }, [noCompetitorPrice])
+
+  async function toggleNoCompetitorPrice(value: boolean) {
+    setFlagBusy(true)
+    setLocalNoPrice(value)
+    try {
+      await api.setNoCompetitorPrice(productId, value)
+      onNoCompetitorPriceChange?.(value)
+      onChanged?.()
+      setError(null)
+    } catch (err) {
+      setLocalNoPrice(!value)
+      setError(toPersianError(err))
+    } finally {
+      setFlagBusy(false)
+    }
+  }
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -652,6 +679,61 @@ export function ProductCompetitorPrices({
           </Button>
         ) : null}
       </div>
+
+      {/* Owner marker: this product has no comparable competitor price. */}
+      <label
+        className={`group relative flex items-center gap-3 overflow-hidden rounded-2xl border px-3 py-2.5 text-start transition-[background-color,border-color,box-shadow] duration-200 ${
+          localNoPrice
+            ? "border-destructive/40 bg-linear-to-r from-destructive/10 to-destructive/[0.02] shadow-[0_0_0_3px_oklch(from_var(--destructive)_l_c_h_/_0.06)]"
+            : "border-border bg-background hover:border-foreground/20 hover:bg-muted/40"
+        } ${!canEdit || flagBusy ? "cursor-default opacity-80" : "cursor-pointer"}`}
+      >
+        <input
+          type="checkbox"
+          checked={localNoPrice}
+          disabled={!canEdit || flagBusy}
+          onChange={(event) =>
+            void toggleNoCompetitorPrice(event.target.checked)
+          }
+          className="peer sr-only"
+          aria-label="قیمت رقیب وجود ندارد"
+        />
+        <span
+          aria-hidden="true"
+          className={`flex size-5 shrink-0 items-center justify-center rounded-lg border-2 transition-all duration-200 peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background ${
+            localNoPrice
+              ? "text-destructive-foreground scale-110 border-destructive bg-destructive shadow-sm"
+              : "border-border bg-background text-transparent group-hover:border-foreground/40"
+          }`}
+        >
+          <Check
+            className={`size-3.5 transition-transform duration-200 ${
+              localNoPrice ? "scale-100 opacity-100" : "scale-50 opacity-0"
+            }`}
+            strokeWidth={3}
+          />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span
+            className={`block text-sm font-semibold ${
+              localNoPrice ? "text-destructive" : "text-foreground"
+            }`}
+          >
+            قیمت رقیب وجود ندارد
+          </span>
+          <span className="mt-0.5 block text-[11px] leading-4 text-muted-foreground">
+            {localNoPrice
+              ? "این کالا علامتگذاری شد؛ در جدول به رنگ قرمز نمایش داده میشود."
+              : "برای کالاهایی که رقیب قیمتی ندارند، تیک بزنید."}
+          </span>
+        </span>
+        {flagBusy ? (
+          <LoaderCircle
+            className="size-4 shrink-0 animate-spin text-muted-foreground"
+            aria-hidden="true"
+          />
+        ) : null}
+      </label>
 
       {error ? (
         <p role="alert" className="text-sm text-destructive">

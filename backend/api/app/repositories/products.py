@@ -33,6 +33,7 @@ class ProductFilters(NamedTuple):
     competitor_store: str | None
     min_competitor_price: int | None
     max_competitor_price: int | None
+    no_competitor_price: bool
     competitor_price_since: datetime
     min_stock: int | None
     max_stock: int | None
@@ -161,7 +162,11 @@ def product_base_criteria(filters: ProductFilters) -> list[ColumnElement[bool]]:
 def product_criteria(filters: ProductFilters) -> list[ColumnElement[bool]]:
     """WHERE clauses for one product list query (list + export share these)."""
     criteria = product_base_criteria(filters)
-    if (
+    if filters.no_competitor_price:
+        # Only products the owner explicitly marked with the "no competitor
+        # price" tick — not merely products whose link is missing/stale.
+        criteria.append(Product.no_competitor_price.is_(True))
+    elif (
         filters.competitor_store
         or filters.min_competitor_price is not None
         or filters.max_competitor_price is not None
@@ -471,6 +476,10 @@ class ProductRepository:
     ) -> None:
         product.allowed_decrease_percent = allowed_decrease_percent
         product.allowed_increase_percent = allowed_increase_percent
+        self._session.flush()
+
+    def set_no_competitor_price(self, product: Product, *, value: bool) -> None:
+        product.no_competitor_price = value
         self._session.flush()
 
     def stage(self, product: Product) -> Product:

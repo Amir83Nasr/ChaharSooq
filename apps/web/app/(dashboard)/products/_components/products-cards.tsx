@@ -108,10 +108,14 @@ export function ProductMobileCard({
               <span className="text-[11px] text-muted-foreground">
                 {marketLabel}
               </span>
-              {competitor?.price !== null &&
-              competitor?.price !== undefined &&
-              amount !== null &&
-              amount !== undefined ? (
+              {item.no_competitor_price ? (
+                <span className="text-xs font-medium text-destructive">
+                  قیمت رقیب وجود ندارد
+                </span>
+              ) : competitor?.price !== null &&
+                competitor?.price !== undefined &&
+                amount !== null &&
+                amount !== undefined ? (
                 <Price
                   value={amount}
                   className="text-sm font-semibold text-muted-foreground"

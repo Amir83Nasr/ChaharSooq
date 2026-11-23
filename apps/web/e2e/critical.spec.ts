@@ -15,6 +15,7 @@ test("unauthenticated routes land on the Persian RTL login page", async ({
     "/settings/sync",
     "/settings/inventory",
     "/settings/appearance",
+    "/backup",
   ]) {
     await page.goto(path)
     await expect(page).toHaveURL(/\/login$/)

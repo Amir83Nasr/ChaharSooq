@@ -1,3 +1,4 @@
+import { Fragment } from "react"
 import {
   Select,
   SelectContent,
@@ -18,9 +19,9 @@ import {
   DataTableToolbar,
   SearchInput,
 } from "@/components/data/data-table-toolbar"
-import type { DefaultCompetitorStore, ProductSort, TopGroup } from "@/lib/api"
+import type { ProductSort, TopGroup } from "@/lib/api"
 import { COMPETITOR_MARKETS } from "@/lib/competitor-price"
-import type { StockFilter } from "@/lib/products-store"
+import type { CompetitorMarketFilter, StockFilter } from "@/lib/products-store"
 import { TOP_GROUPS, isTopGroup } from "@/lib/top-groups"
 
 export const SORT_LABELS: Record<ProductSort, string> = {
@@ -43,7 +44,7 @@ interface ToolbarProps {
   topGroup: TopGroup | null
   sort: ProductSort
   stock: StockFilter
-  market: DefaultCompetitorStore
+  market: CompetitorMarketFilter
   minPrice: string
   maxPrice: string
   hasFilters: boolean
@@ -51,7 +52,7 @@ interface ToolbarProps {
   onTopGroup: (v: TopGroup | null) => void
   onSort: (v: ProductSort) => void
   onStock: (v: StockFilter) => void
-  onMarketChange: (v: DefaultCompetitorStore) => void
+  onMarketChange: (v: CompetitorMarketFilter) => void
   onMinPrice: (v: string) => void
   onMaxPrice: (v: string) => void
   onClear: () => void
@@ -149,25 +150,30 @@ export function ProductsToolbar(props: ToolbarProps) {
       </Select>
       <Select
         value={market}
-        onValueChange={(v) => onMarketChange(v as DefaultCompetitorStore)}
+        onValueChange={(v) => onMarketChange(v as CompetitorMarketFilter)}
       >
         <SelectTrigger className="w-full sm:w-44" aria-label="فروشگاه رقیب">
           <SelectValue>
-            {(value: DefaultCompetitorStore | null) =>
-              value
-                ? (COMPETITOR_MARKETS.find((m) => m.store === value)?.label ??
-                  "فروشگاه رقیب")
-                : "فروشگاه رقیب"
+            {(value: CompetitorMarketFilter | null) =>
+              value === "missing"
+                ? "بدون قیمت رقیب"
+                : value
+                  ? (COMPETITOR_MARKETS.find((m) => m.store === value)?.label ??
+                    "فروشگاه رقیب")
+                  : "فروشگاه رقیب"
             }
           </SelectValue>
         </SelectTrigger>
         <SelectContent align="start">
           <SelectGroup>
             <SelectLabel>فروشگاه رقیب</SelectLabel>
-            {COMPETITOR_MARKETS.map((m) => (
-              <SelectItem key={m.store} value={m.store}>
-                {m.label}
-              </SelectItem>
+            {COMPETITOR_MARKETS.map((m, index) => (
+              <Fragment key={m.store}>
+                <SelectItem value={m.store}>{m.label}</SelectItem>
+                {index === 0 ? (
+                  <SelectItem value="missing">بدون قیمت رقیب</SelectItem>
+                ) : null}
+              </Fragment>
             ))}
           </SelectGroup>
         </SelectContent>

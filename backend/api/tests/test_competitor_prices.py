@@ -178,6 +178,58 @@ def test_link_edit_keeps_manual_values_but_marks_them_stale(client: TestClient) 
     assert edited.json()["price_is_fresh"] is False
 
 
+def test_competitor_store_and_no_price_filters(client: TestClient) -> None:
+    """Store choice filters by that store; no-price filters by the owner tick.
+
+    "Best" is display-only and must never restrict the rows.
+    """
+    technolife_id = _product_id(client)
+    digikala_id = client.post(
+        "/api/v1/products",
+        json={"name": "یخچال دیجی", "sku": "FRIDGE-DIGI", "price": 100000000},
+    ).json()["id"]
+    flagged_id = client.post(
+        "/api/v1/products",
+        json={"name": "کالای بدون رقیب", "sku": "FRIDGE-NONE", "price": 100000000},
+    ).json()["id"]
+
+    for product_id, store, url in (
+        (technolife_id, "technolife", "https://www.technolife.com/product/x"),
+        (digikala_id, "digikala", "https://www.digikala.com/product/dkp-1/"),
+    ):
+        listing = client.post(
+            f"/api/v1/products/{product_id}/competitors",
+            json={"store": store, "url": url},
+        ).json()
+        client.patch(
+            f"/api/v1/competitors/{listing['id']}",
+            json={"manual_price": 30000000, "manual_currency": "IRT", "manual_in_stock": True},
+        )
+
+    client.patch(
+        f"/api/v1/products/{flagged_id}/no-competitor-price",
+        json={"no_competitor_price": True},
+    )
+
+    # Specific store: only products with a fresh price from that store.
+    by_technolife = client.get("/api/v1/products", params={"competitor_store": "technolife"}).json()
+    assert [item["id"] for item in by_technolife["items"]] == [technolife_id]
+    by_digikala = client.get("/api/v1/products", params={"competitor_store": "digikala"}).json()
+    assert [item["id"] for item in by_digikala["items"]] == [digikala_id]
+
+    # Flag: only the owner-marked product, not merely products without prices.
+    flagged = client.get("/api/v1/products", params={"no_competitor_price": True}).json()
+    assert [item["id"] for item in flagged["items"]] == [flagged_id]
+
+    # Best: no filter at all — every active product stays visible.
+    all_items = client.get("/api/v1/products").json()
+    assert {item["id"] for item in all_items["items"]} == {
+        technolife_id,
+        digikala_id,
+        flagged_id,
+    }
+
+
 def test_only_fresh_prices_appear_and_can_filter(client: TestClient) -> None:
     product_id = _product_id(client)
     created = client.post(

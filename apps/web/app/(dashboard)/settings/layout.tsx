@@ -5,7 +5,7 @@ import { PageHeader } from "@workspace/ui/layout/page-header"
 
 import { SettingsNav } from "@/components/settings/settings-nav"
 import { getSessionAdmin } from "@/lib/auth"
-import { isAdmin, isOwner } from "@/lib/session"
+import { isAdmin } from "@/lib/session"
 
 export const metadata: Metadata = { title: "چهارسوق | تنظیمات" }
 
@@ -18,7 +18,6 @@ export default async function SettingsLayout({
   if (!user) redirect("/login")
   // Settings change shop-wide behaviour, so the read-only role never sees them.
   if (!isAdmin(user.role)) redirect("/products")
-  const owner = isOwner(user.role)
   return (
     <div className="flex flex-1 flex-col gap-4 sm:gap-6">
       {/* Keep the title under the 4rem glass header while only the content
@@ -29,7 +28,7 @@ export default async function SettingsLayout({
         <PageHeader title="تنظیمات" subtitle="پیکربندی فروشگاه" />
       </div>
       <div className="grid gap-4 md:grid-cols-[13rem_minmax(0,1fr)] md:gap-6">
-        <SettingsNav owner={owner} />
+        <SettingsNav />
         <div className="flex min-w-0 flex-col gap-4">{children}</div>
       </div>
     </div>

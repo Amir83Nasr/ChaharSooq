@@ -9,9 +9,10 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_db, get_db_readonly, require_admin, require_user
 from app.api.openapi import NOT_FOUND, UNAUTHORIZED, VALIDATION_ERROR
 from app.core.top_groups import TopGroup
-from app.models import Admin
+from app.models import Admin, Product
 from app.schemas import (
     InventorySummaryOut,
+    ProductCompetitorFlagUpdate,
     ProductIn,
     ProductOut,
     ProductPage,
@@ -62,6 +63,10 @@ def list_products(
     max_competitor_price: int | None = Query(
         default=None, ge=0, description="Maximum fresh competitor price."
     ),
+    no_competitor_price: bool = Query(
+        default=False,
+        description="Only products marked by the owner as having no competitor price.",
+    ),
     min_stock: int | None = Query(default=None, ge=0, description="Minimum stock."),
     max_stock: int | None = Query(default=None, ge=0, description="Maximum stock."),
     in_stock: bool | None = Query(
@@ -94,6 +99,7 @@ def list_products(
         competitor_store=competitor_store,
         min_competitor_price=min_competitor_price,
         max_competitor_price=max_competitor_price,
+        no_competitor_price=no_competitor_price,
         min_stock=min_stock,
         max_stock=max_stock,
         in_stock=in_stock,
@@ -106,13 +112,16 @@ def list_products(
     # to keep row numbers and totalPages consistent on the client.
     response_page = page if page_size > 0 else 1
     competitor_prices = CompetitorService(session).prices_for_products({p.id for p in items})
+
+    def with_prices(p: Product) -> ProductOut:
+        prices = competitor_prices.get(p.id, [])
+        has_price = any(price.is_fresh and price.price is not None for price in prices)
+        return ProductOut.model_validate(p).model_copy(
+            update={"competitor_prices": prices, "has_competitor_price": has_price}
+        )
+
     return ProductPage(
-        items=[
-            ProductOut.model_validate(p).model_copy(
-                update={"competitor_prices": competitor_prices.get(p.id, [])}
-            )
-            for p in items
-        ],
+        items=[with_prices(p) for p in items],
         total=total,
         page=response_page,
         page_size=response_page_size,
@@ -164,6 +173,33 @@ def update_product_price_bounds(
 ) -> ProductOut:
     try:
         product = ProductService(session).update_price_bounds(product_id, payload)
+    except ProductNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="کالا پیدا نشد",
+        ) from None
+    return ProductOut.model_validate(product)
+
+
+@router.patch(
+    "/products/{product_id}/no-competitor-price",
+    response_model=ProductOut,
+    summary="Mark a product as having no competitor price",
+    description=(
+        "Sets the owner-marker used to note that a product genuinely has no "
+        "comparable competitor price (distinct from a missing or stale link). "
+        "Admin-only; viewers receive `403`."
+    ),
+    responses={404: NOT_FOUND, 422: VALIDATION_ERROR},
+)
+def update_no_competitor_price(
+    product_id: int,
+    payload: ProductCompetitorFlagUpdate,
+    _admin: Admin = Depends(require_admin),  # noqa: B008
+    session: Session = Depends(get_db),  # noqa: B008
+) -> ProductOut:
+    try:
+        product = ProductService(session).set_no_competitor_price(product_id, payload)
     except ProductNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -61,6 +61,12 @@ export function ProductDetailDialog(props: {
   // default section) so their competitor links stay manageable.
   const topGroup = product ? (product.top_group ?? "لوازم خانگی") : null
 
+  const handleNoCompetitorPriceChange = useCallback((value: boolean) => {
+    setLocalProduct((current) =>
+      current ? { ...current, no_competitor_price: value } : current
+    )
+  }, [])
+
   const handleListingsChanged = useCallback((listings: CompetitorListing[]) => {
     setLocalProduct((current) =>
       current
@@ -136,6 +142,8 @@ export function ProductDetailDialog(props: {
                 onChanged={onCompetitorChanged}
                 onListingsChanged={handleListingsChanged}
                 canEdit={canEdit}
+                noCompetitorPrice={product.no_competitor_price}
+                onNoCompetitorPriceChange={handleNoCompetitorPriceChange}
               />
             ) : null}
           </div>

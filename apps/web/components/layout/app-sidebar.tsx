@@ -1,11 +1,9 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
-  Bot,
-  ChevronDown,
+  Database,
   LayoutDashboard,
   Package,
   Settings,
@@ -26,37 +24,32 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
   useSidebar,
 } from "@workspace/ui/primitives/sidebar"
 import { Badge } from "@workspace/ui/primitives/badge"
 import { Button } from "@workspace/ui/primitives/button"
-import { cn } from "@workspace/ui/lib/utils"
 import { LogoutMenuItem } from "@/components/auth/logout-menu-item"
 import { useSession } from "@/components/auth/session-provider"
 import { prefetchProducts } from "@/lib/products-store"
-
-type NavChild = {
-  href: string
-  label: string
-}
+import { isOwner } from "@/lib/session"
 
 type NavLinkItem = {
+  kind: "link"
   href: string
   label: string
   icon: LucideIcon
   soon?: boolean
+  ownerOnly?: boolean
 }
 
-type NavParentItem = {
+// Display-only entry: no link, no submenu.
+type NavInfoItem = {
+  kind: "info"
   label: string
   icon: LucideIcon
-  children: NavChild[]
 }
 
-type NavItem = NavLinkItem | NavParentItem
+type NavItem = NavLinkItem | NavInfoItem
 
 type NavGroup = {
   group: string
@@ -67,23 +60,22 @@ const NAV: NavGroup[] = [
   {
     group: "اصلی",
     items: [
-      { href: "/products", label: "محصولات", icon: Package },
-      { href: "/dashboard", label: "داشبورد", icon: LayoutDashboard },
+      { kind: "link", href: "/products", label: "محصولات", icon: Package },
+      {
+        kind: "link",
+        href: "/dashboard",
+        label: "داشبورد",
+        icon: LayoutDashboard,
+      },
     ],
   },
   {
     group: "فروشگاه‌ها",
     items: [
       {
+        kind: "info",
         label: "اتصال فروشگاه‌ها",
         icon: Store,
-        children: [
-          { href: "/integrations/sofa", label: "سوفا" },
-          { href: "/integrations/digifresh", label: "دیجی‌فرش" },
-          { href: "/integrations/digikala", label: "دیجی‌کالا" },
-          { href: "/integrations/technolife", label: "تکنولایف" },
-          { href: "/integrations/torob", label: "ترب" },
-        ],
       },
     ],
   },
@@ -91,15 +83,10 @@ const NAV: NavGroup[] = [
     group: "هوش مصنوعی",
     items: [
       {
+        kind: "link",
         href: "/ai-assistant",
         label: "دستیار هوشمند",
         icon: Sparkles,
-        soon: true,
-      },
-      {
-        href: "/ai-pricing",
-        label: "قیمت‌گذاری هوشمند",
-        icon: Bot,
         soon: true,
       },
     ],
@@ -107,8 +94,15 @@ const NAV: NavGroup[] = [
   {
     group: "سیستم",
     items: [
-      { href: "/settings", label: "تنظیمات", icon: Settings },
-      { href: "/users", label: "کاربران", icon: UsersRound },
+      { kind: "link", href: "/settings", label: "تنظیمات", icon: Settings },
+      {
+        kind: "link",
+        href: "/backup",
+        label: "پشتیبان‌گیری",
+        icon: Database,
+        ownerOnly: true,
+      },
+      { kind: "link", href: "/users", label: "کاربران", icon: UsersRound },
     ],
   },
 ]
@@ -121,20 +115,18 @@ function isLinkActive(href: string, pathname: string) {
 
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
-  const { isMobile, setOpenMobile, state } = useSidebar()
-  const { canManage } = useSession()
-  // Views that only make sense for the full-management role.
-  const nav = canManage ? NAV : NAV.filter((group) => group.group !== "سیستم")
-  const storesActive = pathname.startsWith("/integrations")
-  const [storesOpen, setStoresOpen] = useState(storesActive)
-  // Links are keyboard-reachable only when the submenu is actually visible:
-  // open, and (on desktop) the sidebar expanded. On mobile the sidebar is
-  // a sheet, so the desktop collapsed state doesn't apply.
-  const submenuAccessible = storesOpen && (isMobile || state === "expanded")
-
-  useEffect(() => {
-    if (storesActive) setStoresOpen(true)
-  }, [storesActive])
+  const { isMobile, setOpenMobile } = useSidebar()
+  const { canManage, role } = useSession()
+  // Views that only make sense for the full-management role. Backup stays
+  // owner-only even among management accounts, matching the page guard.
+  const nav = (canManage ? NAV : NAV.filter((group) => group.group !== "سیستم"))
+    .map((group) => ({
+      ...group,
+      items: group.items.filter(
+        (item) => !("ownerOnly" in item && item.ownerOnly) || isOwner(role)
+      ),
+    }))
+    .filter((group) => group.items.length > 0)
 
   const closeMobileSidebar = () => {
     if (isMobile) setOpenMobile(false)
@@ -201,61 +193,19 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
             <SidebarGroupLabel>{entry.group}</SidebarGroupLabel>
             <SidebarMenu>
               {entry.items.map((item) =>
-                "children" in item ? (
+                item.kind === "info" ? (
                   <SidebarMenuItem key={item.label}>
                     <SidebarMenuButton
                       render={
-                        <button
-                          type="button"
-                          aria-expanded={storesOpen}
-                          onClick={() => setStoresOpen((open) => !open)}
-                        >
+                        <span>
                           <item.icon className="sidebar-collapse-icon" />
                           <span className="sidebar-collapse-label">
                             {item.label}
                           </span>
-                          <ChevronDown
-                            className={cn(
-                              "sidebar-collapse-fade ms-auto",
-                              storesOpen && "rotate-180"
-                            )}
-                          />
-                        </button>
+                        </span>
                       }
                       tooltip={item.label}
-                      isActive={storesActive}
                     />
-                    <div
-                      className="sidebar-submenu-grid"
-                      data-open={storesOpen}
-                      aria-hidden={!submenuAccessible}
-                    >
-                      <div>
-                        <SidebarMenuSub aria-hidden={!submenuAccessible}>
-                          {item.children.map((child) => (
-                            <SidebarMenuSubItem
-                              key={child.href}
-                              aria-hidden={!submenuAccessible}
-                            >
-                              <SidebarMenuSubButton
-                                render={
-                                  <Link
-                                    href={child.href}
-                                    onClick={closeMobileSidebar}
-                                    tabIndex={
-                                      submenuAccessible ? undefined : -1
-                                    }
-                                  >
-                                    <span>{child.label}</span>
-                                  </Link>
-                                }
-                                isActive={isLinkActive(child.href, pathname)}
-                              />
-                            </SidebarMenuSubItem>
-                          ))}
-                        </SidebarMenuSub>
-                      </div>
-                    </div>
                   </SidebarMenuItem>
                 ) : item.soon ? (
                   <SidebarMenuItem key={item.href} aria-hidden={false}>

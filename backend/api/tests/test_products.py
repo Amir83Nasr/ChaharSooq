@@ -77,6 +77,28 @@ def test_product_invalid_category_rejected(client: TestClient) -> None:
     assert r.status_code == 422
 
 
+def test_no_competitor_price_flag_toggles(client: TestClient) -> None:
+    login(client)
+    product_id = client.post(
+        "/api/v1/products",
+        json={"name": "کالای خاص", "sku": "UNIQUE-1", "price": 1000000},
+    ).json()["id"]
+    r = client.patch(
+        f"/api/v1/products/{product_id}/no-competitor-price",
+        json={"no_competitor_price": True},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["no_competitor_price"] is True
+    listed = client.get("/api/v1/products", params={"q": "UNIQUE-1"}).json()
+    assert listed["items"][0]["no_competitor_price"] is True
+
+    off = client.patch(
+        f"/api/v1/products/{product_id}/no-competitor-price",
+        json={"no_competitor_price": False},
+    )
+    assert off.json()["no_competitor_price"] is False
+
+
 def test_products_summary_counts(client: TestClient) -> None:
     seed(client)
     body = client.get("/api/v1/products/summary", params={"threshold": 5}).json()

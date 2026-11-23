@@ -68,6 +68,20 @@ class ProductOut(BaseModel):
         default=None, description="Last successful source sync (UTC)."
     )
     competitor_prices: list[CompetitorPriceOut] = Field(default_factory=list)
+    has_competitor_price: bool = Field(
+        default=False,
+        description=(
+            "True when at least one active competitor link has a fresh price; "
+            "false for products with no link or only stale/failed data."
+        ),
+    )
+    no_competitor_price: bool = Field(
+        default=False,
+        description=(
+            "Owner-marked: this product genuinely has no comparable competitor "
+            "price. Distinct from stale or missing price data."
+        ),
+    )
     allowed_decrease_percent: float | None = Field(
         default=None,
         description=(
@@ -85,6 +99,14 @@ class ProductOut(BaseModel):
     created_at: datetime = Field(description="UTC creation timestamp.")
 
     model_config = {"from_attributes": True}
+
+
+class ProductCompetitorFlagUpdate(BaseModel):
+    """Toggle the owner-marked 'no competitor price' flag for one product."""
+
+    no_competitor_price: bool = Field(
+        description="True marks the product as having no comparable competitor price."
+    )
 
 
 class ProductPriceBoundsUpdate(BaseModel):

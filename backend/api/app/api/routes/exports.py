@@ -75,6 +75,10 @@ def export_products_csv(
     max_competitor_price: int | None = Query(
         default=None, ge=0, description="Maximum fresh competitor price."
     ),
+    no_competitor_price: bool = Query(  # noqa: B008
+        default=False,
+        description="Only products marked by the owner as having no competitor price.",
+    ),
     min_stock: int | None = Query(default=None, ge=0, description="Minimum stock."),
     max_stock: int | None = Query(default=None, ge=0, description="Maximum stock."),
     in_stock: bool | None = Query(
@@ -109,6 +113,7 @@ def export_products_csv(
         competitor_store=competitor_store,
         min_competitor_price=min_competitor_price,
         max_competitor_price=max_competitor_price,
+        no_competitor_price=no_competitor_price,
         min_stock=min_stock,
         max_stock=max_stock,
         in_stock=in_stock,

@@ -24,12 +24,6 @@ const breadcrumbLabels: Record<string, string> = {
   inventory: "انبار",
   backup: "پشتیبان‌گیری",
   appearance: "نمایش",
-  integrations: "اتصال فروشگاه‌ها",
-  sofa: "سوفا",
-  digifresh: "دیجی‌فرش",
-  digikala: "دیجی‌کالا",
-  technolife: "تکنولایف",
-  torob: "ترب",
 }
 
 export function DashboardBreadcrumbs() {

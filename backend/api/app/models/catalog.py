@@ -96,6 +96,9 @@ class Product(Base):
     weight: Mapped[Decimal | None] = mapped_column(Numeric(18, 3), nullable=True, default=None)
     is_special: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Owner-marked: this product genuinely has no competitor price to track.
+    # Distinct from a missing/stale link, which just means data is not ready.
+    no_competitor_price: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     # Allowed deviation from the base price for the suggested price clamp:
     # floor = price × (1 − allowed_decrease_percent / 100),
     # ceiling = price × (1 + allowed_increase_percent / 100). NULL disables

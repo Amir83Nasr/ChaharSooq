@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 
 import { BusyLabel } from "@workspace/ui/primitives/busy-label"
 import { Button } from "@workspace/ui/primitives/button"
+import { toast } from "@workspace/ui/primitives/sonner"
 import { PersianNumber } from "@workspace/ui/persian/persian-number"
 
 import { api } from "@/lib/api"
@@ -15,8 +16,6 @@ export function PageSizeSettings() {
   const [loaded, setLoaded] = useState(false)
   const [busy, setBusy] = useState(false)
   const [savingValue, setSavingValue] = useState<number | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -30,7 +29,7 @@ export function PageSizeSettings() {
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "خطایی رخ داد.")
+          toast.error(err instanceof Error ? err.message : "خطایی رخ داد.")
           setLoaded(true)
         }
       })
@@ -43,14 +42,12 @@ export function PageSizeSettings() {
     if (busy || next === value) return
     setBusy(true)
     setSavingValue(next)
-    setError(null)
-    setSaved(false)
     try {
       const data = await api.updateSettings({ default_page_size: next })
       setValue(data.default_page_size)
-      setSaved(true)
+      toast.success("تعداد ردیف پیش‌فرض ذخیره شد.")
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "خطایی رخ داد.")
+      toast.error(err instanceof Error ? err.message : "خطایی رخ داد.")
     } finally {
       setBusy(false)
       setSavingValue(null)
@@ -105,16 +102,6 @@ export function PageSizeSettings() {
           )
         })}
       </div>
-      {error ? (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      ) : null}
-      {saved ? (
-        <p role="status" className="text-sm text-success">
-          تعداد پیش‌فرض ذخیره شد.
-        </p>
-      ) : null}
     </div>
   )
 }

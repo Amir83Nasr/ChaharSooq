@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next"
 
 import "@workspace/ui/globals.css"
+import { Toaster } from "@workspace/ui/primitives/sonner"
 import { ThemeColorSync } from "@/components/layout/theme-color-sync"
 import { ThemeProvider } from "@/components/layout/theme-provider"
 import { cn } from "@workspace/ui/lib/utils"
@@ -62,6 +63,7 @@ export default function RootLayout({
           <div id="charsooq-root" className="relative min-h-dvh">
             {children}
           </div>
+          <Toaster position="bottom-center" richColors closeButton />
         </ThemeProvider>
       </body>
     </html>

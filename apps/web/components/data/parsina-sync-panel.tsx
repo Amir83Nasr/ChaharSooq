@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 
 import { Button } from "@workspace/ui/primitives/button"
 import { BusyRefreshIcon } from "@workspace/ui/primitives/busy-refresh-icon"
+import { toast } from "@workspace/ui/primitives/sonner"
 import { PersianDateTime } from "@workspace/ui/persian/persian-date"
 import { formatPersianDateTime } from "@workspace/ui/lib/date"
 import { toPersianDigits } from "@workspace/ui/lib/number"
@@ -55,7 +56,6 @@ export function ParsinaSyncPanel({
 }: Props) {
   const [status, setStatus] = useState<SyncStatus | null>(null)
   const [triggering, setTriggering] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   // True after the first status round-trip settles (success or failure), so a
   // failed first fetch still re-enables the manual button instead of locking
   // it in a loading state.
@@ -79,6 +79,8 @@ export function ParsinaSyncPanel({
   const onSyncedRef = useRef(onSynced)
   const onUnauthorizedRef = useRef(onUnauthorized)
   const onStatusRef = useRef(onStatus)
+  // Last run we reported to the user, so each attempt is toasted once.
+  const reportedAttempt = useRef<string | null | undefined>(undefined)
   onSyncedRef.current = onSynced
   onUnauthorizedRef.current = onUnauthorized
   onStatusRef.current = onStatus
@@ -88,7 +90,7 @@ export function ParsinaSyncPanel({
       onUnauthorizedRef.current()
       return
     }
-    setError(err instanceof Error ? err.message : "خطایی رخ داد.")
+    toast.error(err instanceof Error ? err.message : "خطایی رخ داد.")
   }, [])
 
   // Poll loop: one request in flight at a time, sequential timeouts (no
@@ -119,6 +121,28 @@ export function ParsinaSyncPanel({
         delay = data.running ? RUNNING_POLL_MS : IDLE_POLL_MS
         setStatus(data)
         onStatusRef.current?.(data.last_success_at)
+        // Report the outcome of a finished run once. The status line stays
+        // authoritative; the toast just makes the result noticeable.
+        const attempt = data.last_attempt_at ?? data.last_success_at
+        const firstPoll = reportedAttempt.current === undefined
+        if (firstPoll) {
+          // The initial status may describe an old run; don't toast for it.
+          reportedAttempt.current = attempt
+        } else if (
+          !data.running &&
+          attempt !== null &&
+          reportedAttempt.current !== attempt
+        ) {
+          reportedAttempt.current = attempt
+          if (lastRunFailed(data)) {
+            const detail = data.last_error
+              ? `: ${toPersianDigits(data.last_error)}`
+              : ""
+            toast.error(`آخرین به‌روزرسانی از پارسینا ناموفق بود${detail}`)
+          } else {
+            toast.success("داده‌ها از پارسینا به‌روزرسانی شدند.")
+          }
+        }
         // Re-fetch the catalog whenever a run finishes (success or failure) so
         // manual and scheduled updates land without a full page reload.
         if (
@@ -144,7 +168,7 @@ export function ParsinaSyncPanel({
           pollsRef.current = 0
           delay = IDLE_POLL_MS
           if (!cancelled) {
-            setError(
+            toast.error(
               "همگام‌سازی بیش از حد طول کشیده است؛ بعداً وضعیت را بررسی کنید."
             )
           }
@@ -168,15 +192,15 @@ export function ParsinaSyncPanel({
     if (triggeringRef.current) return
     triggeringRef.current = true
     setTriggering(true)
-    setError(null)
     try {
       await api.parsinaSync()
+      toast.success("درخواست به‌روزرسانی از پارسینا ارسال شد.")
       // 409 = another run (manual or scheduled) owns the lock; the poller
       // already shows it as running, nothing extra to start.
     } catch (err: unknown) {
       if (err instanceof ApiRequestError && err.status === 409) {
-        // Another run is already in progress; no extra text needed — the
-        // status line already reflects the running state.
+        // Another run is already in progress; the poll shows its state.
+        toast.info("همگام‌sازی دیگری از قبل در حال اجراست.")
       } else {
         handle(err)
       }
@@ -263,11 +287,6 @@ export function ParsinaSyncPanel({
           <span>هنوز به‌روزرسانی موفقی انجام نشده است.</span>
         )}
       </div>
-      {error ? (
-        <p role="alert" className="w-full text-xs text-destructive">
-          {error}
-        </p>
-      ) : null}
     </div>
   )
 }

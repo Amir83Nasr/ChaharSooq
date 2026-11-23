@@ -5,10 +5,10 @@ import { useEffect, useState } from "react"
 import { BusyLabel } from "@workspace/ui/primitives/busy-label"
 import { Button } from "@workspace/ui/primitives/button"
 import { Input } from "@workspace/ui/primitives/input"
+import { toast } from "@workspace/ui/primitives/sonner"
 import {
   formatPersianNumber,
   parsePriceFilterInput,
-  toPersianDigits,
 } from "@workspace/ui/lib/number"
 
 import { api } from "@/lib/api"
@@ -17,8 +17,6 @@ export function InventoryThresholdSettings() {
   const [value, setValue] = useState("")
   const [loaded, setLoaded] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -32,7 +30,7 @@ export function InventoryThresholdSettings() {
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "خطایی رخ داد.")
+          toast.error(err instanceof Error ? err.message : "خطایی رخ داد.")
           setLoaded(true)
         }
       })
@@ -44,25 +42,21 @@ export function InventoryThresholdSettings() {
   async function save() {
     const raw = value.trim()
     if (raw === "") {
-      setError("آستانه را وارد کنید.")
-      setSaved(false)
+      toast.error("آستانه را وارد کنید.")
       return
     }
     const threshold = Number(raw)
     if (!Number.isInteger(threshold) || threshold < 0) {
-      setError("آستانه باید عدد صحیح نامنفی باشد.")
-      setSaved(false)
+      toast.error("آستانه باید عدد صحیح نامنفی باشد.")
       return
     }
     setBusy(true)
-    setError(null)
-    setSaved(false)
     try {
       const data = await api.updateSettings({ low_stock_threshold: threshold })
       setValue(String(data.low_stock_threshold))
-      setSaved(true)
+      toast.success("آستانه موجودی کم ذخیره شد.")
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "خطایی رخ داد.")
+      toast.error(err instanceof Error ? err.message : "خطایی رخ داد.")
     } finally {
       setBusy(false)
     }
@@ -82,10 +76,7 @@ export function InventoryThresholdSettings() {
       <div className="flex items-center gap-2">
         <Input
           value={value === "" ? "" : formatPersianNumber(value)}
-          onChange={(e) => {
-            setValue(parsePriceFilterInput(e.target.value))
-            setSaved(false)
-          }}
+          onChange={(e) => setValue(parsePriceFilterInput(e.target.value))}
           placeholder="مثلاً ۱۰"
           aria-label="آستانه موجودی کم (عدد)"
           inputMode="numeric"
@@ -106,16 +97,6 @@ export function InventoryThresholdSettings() {
           />
         </Button>
       </div>
-      {error ? (
-        <p role="alert" className="text-sm text-destructive">
-          {toPersianDigits(error)}
-        </p>
-      ) : null}
-      {saved ? (
-        <p role="status" className="text-sm text-success">
-          آستانه ذخیره شد.
-        </p>
-      ) : null}
     </div>
   )
 }

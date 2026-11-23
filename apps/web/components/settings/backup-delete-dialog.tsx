@@ -12,7 +12,6 @@ import {
 import { BusyLabel } from "@workspace/ui/primitives/busy-label"
 import { Button } from "@workspace/ui/primitives/button"
 import { formatPersianDateTime } from "@workspace/ui/lib/date"
-import { toPersianDigits } from "@workspace/ui/lib/number"
 
 import type { BackupRecord } from "@/lib/api"
 
@@ -22,7 +21,6 @@ type BackupDeleteDialogProps = {
   onOpenChange: (open: boolean) => void
   onConfirm: () => void | Promise<void>
   pending: boolean
-  error: string | null
 }
 
 /** Confirmation for permanently removing one stored archive. */
@@ -32,7 +30,6 @@ export function BackupDeleteDialog({
   onOpenChange,
   onConfirm,
   pending,
-  error,
 }: BackupDeleteDialogProps) {
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
@@ -48,12 +45,6 @@ export function BackupDeleteDialog({
             ) : null}
           </ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
-
-        {error ? (
-          <p role="alert" className="text-sm text-destructive">
-            {toPersianDigits(error)}
-          </p>
-        ) : null}
 
         <ResponsiveDialogFooter>
           <ResponsiveDialogClose

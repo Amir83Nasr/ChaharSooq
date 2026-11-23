@@ -5,11 +5,8 @@ import { useEffect, useState } from "react"
 import { BusyLabel } from "@workspace/ui/primitives/busy-label"
 import { Button } from "@workspace/ui/primitives/button"
 import { Input } from "@workspace/ui/primitives/input"
-import {
-  formatPersianNumber,
-  toLatinDigits,
-  toPersianDigits,
-} from "@workspace/ui/lib/number"
+import { toast } from "@workspace/ui/primitives/sonner"
+import { formatPersianNumber, toLatinDigits } from "@workspace/ui/lib/number"
 
 import { api } from "@/lib/api"
 
@@ -38,8 +35,6 @@ export function SyncIntervalSettings() {
   const [value, setValue] = useState("")
   const [loaded, setLoaded] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -53,7 +48,7 @@ export function SyncIntervalSettings() {
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "خطایی رخ داد.")
+          toast.error(err instanceof Error ? err.message : "خطایی رخ داد.")
           setLoaded(true)
         }
       })
@@ -65,31 +60,26 @@ export function SyncIntervalSettings() {
   async function save() {
     const raw = value.trim().replace(/٫/g, ".")
     if (raw === "" || raw === ".") {
-      setError("فاصله را وارد کنید.")
-      setSaved(false)
+      toast.error("فاصله را وارد کنید.")
       return
     }
     const hours = Number(raw)
     if (!Number.isFinite(hours) || hours < 1 || hours > 168) {
-      setError("فاصله باید عددی بین ۱ تا ۱۶۸ ساعت باشد.")
-      setSaved(false)
+      toast.error("فاصله باید عددی بین ۱ تا ۱۶۸ ساعت باشد.")
       return
     }
     const minutes = Math.round(hours * 60)
     if (minutes < 1 || minutes > 10080) {
-      setError("فاصله باید عددی بین ۱ تا ۱۶۸ ساعت باشد.")
-      setSaved(false)
+      toast.error("فاصله باید عددی بین ۱ تا ۱۶۸ ساعت باشد.")
       return
     }
     setBusy(true)
-    setError(null)
-    setSaved(false)
     try {
       const data = await api.updateSettings({ sync_interval_minutes: minutes })
       setValue(minutesToHoursInput(data.sync_interval_minutes))
-      setSaved(true)
+      toast.success("فاصله به‌روزرسانی ذخیره شد.")
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "خطایی رخ داد.")
+      toast.error(err instanceof Error ? err.message : "خطایی رخ داد.")
     } finally {
       setBusy(false)
     }
@@ -111,7 +101,6 @@ export function SyncIntervalSettings() {
           value={value === "" ? "" : formatPersianNumber(value)}
           onChange={(e) => {
             setValue(parseHoursInput(e.target.value))
-            setSaved(false)
           }}
           placeholder="مثلاً ۲۴"
           aria-label="فاصله به‌روزرسانی خودکار (ساعت)"
@@ -134,16 +123,6 @@ export function SyncIntervalSettings() {
           />
         </Button>
       </div>
-      {error ? (
-        <p role="alert" className="text-sm text-destructive">
-          {toPersianDigits(error)}
-        </p>
-      ) : null}
-      {saved ? (
-        <p role="status" className="text-sm text-success">
-          فاصله به‌روزرسانی ذخیره شد.
-        </p>
-      ) : null}
     </div>
   )
 }

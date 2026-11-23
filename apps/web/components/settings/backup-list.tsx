@@ -6,6 +6,7 @@ import { Download, Play, RotateCcw, Trash2, Upload } from "lucide-react"
 import { Badge } from "@workspace/ui/primitives/badge"
 import { BusyLabel } from "@workspace/ui/primitives/busy-label"
 import { Button } from "@workspace/ui/primitives/button"
+import { toast } from "@workspace/ui/primitives/sonner"
 import {
   Table,
   TableBody,
@@ -231,13 +232,57 @@ export function BackupList() {
   const [restoring, setRestoring] = useState<number | null>(null)
   const [restoreTarget, setRestoreTarget] = useState<BackupRecord | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<BackupRecord | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
+  // Tracks terminal states already reported so the poll loop toasts each
+  // completion once. Seeded from the first load so old jobs stay quiet.
+  const reported = useRef<
+    Map<number, { backup: string; restore: string | null }>
+  >(new Map())
+  const seeded = useRef(false)
+
+  // Toast each terminal transition once. The list badges still show the
+  // persistent state; the toast makes a background result noticeable.
+  const reportTransitions = useCallback((rows: BackupRecord[]) => {
+    for (const row of rows) {
+      const previous = reported.current.get(row.id)
+      reported.current.set(row.id, {
+        backup: row.status,
+        restore: row.restore_status,
+      })
+      if (!previous) continue
+      if (previous.backup !== "completed" && row.status === "completed") {
+        toast.success(
+          `نسخه پشتیبان ${formatPersianNumber(row.id)} با موفقیت ساخته شد.`
+        )
+      }
+      if (previous.backup !== "failed" && row.status === "failed") {
+        const detail = backupErrorLabel(row.error_code)
+        toast.error(
+          `ساخت نسخه پشتیبان ${formatPersianNumber(row.id)} ناموفق بود.${detail ? ` ${detail}` : ""}`
+        )
+      }
+      if (
+        previous.restore !== "completed" &&
+        row.restore_status === "completed"
+      ) {
+        toast.success(
+          `بازیابی نسخه ${formatPersianNumber(row.id)} با موفقیت انجام شد.`
+        )
+      }
+      if (previous.restore !== "failed" && row.restore_status === "failed") {
+        const detail = backupErrorLabel(row.restore_error_code)
+        toast.error(
+          `بازیابی نسخه ${formatPersianNumber(row.id)} ناموفق بود.${detail ? ` ${detail}` : ""}`
+        )
+      }
+    }
+  }, [])
 
   const fetchBackups = useCallback(async () => {
-    setBackups(await api.backups())
-  }, [])
+    const rows = await api.backups()
+    reportTransitions(rows)
+    setBackups(rows)
+  }, [reportTransitions])
 
   useEffect(() => {
     let cancelled = false
@@ -245,13 +290,22 @@ export function BackupList() {
       .backups()
       .then((rows) => {
         if (!cancelled) {
+          if (!seeded.current) {
+            for (const row of rows) {
+              reported.current.set(row.id, {
+                backup: row.status,
+                restore: row.restore_status,
+              })
+            }
+            seeded.current = true
+          }
           setBackups(rows)
           setLoaded(true)
         }
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "خطایی رخ داد.")
+          toast.error(err instanceof Error ? err.message : "خطایی رخ داد.")
           setLoaded(true)
         }
       })
@@ -278,29 +332,23 @@ export function BackupList() {
   const restorePending = backups.some(restoreInFlight)
 
   function fail(err: unknown) {
-    setError(err instanceof Error ? err.message : "خطایی رخ داد.")
+    toast.error(err instanceof Error ? err.message : "خطایی رخ داد.")
   }
 
   function openRestore(backup: BackupRecord) {
-    setError(null)
-    setNotice(null)
     setRestoreTarget(backup)
   }
 
   function openDelete(backup: BackupRecord) {
-    setError(null)
-    setNotice(null)
     setDeleteTarget(backup)
   }
 
   async function startBackup() {
     setBusy("backup")
-    setError(null)
-    setNotice(null)
     try {
       await api.queueBackup()
       await fetchBackups()
-      setNotice("نسخه پشتیبان در صف قرار گرفت.")
+      toast.success("نسخه پشتیبان در صف قرار گرفت.")
     } catch (err: unknown) {
       fail(err)
     } finally {
@@ -310,12 +358,10 @@ export function BackupList() {
 
   async function upload(file: File) {
     setBusy("upload")
-    setError(null)
-    setNotice(null)
     try {
       await api.uploadBackup(file)
       await fetchBackups()
-      setNotice("فایل تأیید شد و آماده بازیابی است.")
+      toast.success("فایل تأیید شد و آماده بازیابی است.")
     } catch (err: unknown) {
       fail(err)
     } finally {
@@ -325,12 +371,12 @@ export function BackupList() {
 
   async function download(backup: BackupRecord) {
     setDownloading(backup.id)
-    setError(null)
     try {
       await downloadFile(
         api.backupDownloadUrl(backup.id),
         `charsooq-backup-${backup.id}.dump`
       )
+      toast.success("دانلود نسخه پشتیبان آغاز شد.")
     } catch (err: unknown) {
       fail(err)
     } finally {
@@ -340,13 +386,12 @@ export function BackupList() {
 
   async function remove(target: BackupRecord) {
     setDeleting(target.id)
-    setError(null)
-    setNotice(null)
     try {
       await api.deleteBackup(target.id)
       setDeleteTarget(null)
       await fetchBackups()
-      setNotice("نسخه پشتیبان حذف شد.")
+      reported.current.delete(target.id)
+      toast.success("نسخه پشتیبان حذف شد.")
     } catch (err: unknown) {
       fail(err)
     } finally {
@@ -356,13 +401,11 @@ export function BackupList() {
 
   async function restore(target: BackupRecord) {
     setRestoring(target.id)
-    setError(null)
-    setNotice(null)
     try {
       await api.restoreBackup(target.id)
       setRestoreTarget(null)
       await fetchBackups()
-      setNotice("بازیابی آغاز شد.")
+      toast.success("بازیابی آغاز شد.")
     } catch (err: unknown) {
       fail(err)
     } finally {
@@ -530,17 +573,6 @@ export function BackupList() {
         </>
       )}
 
-      {error ? (
-        <p role="alert" className="text-sm text-destructive">
-          {toPersianDigits(error)}
-        </p>
-      ) : null}
-      {notice ? (
-        <p role="status" className="text-sm text-success">
-          {toPersianDigits(notice)}
-        </p>
-      ) : null}
-
       <BackupRestoreDialog
         backup={restoreTarget}
         open={restoreTarget !== null}
@@ -551,7 +583,6 @@ export function BackupList() {
           if (restoreTarget !== null) void restore(restoreTarget)
         }}
         pending={restoring !== null}
-        error={error}
       />
       <BackupDeleteDialog
         backup={deleteTarget}
@@ -563,7 +594,6 @@ export function BackupList() {
           if (deleteTarget !== null) void remove(deleteTarget)
         }}
         pending={deleting !== null}
-        error={error}
       />
     </div>
   )

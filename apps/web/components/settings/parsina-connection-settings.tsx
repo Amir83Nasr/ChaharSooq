@@ -5,6 +5,7 @@ import { useEffect, useState } from "react"
 import { BusyLabel } from "@workspace/ui/primitives/busy-label"
 import { Button } from "@workspace/ui/primitives/button"
 import { Input } from "@workspace/ui/primitives/input"
+import { toast } from "@workspace/ui/primitives/sonner"
 import { toLatinDigits, toPersianDigits } from "@workspace/ui/lib/number"
 
 import { api, type ParsinaConnectionOut } from "@/lib/api"
@@ -22,8 +23,6 @@ export function ParsinaConnectionSettings() {
   const [passwordSet, setPasswordSet] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
 
   function apply(data: ParsinaConnectionOut) {
     setBaseUrl(data.base_url ?? "")
@@ -46,7 +45,7 @@ export function ParsinaConnectionSettings() {
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "خطایی رخ داد.")
+          toast.error(err instanceof Error ? err.message : "خطایی رخ داد.")
           setLoaded(true)
         }
       })
@@ -61,18 +60,14 @@ export function ParsinaConnectionSettings() {
     const org = orgRaw === "" ? null : Number(orgRaw)
     const year = yearRaw === "" ? null : Number(yearRaw)
     if (orgRaw !== "" && (!Number.isInteger(org) || (org ?? 0) < 1)) {
-      setError("شناسه سازمان باید یک عدد معتبر باشد.")
-      setSaved(false)
+      toast.error("شناسه سازمان باید یک عدد معتبر باشد.")
       return
     }
     if (yearRaw !== "" && (!Number.isInteger(year) || (year ?? 0) < 1)) {
-      setError("سال مالی باید یک عدد معتبر باشد.")
-      setSaved(false)
+      toast.error("سال مالی باید یک عدد معتبر باشد.")
       return
     }
     setBusy(true)
-    setError(null)
-    setSaved(false)
     try {
       const data = await api.updateParsinaConnection({
         base_url: baseUrl.trim(),
@@ -82,9 +77,9 @@ export function ParsinaConnectionSettings() {
         fiscal_year: year,
       })
       apply(data)
-      setSaved(true)
+      toast.success("تنظیمات اتصال پارسینا ذخیره شد.")
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "خطایی رخ داد.")
+      toast.error(err instanceof Error ? err.message : "خطایی رخ داد.")
     } finally {
       setBusy(false)
     }
@@ -111,10 +106,7 @@ export function ParsinaConnectionSettings() {
           <Input
             dir="ltr"
             value={baseUrl}
-            onChange={(e) => {
-              setBaseUrl(e.target.value)
-              setSaved(false)
-            }}
+            onChange={(e) => setBaseUrl(e.target.value)}
             placeholder="http://IP:PORT/Api/V1"
             aria-label="آدرس سرور پارسینا"
             className="h-11 sm:h-9"
@@ -125,10 +117,7 @@ export function ParsinaConnectionSettings() {
           <Input
             dir="ltr"
             value={username}
-            onChange={(e) => {
-              setUsername(e.target.value)
-              setSaved(false)
-            }}
+            onChange={(e) => setUsername(e.target.value)}
             autoComplete="off"
             aria-label="نام کاربری پارسینا"
             className="h-11 sm:h-9"
@@ -140,10 +129,7 @@ export function ParsinaConnectionSettings() {
             dir="ltr"
             type="password"
             value={password}
-            onChange={(e) => {
-              setPassword(e.target.value)
-              setSaved(false)
-            }}
+            onChange={(e) => setPassword(e.target.value)}
             autoComplete="new-password"
             placeholder={
               passwordSet ? "ذخیره شده است (برای تغییر وارد کنید)" : "رمز عبور"
@@ -158,10 +144,7 @@ export function ParsinaConnectionSettings() {
             dir="ltr"
             inputMode="numeric"
             value={orgId ? toPersianDigits(orgId) : ""}
-            onChange={(e) => {
-              setOrgId(toLatinInt(e.target.value))
-              setSaved(false)
-            }}
+            onChange={(e) => setOrgId(toLatinInt(e.target.value))}
             placeholder="مثلاً ۱"
             aria-label="شناسه سازمان پارسینا"
             className="h-11 sm:h-9"
@@ -173,10 +156,7 @@ export function ParsinaConnectionSettings() {
             dir="ltr"
             inputMode="numeric"
             value={fiscalYear ? toPersianDigits(fiscalYear) : ""}
-            onChange={(e) => {
-              setFiscalYear(toLatinInt(e.target.value))
-              setSaved(false)
-            }}
+            onChange={(e) => setFiscalYear(toLatinInt(e.target.value))}
             placeholder="مثلاً ۱۴۰۳"
             aria-label="سال مالی پارسینا"
             className="h-11 sm:h-9"
@@ -203,16 +183,6 @@ export function ParsinaConnectionSettings() {
           </span>
         ) : null}
       </div>
-      {error ? (
-        <p role="alert" className="text-sm text-destructive">
-          {toPersianDigits(error)}
-        </p>
-      ) : null}
-      {saved ? (
-        <p role="status" className="text-sm text-success">
-          تنظیمات اتصال پارسینا ذخیره شد.
-        </p>
-      ) : null}
     </div>
   )
 }

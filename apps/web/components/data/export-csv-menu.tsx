@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@workspace/ui/primitives/dropdown-menu"
 import { Spinner } from "@workspace/ui/primitives/spinner"
+import { toast } from "@workspace/ui/primitives/sonner"
 
 import { ApiRequestError } from "@/lib/api"
 import { downloadFile } from "@/lib/download"
@@ -30,7 +31,7 @@ export interface ExportCsvOption {
  * "خروجی گرفتن از اطلاعات" menu shared by the products page and the store pages.
  *
  * One download at a time: the trigger stays busy until the file starts, and
- * API errors (401 excepted) are shown inline instead of in a toast.
+ * API errors (401 excepted) are reported via toast.
  */
 export function ExportCsvMenu({
   options,
@@ -45,12 +46,10 @@ export function ExportCsvMenu({
   compact?: boolean
 }) {
   const [busyLabel, setBusyLabel] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
   const busy = busyLabel !== null
 
   async function run(option: ExportCsvOption) {
     setBusyLabel(option.label)
-    setError(null)
     try {
       await downloadFile(option.buildUrl(), "charsooq-export.csv", {
         onUnauthorized,
@@ -58,7 +57,7 @@ export function ExportCsvMenu({
     } catch (err: unknown) {
       // 401 already navigated away; any other failure stays on this page.
       if (err instanceof ApiRequestError && err.status === 401) return
-      setError(
+      toast.error(
         err instanceof ApiRequestError
           ? err.message
           : "دانلود خروجی ناموفق بود. دوباره تلاش کنید."
@@ -157,18 +156,6 @@ export function ExportCsvMenu({
           {busy ? "در حال آماده‌سازی خروجی…" : "دریافت داده‌ها در قالب CSV"}
         </div>
       )}
-      {error ? (
-        <p
-          role="alert"
-          className={
-            compact
-              ? "absolute end-0 top-full z-20 mt-1 w-52 rounded-xl border bg-popover px-2 py-1.5 text-xs text-destructive shadow-sm"
-              : "w-full text-xs text-destructive"
-          }
-        >
-          {error}
-        </p>
-      ) : null}
     </div>
   )
 }

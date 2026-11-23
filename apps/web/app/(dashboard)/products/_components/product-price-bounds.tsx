@@ -5,6 +5,7 @@ import { useEffect, useState } from "react"
 import { BusyLabel } from "@workspace/ui/primitives/busy-label"
 import { Button } from "@workspace/ui/primitives/button"
 import { Input } from "@workspace/ui/primitives/input"
+import { toast } from "@workspace/ui/primitives/sonner"
 import { Price } from "@workspace/ui/persian/price"
 import { DECIMAL_SEP } from "@workspace/ui/lib/locale"
 import { formatPersianNumber, toLatinDigits } from "@workspace/ui/lib/number"
@@ -176,8 +177,6 @@ export function ProductPriceBounds({
     toInput(product.allowed_increase_percent)
   )
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     const nextDecrease = toInput(product.allowed_decrease_percent)
@@ -186,7 +185,6 @@ export function ProductPriceBounds({
     setIncrease(nextIncrease)
     setSavedDecrease(nextDecrease)
     setSavedIncrease(nextIncrease)
-    setError(null)
   }, [
     product.id,
     product.allowed_decrease_percent,
@@ -214,8 +212,6 @@ export function ProductPriceBounds({
     const decreaseValue = decreaseParsed.value
     const increaseValue = increaseParsed.value
     setBusy(true)
-    setError(null)
-    setSaved(false)
     try {
       const updated = await api.updateProductPriceBounds(product.id, {
         allowed_decrease_percent: decreaseValue,
@@ -223,11 +219,11 @@ export function ProductPriceBounds({
       })
       setSavedDecrease(toInput(decreaseValue))
       setSavedIncrease(toInput(increaseValue))
-      setSaved(true)
+      toast.success("محدوده قیمت پیشنهادی ذخیره شد.")
       onSaved?.(updated)
       onChanged?.()
     } catch (err) {
-      setError(toPersianError(err))
+      toast.error(toPersianError(err))
     } finally {
       setBusy(false)
     }
@@ -263,8 +259,6 @@ export function ProductPriceBounds({
           error={decreaseParsed.error}
           onChange={(value) => {
             setDecrease(value)
-            setSaved(false)
-            setError(null)
           }}
         />
         <PercentField
@@ -277,19 +271,11 @@ export function ProductPriceBounds({
           error={increaseParsed.error}
           onChange={(value) => {
             setIncrease(value)
-            setSaved(false)
-            setError(null)
           }}
         />
       </div>
 
       <BoundsResult floor={floor} ceiling={ceiling} />
-
-      {error ? (
-        <p role="alert" className="text-xs text-destructive">
-          {error}
-        </p>
-      ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
         <Button
@@ -306,11 +292,7 @@ export function ProductPriceBounds({
             spinner
           />
         </Button>
-        {saved ? (
-          <span role="status" className="text-xs text-success">
-            محدوده ذخیره شد.
-          </span>
-        ) : isDirty ? (
+        {isDirty ? (
           <span className="text-xs text-amber-700 dark:text-amber-300">
             تغییرات ذخیره نشده است.
           </span>

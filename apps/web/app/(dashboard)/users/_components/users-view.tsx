@@ -30,6 +30,7 @@ import {
   SelectValue,
 } from "@workspace/ui/primitives/select"
 import { Skeleton } from "@workspace/ui/primitives/skeleton"
+import { toast } from "@workspace/ui/primitives/sonner"
 import { toPersianDigits } from "@workspace/ui/lib/number"
 import { PersianDateTime } from "@workspace/ui/persian/persian-date"
 
@@ -92,12 +93,9 @@ export function UsersView({
   const [password, setPassword] = useState("")
   const [role, setRole] = useState<AssignableRole>("viewer")
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
-  const [formError, setFormError] = useState<string | null>(null)
-  const [created, setCreated] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<UserOut | null>(null)
-  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -118,8 +116,6 @@ export function UsersView({
   async function createUser(event: React.FormEvent) {
     event.preventDefault()
     setFieldErrors({})
-    setFormError(null)
-    setCreated(null)
 
     const next: FieldErrors = {}
     const trimmed = username.trim()
@@ -139,7 +135,7 @@ export function UsersView({
         role,
       })
       setUsers((current) => [...(current ?? []), user])
-      setCreated(user.username)
+      toast.success(`حساب «${user.username}» ساخته شد.`)
       setUsername("")
       setPassword("")
       setRole("viewer")
@@ -160,39 +156,35 @@ export function UsersView({
           return
         }
       }
-      setFormError(errorMessage(error))
+      toast.error(errorMessage(error))
     } finally {
       setCreating(false)
     }
   }
 
   function requestDelete(user: UserOut) {
-    setDeleteError(null)
     setDeleteTarget(user)
   }
 
   function handleDeleteOpenChange(open: boolean) {
     // Keep the dialog open while the delete request is in flight.
     if (!open && deletingId !== null) return
-    if (!open) {
-      setDeleteTarget(null)
-      setDeleteError(null)
-    }
+    if (!open) setDeleteTarget(null)
   }
 
   async function confirmDelete() {
     if (deleteTarget === null || deletingId !== null) return
     const target = deleteTarget
     setDeletingId(target.id)
-    setDeleteError(null)
     try {
       await api.deleteUser(target.id)
       setUsers((current) =>
         (current ?? []).filter((item) => item.id !== target.id)
       )
       setDeleteTarget(null)
+      toast.success(`حساب «${target.username}» حذف شد.`)
     } catch (error) {
-      setDeleteError(errorMessage(error))
+      toast.error(errorMessage(error))
     } finally {
       setDeletingId(null)
     }
@@ -317,17 +309,6 @@ export function UsersView({
                   </p>
                 )}
               </div>
-
-              {formError ? (
-                <p role="alert" className="text-sm text-destructive">
-                  {formError}
-                </p>
-              ) : null}
-              {created ? (
-                <p role="status" className="text-sm text-success">
-                  حساب «{created}» ساخته شد.
-                </p>
-              ) : null}
 
               <Button
                 type="submit"
@@ -484,7 +465,6 @@ export function UsersView({
         onOpenChange={handleDeleteOpenChange}
         onConfirm={confirmDelete}
         pending={deletingId !== null}
-        error={deleteError}
       />
     </>
   )

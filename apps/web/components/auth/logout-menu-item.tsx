@@ -13,6 +13,7 @@ import {
 import { LogOut } from "lucide-react"
 
 import { SidebarMenuButton, useSidebar } from "@workspace/ui/primitives/sidebar"
+import { toast } from "@workspace/ui/primitives/sonner"
 import { api } from "@/lib/api"
 import { leaveToLogin } from "@/lib/auth-navigation"
 import { resetProductsStore } from "@/lib/products-store"
@@ -66,8 +67,13 @@ export function LogoutProvider({ children }: { children: ReactNode }) {
     setPending(true)
     try {
       await api.logout()
-    } catch {
-      // Server already cleared or session expired — still leave the shell.
+    } catch (err: unknown) {
+      // A failed logout must not silently drop the user: the server-side
+      // session may still be alive. Keep the shell so they can retry.
+      toast.error(
+        err instanceof Error ? err.message : "خروج از حساب ناموفق بود."
+      )
+      return
     } finally {
       setPending(false)
     }

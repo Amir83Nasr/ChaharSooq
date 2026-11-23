@@ -12,7 +12,6 @@ import {
   ResponsiveDialogTitle,
 } from "@workspace/ui/primitives/responsive-dialog"
 import { formatPersianDateTime } from "@workspace/ui/lib/date"
-import { toPersianDigits } from "@workspace/ui/lib/number"
 
 import type { BackupRecord } from "@/lib/api"
 
@@ -22,7 +21,6 @@ type BackupRestoreDialogProps = {
   onOpenChange: (open: boolean) => void
   onConfirm: () => void | Promise<void>
   pending: boolean
-  error: string | null
 }
 
 /** Final confirmation before replacing shop data from one stored archive. */
@@ -32,7 +30,6 @@ export function BackupRestoreDialog({
   onOpenChange,
   onConfirm,
   pending,
-  error,
 }: BackupRestoreDialogProps) {
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
@@ -48,12 +45,6 @@ export function BackupRestoreDialog({
             ) : null}
           </ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
-
-        {error ? (
-          <p role="alert" className="text-sm text-destructive">
-            {toPersianDigits(error)}
-          </p>
-        ) : null}
 
         <ResponsiveDialogFooter>
           <ResponsiveDialogClose

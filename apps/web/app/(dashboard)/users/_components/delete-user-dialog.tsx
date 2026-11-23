@@ -19,7 +19,6 @@ type DeleteUserDialogProps = {
   onOpenChange: (open: boolean) => void
   onConfirm: () => void | Promise<void>
   pending: boolean
-  error: string | null
 }
 
 /** Delete confirmation — centered dialog on desktop, bottom sheet on mobile. */
@@ -28,7 +27,6 @@ export function DeleteUserDialog({
   onOpenChange,
   onConfirm,
   pending,
-  error,
 }: DeleteUserDialogProps) {
   return (
     <ResponsiveDialog open={user !== null} onOpenChange={onOpenChange}>
@@ -44,12 +42,6 @@ export function DeleteUserDialog({
             بازگشت نیست.
           </ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
-
-        {error ? (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        ) : null}
 
         {/* No layout classes here: DrawerFooter stacks full-width on mobile,
             DialogFooter right-aligns a row on desktop. */}

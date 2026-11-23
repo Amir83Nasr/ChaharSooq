@@ -5,6 +5,7 @@ import { Eye, EyeOff, RotateCcw } from "lucide-react"
 
 import { BusyLabel } from "@workspace/ui/primitives/busy-label"
 import { Button } from "@workspace/ui/primitives/button"
+import { toast } from "@workspace/ui/primitives/sonner"
 import { PersianNumber } from "@workspace/ui/persian/persian-number"
 import { cn } from "@workspace/ui/lib/utils"
 
@@ -29,8 +30,6 @@ export function TableColumnsSettings() {
   const [baseline, setBaseline] = useState<ProductTableColumn[]>([])
   const [loaded, setLoaded] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -46,11 +45,11 @@ export function TableColumnsSettings() {
       .catch((err: unknown) => {
         if (cancelled) return
         // Keep the card usable with the defaults if the settings call fails;
-        // the error stays visible and the next save retries the write.
+        // the error is reported via toast and the next save retries the write.
         const fallback = [...DEFAULT_PRODUCT_TABLE_COLUMNS]
         setValue(fallback)
         setBaseline(fallback)
-        setError(err instanceof Error ? err.message : "خطایی رخ داد.")
+        toast.error(err instanceof Error ? err.message : "خطایی رخ داد.")
         setLoaded(true)
       })
     return () => {
@@ -63,8 +62,6 @@ export function TableColumnsSettings() {
 
   function toggle(column: ProductTableColumn) {
     if (busy) return
-    setSaved(false)
-    setError(null)
     setValue((current) => {
       if (current.includes(column)) {
         // Keep at least one column so the table never renders empty.
@@ -80,16 +77,14 @@ export function TableColumnsSettings() {
 
   async function persist(next: ProductTableColumn[]) {
     setBusy(true)
-    setError(null)
-    setSaved(false)
     try {
       const data = await api.updateSettings({ product_table_columns: next })
       const columns = normalizeProductTableColumns(data.product_table_columns)
       setValue(columns)
       setBaseline(columns)
-      setSaved(true)
+      toast.success("ستون‌های جدول ذخیره شد.")
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "خطایی رخ داد.")
+      toast.error(err instanceof Error ? err.message : "خطایی رخ داد.")
     } finally {
       setBusy(false)
     }
@@ -174,13 +169,7 @@ export function TableColumnsSettings() {
 
       <div className="flex flex-col gap-3 border-t border-border/70 pt-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-h-5 text-xs" role="status">
-          {error ? (
-            <p role="alert" className="text-destructive">
-              {error}
-            </p>
-          ) : saved ? (
-            <p className="text-success">ستون‌های جدول ذخیره شد.</p>
-          ) : dirty ? (
+          {dirty ? (
             <p className="text-amber-700 dark:text-amber-300">
               تغییرات ذخیره نشده است.
             </p>

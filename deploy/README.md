@@ -58,6 +58,13 @@ must never contain secret values, private keys, or certificates.
   operator checklist for the Production 18 → 19 upgrade: preflight, full dump,
   rehearsal, stop writes, cutover, config, deploy, verification, fresh backup and
   rollback.
+- `scripts/release_watch.sh` + `systemd/charsooq-release-watch.{service,timer}` —
+  an optional outbound-only auto-deploy agent. Every 5 minutes it reads the newest
+  published GitHub Release, compares it with the last deployed tag in
+  `/var/lib/charsooq/last-deployed-release`, and calls `deploy.sh` only for a new
+  published, non-draft, non-prerelease tag. State is written only after a
+  successful deploy, so failures retry on the next tick. Install with
+  `make prod-watch-install` on the host ([ADR 033](../docs/adr/033-automatic-release-polling-deploy.md)).
 
 ## What must stay outside this directory/repository
 

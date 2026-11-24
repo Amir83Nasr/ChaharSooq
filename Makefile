@@ -11,6 +11,7 @@ SHELL := /bin/bash
 	docker-build docker-up docker-down docker-logs deploy-api \
 	local-up local-down \
 	prod-config prod-build prod-deploy prod-deploy-simulate prod-pull prod-image-revision \
+	prod-watch-install prod-watch-status prod-watch-stop \
 	prod-provision prod-migrate prod-bootstrap-owner prod-up prod-ps prod-logs \
 	prod-down prod-caddy-validate tls-validate tls-activate tls-rollback \
 	lint typecheck test test-e2e openapi-check
@@ -507,6 +508,23 @@ prod-deploy: ## @user Deploy the newest GitHub Release on the server [VERSION=â€
 	@$(COLOR_INIT) \
 	set -o pipefail; \
 	$(PROD_DEPLOY_CMD) 2>&1 | $(COLORIZE_DEPLOY)
+
+# Install/start/stop the outbound-only release-polling agent on the host (ADR 033).
+# The timer calls deploy.sh; it never runs a CI workflow on the host.
+prod-watch-install: ## @user Install and enable the 5-minute auto-deploy timer on the server
+	sudo install -m 0644 deploy/systemd/charsooq-release-watch.service /etc/systemd/system/
+	sudo install -m 0644 deploy/systemd/charsooq-release-watch.timer /etc/systemd/system/
+	sudo systemctl daemon-reload
+	sudo systemctl enable --now charsooq-release-watch.timer
+	@echo "auto-deploy timer enabled; check: systemctl status charsooq-release-watch.timer"
+
+prod-watch-status: ## @user Show auto-deploy timer status and recent agent log
+	sudo systemctl status charsooq-release-watch.timer --no-pager || true
+	sudo journalctl -u charsooq-release-watch.service -n 30 --no-pager
+
+prod-watch-stop: ## @user Disable the auto-deploy timer (keeps manual prod-deploy working)
+	sudo systemctl disable --now charsooq-release-watch.timer
+	@echo "auto-deploy timer disabled; manual make prod-deploy still works"
 
 # Local preview of the deploy transcript. Step names mirror deploy.sh; every
 # value below is invented, and this recipe runs no deploy, Docker or SSH command.

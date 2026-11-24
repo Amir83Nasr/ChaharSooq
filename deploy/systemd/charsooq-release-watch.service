@@ -1,0 +1,14 @@
+[Unit]
+Description=Charsooq Production auto-deploy (release polling)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Environment=CHARSOOQ_ENV_FILE=/etc/charsooq/production.env
+Environment=CHARSOOQ_RELEASE_REPO=Amir83Nasr/ChaharSooq
+Environment=CHARSOOQ_WATCH_STATE_FILE=/var/lib/charsooq/last-deployed-release
+Environment=CHARSOOQ_WATCH_LOCK_FILE=/run/charsooq-release-watch.lock
+ExecStart=/opt/charsooq/deploy/scripts/release_watch.sh
+# No restart loop: the timer is the scheduler; a failed run is retried next tick.

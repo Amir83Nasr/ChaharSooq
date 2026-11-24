@@ -72,8 +72,19 @@ class SyncResult:
     skipped: int
 
 
+RIALS_PER_TOMAN = 10
+"""Parsina reports monetary values in rials; the database stores toman (ADR 003)."""
+
+
 def _money(value: Decimal | None) -> Decimal:
     return value if value is not None else Decimal("0")
+
+
+def _toman(value: Decimal | None) -> Decimal | None:
+    """Convert a Parsina rial amount to toman; `None` stays `None`."""
+    if value is None:
+        return None
+    return value / RIALS_PER_TOMAN
 
 
 def _stock(row: CommodityRow) -> Decimal:
@@ -240,9 +251,10 @@ class ProductSyncService:
         )
 
     def _assign(self, product: Product, row: CommodityRow, units: dict[int, str]) -> None:
+        # Parsina price fields are rials; every stored price field is toman.
         product.name = row.good_name
         product.sku = row.good_code
-        product.price = _money(row.sale_price)
+        product.price = _money(_toman(row.sale_price))
         product.stock = _stock(row)
         product.main_group_id = row.main_group
         product.sub_group_id = row.sub_group
@@ -257,10 +269,10 @@ class ProductSyncService:
             product.unit_name = units.get(row.count_unit)
         product.weight = row.weight
         product.is_special = row.is_special
-        product.buy_price = row.buy_price
-        product.sale_pack_price = row.sale_pack_price
-        product.sale_box_price = row.sale_box_price
-        product.use_price = row.use_price
+        product.buy_price = _toman(row.buy_price)
+        product.sale_pack_price = _toman(row.sale_pack_price)
+        product.sale_box_price = _toman(row.sale_box_price)
+        product.use_price = _toman(row.use_price)
         product.discount = row.discount
         product.extra = row.extra
         product.number_in_box = row.number_in_box

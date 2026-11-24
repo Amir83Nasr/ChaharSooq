@@ -290,7 +290,18 @@ def test_dev_db_source_fetch_returns_parsina_shaped_rows(tmp_path: Path) -> None
     row = parse_commodity(raw_rows[0])
     assert row is not None
     assert row.good_id in {1, 2}
-    assert row.sale_price in {Decimal(1000), Decimal(2000)}
+    # Stored toman values are re-expressed as rials for the shared sync path.
+    assert row.sale_price in {Decimal(10000), Decimal(20000)}
+
+
+def test_dev_db_round_trip_keeps_toman_prices_unchanged(tmp_path: Path, session: Session) -> None:
+    """Dev mirror → Parsina-shaped rows → sync must not divide twice."""
+    url = _make_dev_db(tmp_path / "dev.db")
+    ProductSyncService(session, source=DevDatabaseCommoditySource(url)).run()
+
+    products = session.execute(select(Product).order_by(Product.external_id)).scalars().all()
+    assert [p.price for p in products] == [Decimal(1000), Decimal(2000)]
+    assert [p.buy_price for p in products] == [None, None]
 
 
 def test_dev_db_source_reports_unreachable_db(tmp_path: Path) -> None:

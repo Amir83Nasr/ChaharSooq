@@ -24,6 +24,10 @@ from app.models.catalog import Product
 
 log = logging.getLogger("charsooq")
 
+# The dev mirror stores toman (ADR 003); raw Parsina-shaped rows are rials.
+# `_to_raw` therefore scales prices back up so the sync converts exactly once.
+RIALS_PER_TOMAN = 10
+
 
 class DevDbSourceError(Exception):
     """The dev database is unreachable or returned an unusable catalog."""
@@ -79,8 +83,19 @@ class DevDatabaseCommoditySource:
         return rows, len(rows), _unit_titles(products)
 
 
+def _to_rials(value: Any) -> Any:
+    """Re-express a stored toman amount as the rial value Parsina would send."""
+    if value is None:
+        return None
+    return value * RIALS_PER_TOMAN
+
+
 def _to_raw(product: Product) -> dict[str, Any]:
-    """Map one dev mirror row back to the Parsina `/Commodity` field shape."""
+    """Map one dev mirror row back to the Parsina `/Commodity` field shape.
+
+    All prices are written to this row in rials because the sync applies the
+    single rial → toman conversion before storing them again.
+    """
     good_id = product.external_id if product.external_id is not None else product.id
     return {
         "goodId": good_id,
@@ -93,15 +108,15 @@ def _to_raw(product: Product) -> dict[str, Any]:
         "countUnit": product.unit_id,
         "weight": product.weight,
         "khas": product.is_special,
-        "salePackPrice": product.sale_pack_price,
-        "saleBoxPrice": product.sale_box_price,
-        "usePrice": product.use_price,
+        "salePackPrice": _to_rials(product.sale_pack_price),
+        "saleBoxPrice": _to_rials(product.sale_box_price),
+        "usePrice": _to_rials(product.use_price),
         "discount": product.discount,
         "extra": product.extra,
         "numberInBox": product.number_in_box,
         "numberInPack": product.number_in_pack,
-        "buyPrice": product.buy_price,
-        "salePrice": product.price,
+        "buyPrice": _to_rials(product.buy_price),
+        "salePrice": _to_rials(product.price),
         "remain": product.stock,
         "wareRemain": product.ware_remain,
     }

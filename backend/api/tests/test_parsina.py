@@ -266,6 +266,41 @@ def test_sync_inserts_then_updates_without_duplicates(session: Session) -> None:
     assert all(p.synced_at is not None for p in products)
 
 
+def test_sync_converts_all_parsina_prices_from_rials_to_toman(session: Session) -> None:
+    good = _good(1, "A-1", "کالا", sale=26316000, remain=3)
+    good.update(
+        {
+            "buyPrice": 21053000,
+            "salePackPrice": 26316000,
+            "saleBoxPrice": 27455000,
+            "usePrice": 28500001,
+        }
+    )
+    _service(session, FakeParsina(_goods(good))).run()
+
+    product = session.execute(select(Product)).scalar_one()
+    assert product.price == Decimal("2631600")
+    assert product.buy_price == Decimal("2105300")
+    assert product.sale_pack_price == Decimal("2631600")
+    assert product.sale_box_price == Decimal("2745500")
+    assert product.use_price == Decimal("2850000.1")
+    # Non-price values must not be rescaled.
+    assert product.stock == Decimal("3")
+    assert product.weight == Decimal("1.5")
+
+
+def test_sync_keeps_missing_and_zero_prices_without_rescaling(session: Session) -> None:
+    good = _good(1, "A-1", "کالا", sale=0, remain=3)
+    good["buyPrice"] = None
+    good["usePrice"] = ""
+    _service(session, FakeParsina(_goods(good))).run()
+
+    product = session.execute(select(Product)).scalar_one()
+    assert product.price == Decimal("0")
+    assert product.buy_price is None
+    assert product.use_price is None
+
+
 def test_sync_rejects_short_listing_and_keeps_previous_data(session: Session) -> None:
     good = _good(1, "A-1", "کالا")
     _service(session, FakeParsina(_goods(good))).run()
@@ -324,7 +359,7 @@ def test_sync_failure_leaves_no_partial_db_changes(session: Session) -> None:
     products = session.execute(select(Product).order_by(Product.external_id)).scalars().all()
     assert len(products) == 1
     assert products[0].name == "قدیم"
-    assert products[0].price == Decimal("1000")
+    assert products[0].price == Decimal("100")  # 1000 rials → 100 toman
     state = SyncStateRepository(session).get()
     assert state.last_success_at == state_before.last_success_at
     assert state.last_error is not None

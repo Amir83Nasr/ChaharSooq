@@ -99,7 +99,10 @@ export function CompetitorSyncPanel({
   useEffect(() => {
     const ticker = setInterval(() => setNow(Date.now()), 30_000)
     let cancelled = false
-    let delay = IDLE_POLL_MS
+    // A manual press bumps `pollBump` to restart this effect. Run the first
+    // tick immediately so completion is noticed without waiting for the full
+    // idle interval; subsequent ticks keep the normal running/idle cadence.
+    let delay = pollBump > 0 ? 0 : IDLE_POLL_MS
 
     const schedule = () => {
       if (!cancelled) timerRef.current = setTimeout(tick, delay)

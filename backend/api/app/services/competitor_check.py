@@ -14,14 +14,22 @@ from app.models.competitor import CompetitorListing, CompetitorPriceObservation
 
 
 def apply_competitor_check(row: CompetitorListing, now: datetime) -> bool:
-    """Refresh one row in place; True when the fetch succeeded."""
-    row.last_checked_at = now
+    """Refresh one row in place; True when the fetch succeeded.
+
+    ``last_checked_at`` is only written when a request was actually attempted.
+    A fetch blocked by the store's local cooldown sends nothing, so the row
+    stays immediately eligible for a later check instead of being throttled
+    by ``CompetitorService.check`` for one full interval.
+    """
     try:
         result = fetch_competitor_price(row.store, row.url)
     except PriceFetchError as exc:
         row.status = exc.status
         row.last_error = str(exc)[:500]
+        if exc.status != "blocked":
+            row.last_checked_at = now
         return False
+    row.last_checked_at = now
     observed_at = result.observed_at or now
     row.fetched_price = result.amount
     row.fetched_currency = result.currency

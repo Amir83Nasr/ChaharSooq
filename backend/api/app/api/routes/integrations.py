@@ -92,7 +92,9 @@ def _run_competitor_manual() -> None:
     factory = sessionmaker(bind=get_engine(), autoflush=False, expire_on_commit=False)
     with factory() as session:
         try:
-            CompetitorSyncService(session).run_acquired()
+            # A factory is passed so the refresh can fan out across links with
+            # one independent Session per concurrent worker.
+            CompetitorSyncService(session, session_factory=factory).run_acquired()
         except Exception:  # noqa: BLE001 — failure is recorded in sync state
             log.exception("manual competitor refresh failed")
 

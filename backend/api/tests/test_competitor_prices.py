@@ -1,5 +1,6 @@
 """Manual competitor link management and safe page parsing."""
 
+import threading
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -11,7 +12,7 @@ from fastapi.testclient import TestClient
 from pytest import MonkeyPatch
 from sqlalchemy import delete, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.database import get_engine
 from app.integrations import competitor_prices as prices
@@ -912,3 +913,66 @@ def test_scheduled_competitor_sync_skips_while_locked(
         )
         is None
     )
+
+
+def test_global_sync_runs_different_stores_concurrently(
+    client: TestClient, db_session: Session, monkeypatch: MonkeyPatch
+) -> None:
+    """Workers must overlap across stores, each with its own Session."""
+    _seed_two_products_with_links(client)
+    # Another test may have left a long-held lock in the shared state row.
+    state = db_session.get(CompetitorSyncState, 1)
+    if state is not None:
+        state.lock_until = None
+        state.running_since = None
+        db_session.commit()
+    barrier = threading.Barrier(2, timeout=15)
+    seen: list[str] = []
+
+    def blocking_fetch(store: str, _url: str) -> FetchedPrice:
+        seen.append(store)
+        barrier.wait()  # deadlocks if the two links are checked sequentially
+        return FetchedPrice(Decimal("27000000"), "IRR", True, datetime.now(UTC))
+
+    monkeypatch.setattr("app.services.competitor_check.fetch_competitor_price", blocking_fetch)
+    factory = sessionmaker(bind=get_engine(), autoflush=False, expire_on_commit=False)
+    with factory() as session:
+        result = CompetitorSyncService(session, session_factory=factory).run()
+    assert (result.checked, result.updated, result.failed) == (2, 2, 0)
+    assert sorted(seen) == ["digikala", "technolife"]
+
+    rows = db_session.query(CompetitorListing).all()
+    assert len(rows) == 2
+    assert all(row.status == "success" for row in rows)
+
+
+def test_blocked_fetch_does_not_throttle_the_next_check(
+    client: TestClient, db_session: Session, monkeypatch: MonkeyPatch
+) -> None:
+    """A local cooldown sends no request, so no check timestamp is recorded."""
+    first_id, _second_id = _seed_two_products_with_links(client)
+    listing = client.get(f"/api/v1/products/{first_id}/competitors").json()[0]
+    listing_id = listing["id"]
+
+    from app.services.competitor import CompetitorService
+
+    monkeypatch.setattr(
+        "app.services.competitor_check.fetch_competitor_price",
+        lambda _store, _url: (_ for _ in ()).throw(
+            PriceFetchError("blocked", "محدودیت موقت فروشگاه")
+        ),
+    )
+    CompetitorService(db_session).check(listing_id)
+    db_session.expire_all()
+    row = db_session.get(CompetitorListing, listing_id)
+    assert row is not None
+    assert row.last_checked_at is None
+    assert row.status == "blocked"
+
+    # The next check is allowed immediately because nothing was actually sent.
+    monkeypatch.setattr(
+        "app.services.competitor_check.fetch_competitor_price",
+        lambda _store, _url: FetchedPrice(Decimal("27000000"), "IRR", True, datetime.now(UTC)),
+    )
+    result = CompetitorService(db_session).check(listing_id)
+    assert result.status == "success"

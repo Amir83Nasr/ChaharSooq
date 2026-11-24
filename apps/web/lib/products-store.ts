@@ -153,10 +153,8 @@ function paramsFromView(view: ProductsView): ProductFilters {
     stockParams.in_stock = true
     stockParams.max_stock = threshold()
   }
-  // "best" is display-only (cheapest competitor wins, no row filtering);
-  // a specific store filters to products with a price from that store.
-  const marketFilter: Pick<ProductFilters, "competitor_store"> =
-    view.market === "best" ? {} : { competitor_store: view.market }
+  // The market is a display choice: it only decides which competitor price the
+  // columns show. It must not filter rows, so it stays out of the API query.
   return {
     q: view.q || undefined,
     top_group: view.topGroup ?? undefined,
@@ -164,7 +162,6 @@ function paramsFromView(view: ProductsView): ProductFilters {
     max_price: priceParam(view.maxPrice),
     ...stockParams,
     pinned: view.pinned || undefined,
-    ...marketFilter,
     sort: view.sort,
     page: view.page,
     page_size: view.pageSize,
@@ -325,7 +322,6 @@ export function setProductsView(patch: Partial<ProductsView>): void {
     (patch.minPrice !== undefined && patch.minPrice !== previous.minPrice) ||
     (patch.maxPrice !== undefined && patch.maxPrice !== previous.maxPrice) ||
     (patch.pinned !== undefined && patch.pinned !== previous.pinned) ||
-    (patch.market !== undefined && patch.market !== previous.market) ||
     (patch.pageSize !== undefined && patch.pageSize !== previous.pageSize)
 
   // Any filter/page-size change returns to the first page unless the caller
@@ -378,7 +374,6 @@ export function primeProductsView(patch: Partial<ProductsView>): void {
     (patch.minPrice !== undefined && patch.minPrice !== previous.minPrice) ||
     (patch.maxPrice !== undefined && patch.maxPrice !== previous.maxPrice) ||
     (patch.pinned !== undefined && patch.pinned !== previous.pinned) ||
-    (patch.market !== undefined && patch.market !== previous.market) ||
     (patch.pageSize !== undefined && patch.pageSize !== previous.pageSize)
   if (changesFilters && patch.page === undefined) next.page = 1
   if (!hasViewChanged(previous, next)) return

@@ -680,6 +680,14 @@ def test_worker_restores_data_with_a_pre_restore_archive(
     for table in ("products", "categories", "competitor_listings", "settings"):
         expected = f'DELETE FROM public."{table}";'  # noqa: S608
         assert expected in script
+    # Every DELETE must precede every COPY block. pg_restore writes COPY data
+    # straight to the file descriptor; if the DELETEs are still buffered they
+    # land after the data and every restored id collides with a live row.
+    first_copy = script.find("COPY public.")
+    assert first_copy > 0
+    for table in ("products", "categories", "competitor_listings", "settings"):
+        expected = f'DELETE FROM public."{table}";'  # noqa: S608
+        assert script.find(expected) < first_copy
     # Logins and backup metadata are never deleted by a restore.
     assert '"admins"' not in script
     assert '"backup_records"' not in script

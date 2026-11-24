@@ -371,7 +371,13 @@ class BackupWorker:
             for table in RESTORE_DELETE_ORDER:
                 if table in present:
                     handle.write(f'DELETE FROM public."{table}";\n'.encode())
+            # pg_restore writes straight to the same file descriptor via
+            # `--file=-`. Flush our buffered DELETEs first, otherwise the COPY
+            # blocks land on disk before them and every id collides with a
+            # still-present row.
+            handle.flush()
             self._tools.append_table_data(archive, loadable, handle)
+            handle.flush()
             for statement in self._sequence_statements(loadable):
                 handle.write(f"{statement}\n".encode())
             for key, value in settings.items():

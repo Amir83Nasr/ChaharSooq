@@ -100,8 +100,21 @@ cluster_major="$("${COMPOSE[@]}" run --rm --no-deps --entrypoint sh db -c \
    cat '/var/lib/postgresql/$image_major/docker/PG_VERSION' || true" 2>/dev/null)" || fail "cannot read the database cluster version from the pgdata volume"
 case "$cluster_major" in
   "$image_major") ;;
-  "") fail "no PostgreSQL $image_major cluster in the pgdata volume; migrate the data before deploying $db_image" ;;
-  *) fail "cluster is PostgreSQL $cluster_major but the image is $db_image; migrate the data before deploying" ;;
+  "")
+    fail "no PostgreSQL $image_major cluster in the pgdata volume.
+     Run the 18 -> 19 data cutover first (ADR 028):
+       1. take a verified full administrative dump and rehearse with ./deploy/scripts/pg_upgrade_drill.sh <dump.fc> --with-tests
+       2. stop the stack, then run ./deploy/scripts/pg19_cutover.sh <dump.fc>
+       3. re-run this deploy
+     Never start the $db_image image against an older cluster: it would serve an empty database."
+    ;;
+  *)
+    fail "cluster is PostgreSQL $cluster_major but the image is $db_image.
+     A major bump is a data migration, not a tag change. Follow ADR 028:
+       ./deploy/scripts/pg_upgrade_drill.sh <verified-dump.fc> --with-tests
+       ./deploy/scripts/pg19_cutover.sh <verified-dump.fc>
+     Deploy is refused until the $image_major cluster holds the data."
+    ;;
 esac
 note "cluster and image agree on PostgreSQL major $image_major"
 
@@ -276,6 +289,18 @@ case "$migration_output" in
 esac
 
 step "Starting api and web"
+
+# Re-check the on-disk major immediately before starting services. The first
+# check happened before release discovery and image pulls; a half-finished
+# cutover in that window must not end with an empty database behind a healthy
+# API (TOCTOU).
+cluster_major_before_start="$("${COMPOSE[@]}" run --rm --no-deps --entrypoint sh db -c \
+  "test -f '/var/lib/postgresql/$image_major/docker/PG_VERSION' && \
+   cat '/var/lib/postgresql/$image_major/docker/PG_VERSION' || true" 2>/dev/null)" ||
+  fail "cannot re-read the database cluster version before starting services"
+[ "$cluster_major_before_start" = "$image_major" ] ||
+  fail "database cluster changed to '$cluster_major_before_start' during the deploy; refusing to start services"
+
 previous_version=""
 api_container_id="$("${COMPOSE[@]}" ps -q api 2>/dev/null || true)"
 api_container_id="${api_container_id%%$'\n'*}"
@@ -318,10 +343,13 @@ container_state() {
 }
 
 healthy_state() {
-  case "$1" in
-    healthy|running) return 0 ;;
-    *) return 1 ;;
-  esac
+  local service="$1" state="$2"
+  # db, api and web all define healthchecks in compose; `running` is not enough.
+  if [ "$service" = "caddy" ]; then
+    [ "$state" = "running" ]
+  else
+    [ "$state" = "healthy" ]
+  fi
 }
 
 step "Verifying service and endpoint health"
@@ -329,14 +357,13 @@ SERVICES=(db api web caddy)
 PROBES=(/api/v1/health /api/v1/ready /login)
 states=()
 verified=0
-for attempt in {1..30}; do
+for attempt in {1..45}; do
   states=()
   all_running=1
   for service in "${SERVICES[@]}"; do
     state="$(container_state "$service")"
     states+=("$state")
-    # Caddy has no healthcheck in Compose; `running` is its expected state.
-    [ "$service" = "caddy" ] || healthy_state "$state" || all_running=0
+    healthy_state "$service" "$state" || all_running=0
   done
   endpoints_ok=1
   for endpoint in "${PROBES[@]}"; do
@@ -346,7 +373,7 @@ for attempt in {1..30}; do
     verified=1
     break
   fi
-  note "waiting for services (attempt $attempt/30)"
+  note "waiting for services (attempt $attempt/45)"
   sleep 2
 done
 [ "$verified" -eq 1 ] || {
@@ -366,7 +393,9 @@ for endpoint in "${PROBES[@]}"; do
   probe_report+="$endpoint ok  "
 done
 release_display="${release_tag:-$api_version}"
-rollback_to="${previous_version:+v$previous_version}"
+# Image labels may already carry the `v` prefix (local prod-build), so strip it
+# before constructing the previous release tag.
+rollback_to="${previous_version:+v${previous_version#v}}"
 [ -n "$rollback_to" ] && [ "$rollback_to" != "$release_display" ] ||
   rollback_to="<previous-version>"
 elapsed=$((SECONDS - START_SECONDS))
@@ -381,4 +410,7 @@ printf '[deploy]   %-11s %s\n' "Probes" "$probe_report"
 printf '[deploy]   %-11s %s\n' "Duration" "${elapsed}s"
 printf '[deploy]   %-11s %s\n' "Rollback" "./deploy/scripts/deploy.sh $rollback_to"
 printf '\n[deploy] All services are up and every health probe passed on %s.\n' "$CHARSOOQ_SITE_HOST"
+# A code-only rollback is not enough after a major-version cutover: the 19
+# cluster cannot be served by the old image (ADR 028, rollback section).
+printf '[deploy] If this release included the 18 -> 19 data cutover, a code-only rollback is NOT sufficient; see ADR 028 section 4 and keep the 18 datadir at rollback/18.\n'
 log "deployment complete ($api_version)"

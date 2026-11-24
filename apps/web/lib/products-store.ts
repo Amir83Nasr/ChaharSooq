@@ -29,7 +29,7 @@ import { DEFAULT_LOW_STOCK_THRESHOLD } from "./inventory"
 
 export type StockFilter = "all" | "in" | "out" | "low"
 
-/** `missing` is the toolbar's "بدون قیمت رقیب" choice; it is not an API store. */
+/** `missing` is the toolbar's "فاقد قیمت رقیب" choice; it is not an API store. */
 export type CompetitorMarketFilter = CompetitorMarketOption | "missing"
 
 export interface ProductsView {

@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
+import { BadgeCheck, Link2, SlidersHorizontal } from "lucide-react"
 
 import {
   ResponsiveDialog,
@@ -19,6 +20,7 @@ import { BusyLabel } from "@workspace/ui/primitives/busy-label"
 import { Button } from "@workspace/ui/primitives/button"
 import { Price } from "@workspace/ui/persian/price"
 import { PersianNumber } from "@workspace/ui/persian/persian-number"
+import { cn } from "@workspace/ui/lib/utils"
 import {
   ApiRequestError,
   api,
@@ -61,24 +63,27 @@ const MODE_BUTTONS: {
   value: Selection
   label: string
   description: string
+  icon: typeof Link2
 }[] = [
   {
     value: "exact_competitor",
     label: "قیمت رقیب",
     description: "ترکیب وزنی قیمت رقیب دقیق با قیمت پایه",
+    icon: Link2,
   },
   {
     value: "similar_product",
     label: "محصول مشابه",
     description: "استفاده از تغییر روزانه قیمت محصول مشابه",
+    icon: BadgeCheck,
   },
   {
     value: "no_competitor_price",
     label: "فاقد قیمت رقیب",
-    description: "غیرفعال کردن لینک‌ها و ستون‌های رقیب",
+    description: "بدون لینک و بدون قیمت رقیب",
+    icon: SlidersHorizontal,
   },
 ]
-
 function toPersianError(error: unknown): string {
   if (error instanceof ApiRequestError) return error.message
   return "تغییر حالت قیمت‌گذاری انجام نشد. دوباره تلاش کنید."
@@ -95,7 +100,8 @@ export function ProductDetailDialog(props: {
   const [localProduct, setLocalProduct] = useState<ProductOut | null>(null)
   const [modeBusy, setModeBusy] = useState<Selection | null>(null)
   const [modeError, setModeError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<PricingMode>("exact_competitor")
+  type DetailTab = "links" | "bounds"
+  const [activeTab, setActiveTab] = useState<DetailTab>("links")
 
   useEffect(() => {
     setLocalProduct(selected)
@@ -106,14 +112,6 @@ export function ProductDetailDialog(props: {
   // Manual rows have no Parsina group; they behave like appliances (the
   // default section) so their competitor links stay manageable.
   const topGroup = product ? (product.top_group ?? "لوازم خانگی") : null
-
-  // Keep the visible tab in sync with the product's mode (also on dialog open
-  // and after an optimistic mode change).
-  useEffect(() => {
-    if (product && product.pricing_mode !== "no_competitor_price") {
-      setActiveTab(product.pricing_mode)
-    }
-  }, [product?.id, product?.pricing_mode])
 
   const handleListingsChanged = useCallback((listings: CompetitorListing[]) => {
     setLocalProduct((current) =>
@@ -143,42 +141,48 @@ export function ProductDetailDialog(props: {
 
     // Optimistic update: derived selection and tab switch immediately.
     setLocalProduct({ ...previous, pricing_mode: next })
-    if (next !== "no_competitor_price") setActiveTab(next)
 
     try {
       await api.setPricingMode(previous.id, next)
       onCompetitorChanged?.()
     } catch (err) {
       setLocalProduct(previous)
-      if (previous.pricing_mode !== "no_competitor_price") {
-        setActiveTab(previous.pricing_mode)
-      }
       setModeError(toPersianError(err))
     } finally {
       setModeBusy(null)
     }
   }
 
-  /** One tab's content; only the active tab is mounted to avoid duplicate fetches. */
-  function modePanel() {
+  /** Only the active tab is mounted, so link fetches never duplicate. */
+  function linksPanel() {
     if (!product || !topGroup) return null
     return (
-      <div className="grid min-h-0 gap-3 md:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] md:items-start">
+      <ProductCompetitorPrices
+        productId={product.id}
+        stores={storesForTopGroup(topGroup)}
+        onChanged={onCompetitorChanged}
+        onListingsChanged={handleListingsChanged}
+        canEdit={canEdit}
+      />
+    )
+  }
+
+  function boundsPanel() {
+    if (!product) return null
+    return (
+      <div className="grid min-h-0 gap-3 md:grid-cols-2 md:items-start">
         <div className="space-y-3">
           <ProductSuggestedPrice product={product} />
-          <ProductPriceBounds
-            product={product}
-            canEdit={canEdit}
-            onChanged={onCompetitorChanged}
-            onSaved={handleBoundsSaved}
-          />
+          <p className="rounded-2xl border border-border/70 bg-muted/30 px-3 py-2 text-[11px] leading-5 text-muted-foreground">
+            کف و سقف، قیمت پیشنهادی را محدود می‌کند؛ خالی گذاشتن هر فیلد یعنی
+            بدون محدودیت.
+          </p>
         </div>
-        <ProductCompetitorPrices
-          productId={product.id}
-          stores={storesForTopGroup(topGroup)}
-          onChanged={onCompetitorChanged}
-          onListingsChanged={handleListingsChanged}
+        <ProductPriceBounds
+          product={product}
           canEdit={canEdit}
+          onChanged={onCompetitorChanged}
+          onSaved={handleBoundsSaved}
         />
       </div>
     )
@@ -193,7 +197,7 @@ export function ProductDetailDialog(props: {
     >
       <ResponsiveDialogContent
         aria-label="جزئیات کالا"
-        className="no-scrollbar max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-2xl pb-[calc(1rem+env(safe-area-inset-bottom))] sm:max-w-5xl sm:rounded-2xl md:flex md:max-h-[96dvh] md:flex-col md:gap-3 md:overflow-hidden md:p-5"
+        className="no-scrollbar max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-2xl pb-[calc(1rem+env(safe-area-inset-bottom))] sm:max-w-6xl sm:rounded-2xl md:flex md:max-h-[96dvh] md:flex-col md:gap-3 md:overflow-hidden md:p-5"
       >
         <ResponsiveDialogHeader className="shrink-0 gap-1 pe-8">
           <ResponsiveDialogTitle>{product?.name ?? ""}</ResponsiveDialogTitle>
@@ -233,22 +237,47 @@ export function ProductDetailDialog(props: {
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 {MODE_BUTTONS.map((option) => {
                   const active = selection === option.value
+                  const busy = modeBusy === option.value
+                  const Icon = option.icon
                   return (
                     <Button
                       key={option.value}
                       type="button"
-                      variant={active ? "secondary" : "outline"}
+                      variant="outline"
                       aria-pressed={active}
                       disabled={!canEdit || modeBusy !== null}
                       onClick={() => void selectMode(option.value)}
-                      className="h-auto min-h-11 flex-col items-start gap-0.5 rounded-2xl px-3 py-2 text-start"
+                      className={cn(
+                        "relative h-auto min-h-20 flex-col items-start justify-start gap-1 rounded-2xl border p-3 text-start transition-[background-color,border-color,box-shadow,opacity]",
+                        active
+                          ? "border-primary/50 bg-primary/5 shadow-[0_0_0_1px_var(--primary)]"
+                          : "border-border/70 bg-background/60 opacity-75 hover:opacity-100"
+                      )}
                     >
-                      <BusyLabel
-                        busy={modeBusy === option.value}
-                        idle={option.label}
-                        busyLabel={option.label}
-                        spinner
-                      />
+                      <span className="flex w-full items-center gap-2">
+                        <span
+                          className={cn(
+                            "flex size-8 shrink-0 items-center justify-center rounded-xl",
+                            active
+                              ? "bg-primary/15 text-primary"
+                              : "bg-muted text-muted-foreground"
+                          )}
+                        >
+                          <Icon className="size-4" aria-hidden="true" />
+                        </span>
+                        <BusyLabel
+                          busy={busy}
+                          idle={option.label}
+                          busyLabel={option.label}
+                          spinner
+                        />
+                        {active && !busy ? (
+                          <BadgeCheck
+                            className="ms-auto size-4 shrink-0 text-primary"
+                            aria-label="انتخابشده"
+                          />
+                        ) : null}
+                      </span>
                       <span className="w-full text-[11px] leading-4 font-normal text-muted-foreground">
                         {option.description}
                       </span>
@@ -268,9 +297,6 @@ export function ProductDetailDialog(props: {
             ) : null}
 
             {selection === "no_competitor_price" ? (
-              // No tabs in this mode: links are suppressed, so a notice is
-              // clearer than two tabs of dead controls. The three-way selector
-              // above switches back to an active mode.
               <div className="space-y-3">
                 <ProductSuggestedPrice product={product} />
                 <p className="rounded-2xl border border-dashed border-border bg-background px-3 py-4 text-center text-xs leading-6 text-muted-foreground">
@@ -281,18 +307,20 @@ export function ProductDetailDialog(props: {
             ) : (
               <Tabs
                 value={activeTab}
-                onValueChange={(value) => setActiveTab(value as PricingMode)}
+                onValueChange={(value) => setActiveTab(value as DetailTab)}
                 className="gap-2"
               >
                 <TabsList variant="line" className="self-start">
-                  <TabsTrigger value="exact_competitor">قیمت رقیب</TabsTrigger>
-                  <TabsTrigger value="similar_product">محصول مشابه</TabsTrigger>
+                  <TabsTrigger value="links">لینک فروشگاه‌ها</TabsTrigger>
+                  <TabsTrigger value="bounds">
+                    محدودیت قیمت پیشنهادی
+                  </TabsTrigger>
                 </TabsList>
-                <TabsContent value="exact_competitor" className="mt-1">
-                  {modePanel()}
+                <TabsContent value="links" className="mt-1">
+                  {linksPanel()}
                 </TabsContent>
-                <TabsContent value="similar_product" className="mt-1">
-                  {modePanel()}
+                <TabsContent value="bounds" className="mt-1">
+                  {boundsPanel()}
                 </TabsContent>
               </Tabs>
             )}

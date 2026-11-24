@@ -78,3 +78,34 @@ export function competitorForRow(
     (amountOf(price) ?? 0) < (amountOf(cheapest) ?? 0) ? price : cheapest
   )
 }
+
+// ── EMPTY-CELL MESSAGES ────────────────────────────────────────────────
+
+/**
+ * Short label for a competitor-derived cell with no value. The long reason
+ * goes into the cell's `title` tooltip so the column stays narrow.
+ */
+export function competitorEmptyMessage(
+  mode: "exact_competitor" | "similar_product" | "no_competitor_price",
+  kind: "price" | "diff" | "daily_change" | "suggested"
+): string {
+  if (mode === "no_competitor_price") return "فاقد قیمت رقیب"
+  if (mode === "similar_product" && kind === "price") return "کالای مشابه"
+  if (kind === "price" || kind === "diff") return "—"
+  return "داده کافی نیست"
+}
+
+/** Detailed reason for the tooltip, where space is not constrained. */
+export function competitorEmptyHint(
+  mode: "exact_competitor" | "similar_product",
+  kind: "daily_change" | "suggested"
+): string {
+  if (mode === "similar_product") {
+    return kind === "daily_change"
+      ? "برای تغییر روزانه، مشاهدهٔ قیمت دو روز لازم است"
+      : "برای محاسبهٔ قیمت، تغییر قیمت دو روز لازم است"
+  }
+  return kind === "daily_change"
+    ? "برای تغییر روزانه، مشاهدهٔ قیمت دو روز لازم است"
+    : "برای محاسبهٔ قیمت، قیمت تازه لازم است"
+}

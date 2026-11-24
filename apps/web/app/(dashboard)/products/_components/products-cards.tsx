@@ -13,6 +13,7 @@ import { Skeleton } from "@workspace/ui/primitives/skeleton"
 import { PackageSearch } from "lucide-react"
 import { StockCell } from "@/components/data/products-stock-cell"
 import {
+  competitorEmptyMessage,
   competitorForRow,
   showsCompetitorPrice,
   STORE_MARKET_LABELS,
@@ -51,10 +52,14 @@ export function ProductMobileCard({
   const competitor = showCompetitor
     ? competitorForRow(item.competitor_prices, market, top)
     : null
-  const marketLabel =
-    market === "best" && competitor
-      ? STORE_MARKET_LABELS[competitor.store]
-      : STORE_MARKET_LABELS[market]
+  // Name a store only when a listing actually exists: with no link — or in
+  // no-price / similar-product mode — there is no store to put above the price.
+  const storeLabel =
+    competitor !== null
+      ? market === "best"
+        ? STORE_MARKET_LABELS[competitor.store]
+        : STORE_MARKET_LABELS[market]
+      : null
   const amount = toTomanAmount(
     competitor?.price ?? null,
     competitor?.currency ?? null
@@ -106,11 +111,23 @@ export function ProductMobileCard({
           </span>
           {showCompetitor || noCompetitor ? (
             <span className="flex flex-col items-end gap-0.5">
-              <span className="text-[11px] text-muted-foreground">
-                {marketLabel}
-              </span>
+              {storeLabel ? (
+                <span className="text-[11px] text-muted-foreground">
+                  {storeLabel}
+                </span>
+              ) : null}
               {noCompetitor ? (
-                <span className="text-sm text-muted-foreground">—</span>
+                <span className="text-xs text-destructive">
+                  {competitorEmptyMessage(item.pricing_mode, "price")}
+                </span>
+              ) : competitor === null || !showCompetitor ? (
+                <span className="text-xs text-muted-foreground">
+                  لینک ثبت نشد
+                </span>
+              ) : !exact ? (
+                <span className="text-xs text-muted-foreground">
+                  {competitorEmptyMessage(item.pricing_mode, "price")}
+                </span>
               ) : competitor?.price !== null &&
                 competitor?.price !== undefined &&
                 amount !== null &&
@@ -120,9 +137,7 @@ export function ProductMobileCard({
                   className="text-sm font-semibold text-muted-foreground"
                 />
               ) : (
-                <span className="text-xs text-muted-foreground">
-                  لینک ثبت نشده
-                </span>
+                <span className="text-muted-foreground">—</span>
               )}
             </span>
           ) : null}

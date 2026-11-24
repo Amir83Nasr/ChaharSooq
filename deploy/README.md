@@ -35,8 +35,9 @@ must never contain secret values, private keys, or certificates.
   digests, checks that both images report that release version and commit, then
   pulls, provisions, checks migrations (applying only when pending), starts the
   single `api`/`web` pair, and verifies container and external health. It first
-  compares the configured database image major with the on-disk `PG_VERSION` and
-  refuses to start if they differ (a major bump needs a data migration). A
+  compares the configured database image major with the on-disk `PG_VERSION`
+  before **and** immediately after release discovery, refuses to start if they
+  differ, and prints the ADR 028 cutover commands when a major bump is pending. A
   specific version tag or two explicit digests are also accepted. It prints
   numbered progress and a final health/status summary, is fail-closed, and never
   reads a secret value or removes a volume, database, or image.
@@ -45,6 +46,18 @@ must never contain secret values, private keys, or certificates.
   supplied by the operator. It compares version, data directory, migration
   revision and row counts, and removes only its own scratch resources (see
   [ADR 028](../docs/adr/028-postgresql-19-upgrade-readiness.md)).
+- `scripts/pg19_cutover.sh` — performs the real 18 → 19 data cutover on the server
+  against the `pgdata` volume, after the rehearsal passed and the stack is
+  stopped. It moves the 18 datadir to `/var/lib/postgresql/rollback/18` on the
+  **same volume** (required: the 18+ image refuses to start when it sees an old
+  datadir at `/var/lib/postgresql/*/docker`), restores the verified dump into a
+  fresh 19 cluster, checks the migration revision and row counts, and never
+  deletes a datadir or volume. Re-running it after a successful cutover is a
+  no-op. See [the cutover runbook](../docs/pg19-cutover-runbook.md).
+- [`../docs/pg19-cutover-runbook.md`](../docs/pg19-cutover-runbook.md) — the
+  operator checklist for the Production 18 → 19 upgrade: preflight, full dump,
+  rehearsal, stop writes, cutover, config, deploy, verification, fresh backup and
+  rollback.
 
 ## What must stay outside this directory/repository
 

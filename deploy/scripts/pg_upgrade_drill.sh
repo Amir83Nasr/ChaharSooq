@@ -50,10 +50,10 @@ wait_ready() {
 
 state() {
   local container="$1"
-  docker exec "$container" psql -U charsooq -d charsooq -At \
+  docker exec "$container" psql -v ON_ERROR_STOP=1 -U charsooq -d charsooq -At \
     -c "select version();" \
     -c "select current_setting('data_directory');" \
-    -c "select coalesce(version_num, 'none') from alembic_version;" \
+    -c "select version_num from alembic_version;" \
     -c "select count(*) from products;" \
     -c "select count(*) from admins;"
 }
@@ -88,11 +88,15 @@ case "$state_19" in
   *"PostgreSQL 19"*) ;;
   *) fail "scratch 19 does not report PostgreSQL 19" ;;
 esac
-# The first three lines carry major/data path/migration revision; only the row
-# counts must match exactly after a logical upgrade.
+# Every line matters: a missing alembic_version row or a different data
+# directory must fail the drill, not just a row-count mismatch.
+migration_18="$(printf '%s\n' "$state_18" | sed -n '3p')"
+migration_19="$(printf '%s\n' "$state_19" | sed -n '3p')"
+[ -n "$migration_18" ] && [ "$migration_18" = "$migration_19" ] ||
+  fail "migration revision differs (18: '${migration_18:-empty}', 19: '${migration_19:-empty}')"
 counts_18="$(printf '%s\n' "$state_18" | tail -n 2)"
 counts_19="$(printf '%s\n' "$state_19" | tail -n 2)"
-[ "$counts_18" = "$counts_19" ] || fail "row counts differ after the upgrade"
+[ -n "$counts_18" ] && [ "$counts_18" = "$counts_19" ] || fail "row counts differ after the upgrade"
 
 if [ "${2:-}" = "--with-tests" ]; then
   log "running the opt-in real-grants test against scratch 19"

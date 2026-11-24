@@ -119,6 +119,7 @@ def _fake_bin(
     previous_version: str = PREVIOUS_VERSION,
     cluster_major: str = "19",
     db_image: str = "postgres:19.0-trixie",
+    api_state: str = "healthy",
 ) -> tuple[Path, Path]:
     """Install fake docker/curl. The docker fake answers digest lookups, OCI
     label reads, container state, the cluster-version guard, and the migration
@@ -188,6 +189,7 @@ def _fake_bin(
                 '      *".State.Health"*)',
                 '        case "$*" in',
                 '          *fake-caddy-id*) printf "%s\\n" "running" ;;',
+                f'          *fake-api-id*) printf "%s\\n" "{api_state}" ;;',
                 '          *) printf "%s\\n" "healthy" ;;',
                 "        esac",
                 "        ;;",
@@ -199,6 +201,7 @@ def _fake_bin(
                 '  *" ps "*)',
                 '    case "$*" in',
                 '      *"ps -q caddy"*) printf "%s\\n" fake-caddy-id ;;',
+                '      *"ps -q api"*) printf "%s\\n" fake-api-id ;;',
                 '      *) printf "%s\\n" fake-service-id ;;',
                 "    esac",
                 "    ;;",
@@ -533,5 +536,62 @@ def test_progress_and_completion_report_services_health_and_rollback(tmp_path: P
         "/api/v1/ready ok",
         "All services are up and every health probe passed",
         "./deploy/scripts/deploy.sh v1.2.2",
+        "code-only rollback is NOT sufficient",
     ):
         assert marker in result.stdout
+
+
+def test_cluster_major_mismatch_points_to_the_cutover_runbook(tmp_path: Path) -> None:
+    env = _fixture(tmp_path)
+    docker_log, _ = _fake_bin(tmp_path, env, cluster_major="18")
+
+    result = _run([], env)
+
+    assert result.returncode != 0
+    assert "pg19_cutover.sh" in result.stderr
+    assert "pg_upgrade_drill.sh" in result.stderr
+    assert "pull api web" not in docker_log.read_text()
+
+
+def test_cluster_major_is_rechecked_before_starting_services(tmp_path: Path) -> None:
+    env = _fixture(tmp_path)
+    docker_log, _ = _fake_bin(tmp_path, env)
+
+    result = _run([], env)
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    marker_reads = [line for line in docker_log.read_text().splitlines() if "PG_VERSION" in line]
+    assert len(marker_reads) == 2
+    up_line = next(
+        index
+        for index, line in enumerate(docker_log.read_text().splitlines())
+        if "up -d --no-build" in line
+    )
+    assert all(
+        index < up_line
+        for index, line in enumerate(docker_log.read_text().splitlines())
+        if "PG_VERSION" in line
+    )
+
+
+def test_api_must_report_healthy_not_just_running(tmp_path: Path) -> None:
+    env = _fixture(tmp_path)
+    _fake_bin(tmp_path, env, api_state="running")
+
+    result = _run([], env)
+
+    assert result.returncode != 0
+    assert "health verification failed" in result.stderr
+
+
+def test_rollback_tag_is_normalized_when_the_label_already_has_the_v_prefix(
+    tmp_path: Path,
+) -> None:
+    env = _fixture(tmp_path)
+    _fake_bin(tmp_path, env, previous_version="v1.2.2")
+
+    result = _run([], env)
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert "./deploy/scripts/deploy.sh v1.2.2" in result.stdout
+    assert "vv1.2.2" not in result.stdout

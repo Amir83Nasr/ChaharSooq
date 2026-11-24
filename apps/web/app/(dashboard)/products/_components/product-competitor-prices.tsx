@@ -643,7 +643,10 @@ export function ProductCompetitorPrices({
       </div>
 
       {loading ? (
-        <div className="space-y-3" aria-label="در حال بارگذاری منابع قیمت">
+        <div
+          className="grid gap-3 sm:grid-cols-2"
+          aria-label="در حال بارگذاری منابع قیمت"
+        >
           {stores.map((store) => (
             <div
               key={store}
@@ -656,7 +659,7 @@ export function ProductCompetitorPrices({
           ))}
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           {stores.map((store) => {
             const listing = byStore.get(store)
             if (!listing) {

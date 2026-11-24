@@ -156,7 +156,7 @@ export function ProductsToolbar(props: ToolbarProps) {
           <SelectValue>
             {(value: CompetitorMarketFilter | null) =>
               value === "missing"
-                ? "بدون قیمت رقیب"
+                ? "فاقد قیمت رقیب"
                 : value
                   ? (COMPETITOR_MARKETS.find((m) => m.store === value)?.label ??
                     "فروشگاه رقیب")
@@ -171,7 +171,7 @@ export function ProductsToolbar(props: ToolbarProps) {
               <Fragment key={m.store}>
                 <SelectItem value={m.store}>{m.label}</SelectItem>
                 {index === 0 ? (
-                  <SelectItem value="missing">بدون قیمت رقیب</SelectItem>
+                  <SelectItem value="missing">فاقد قیمت رقیب</SelectItem>
                 ) : null}
               </Fragment>
             ))}

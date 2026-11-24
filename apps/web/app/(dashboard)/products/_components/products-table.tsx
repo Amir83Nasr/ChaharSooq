@@ -25,6 +25,8 @@ import { Skeleton } from "@workspace/ui/primitives/skeleton"
 import { CircleAlert, PackageSearch, RefreshCw } from "lucide-react"
 import { StockCell } from "@/components/data/products-stock-cell"
 import {
+  competitorEmptyHint,
+  competitorEmptyMessage,
   competitorForRow,
   showsCompetitorPrice,
   STORE_MARKET_LABELS,
@@ -68,16 +70,6 @@ interface TableProps {
   onSelect: (item: ProductOut) => void
   onPageChange: (p: number) => void
   onPageSize: (n: number) => void
-}
-
-const COMPETITOR_STATUS_LABELS: Record<string, string> = {
-  pending: "در انتظار بررسی",
-  success: "قیمت تازه دریافت نشده",
-  not_found: "صفحه پیدا نشد",
-  unavailable: "نیازمند بررسی",
-  blocked: "دسترسی محدود شد",
-  failed: "دریافت ناموفق",
-  manual: "قیمت تازه ثبت نشده",
 }
 
 // اختلاف درصد قیمت ما نسبت به رقیب: مثبت یعنی گران‌تر از رقیب.
@@ -320,10 +312,14 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
             // shared weight and hints which similar-product store to display.
             const exact = item.pricing_mode === "exact_competitor"
             const noCompetitor = item.pricing_mode === "no_competitor_price"
+            const mode = item.pricing_mode
             const showCompetitorCell = showsCompetitorPrice(market, top)
             const competitor = showCompetitorCell
               ? competitorForRow(item.competitor_prices, market, top)
               : null
+            // A link must exist before we can talk about "insufficient data":
+            // without one the cell stays a plain dash.
+            const hasLink = competitor !== null
             const amount = toTomanAmount(
               competitor?.price ?? null,
               competitor?.currency ?? null
@@ -443,7 +439,22 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                 {shown.has("competitor_price") ? (
                   <TableCell className="text-center">
                     {noCompetitor ? (
+                      <span className="block text-xs text-destructive">
+                        {competitorEmptyMessage(mode, "price")}
+                      </span>
+                    ) : !hasLink || !showCompetitorCell ? (
                       <span className="text-muted-foreground">—</span>
+                    ) : !exact ? (
+                      <span className="flex flex-col items-center gap-0.5">
+                        {market === "best" && competitor ? (
+                          <span className="text-[11px] text-muted-foreground">
+                            {STORE_MARKET_LABELS[competitor.store]}
+                          </span>
+                        ) : null}
+                        <span className="text-xs text-muted-foreground">
+                          {competitorEmptyMessage(mode, "price")}
+                        </span>
+                      </span>
                     ) : (
                       <>
                         {market === "best" && competitor ? (
@@ -451,55 +462,13 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                             {STORE_MARKET_LABELS[competitor.store]}
                           </span>
                         ) : null}
-                        {!showCompetitorCell ? (
+                        {competitor?.price === null ||
+                        competitor?.price === undefined ||
+                        amount === null ||
+                        amount === undefined ? (
                           <span className="text-muted-foreground">—</span>
-                        ) : competitor?.price !== null &&
-                          competitor?.price !== undefined &&
-                          amount !== null &&
-                          amount !== undefined ? (
-                          <span className="inline-flex flex-col items-center gap-0.5">
-                            <Price value={amount} />
-                            {!exact &&
-                            competitor.price_change_percent !== null ? (
-                              <span
-                                className={`text-[11px] ${
-                                  competitor.price_change_percent > 0
-                                    ? "text-destructive"
-                                    : competitor.price_change_percent < 0
-                                      ? "text-success"
-                                      : "text-muted-foreground"
-                                }`}
-                                title="تغییر قیمت نسبت به مشاهدهٔ روز قبل"
-                              >
-                                تغییر روزانه{" "}
-                                {formatPercentMagnitude(
-                                  competitor.price_change_percent
-                                )}
-                              </span>
-                            ) : !competitor.is_fresh ? (
-                              <span
-                                className="text-[11px] text-muted-foreground"
-                                title={
-                                  competitor.last_checked_at
-                                    ? `آخرین بررسی: ${competitor.last_checked_at}`
-                                    : "قیمت تازه دریافت نشده"
-                                }
-                              >
-                                {competitor.last_checked_at
-                                  ? (formatPersianRelativeTime(
-                                      competitor.last_checked_at
-                                    ) ?? "قیمت قدیمی")
-                                  : "قیمت قدیمی"}
-                              </span>
-                            ) : null}
-                          </span>
                         ) : (
-                          <span className="text-xs text-muted-foreground">
-                            {competitor
-                              ? (COMPETITOR_STATUS_LABELS[competitor.status] ??
-                                "نیازمند بررسی")
-                              : "لینک ثبت نشده"}
-                          </span>
+                          <Price value={amount} />
                         )}
                       </>
                     )}
@@ -508,7 +477,23 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                 {shown.has("suggested_price_change") ? (
                   <TableCell className="text-center">
                     {dailyChange === null ? (
-                      <span className="text-muted-foreground">—</span>
+                      <span
+                        className="text-xs text-muted-foreground"
+                        title={
+                          noCompetitor || !hasLink
+                            ? undefined
+                            : competitorEmptyHint(
+                                item.pricing_mode === "similar_product"
+                                  ? "similar_product"
+                                  : "exact_competitor",
+                                "daily_change"
+                              )
+                        }
+                      >
+                        {noCompetitor || !hasLink
+                          ? "—"
+                          : competitorEmptyMessage(mode, "daily_change")}
+                      </span>
                     ) : Math.round(dailyChange * 10) === 0 ? (
                       <span className="block text-xs text-muted-foreground">
                         بدون تغییر
@@ -529,7 +514,23 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                 {shown.has("suggested_price") ? (
                   <TableCell className="text-center">
                     {suggested === null ? (
-                      <span className="text-muted-foreground">—</span>
+                      <span
+                        className="text-xs text-muted-foreground"
+                        title={
+                          noCompetitor || !hasLink
+                            ? undefined
+                            : competitorEmptyHint(
+                                item.pricing_mode === "similar_product"
+                                  ? "similar_product"
+                                  : "exact_competitor",
+                                "suggested"
+                              )
+                        }
+                      >
+                        {noCompetitor || !hasLink
+                          ? "—"
+                          : competitorEmptyMessage(mode, "suggested")}
+                      </span>
                     ) : (
                       <Price value={suggested} />
                     )}

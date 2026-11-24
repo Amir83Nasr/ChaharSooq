@@ -437,7 +437,9 @@ def test_invalid_release_tag_is_rejected(tmp_path: Path) -> None:
     assert "unexpected release tag 'release-123'" in result.stderr
 
 
-def test_missing_github_repo_configuration_fails_closed(tmp_path: Path) -> None:
+def test_missing_github_repo_reads_release_body_and_fails_without_digests(
+    tmp_path: Path,
+) -> None:
     env = _fixture(tmp_path)
     _fake_bin(tmp_path, env)
     env_file = Path(env["CHARSOOQ_ENV_FILE"])
@@ -450,8 +452,45 @@ def test_missing_github_repo_configuration_fails_closed(tmp_path: Path) -> None:
     result = _run([], env)
 
     assert result.returncode != 0
-    assert "CHARSOOQ_GITHUB_REPO is not set" in result.stderr
-    assert "CHAHARSOQ_API_IMAGE" in result.stderr
+    assert "release body has no CHAHARSOQ_API_IMAGE digest" in result.stderr
+    assert "reading digests from the newest published release" in result.stdout
+
+
+def test_release_body_digests_are_used_without_repo_or_env_refs(tmp_path: Path) -> None:
+    """`make prod-deploy VERSION=vX.Y.Z` works with only network values in env."""
+    env = _fixture(tmp_path)
+    docker_log, curl_log = _fake_bin(tmp_path, env)
+    env_file = Path(env["CHARSOOQ_ENV_FILE"])
+    original = env_file.read_text(encoding="utf-8")
+    env_file.write_text(
+        original.replace("CHARSOOQ_GITHUB_REPO=", "CHARSOOQ_GITHUB_REPO_UNUSED="),
+        encoding="utf-8",
+    )
+    api = "ghcr.io/amir83nasr/chaharsooq-api@sha256:" + "a" * 64
+    web = "ghcr.io/amir83nasr/chaharsooq-web@sha256:" + "b" * 64
+    release = _release_json()
+    import json as _json
+
+    body = (
+        "ChaharSooq release v1.2.3.\n\n"
+        f'export CHAHARSOQ_API_IMAGE="{api}"\n'
+        f'export CHAHARSOQ_WEB_IMAGE="{web}"\n'
+    )
+    release = _json.dumps({**_json.loads(release), "body": body})
+    import shutil as _shutil
+
+    # reinstall the fake with the richer release body
+    bin_dir = tmp_path / "bin"
+    _shutil.rmtree(bin_dir)
+    _, curl_log = _fake_bin(tmp_path, env, release_json=release)
+
+    result = _run(["v1.2.3"], env)
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert "digest-pinned image references from the release body" in result.stdout
+    assert api in result.stdout
+    assert web in result.stdout
+    assert "releases/tags/v1.2.3" in curl_log.read_text()
 
 
 def test_env_file_digests_work_without_github_discovery(tmp_path: Path) -> None:

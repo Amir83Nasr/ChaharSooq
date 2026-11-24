@@ -206,7 +206,57 @@ else
     esac
     note "using digest-pinned image references from $ENV_FILE; GitHub release discovery skipped"
   elif [ -z "${CHARSOOQ_GITHUB_REPO:-}" ]; then
-    fail "CHARSOOQ_GITHUB_REPO is not set in $ENV_FILE. Set it for release discovery, or pin CHAHARSOQ_API_IMAGE and CHAHARSOQ_WEB_IMAGE to digest references in $ENV_FILE."
+
+    # No discovery variables and no pinned refs: read the digests straight from
+    # the GitHub Release body. This makes `make prod-deploy VERSION=vX.Y.Z`
+    # sufficient even on a host whose env file only carries network/secret
+    # values. Nothing is written to the env file.
+    : "${CHARSOOQ_RELEASE_REPO:=Amir83Nasr/ChaharSooq}"
+    if [ "$release" = "latest" ]; then
+      release_endpoint='releases/latest'
+      note "reading digests from the newest published release of $CHARSOOQ_RELEASE_REPO"
+    else
+      release_endpoint="releases/tags/$release"
+      note "reading digests from release $release of $CHARSOOQ_RELEASE_REPO"
+    fi
+    saved_repo="${CHARSOOQ_GITHUB_REPO:-}"
+    CHARSOOQ_GITHUB_REPO="$CHARSOOQ_RELEASE_REPO"
+    release_json="$(fetch_release "$release_endpoint")"
+    if [ -n "$saved_repo" ]; then
+      CHARSOOQ_GITHUB_REPO="$saved_repo"
+    else
+      unset CHARSOOQ_GITHUB_REPO
+    fi
+
+    [ "$(printf '%s' "$release_json" | jq -r '.draft // false')" = "false" ] ||
+      fail "release $release is still a draft"
+    [ "$(printf '%s' "$release_json" | jq -r '.prerelease // false')" = "false" ] ||
+      fail "release $release is a prerelease"
+
+    release_tag="$(printf '%s' "$release_json" | jq -er '.tag_name // empty')" ||
+      fail "the GitHub response has no release tag"
+    [[ "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
+      fail "unexpected release tag '$release_tag'; expected vMAJOR.MINOR.PATCH"
+    release_commit="$(printf '%s' "$release_json" | jq -r '.target_commitish // empty')"
+    [[ "$release_commit" =~ ^[0-9a-f]{40}$ ]] || release_commit=""
+    version="${release_tag#v}"
+
+    release_body="$(printf '%s' "$release_json" | jq -r '.body // empty')"
+    # The release body uses single quotes; be tolerant of double quotes too.
+    CHAHARSOQ_API_IMAGE="$(printf '%s\n' "$release_body" |
+      sed -n "s/.*CHAHARSOQ_API_IMAGE=[\"']\([^\"']*\)[\"'].*/\1/p" | head -n 1)"
+    CHAHARSOQ_WEB_IMAGE="$(printf '%s\n' "$release_body" |
+      sed -n "s/.*CHAHARSOQ_WEB_IMAGE=[\"']\([^\"']*\)[\"'].*/\1/p" | head -n 1)"
+    case "${CHAHARSOQ_API_IMAGE:-}" in
+      *@sha256:*) ;;
+      *) fail "the release body has no CHAHARSOQ_API_IMAGE digest reference" ;;
+    esac
+    case "${CHAHARSOQ_WEB_IMAGE:-}" in
+      *@sha256:*) ;;
+      *) fail "the release body has no CHAHARSOQ_WEB_IMAGE digest reference" ;;
+    esac
+    note "using digest-pinned image references from the release body"
+
   else
 
   if [ "$release" = "latest" ]; then

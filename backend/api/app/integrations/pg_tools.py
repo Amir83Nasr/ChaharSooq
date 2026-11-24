@@ -114,7 +114,12 @@ class PgTools:
             "--no-privileges",
             f"--file={partial}",
         ]
-        command.extend(f"--exclude-table-data=public.{table}" for table in exclude_table_data)
+        # Excluding only the *data* still leaves pg_dump taking ACCESS SHARE on
+        # the table, which fails for tables the application role cannot read at
+        # all (alembic_version is deliberately revoked from it). Exclude those
+        # tables entirely; their data is already outside the application's
+        # backup contract.
+        command.extend(f"--exclude-table=public.{table}" for table in exclude_table_data)
 
         try:
             result = subprocess.run(

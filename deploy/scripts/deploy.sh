@@ -189,7 +189,25 @@ else
     latest|v[0-9]*.[0-9]*.[0-9]*) ;;
     *) usage ;;
   esac
-  [ -n "${CHARSOOQ_GITHUB_REPO:-}" ] || fail "CHARSOOQ_GITHUB_REPO is not set in $ENV_FILE"
+
+  # Hosts without GitHub access (or without the discovery variables) may pin
+  # the two release digests directly in the env file. This keeps `make
+  # prod-deploy` a single command: the env file is the sole source of the
+  # deployment identity either way. Both refs must be digest-pinned.
+  if [ -z "${CHARSOOQ_GITHUB_REPO:-}" ] &&
+    { [ -n "${CHAHARSOQ_API_IMAGE:-}" ] || [ -n "${CHAHARSOQ_WEB_IMAGE:-}" ]; }; then
+    case "${CHAHARSOQ_API_IMAGE:-}" in
+      *@sha256:*) ;;
+      *) fail "CHAHARSOQ_API_IMAGE in $ENV_FILE must be a repo@sha256:<digest> reference" ;;
+    esac
+    case "${CHAHARSOQ_WEB_IMAGE:-}" in
+      *@sha256:*) ;;
+      *) fail "CHAHARSOQ_WEB_IMAGE in $ENV_FILE must be a repo@sha256:<digest> reference" ;;
+    esac
+    note "using digest-pinned image references from $ENV_FILE; GitHub release discovery skipped"
+  elif [ -z "${CHARSOOQ_GITHUB_REPO:-}" ]; then
+    fail "CHARSOOQ_GITHUB_REPO is not set in $ENV_FILE. Set it for release discovery, or pin CHAHARSOQ_API_IMAGE and CHAHARSOQ_WEB_IMAGE to digest references in $ENV_FILE."
+  else
 
   if [ "$release" = "latest" ]; then
     note "fetching the newest published release of $CHARSOOQ_GITHUB_REPO"
@@ -220,6 +238,7 @@ else
   [ -n "${CHAHARSOQ_WEB_REPO:-}" ] || fail "CHAHARSOQ_WEB_REPO is not set in $ENV_FILE"
   CHAHARSOQ_API_IMAGE="$(resolve_digest "${CHAHARSOQ_API_REPO:-}:$version")"
   CHAHARSOQ_WEB_IMAGE="$(resolve_digest "${CHAHARSOQ_WEB_REPO:-}:$version")"
+  fi
 fi
 note "api image   $CHAHARSOQ_API_IMAGE"
 note "web image   $CHAHARSOQ_WEB_IMAGE"

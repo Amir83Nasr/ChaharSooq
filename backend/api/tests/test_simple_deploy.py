@@ -451,6 +451,31 @@ def test_missing_github_repo_configuration_fails_closed(tmp_path: Path) -> None:
 
     assert result.returncode != 0
     assert "CHARSOOQ_GITHUB_REPO is not set" in result.stderr
+    assert "CHAHARSOQ_API_IMAGE" in result.stderr
+
+
+def test_env_file_digests_work_without_github_discovery(tmp_path: Path) -> None:
+    """A host without GitHub access can pin both digests in the env file."""
+    env = _fixture(tmp_path)
+    docker_log, curl_log = _fake_bin(tmp_path, env)
+    env_file = Path(env["CHARSOOQ_ENV_FILE"])
+    original = env_file.read_text(encoding="utf-8")
+    api = "ghcr.io/example/chaharsooq-api@sha256:" + "a" * 64
+    web = "ghcr.io/example/chaharsooq-web@sha256:" + "b" * 64
+    env_file.write_text(
+        original.replace("CHARSOOQ_GITHUB_REPO=", "CHARSOOQ_GITHUB_REPO_UNUSED=")
+        + f"CHAHARSOQ_API_IMAGE={api}\nCHAHARSOQ_WEB_IMAGE={web}\n",
+        encoding="utf-8",
+    )
+
+    result = _run([], env)
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert "digest-pinned image references" in result.stdout
+    assert "api.github.com" not in curl_log.read_text()
+    assert api in result.stdout
+    assert web in result.stdout
+    assert "pull api web" in docker_log.read_text()
 
 
 def test_label_reading_tolerates_formatted_json(tmp_path: Path) -> None:

@@ -47,6 +47,7 @@ COMPOSE_PROD_FILE ?= compose.production.yml ## Production compose file (separate
 CHARSOOQ_SECRETS_DIR ?= /etc/charsooq/secrets ## Host directory of production secret files (never committed)
 CHARSOOQ_TLS_DIR ?= /etc/charsooq/tls ## Host directory of organization TLS material (never committed)
 PROD_ENV_FILE ?= /etc/charsooq/production.env
+PROD_REMOTE_DIR ?= /opt/charsooq ## Remote checkout directory used by SSH prod-deploy/prod-logs
 # Doctor checks the local stack by default. On the Production host either the
 # host env file or an explicit identity selects the Production checks; pass
 # DOCTOR_ENV=development|production to override the detection.
@@ -477,7 +478,7 @@ prod-build: ## Build production API and web images from this commit (host-build 
 ifeq ($(strip $(SSH_HOST)),)
 PROD_DEPLOY_CMD = ./deploy/scripts/deploy.sh "$(VERSION)"
 else
-PROD_DEPLOY_CMD = ssh $(SSH_HOST) 'cd /opt/charsooq && ./deploy/scripts/deploy.sh "$(VERSION)"'
+PROD_DEPLOY_CMD = ssh $(SSH_HOST) 'cd $(strip $(PROD_REMOTE_DIR)) && ./deploy/scripts/deploy.sh "$(VERSION)"'
 endif
 
 # Stream the deploy transcript through the shared palette. pipefail keeps the
@@ -584,7 +585,7 @@ ifeq ($(strip $(SSH_HOST)),)
 	@test -f "$(PROD_ENV_FILE)" || { echo "missing $(PROD_ENV_FILE)" >&2; exit 1; }; \
 		set -a && . "$(PROD_ENV_FILE)" && set +a && $(COMPOSE_PROD) logs -f
 else
-	ssh $(SSH_HOST) 'cd /opt/charsooq && test -f "$(PROD_ENV_FILE)" && set -a && . "$(PROD_ENV_FILE)" && set +a && docker compose -f "$(strip $(COMPOSE_PROD_FILE))" logs -f'
+	ssh $(SSH_HOST) 'cd $(strip $(PROD_REMOTE_DIR)) && test -f "$(PROD_ENV_FILE)" && set -a && . "$(PROD_ENV_FILE)" && set +a && docker compose -f "$(strip $(COMPOSE_PROD_FILE))" logs -f'
 endif
 
 prod-down: ## Stop production services (keeps volumes and data)

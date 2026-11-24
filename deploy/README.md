@@ -68,6 +68,16 @@ must never contain secret values, private keys, or certificates.
   default `/etc/charsooq/tls`.
 - Filled `production.env` files with real environment values.
 
+## One-command deploy without GitHub access
+
+If the host cannot reach the GitHub API, leave `CHARSOOQ_GITHUB_REPO` empty and
+copy the two `repo@sha256:<digest>` references from the GitHub Release body into
+`CHAHARSOQ_API_IMAGE` / `CHAHARSOQ_WEB_IMAGE` in `production.env`. `deploy.sh`
+then uses those digest-pinned references and skips discovery, so `make
+prod-deploy` stays a single command. For remote deploys over SSH, set
+`SSH_HOST=... PROD_REMOTE_DIR=<checkout-path>` (the remote path defaults to
+`/opt/charsooq`).
+
 See [AGENTS.md](../AGENTS.md) for the rules, [README.md](../README.md) for the
 production stack, and [ADR 018](../docs/adr/018-simple-production-deploy.md)
 for why deployment is a single-slot script.

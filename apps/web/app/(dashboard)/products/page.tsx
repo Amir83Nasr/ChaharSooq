@@ -148,7 +148,6 @@ function ProductsPageContent() {
     view.sort !== "category" ||
     view.stock !== "all" ||
     view.pinned ||
-    view.market !== "best" ||
     minPrice.trim() !== "" ||
     maxPrice.trim() !== ""
   const activeFilterCount =
@@ -157,7 +156,6 @@ function ProductsPageContent() {
     (view.sort !== "category" ? 1 : 0) +
     (view.stock !== "all" ? 1 : 0) +
     (view.pinned ? 1 : 0) +
-    (view.market !== "best" ? 1 : 0) +
     (minPrice.trim() !== "" ? 1 : 0) +
     (maxPrice.trim() !== "" ? 1 : 0)
 
@@ -208,7 +206,6 @@ function ProductsPageContent() {
       min_price: toNumber(view.minPrice),
       max_price: toNumber(view.maxPrice),
       pinned: view.pinned || undefined,
-      ...(view.market === "best" ? {} : { competitor_store: view.market }),
       sort: view.sort,
     }
     if (view.stock === "in" || view.stock === "out") {

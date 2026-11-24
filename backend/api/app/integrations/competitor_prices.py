@@ -428,6 +428,46 @@ def _parse_digikala(html: str) -> FetchedPrice | None:
     return _price_from_json_ld(html)
 
 
+def _technolife_out_of_stock(html: str) -> bool:
+    """Detect an explicit out-of-stock state on a Technolife product page.
+
+    Out-of-stock listings omit ``offers`` from their JSON-LD entirely, so the
+    generic parser cannot tell «ناموجود» from a changed page layout. The
+    page's ``__NEXT_DATA__`` carries ``product_info.is_available: false``;
+    treat only that explicit flag (or the visible «ناموجود» marker next to the
+    «این محصول در حال حاضر موجود نیست» message) as out-of-stock — a missing
+    signal stays "unknown" and keeps the usual extraction error.
+    """
+    match = re.search(
+        r'<script[^>]+id=["\']__NEXT_DATA__["\'][^>]*>(.*?)</script>',
+        html,
+        re.DOTALL | re.IGNORECASE,
+    )
+    if match is not None:
+        try:
+            data = json.loads(match.group(1))
+        except (ValueError, TypeError):
+            data = None
+        if isinstance(data, dict):
+            # React Query state embeds the product page response under
+            # props.pageProps.dehydratedState.queries[*].state.data.
+            root = cast(dict[str, Any], data)
+            props = root.get("props")
+            page_props = props.get("pageProps") if isinstance(props, dict) else None
+            state = page_props.get("dehydratedState") if isinstance(page_props, dict) else None
+            queries = state.get("queries") if isinstance(state, dict) else None
+            if isinstance(queries, list):
+                for query in queries:
+                    query_state = query.get("state") if isinstance(query, dict) else None
+                    payload = query_state.get("data") if isinstance(query_state, dict) else None
+                    if not isinstance(payload, dict):
+                        continue
+                    info = payload.get("product_info")
+                    if isinstance(info, dict) and "is_available" in info:
+                        return cast(dict[str, Any], info)["is_available"] is False
+    return "ناموجود" in html and "این محصول در حال حاضر موجود نیست" in html
+
+
 def _parse_technolife(html: str) -> FetchedPrice | None:
     """Technolife adapter; kept separate for store-specific markup changes.
 
@@ -436,7 +476,13 @@ def _parse_technolife(html: str) -> FetchedPrice | None:
     for «۱۱۲٬۹۰۰٬۰۰۰ تومان»). Dividing such values by 10 (IRR→toman) drops
     one zero, so normalise them to IRT at the source.
     """
-    return _parse_toman_labelled_irr(html)
+    result = _parse_toman_labelled_irr(html)
+    if result is None and _technolife_out_of_stock(html):
+        # Same shape as Digikala's out-of-stock response: a successful check
+        # with no price, so the row records «ناموجود» instead of an extraction
+        # error («استخراج در دسترس نیست»).
+        return FetchedPrice(None, None, False)
+    return result
 
 
 def _parse_toman_labelled_irr(html: str) -> FetchedPrice | None:

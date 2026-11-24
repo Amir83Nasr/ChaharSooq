@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Check, ExternalLink, LoaderCircle, Plus, Trash2 } from "lucide-react"
+import { ExternalLink, LoaderCircle, Plus, Trash2 } from "lucide-react"
 
 import { Badge } from "@workspace/ui/primitives/badge"
 import { BusyLabel } from "@workspace/ui/primitives/busy-label"
@@ -22,31 +22,8 @@ import {
   type TopGroup,
 } from "@/lib/api"
 
-/** Exact-competitor links offered by the detail dialog. */
-export const EXACT_STORES: readonly CompetitorStore[] = [
-  "digikala",
-  "technolife",
-  "torob",
-  "other",
-]
-
-/** Similar-product links offered by the detail dialog (picked by section). */
-export const SIMILAR_STORES: Record<TopGroup, readonly CompetitorStore[]> = {
-  "لوازم خانگی": ["digikala", "torob", "other"],
-  "کالای دیجیتال": ["digikala", "torob", "other"],
-  مبلمان: ["sofa", "torob", "other"],
-  فرش: ["digifresh", "torob", "other"],
-}
-
-/** Compatibility alias for callers that still use the per-section map. */
-export const DIALOG_STORES: Record<TopGroup, CompetitorStore[]> = {
-  "لوازم خانگی": ["digikala", "technolife", "torob"],
-  "کالای دیجیتال": ["digikala", "technolife", "torob"],
-  مبلمان: ["sofa", "torob"],
-  فرش: ["digifresh", "torob"],
-}
-
-export const TRACKING_STORES: ReadonlySet<CompetitorStore> = new Set([
+/** Stores that publish a recorded price (as opposed to an "effective" price). */
+const TRACKING_STORES: ReadonlySet<CompetitorStore> = new Set([
   "sofa",
   "digifresh",
 ])
@@ -510,54 +487,21 @@ export function ProductCompetitorPrices({
   onChanged,
   onListingsChanged,
   canEdit = true,
-  noCompetitorPrice = false,
-  onNoCompetitorPriceChange,
 }: {
   productId: number
-  /** Stores offered by the active pricing-mode tab. */
+  /** Link slots for the product's catalog section (identical in both modes). */
   stores: readonly CompetitorStore[]
   onChanged?: () => void
   /** Latest listings, so the parent can recompute the suggested price. */
   onListingsChanged?: (listings: CompetitorListing[]) => void
   /** `false` renders the stored prices without any edit controls. */
   canEdit?: boolean
-  /** Owner marker: this product genuinely has no competitor price. */
-  noCompetitorPrice?: boolean
-  onNoCompetitorPriceChange?: (value: boolean) => void
 }) {
-  // "sofa"/"digifresh" only appear in the similar-product tab, so their
-  // presence identifies that tab (torob/other are shared with exact mode).
   const trackingOnly = stores.some((store) => TRACKING_STORES.has(store))
   const [listings, setListings] = useState<CompetitorListing[]>([])
   const [loading, setLoading] = useState(true)
   const [busyKey, setBusyKey] = useState<number | string | null>(null)
   const [checkAllBusy, setCheckAllBusy] = useState(false)
-  const [flagBusy, setFlagBusy] = useState(false)
-  const [localNoPrice, setLocalNoPrice] = useState(noCompetitorPrice)
-
-  useEffect(() => {
-    setLocalNoPrice(noCompetitorPrice)
-  }, [noCompetitorPrice])
-
-  async function toggleNoCompetitorPrice(value: boolean) {
-    setFlagBusy(true)
-    setLocalNoPrice(value)
-    try {
-      await api.setNoCompetitorPrice(productId, value)
-      onNoCompetitorPriceChange?.(value)
-      onChanged?.()
-      toast.success(
-        value
-          ? "علامت «بدون قیمت رقیب» ثبت شد."
-          : "علامت «بدون قیمت رقیب» برداشته شد."
-      )
-    } catch (err) {
-      setLocalNoPrice(!value)
-      toast.error(toPersianError(err))
-    } finally {
-      setFlagBusy(false)
-    }
-  }
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -665,9 +609,6 @@ export function ProductCompetitorPrices({
   const anyBusy = busyKey !== null || checkAllBusy
 
   const byStore = new Map(listings.map((listing) => [listing.store, listing]))
-  const otherListings = trackingOnly
-    ? []
-    : listings.filter((listing) => listing.store === "other")
 
   return (
     <section className="space-y-2.5 rounded-2xl border border-border bg-muted/30 p-2.5 text-start">
@@ -686,7 +627,7 @@ export function ProductCompetitorPrices({
                 : "قیمت‌ها و وضعیت ثبت‌شدهٔ فروشگاه‌ها را می‌بینید."}
           </p>
         </div>
-        {canEdit && !localNoPrice ? (
+        {canEdit ? (
           <Button
             size="sm"
             variant="outline"
@@ -701,67 +642,7 @@ export function ProductCompetitorPrices({
         ) : null}
       </div>
 
-      {/* Owner marker: this product has no comparable competitor price. */}
-      <label
-        className={`group relative flex items-center gap-3 overflow-hidden rounded-2xl border px-3 py-2.5 text-start transition-[background-color,border-color,box-shadow] duration-200 ${
-          localNoPrice
-            ? "border-destructive/40 bg-linear-to-r from-destructive/10 to-destructive/[0.02] shadow-[0_0_0_3px_oklch(from_var(--destructive)_l_c_h_/_0.06)]"
-            : "border-border bg-background hover:border-foreground/20 hover:bg-muted/40"
-        } ${!canEdit || flagBusy ? "cursor-default opacity-80" : "cursor-pointer"}`}
-      >
-        <input
-          type="checkbox"
-          checked={localNoPrice}
-          disabled={!canEdit || flagBusy}
-          onChange={(event) =>
-            void toggleNoCompetitorPrice(event.target.checked)
-          }
-          className="peer sr-only"
-          aria-label="قیمت رقیب وجود ندارد"
-        />
-        <span
-          aria-hidden="true"
-          className={`flex size-5 shrink-0 items-center justify-center rounded-lg border-2 transition-all duration-200 peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background ${
-            localNoPrice
-              ? "text-destructive-foreground scale-110 border-destructive bg-destructive shadow-sm"
-              : "border-border bg-background text-transparent group-hover:border-foreground/40"
-          }`}
-        >
-          <Check
-            className={`size-3.5 transition-transform duration-200 ${
-              localNoPrice ? "scale-100 opacity-100" : "scale-50 opacity-0"
-            }`}
-            strokeWidth={3}
-          />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span
-            className={`block text-sm font-semibold ${
-              localNoPrice ? "text-destructive" : "text-foreground"
-            }`}
-          >
-            قیمت رقیب وجود ندارد
-          </span>
-          <span className="mt-0.5 block text-[11px] leading-4 text-muted-foreground">
-            {localNoPrice
-              ? "با تیک زدن، ورود لینکها بسته میشود و ستونهای رقیب در جدول خط تیره نشان داده میشوند."
-              : "برای کالاهایی که رقیب قیمتی ندارند، تیک بزنید."}
-          </span>
-        </span>
-        {flagBusy ? (
-          <LoaderCircle
-            className="size-4 shrink-0 animate-spin text-muted-foreground"
-            aria-hidden="true"
-          />
-        ) : null}
-      </label>
-
-      {localNoPrice ? (
-        <p className="rounded-2xl border border-dashed border-border bg-background px-3 py-4 text-center text-xs leading-6 text-muted-foreground">
-          این کالا بهعنوان فاقد قیمت رقیب علامتگذاری شده است؛ لینکهای رقیب فعال
-          نیستند.
-        </p>
-      ) : loading ? (
+      {loading ? (
         <div className="space-y-3" aria-label="در حال بارگذاری منابع قیمت">
           {stores.map((store) => (
             <div
@@ -829,36 +710,6 @@ export function ProductCompetitorPrices({
               />
             )
           })}
-          {otherListings.map((listing) => (
-            <FilledSlotCard
-              key={listing.id}
-              listing={listing}
-              busy={busyKey === listing.id || checkAllBusy}
-              canEdit={canEdit}
-              onLinkUpdate={(url) =>
-                void mutate(listing.id, () =>
-                  api.updateCompetitorListing(listing.id, {
-                    store: listing.store,
-                    url,
-                    is_active: true,
-                  })
-                )
-              }
-              onCheck={(url) =>
-                void mutate(listing.id, async () => {
-                  if (url !== listing.url.trim()) {
-                    await api.updateCompetitorListing(listing.id, {
-                      store: listing.store,
-                      url,
-                      is_active: true,
-                    })
-                  }
-                  return api.checkCompetitorListing(listing.id)
-                })
-              }
-              onDelete={() => void removeListing(listing.id)}
-            />
-          ))}
         </div>
       )}
     </section>

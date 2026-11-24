@@ -316,10 +316,10 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
               i +
               1
             const top = item.top_group
-            // The formula switch is per product; the category only hints which
-            // similar-product store to display.
+            // The formula switch is per product; the category supplies the
+            // shared weight and hints which similar-product store to display.
             const exact = item.pricing_mode === "exact_competitor"
-            const noCompetitor = item.no_competitor_price
+            const noCompetitor = item.pricing_mode === "no_competitor_price"
             const showCompetitorCell = showsCompetitorPrice(market, top)
             const competitor = showCompetitorCell
               ? competitorForRow(item.competitor_prices, market, top)
@@ -332,7 +332,7 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
               !noCompetitor && exact && competitor?.is_fresh === true
                 ? diffPercent(item.price, amount)
                 : null
-            const weight = weights[item.pricing_mode] ?? null
+            const weight = top ? (weights[top] ?? null) : null
             const rawSuggested =
               !noCompetitor && competitor?.is_fresh === true
                 ? exact

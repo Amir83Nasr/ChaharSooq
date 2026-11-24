@@ -46,11 +46,11 @@ export function ProductSuggestedPrice({ product }: { product: ProductOut }) {
   }, [])
 
   const topGroup = product.top_group ?? "لوازم خانگی"
-  // The formula follows the per-product mode; the category only picks which
-  // similar-product store to display.
+  // The formula follows the per-product mode; the category supplies the shared
+  // weight and picks which similar-product store to display.
   const exact = product.pricing_mode === "exact_competitor"
-  const noCompetitor = product.no_competitor_price
-  const weight = weights?.[product.pricing_mode] ?? null
+  const noCompetitor = product.pricing_mode === "no_competitor_price"
+  const weight = weights?.[topGroup] ?? null
   const fresh = product.competitor_prices.filter(
     (price) => price.is_fresh && price.price !== null
   )
@@ -85,15 +85,14 @@ export function ProductSuggestedPrice({ product }: { product: ProductOut }) {
       ? ((suggested - product.price) / product.price) * 100
       : null
 
-  const modeLabel = exact ? "قیمت رقیب" : "محصول مشابه"
   const hint = error
     ? "دریافت تنظیمات ممکن نشد."
     : weights === null
       ? "در حال خواندن وزن‌ها…"
       : noCompetitor
-        ? "این کالا فاقد قیمت رقیب است؛ قیمت پیشنهادی محاسبه نمیشود."
+        ? "این کالا فاقد قیمت رقیب است؛ قیمت پیشنهادی محاسبه نمی‌شود."
         : weight === null
-          ? `برای حالت ${modeLabel} وزنی ثبت نشده است.`
+          ? `برای دسته ${topGroup} وزنی ثبت نشده است.`
           : suggested === null
             ? exact
               ? "قیمت تازه‌ای از فروشگاه رقیب ثبت نشده است."

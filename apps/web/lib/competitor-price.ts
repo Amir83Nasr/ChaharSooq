@@ -2,7 +2,7 @@
 
 import type { CompetitorPrice, CompetitorStore, TopGroup } from "./api-types"
 import { toTomanAmount } from "./money"
-import { comparesWithCompetitor } from "./top-groups"
+import { storesForTopGroup } from "./top-groups"
 
 export type CompetitorMarket = CompetitorStore | "best"
 
@@ -31,37 +31,19 @@ export const COMPETITOR_MARKETS: {
   { store: "torob", label: STORE_MARKET_LABELS.torob },
 ]
 
-const DIRECT_STORES: readonly CompetitorStore[] = [
-  "digikala",
-  "technolife",
-  "torob",
-]
-
 /**
- * Stores shown for a competitor market. The exact-vs-similar decision is no
- * longer made here: it comes from `product.pricing_mode`. This helper only
- * picks which similar-product store to display for a catalog section.
+ * Stores relevant for a competitor market. The section owns the link slots;
+ * the per-product mode only decides how those prices feed the suggestion.
  */
 function trackedStores(
   market: CompetitorMarket,
   top: TopGroup | null
 ): readonly CompetitorStore[] {
-  if (comparesWithCompetitor(top) || top === null) {
-    if (market === "best") return DIRECT_STORES
-    return DIRECT_STORES.includes(market as CompetitorStore)
-      ? [market as CompetitorStore]
-      : []
-  }
-  if (top === "مبلمان") {
-    if (market === "best" || market === "sofa") return ["sofa", "torob"]
-    return market === "torob" ? ["torob"] : []
-  }
-  if (top === "فرش") {
-    if (market === "best" || market === "digifresh")
-      return ["digifresh", "torob"]
-    return market === "torob" ? ["torob"] : []
-  }
-  return []
+  const sectionStores = storesForTopGroup(top)
+  if (market === "best") return sectionStores
+  return sectionStores.includes(market as CompetitorStore)
+    ? [market as CompetitorStore]
+    : []
 }
 
 /** Whether the competitor column has anything to show for this row. */

@@ -30,7 +30,9 @@ This file is the single source of agent rules. Other documents:
 | Schedule defaults (027)  | [Backup schedule defaults in days](docs/adr/027-backup-schedule-defaults.md) (overrides schedule defaults in 023)                                                                                                                                                                                                                                                      |
 | PostgreSQL 19 (028)      | [PostgreSQL 19 upgrade readiness](docs/adr/028-postgresql-19-upgrade-readiness.md) (supersedes version statements in 003/008/014/023)                                                                                                                                                                                                                                  |
 | Backup page (029)        | [Standalone backup page in the system sidebar](docs/adr/029-standalone-backup-page.md) (relocates the owner-facing page in 022)                                                                                                                                                                                                                                        |
-| Pricing modes (030)      | [Per-product pricing modes](docs/adr/030-per-product-pricing-modes.md) (replaces the category-based formula split with per-product modes)                                                                                                                                                                                                                              |
+| Pricing modes (030)      | [Per-product pricing modes](docs/adr/030-per-product-pricing-modes.md) (replaces the category-based formula split with per-product modes; refined by 031)                                                                                                                                                                                                              |
+| Competitor links (031)   | [Category-scoped competitor links and unified no-price mode](docs/adr/031-category-competitor-links.md) (three persisted modes; link slots by section only)                                                                                                                                                                                                            |
+| Pricing page (032)       | [Standalone pricing page in the system sidebar](docs/adr/032-standalone-pricing-page.md) (relocates the pricing UI previously nested under settings)                                                                                                                                                                                                                   |
 
 ## 1. Repository map
 
@@ -160,6 +162,14 @@ Charsooq has exactly three independent environments
   once in `apps/web/app/fonts.ts`, not in features). Accessible text (`aria-label`, `sr-only`) stays
   plain `تومان` so screen readers announce the unit, not the hamzas
   ([ADR 004](docs/adr/004-persian-formatting.md)).
+- Persian orthography must be fully respected in every UI string — labels, buttons, descriptions,
+  errors, dialogs, toasts, tooltips, headings, and accessible text. Use the half-space / نیم فاصله
+  (ZWNJ, `U+200C`) between a word and a Persian suffix, never a normal space, and never omit the
+  separator where one is required. Correct: `قیمت\u200cگذاری`, `لینک\u200cها`, `ستون\u200cهای`,
+  `لینک\u200cشده`; wrong: `لینک ها` (normal space), `لینکها`, `قیمتگذاری` (joined without ZWNJ).
+  Two independent words still take a real space. Prefer Persian letters (`ی`, `ک`) over Arabic
+  ones. After changing any Persian copy, verify the rendered text in the browser in RTL — the ZWNJ
+  is invisible, so a plain space or a joined form can look plausible in source but read wrong.
 
 ## 6. Numbers, dates, currency
 

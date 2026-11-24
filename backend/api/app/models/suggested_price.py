@@ -1,9 +1,9 @@
-"""Per-pricing-mode suggested price configuration.
+"""Per-top-group suggested price configuration.
 
-Suggested prices use two fixed formulas — ``weight × competitor +
-(1 − weight) × Parsina base`` for ``exact_competitor`` and
-``base × (1 + weight × daily change)`` for ``similar_product`` — selected by
-each product's persisted `pricing_mode`, not by its catalog section."""
+Weights stay keyed by catalog section (فرش، مبلمان، لوازم خانگی، کالای
+دیجیتال): one weight per category, shared by both formulas. The per-product
+`pricing_mode` only selects which formula consumes that weight — the weighted
+blend for `exact_competitor`, or the scaled daily change for `similar_product`."""
 
 from decimal import Decimal
 
@@ -16,5 +16,5 @@ from app.core.database import Base
 class SuggestedPriceFormula(Base):
     __tablename__ = "suggested_price_formulas"
 
-    mode: Mapped[str] = mapped_column(String(32), primary_key=True)
+    top_group: Mapped[str] = mapped_column(String(32), primary_key=True)
     weight: Mapped[Decimal] = mapped_column(Numeric(5, 4), nullable=False)

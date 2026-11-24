@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { PackageMinus, Palette, RefreshCw, Sigma } from "lucide-react"
+import { PackageMinus, Palette, RefreshCw } from "lucide-react"
 
 import { formatPersianNumber } from "@workspace/ui/lib/number"
 
@@ -36,17 +36,6 @@ export function SettingsOverview() {
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      <SettingsOverviewCard
-        href="/settings/pricing"
-        icon={Sigma}
-        title="قیمت‌گذاری"
-        description="وزن سهم منبع price برای هر حالت price‌گذاری"
-        summary={
-          settings
-            ? `${formatPersianNumber(settings.suggested_price_formulas.length)} حالت وزن‌دار`
-            : "وزن فرمول‌های قیمت پیشنهادی"
-        }
-      />
       <SettingsOverviewCard
         href="/settings/sync"
         icon={RefreshCw}

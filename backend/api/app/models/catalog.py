@@ -97,13 +97,11 @@ class Product(Base):
     is_special: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     # Which formula computes the suggested price: a direct competitor price
-    # blend, or the daily change of a similar product's linked listing.
+    # blend, the daily change of a similar product's linked listing, or no
+    # competitor price at all (all competitor cells are suppressed).
     pricing_mode: Mapped[str] = mapped_column(
         String(32), nullable=False, default="exact_competitor"
     )
-    # Owner-marked: this product genuinely has no competitor price to track.
-    # Distinct from a missing/stale link, which just means data is not ready.
-    no_competitor_price: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     # Allowed deviation from the base price for the suggested price clamp:
     # floor = price × (1 − allowed_decrease_percent / 100),
     # ceiling = price × (1 + allowed_increase_percent / 100). NULL disables

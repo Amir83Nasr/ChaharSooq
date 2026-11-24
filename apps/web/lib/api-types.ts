@@ -10,8 +10,13 @@ export interface CategoryOut {
 export type ProductSort =
   "category" | "alphabetical" | "newest" | "cheapest" | "most_expensive"
 
-/** Which competitor source drives this product's suggested price. */
-export type PricingMode = "exact_competitor" | "similar_product"
+/**
+ * Which competitor source drives this product's suggested price.
+ * `no_competitor_price` is the third selection of the three-way dialog: no
+ * links are offered and all competitor-derived cells render as dashes.
+ */
+export type PricingMode =
+  "exact_competitor" | "similar_product" | "no_competitor_price"
 
 export interface ProductOut {
   id: number
@@ -19,9 +24,7 @@ export interface ProductOut {
   name: string
   /** True when an active competitor link has a fresh price (any store). */
   has_competitor_price: boolean
-  /** Owner-marked: this product has no comparable competitor price. */
-  no_competitor_price: boolean
-  /** Per-product formula switch; independent of the catalog top group. */
+  /** Three-way per-product selector; independent of the catalog top group. */
   pricing_mode: PricingMode
   sku: string
   price: number
@@ -309,11 +312,10 @@ export interface BackupRecord {
 export type TopGroup = "کالای دیجیتال" | "لوازم خانگی" | "فرش" | "مبلمان"
 
 export interface SuggestedPriceFormula {
-  /** Per-product pricing mode this weight applies to. */
-  mode: PricingMode
+  top_group: TopGroup
   /**
-   * Share applied to the source: competitor price for `exact_competitor`,
-   * daily price change for `similar_product`. Always 0–1.
+   * Share applied to the source: competitor price for لوازم خانگی/کالای
+   * دیجیتال, daily price change for مبلمان/فرش. Always 0–1.
    */
   weight: number
 }
@@ -335,7 +337,7 @@ export interface ProductFilters {
   min_price?: number
   max_price?: number
   competitor_store?: CompetitorStore
-  no_competitor_price?: boolean
+  pricing_mode?: PricingMode
   min_competitor_price?: number
   max_competitor_price?: number
   min_stock?: number

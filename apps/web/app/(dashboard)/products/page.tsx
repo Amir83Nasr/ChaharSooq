@@ -206,7 +206,7 @@ function ProductsPageContent() {
       min_price: toNumber(view.minPrice),
       max_price: toNumber(view.maxPrice),
       ...(view.market === "missing"
-        ? { no_competitor_price: true as const }
+        ? { pricing_mode: "no_competitor_price" as const }
         : view.market === "best"
           ? {}
           : { competitor_store: view.market }),

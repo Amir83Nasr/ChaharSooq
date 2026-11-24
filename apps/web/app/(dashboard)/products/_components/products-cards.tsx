@@ -46,7 +46,7 @@ export function ProductMobileCard({
   const top = item.top_group
   // The pricing formula comes from the product, not its catalog section.
   const exact = item.pricing_mode === "exact_competitor"
-  const noCompetitor = item.no_competitor_price
+  const noCompetitor = item.pricing_mode === "no_competitor_price"
   const showCompetitor = showsCompetitorPrice(market, top)
   const competitor = showCompetitor
     ? competitorForRow(item.competitor_prices, market, top)

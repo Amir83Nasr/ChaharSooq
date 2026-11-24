@@ -1,4 +1,4 @@
-import type { TopGroup } from "./api-types"
+import type { CompetitorStore, TopGroup } from "./api-types"
 
 /**
  * Catalog sections in display order. The section itself is computed once by
@@ -43,11 +43,30 @@ export function brandOf(
 }
 
 /**
+ * Competitor link slots for a catalog section — the single source of truth for
+ * the detail dialog. The links are the same for both active pricing modes; only
+ * the suggested-price formula differs. There is no manual «other» store.
+ */
+export const STORES_BY_TOP_GROUP: Readonly<
+  Record<TopGroup, readonly CompetitorStore[]>
+> = {
+  "کالای دیجیتال": ["digikala", "technolife", "torob"],
+  "لوازم خانگی": ["digikala", "technolife", "torob"],
+  فرش: ["digifresh", "torob"],
+  مبلمان: ["sofa", "torob"],
+}
+
+/** Link slots for one product; rows without a group behave like appliances. */
+export function storesForTopGroup(
+  top: TopGroup | null
+): readonly CompetitorStore[] {
+  return STORES_BY_TOP_GROUP[top ?? "لوازم خانگی"]
+}
+
+/**
  * Legacy display hint: the sections that historically blended a direct
- * competitor price. It is no longer the pricing formula switch — each product
- * chooses its formula through `ProductOut.pricing_mode`. Kept for category
- * display/branding and as a hint when choosing which similar-product store to
- * offer.
+ * competitor price. Kept for display/branding; the formula itself is selected
+ * per product through `ProductOut.pricing_mode`.
  */
 export function comparesWithCompetitor(top: TopGroup | null): boolean {
   return top === "لوازم خانگی" || top === "کالای دیجیتال"

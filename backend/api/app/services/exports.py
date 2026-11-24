@@ -32,7 +32,7 @@ from app.repositories import (
     ProductSort,
 )
 from app.schemas.competitor import CompetitorListingOut, CompetitorPriceOut
-from app.services.competitor import STORE_LABELS, CompetitorService
+from app.services.competitor import STORE_LABELS, CompetitorService, stores_for_top_group
 from app.services.settings import PRODUCT_TABLE_COLUMNS, SettingsService
 
 MARKET_LABELS = {
@@ -108,7 +108,7 @@ def _has_filters(filters: ProductFilters) -> bool:
             bool(filters.competitor_store),
             filters.min_competitor_price is not None,
             filters.max_competitor_price is not None,
-            filters.no_competitor_price,
+            bool(filters.pricing_mode),
             filters.min_stock is not None,
             filters.max_stock is not None,
             filters.in_stock is not None,
@@ -121,19 +121,6 @@ def _to_toman(price: float | Decimal | None, currency: str | None) -> Decimal | 
         return None
     amount = Decimal(str(price))
     return amount / 10 if currency == "IRR" else amount
-
-
-def _cheapest_price(
-    prices: list[CompetitorPriceOut], stores: tuple[str, ...]
-) -> CompetitorPriceOut | None:
-    """Available listing, or the cheaper one when several stores have prices."""
-    candidates = [price for price in prices if price.store in stores]
-    if not candidates:
-        return None
-    priced = [price for price in candidates if _to_toman(price.price, price.currency) is not None]
-    if not priced:
-        return candidates[0]
-    return min(priced, key=lambda price: _to_toman(price.price, price.currency) or Decimal(0))
 
 
 def _format_percent_magnitude(percent: float) -> str:
@@ -286,10 +273,10 @@ class ExportService:
         formulas = settings.get_suggested_price_formulas()
         weights: dict[str, float] = {}
         for item in formulas:
-            mode = item.get("mode")
+            top_group = item.get("top_group")
             weight = item.get("weight")
-            if isinstance(mode, str) and weight is not None:
-                weights[mode] = float(str(weight))
+            if isinstance(top_group, str) and weight is not None:
+                weights[top_group] = float(str(weight))
         # The catalog always defaults to the cheapest available competitor price.
         selected_market = market or "best"
         if selected_market not in MARKET_LABELS:
@@ -358,22 +345,12 @@ class ExportService:
         base_price = float(product.price or 0)
 
         exact_mode = product.pricing_mode == "exact_competitor"
-        # An owner-marked product has no comparable price at all: suppress every
-        # competitor-derived cell and the suggested price, regardless of links.
-        show_competitor = not product.no_competitor_price
-        # Similar-product tracking still picks a store per catalog section,
-        # because those stores (Sofa/DigiFresh) are themselves category-specific.
-        tracked_stores: tuple[str, ...] = (
-            ()
-            if exact_mode
-            else (
-                ("sofa", "torob")
-                if top == "مبلمان"
-                else ("digifresh", "torob")
-                if top == "فرش"
-                else ("torob",)
-            )
-        )
+        # No-price mode suppresses every competitor-derived cell and the
+        # suggested price, regardless of any stored links.
+        show_competitor = product.pricing_mode != "no_competitor_price"
+        # Both active modes use the same category-scoped store slots; only the
+        # formula consuming the picked price differs.
+        tracked_stores = stores_for_top_group(top)
 
         def competitor_text(store: str | None) -> str:
             competitor = next((p for p in prices if p.store == store), None) if store else None
@@ -390,30 +367,25 @@ class ExportService:
 
         if not show_competitor:
             competitor = None
-        elif exact_mode:
-            competitor = (
-                _cheapest_price(prices, ("digikala", "technolife", "torob"))
-                if market == "best"
-                else next((p for p in prices if p.store == market), None)
+        elif market == "best":
+            # The first store in the category's ordered map with a price wins;
+            # if none has one, keep the first link so its status is displayed.
+            linked = [
+                next((p for p in prices if p.store == store), None) for store in tracked_stores
+            ]
+            available = [p for p in linked if p is not None]
+            competitor = next(
+                (p for p in available if p.price is not None),
+                available[0] if available else None,
             )
+            show_competitor = bool(available)
         else:
-            if market == "best":
-                competitor = (
-                    next((p for p in prices if p.store == tracked_stores[0]), None)
-                    if tracked_stores
-                    else None
-                )
-            else:
-                competitor = (
-                    next((p for p in prices if p.store == market), None)
-                    if market in tracked_stores
-                    else None
-                )
-            show_competitor = (
-                show_competitor
-                and bool(tracked_stores)
-                and (market == "best" or market in tracked_stores)
+            competitor = (
+                next((p for p in prices if p.store == market), None)
+                if market in tracked_stores
+                else None
             )
+            show_competitor = market in tracked_stores
         amount: float | None = None
         if competitor and competitor.price is not None:
             toman = _to_toman(competitor.price, competitor.currency)
@@ -444,7 +416,7 @@ class ExportService:
                 word = "گران‌تر" if pct > 0 else "ارزان‌تر"
                 price_diff_text = f"{_format_whole_percent_magnitude(pct)} {word}"
 
-        weight = weights.get(product.pricing_mode)
+        weight = weights.get(top) if top is not None else None
         if fresh and show_competitor:
             if exact_mode:
                 raw_suggested = _suggested_price_for(base_price, amount, weight)

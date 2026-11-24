@@ -8,9 +8,9 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.core.top_groups import TopGroup
 from app.schemas.competitor import CompetitorPriceOut
 
-# Which suggested-price formula applies to a product. `no_competitor_price` is
-# a separate owner marker, not a third mode.
-type PricingMode = Literal["exact_competitor", "similar_product"]
+# Which suggested-price formula applies to a product. The third mode marks a
+# product with no comparable competitor price; it suppresses competitor cells.
+type PricingMode = Literal["exact_competitor", "similar_product", "no_competitor_price"]
 
 
 class CategoryIn(BaseModel):
@@ -84,14 +84,8 @@ class ProductOut(BaseModel):
         description=(
             "Formula selector: `exact_competitor` blends the base price with a "
             "direct competitor price; `similar_product` uses a linked product's "
-            "daily price change."
-        ),
-    )
-    no_competitor_price: bool = Field(
-        default=False,
-        description=(
-            "Owner-marked: this product genuinely has no comparable competitor "
-            "price. Distinct from stale or missing price data."
+            "daily price change; `no_competitor_price` marks a product with no "
+            "comparable competitor price and suppresses competitor cells."
         ),
     )
     allowed_decrease_percent: float | None = Field(
@@ -113,21 +107,14 @@ class ProductOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class ProductCompetitorFlagUpdate(BaseModel):
-    """Toggle the owner-marked 'no competitor price' flag for one product."""
-
-    no_competitor_price: bool = Field(
-        description="True marks the product as having no comparable competitor price."
-    )
-
-
 class ProductPricingModeUpdate(BaseModel):
     """Select the suggested-price formula for one product."""
 
     pricing_mode: PricingMode = Field(
         description=(
             "`exact_competitor` blends the base with a direct competitor price; "
-            "`similar_product` scales a linked product's daily price change."
+            "`similar_product` scales a linked product's daily price change; "
+            "`no_competitor_price` suppresses competitor-derived cells."
         )
     )
 

@@ -11,7 +11,7 @@ test("unauthenticated routes land on the Persian RTL login page", async ({
     "/products",
     "/dashboard",
     "/settings",
-    "/settings/pricing",
+    "/pricing",
     "/settings/sync",
     "/settings/inventory",
     "/settings/appearance",

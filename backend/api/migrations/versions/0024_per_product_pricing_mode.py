@@ -5,10 +5,8 @@ weighted blend with a direct competitor price, ``similar_product`` uses the
 linked product's daily price change. Existing rows get their mode from their
 catalog section (carpet/furniture become ``similar_product``).
 
-The formula weights are keyed by mode instead of top group. Old rows are
-collapsed to two modes; when several old weights map to the same mode the
-lexicographically first original top_group wins, making the result
-deterministic on both SQLite and PostgreSQL.
+Formula weights stay keyed by top group — one weight per catalog section,
+shared by both formulas — so ``suggested_price_formulas`` is left untouched.
 """
 
 from collections.abc import Sequence
@@ -41,44 +39,6 @@ def upgrade() -> None:
     if op.get_bind().dialect.name != "sqlite":
         op.alter_column("products", "pricing_mode", server_default=None)
 
-    op.alter_column(
-        "suggested_price_formulas",
-        "top_group",
-        new_column_name="mode",
-        existing_type=sa.String(32),
-    )
-    # Collapse the four old top-group keys to two modes. Where both keys of a
-    # group exist, keep the lexicographically first one (by Unicode code point:
-    # «فرش» before «مبلمان», «لوازم خانگی» before «کالای دیجیتال»); a lone key
-    # is always kept. Explicit keys keep offline SQL generation dialect-neutral.
-    op.execute(
-        "DELETE FROM suggested_price_formulas WHERE "
-        "(mode = 'مبلمان' AND EXISTS (SELECT 1 FROM suggested_price_formulas WHERE mode = 'فرش')) "
-        "OR (mode = 'کالای دیجیتال' AND EXISTS "
-        "(SELECT 1 FROM suggested_price_formulas WHERE mode = 'لوازم خانگی'))"
-    )
-    op.execute(
-        "UPDATE suggested_price_formulas SET mode = 'similar_product' "
-        "WHERE mode IN ('فرش', 'مبلمان')"
-    )
-    op.execute(
-        "UPDATE suggested_price_formulas SET mode = 'exact_competitor' "
-        "WHERE mode IN ('لوازم خانگی', 'کالای دیجیتال')"
-    )
-
 
 def downgrade() -> None:
-    op.alter_column(
-        "suggested_price_formulas",
-        "mode",
-        new_column_name="top_group",
-        existing_type=sa.String(32),
-    )
-    op.execute(
-        "UPDATE suggested_price_formulas SET top_group = 'فرش' WHERE top_group = 'similar_product'"
-    )
-    op.execute(
-        "UPDATE suggested_price_formulas SET top_group = 'لوازم خانگی' "
-        "WHERE top_group = 'exact_competitor'"
-    )
     op.drop_column("products", "pricing_mode")

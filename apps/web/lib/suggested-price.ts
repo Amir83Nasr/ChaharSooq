@@ -1,7 +1,7 @@
-import type { PricingMode, SuggestedPriceFormula } from "./api"
+import type { SuggestedPriceFormula, TopGroup } from "./api"
 
-/** Source weight per pricing mode — absent means "not configured". */
-export type SuggestedPriceWeights = Partial<Record<PricingMode, number>>
+/** Competitor weight per top group — absent means "not configured". */
+export type SuggestedPriceWeights = Partial<Record<TopGroup, number>>
 
 export function toSuggestedPriceWeights(
   formulas: SuggestedPriceFormula[]
@@ -13,7 +13,7 @@ export function toSuggestedPriceWeights(
       formula.weight >= 0 &&
       formula.weight <= 1
     ) {
-      weights[formula.mode] = formula.weight
+      weights[formula.top_group] = formula.weight
     }
   }
   return weights

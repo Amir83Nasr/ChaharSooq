@@ -141,17 +141,47 @@ def test_internal_and_direct_ip_urls_are_rejected(client: TestClient) -> None:
         assert response.status_code == 422
 
 
-def test_unknown_public_store_is_kept_for_manual_entry_only(client: TestClient) -> None:
+def test_unknown_public_store_is_legacy_readonly(client: TestClient) -> None:
     product_id = _product_id(client)
-    created = client.post(
+    rejected = client.post(
         f"/api/v1/products/{product_id}/competitors",
         json={"store": "other", "url": "https://example.com/product/123"},
     )
-    assert created.status_code == 201, created.text
-    checked = client.post(f"/api/v1/competitors/{created.json()['id']}/check")
+    assert rejected.status_code == 422
+    assert "برای این دسته فقط لینک" in rejected.json()["error"]["message"]
+
+    # Links written before the category-only rule stay readable and checkable.
+    with Session(get_engine()) as session:
+        listing = CompetitorListing(
+            product_id=product_id,
+            store="other",
+            url="https://example.com/product/123",
+            is_active=True,
+            status="pending",
+        )
+        session.add(listing)
+        session.commit()
+        listing_id = listing.id
+
+    listed = client.get(f"/api/v1/products/{product_id}/competitors").json()
+    assert [item["store"] for item in listed] == ["other"]
+    checked = client.post(f"/api/v1/competitors/{listing_id}/check")
     assert checked.status_code == 200, checked.text
     assert checked.json()["status"] == "unavailable"
     assert "پشتیبانی" in checked.json()["last_error"]
+
+    # The store may not be switched to another one, but unchanged stays valid.
+    unchanged = client.patch(
+        f"/api/v1/competitors/{listing_id}",
+        json={"manual_price": 25000000, "manual_currency": "IRT"},
+    )
+    assert unchanged.status_code == 200, unchanged.text
+    assert unchanged.json()["effective_price"] == 25000000
+    switched = client.patch(
+        f"/api/v1/competitors/{listing_id}",
+        json={"store": "digikala", "url": "https://www.digikala.com/product/dkp-1/"},
+    )
+    assert switched.status_code == 422  # cannot move a legacy "other" link to another store
 
 
 def test_link_edit_keeps_manual_values_but_marks_them_stale(client: TestClient) -> None:
@@ -168,18 +198,18 @@ def test_link_edit_keeps_manual_values_but_marks_them_stale(client: TestClient) 
 
     edited = client.patch(
         f"/api/v1/competitors/{listing_id}",
-        json={"store": "other", "url": "https://example.com/product/123"},
+        json={"store": "technolife", "url": "https://www.technolife.ir/product/122293/"},
     )
     assert edited.status_code == 200, edited.text
-    assert edited.json()["store"] == "other"
-    assert edited.json()["url"] == "https://example.com/product/123"
+    assert edited.json()["store"] == "technolife"
+    assert edited.json()["url"] == "https://www.technolife.ir/product/122293/"
     assert edited.json()["manual_price"] == 25000000
     assert edited.json()["effective_price"] is None
     assert edited.json()["price_is_fresh"] is False
 
 
-def test_competitor_store_and_no_price_filters(client: TestClient) -> None:
-    """Store choice filters by that store; no-price filters by the owner tick.
+def test_competitor_store_and_pricing_mode_filters(client: TestClient) -> None:
+    """Store choice filters by that store; no-price is the third mode.
 
     "Best" is display-only and must never restrict the rows.
     """
@@ -188,7 +218,7 @@ def test_competitor_store_and_no_price_filters(client: TestClient) -> None:
         "/api/v1/products",
         json={"name": "یخچال دیجی", "sku": "FRIDGE-DIGI", "price": 100000000},
     ).json()["id"]
-    flagged_id = client.post(
+    no_price_id = client.post(
         "/api/v1/products",
         json={"name": "کالای بدون رقیب", "sku": "FRIDGE-NONE", "price": 100000000},
     ).json()["id"]
@@ -206,10 +236,11 @@ def test_competitor_store_and_no_price_filters(client: TestClient) -> None:
             json={"manual_price": 30000000, "manual_currency": "IRT", "manual_in_stock": True},
         )
 
-    client.patch(
-        f"/api/v1/products/{flagged_id}/no-competitor-price",
-        json={"no_competitor_price": True},
+    changed = client.patch(
+        f"/api/v1/products/{no_price_id}/pricing-mode",
+        json={"pricing_mode": "no_competitor_price"},
     )
+    assert changed.status_code == 200, changed.text
 
     # Specific store: only products with a fresh price from that store.
     by_technolife = client.get("/api/v1/products", params={"competitor_store": "technolife"}).json()
@@ -217,16 +248,18 @@ def test_competitor_store_and_no_price_filters(client: TestClient) -> None:
     by_digikala = client.get("/api/v1/products", params={"competitor_store": "digikala"}).json()
     assert [item["id"] for item in by_digikala["items"]] == [digikala_id]
 
-    # Flag: only the owner-marked product, not merely products without prices.
-    flagged = client.get("/api/v1/products", params={"no_competitor_price": True}).json()
-    assert [item["id"] for item in flagged["items"]] == [flagged_id]
+    # Mode: only the no-price product, not merely products without prices.
+    no_price = client.get("/api/v1/products", params={"pricing_mode": "no_competitor_price"}).json()
+    assert [item["id"] for item in no_price["items"]] == [no_price_id]
+    exact = client.get("/api/v1/products", params={"pricing_mode": "exact_competitor"}).json()
+    assert {item["id"] for item in exact["items"]} == {technolife_id, digikala_id}
 
-    # Best: no filter at all — every active product stays visible.
+    # No mode filter: every active product stays visible.
     all_items = client.get("/api/v1/products").json()
     assert {item["id"] for item in all_items["items"]} == {
         technolife_id,
         digikala_id,
-        flagged_id,
+        no_price_id,
     }
 
 

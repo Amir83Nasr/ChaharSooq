@@ -461,7 +461,7 @@ def test_products_csv_percent_precision_and_daily_change(client: TestClient) -> 
     assert row[headers.index("تغییرات قیمت رقبا")] == "۳.۸٪ کاهش"
 
 
-def test_products_csv_uses_pricing_mode_and_suppresses_no_competitor_price(
+def test_products_csv_uses_pricing_mode_and_suppresses_no_price_mode(
     client: TestClient,
 ) -> None:
     from sqlalchemy.orm import Session
@@ -474,8 +474,8 @@ def test_products_csv_uses_pricing_mode_and_suppresses_no_competitor_price(
         "/api/v1/settings",
         json={
             "suggested_price_formulas": [
-                {"mode": "exact_competitor", "weight": 0.5},
-                {"mode": "similar_product", "weight": 0.5},
+                {"top_group": "لوازم خانگی", "weight": 0.5},
+                {"top_group": "فرش", "weight": 0.5},
             ]
         },
     )
@@ -488,6 +488,9 @@ def test_products_csv_uses_pricing_mode_and_suppresses_no_competitor_price(
             product = db.get(Product, product_id)
             assert product is not None
             product.price = Decimal("100000000")
+        appliance = db.get(Product, exact_id)
+        assert appliance is not None
+        appliance.main_group_name = "لوازم خانگی یخچال"
         carpet = db.get(Product, similar_id)
         assert carpet is not None
         carpet.main_group_name = "فرش دستباف"
@@ -545,11 +548,11 @@ def test_products_csv_uses_pricing_mode_and_suppresses_no_competitor_price(
     # similar_product: 100M × (1 + 0.5 × (−20%)) = 90M.
     assert similar_row[headers.index("قیمت پیشنهادی (تومان)")] == "۹۰۰۰۰۰۰۰"
 
-    flagged = client.patch(
-        f"/api/v1/products/{similar_id}/no-competitor-price",
-        json={"no_competitor_price": True},
+    no_price = client.patch(
+        f"/api/v1/products/{similar_id}/pricing-mode",
+        json={"pricing_mode": "no_competitor_price"},
     )
-    assert flagged.status_code == 200, flagged.text
+    assert no_price.status_code == 200, no_price.text
     headers, similar_row = row_for("MODE-SIMILAR")
     for column in (
         "قیمت ارزانترین رقیب",
@@ -558,6 +561,37 @@ def test_products_csv_uses_pricing_mode_and_suppresses_no_competitor_price(
         "تغییرات قیمت ارزانترین رقیب",
     ):
         assert similar_row[headers.index(column)] == "—"
+
+    # Per-store competitor cells stay suppressed too, even with links present.
+    all_rows = _rows(
+        client.get(
+            "/api/v1/exports/products.csv",
+            params={"q": "MODE-SIMILAR", "scope": "all"},
+        )
+    )
+    all_headers = all_rows[0]
+    assert all_rows[1][all_headers.index("قیمت رقبا (دیجی\u200cکالا)")] == "—"
+    assert all_rows[1][all_headers.index("قیمت رقبا (تکنولایف)")] == "—"
+
+    # Export filter accepts the same three-value mode as the products list.
+    only_no_price = _rows(
+        client.get(
+            "/api/v1/exports/products.csv",
+            params={"pricing_mode": "no_competitor_price", "columns": "sku,category"},
+        )
+    )
+    assert [row[only_no_price[0].index("کد")] for row in only_no_price[1:]] == ["MODE-SIMILAR"]
+    exact_only = _rows(
+        client.get(
+            "/api/v1/exports/products.csv",
+            params={"pricing_mode": "exact_competitor", "columns": "sku,category"},
+        )
+    )
+    assert [row[exact_only[0].index("کد")] for row in exact_only[1:]] == ["MODE-EXACT"]
+    assert (
+        client.get("/api/v1/exports/products.csv", params={"pricing_mode": "نامعتبر"}).status_code
+        == 422
+    )
 
 
 def test_persian_format_helpers() -> None:

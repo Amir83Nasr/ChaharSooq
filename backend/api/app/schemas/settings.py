@@ -29,7 +29,7 @@ class SettingsOut(BaseModel):
     sync_interval_minutes: int = Field(description="Product sync interval.")
     competitor_sync_interval_minutes: int = Field(description="Bulk competitor refresh interval.")
     suggested_price_formulas: list[SuggestedPriceFormulaOut] = Field(
-        description="Per-pricing-mode weight for the suggested price."
+        description="Per-category competitor weight for the suggested price."
     )
     product_table_columns: list[ProductTableColumn] = Field(
         description="Visible product-table columns, in canonical order."
@@ -46,7 +46,7 @@ class SettingsUpdateIn(BaseModel):
                     "default_page_size": 20,
                     "sync_interval_minutes": 720,
                     "competitor_sync_interval_minutes": 1440,
-                    "suggested_price_formulas": [{"mode": "exact_competitor", "weight": 0.5}],
+                    "suggested_price_formulas": [{"top_group": "فرش", "weight": 0.4}],
                     "product_table_columns": ["name", "price", "stock"],
                 }
             ]
@@ -88,12 +88,12 @@ class SettingsUpdateIn(BaseModel):
 
     @field_validator("suggested_price_formulas")
     @classmethod
-    def validate_unique_formula_modes(
+    def validate_unique_formula_top_groups(
         cls, formulas: list[SuggestedPriceFormulaIn] | None
     ) -> list[SuggestedPriceFormulaIn] | None:
         if formulas is None:
             return None
-        modes = [formula.mode for formula in formulas]
-        if len(modes) != len(set(modes)):
-            raise ValueError("برای هر حالت قیمتگذاری فقط یک وزن می‌توان ثبت کرد")
+        top_groups = [formula.top_group for formula in formulas]
+        if len(top_groups) != len(set(top_groups)):
+            raise ValueError("برای هر دسته\u200cبندی فقط یک وزن می‌توان ثبت کرد")
         return formulas

@@ -1,31 +1,27 @@
 """Suggested price boundary schemas.
 
-One weight per pricing mode: `exact_competitor` blends the Parsina base with a
-direct competitor price; `similar_product` scales the linked product's daily
-price change. The mode is stored per product, not per catalog section.
+Weights stay per catalog section: one weight per top group, shared by both
+formulas. The per-product `pricing_mode` selects which formula consumes it —
+`exact_competitor` blends the Parsina base with a direct competitor price,
+while `similar_product` scales the linked product's daily price change.
 """
 
 from pydantic import BaseModel, Field
 
-from app.schemas.catalog import PricingMode
+from app.core.top_groups import TopGroup
 
-__all__ = ["SuggestedPriceFormulaIn", "SuggestedPriceFormulaOut"]
+__all__ = ["SuggestedPriceFormulaIn", "SuggestedPriceFormulaOut", "TopGroup"]
 
 
 class SuggestedPriceFormulaIn(BaseModel):
-    mode: PricingMode = Field(
-        description=(
-            "Pricing mode the weight applies to: `exact_competitor` (weighted "
-            "blend with a direct competitor price) or `similar_product` "
-            "(base adjusted by the linked product's daily price change)."
-        )
-    )
+    top_group: TopGroup = Field(description="Catalog section the weight applies to.")
     weight: float = Field(
         ge=0,
         le=1,
         description=(
-            "Source share (0–1): competitor price for `exact_competitor`, "
-            "daily price change for `similar_product`."
+            "Source share (0–1): used as the competitor share in the weighted "
+            "blend for `exact_competitor` products, and as the daily-change "
+            "scale for `similar_product` products."
         ),
     )
 

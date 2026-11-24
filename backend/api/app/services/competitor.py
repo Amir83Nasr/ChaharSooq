@@ -8,7 +8,8 @@ from urllib.parse import urlsplit
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models import CompetitorListing, Product
+from app.core.top_groups import TopGroup
+from app.models import CompetitorListing
 from app.repositories.competitor import CompetitorRepository, DailyPriceChange
 from app.schemas.competitor import (
     CompetitorListingCreate,
@@ -28,13 +29,17 @@ STORE_HOSTS: dict[str, frozenset[str]] = {
     "torob": frozenset({"torob.com", "www.torob.com"}),
 }
 
-# Torob is a marketplace available for every catalog section; the other stores
-# stay specific to their group. `other` remains the manual-only escape hatch.
-GROUP_STORES: dict[str, frozenset[str]] = {
-    "مبلمان": frozenset({"sofa", "torob"}),
-    "فرش": frozenset({"digifresh", "torob"}),
+# Authoritative competitor-link stores per catalog section. Both active pricing
+# modes use the same map: stores follow the category, never the formula. Order
+# matters — the first entry is the "best" market's preferred link.
+CATEGORY_STORES: dict[TopGroup, tuple[str, ...]] = {
+    "کالای دیجیتال": ("digikala", "technolife", "torob"),
+    "لوازم خانگی": ("digikala", "technolife", "torob"),
+    "فرش": ("digifresh", "torob"),
+    "مبلمان": ("sofa", "torob"),
 }
-APPLIANCE_STORES = frozenset({"digikala", "technolife", "torob", "other"})
+# Products without a catalog section keep the appliance rivals as the default.
+DEFAULT_STORES: tuple[str, ...] = CATEGORY_STORES["لوازم خانگی"]
 STORE_LABELS = {
     "sofa": "سوفا",
     "digifresh": "دیجی‌فرش",
@@ -99,25 +104,16 @@ def validate_url(url: str, store: str) -> str:
     return raw
 
 
-def _allowed_stores(product: Product) -> frozenset[str]:
-    """Stores valid for a product's pricing mode, not just its section.
-
-    Exact-competitor links can point at any direct rival regardless of the
-    catalog section. Similar-product links stay section-specific because the
-    trackers themselves (Sofa/DigiFresh) only cover those sections.
-    """
-    if product.pricing_mode == "exact_competitor":
-        return APPLIANCE_STORES
-    name = (product.main_group_name or "").strip()
-    for prefix, stores in GROUP_STORES.items():
-        if name.startswith(prefix):
-            return stores | {"other"}
-    return frozenset({"digikala", "torob", "other"})
+def stores_for_top_group(top: str | None) -> tuple[str, ...]:
+    """Allowed stores for one catalog section, in preferred ("best") order."""
+    if top in CATEGORY_STORES:
+        return CATEGORY_STORES[top]
+    return DEFAULT_STORES
 
 
-def _store_error(stores: frozenset[str]) -> str:
-    labels = " یا ".join(STORE_LABELS[store] for store in sorted(stores))
-    return f"برای این حالت قیمتگذاری فقط لینک {labels} مجاز است"
+def _store_error(stores: frozenset[str] | tuple[str, ...]) -> str:
+    labels = " یا ".join(STORE_LABELS[store] for store in stores)
+    return f"برای این دسته فقط لینک {labels} مجاز است"
 
 
 class CompetitorService:
@@ -240,7 +236,9 @@ class CompetitorService:
         product = self._repo.product(product_id)
         if product is None:
             raise CompetitorNotFoundError
-        allowed = _allowed_stores(product)
+        if product.pricing_mode == "no_competitor_price":
+            raise InvalidCompetitorProductError("برای کالای فاقد قیمت رقیب نمیتوان لینک ثبت کرد")
+        allowed = stores_for_top_group(product.top_group)
         if payload.store not in allowed:
             raise InvalidCompetitorProductError(_store_error(allowed))
         # At most one manual link per store for every group.
@@ -270,8 +268,11 @@ class CompetitorService:
         target_url = values.get("url") or row.url
         if "store" in values or "url" in values:
             product = self._repo.product(row.product_id)
-            allowed = _allowed_stores(product) if product else APPLIANCE_STORES
-            if target_store not in allowed:
+            allowed = stores_for_top_group(product.top_group) if product else DEFAULT_STORES
+            # Legacy "other" links stay readable and editable only while the
+            # store stays "other": no new link may use it and no link may move
+            # into or out of it.
+            if target_store != "other" and (target_store not in allowed or row.store == "other"):
                 raise InvalidCompetitorProductError(_store_error(allowed))
             try:
                 target_url = validate_url(target_url, target_store)

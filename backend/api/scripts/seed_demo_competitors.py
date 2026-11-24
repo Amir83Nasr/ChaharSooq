@@ -1,10 +1,11 @@
 """Fill a development or staging database with demo competitor prices.
 
 Never run against production. Every active product gets the competitor links
-its group uses in the table — Digikala/Technolife for appliances, Sofa for
-furniture, DigiFresh for carpets, plus Torob for every section — and a fresh price and two daily
-observations, so the products table shows competitor price, price difference,
-suggested price and daily change instead of empty cells.
+its catalog section allows — Digikala/Technolife for digital and appliances,
+Sofa for furniture, DigiFresh for carpets, plus Torob for every section — and a
+fresh price and two daily observations, so the products table shows competitor
+price, price difference, suggested price and daily change instead of empty
+cells. Link slots depend on the section only, never on the pricing mode.
 
 Products rotate through four suggested-price scenarios (stable per product
 `external_id`, falling back to SKU) so the demo covers every clamp branch: a
@@ -52,6 +53,7 @@ from app.models import (
     Product,
     SuggestedPriceFormula,
 )
+from app.services.competitor import stores_for_top_group
 from scripts.common import is_demo_competitor_url
 
 STORE_URLS = {
@@ -61,12 +63,11 @@ STORE_URLS = {
     "digifresh": "https://www.digifarsh.com/product/demo-{product_id}/",
     "torob": "https://torob.com/p/demo-{product_id}/",
 }
-# Torob is a marketplace linked for every section, alongside the group-specific
-# store (Sofa/DigiFresh) or the appliance rivals (Digikala/Technolife).
-APPLIANCE_STORES = ("digikala", "technolife", "torob")
 TARGET_WEIGHTS = {
-    "exact_competitor": Decimal("0.2000"),
-    "similar_product": Decimal("0.4000"),
+    "فرش": Decimal("0.4000"),
+    "مبلمان": Decimal("0.5000"),
+    "لوازم خانگی": Decimal("0.2000"),
+    "کالای دیجیتال": Decimal("0.4000"),
 }
 TOMAN = Decimal("1")
 
@@ -90,13 +91,8 @@ class SeedResult:
 
 
 def stores_for(product: Product) -> tuple[str, ...]:
-    """Stores the products table expects for this product's top group."""
-    name = (product.main_group_name or "").strip()
-    if name.startswith("فرش"):
-        return ("digifresh", "torob")
-    if name.startswith("مبلمان"):
-        return ("sofa", "torob")
-    return APPLIANCE_STORES
+    """Stores the products table expects for this product's catalog section."""
+    return stores_for_top_group(product.top_group)
 
 
 def _demo_url(store: str, product_id: int) -> str:
@@ -336,12 +332,12 @@ def seed_demo_competitors(session: Session, *, now: datetime | None = None) -> S
         )
         observations_added += 2
 
-    weights = {row.mode for row in session.scalars(select(SuggestedPriceFormula))}
+    weights = {row.top_group for row in session.scalars(select(SuggestedPriceFormula))}
     weights_added = 0
-    for mode, weight in TARGET_WEIGHTS.items():
-        if mode in weights:
+    for top_group, weight in TARGET_WEIGHTS.items():
+        if top_group in weights:
             continue
-        session.add(SuggestedPriceFormula(mode=mode, weight=weight))
+        session.add(SuggestedPriceFormula(top_group=top_group, weight=weight))
         weights_added += 1
 
     session.commit()

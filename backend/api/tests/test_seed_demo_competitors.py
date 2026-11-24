@@ -71,14 +71,14 @@ def test_seed_fills_every_group_and_refreshes_only_demo_rows(tmp_path: Path) -> 
                 url="https://www.digikala.com/product/dkp-1/",
             )
         )
-        session.add(SuggestedPriceFormula(mode="exact_competitor", weight=Decimal("0.2000")))
+        session.add(SuggestedPriceFormula(top_group="لوازم خانگی", weight=Decimal("0.2000")))
         session.commit()
 
         result = seed_demo_competitors(session, now=NOW)
         assert result.created == 10  # 3 appliance stores × 2 rows + 2 sofa + 2 carpet
         assert result.refreshed == 10
         assert result.observations == 20  # today + yesterday per demo listing
-        assert result.weights == 1  # similar_product; the exact_competitor weight stays
+        assert result.weights == 3  # فرش، مبلمان و کالای دیجیتال؛ وزن لوازم خانگی موجود است
         assert result.bounds == 6  # tight floor+ceiling for two rows, loose pair for one
 
         listings = _all(session, CompetitorListing)
@@ -145,10 +145,12 @@ def test_seed_fills_every_group_and_refreshes_only_demo_rows(tmp_path: Path) -> 
         assert len(_all(session, CompetitorListing)) == 11
         assert len(_all(session, CompetitorPriceObservation)) == 20
 
-        weights = {row.mode: row.weight for row in _all(session, SuggestedPriceFormula)}
+        weights = {row.top_group: row.weight for row in _all(session, SuggestedPriceFormula)}
         assert weights == {
-            "exact_competitor": Decimal("0.2000"),
-            "similar_product": Decimal("0.4000"),
+            "لوازم خانگی": Decimal("0.2000"),
+            "فرش": Decimal("0.4000"),
+            "مبلمان": Decimal("0.5000"),
+            "کالای دیجیتال": Decimal("0.4000"),
         }
 
 
@@ -172,21 +174,21 @@ def test_demo_rows_cover_every_suggested_price_clamp_branch(tmp_path: Path) -> N
         # daily change. Mirror the frontend formula to check the seed's intent.
         appliance_base = appliance.price
         appliance_price, _ = demo_prices(appliance, "digikala")
-        appliance_weight = TARGET_WEIGHTS["exact_competitor"]
+        appliance_weight = TARGET_WEIGHTS["لوازم خانگی"]
         appliance_raw = appliance_weight * appliance_price + (1 - appliance_weight) * appliance_base
         appliance_floor = appliance_base * (1 - Decimal("1.50") / 100)
         assert appliance_raw < appliance_floor
 
         sofa_base = sofa.price
         _, sofa_change = demo_prices(sofa, "sofa")
-        sofa_weight = TARGET_WEIGHTS["similar_product"]
+        sofa_weight = TARGET_WEIGHTS["مبلمان"]
         sofa_raw = sofa_base * (1 + sofa_weight * sofa_change / 100)
         sofa_ceiling = sofa_base * (1 + Decimal("1.50") / 100)
         assert sofa_raw > sofa_ceiling
 
         carpet_base = carpet.price
         _, carpet_change = demo_prices(carpet, "digifresh")
-        carpet_weight = TARGET_WEIGHTS["similar_product"]
+        carpet_weight = TARGET_WEIGHTS["فرش"]
         carpet_raw = carpet_base * (1 + carpet_weight * carpet_change / 100)
         decrease, increase = demo_bounds(carpet)
         assert carpet_base * (1 - decrease / 100) <= carpet_raw

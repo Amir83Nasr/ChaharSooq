@@ -17,7 +17,6 @@ from app.repositories import (
     ProductSort,
 )
 from app.schemas import (
-    ProductCompetitorFlagUpdate,
     ProductIn,
     ProductPriceBoundsUpdate,
     ProductPricingModeUpdate,
@@ -54,10 +53,10 @@ class ProductService:
         competitor_store: str | None = None,
         min_competitor_price: int | None = None,
         max_competitor_price: int | None = None,
+        pricing_mode: str | None = None,
         min_stock: int | None,
         max_stock: int | None,
         in_stock: bool | None,
-        no_competitor_price: bool = False,
     ) -> ProductFilters:
         """Normalise query params once; the list and the CSV export share it."""
         if min_price is not None and max_price is not None and min_price > max_price:
@@ -74,7 +73,7 @@ class ProductService:
             competitor_store=competitor_store,
             min_competitor_price=min_competitor_price,
             max_competitor_price=max_competitor_price,
-            no_competitor_price=no_competitor_price,
+            pricing_mode=pricing_mode,
             competitor_price_since=datetime.now(UTC)
             - timedelta(hours=get_settings().competitor_price_ttl_hours),
             min_stock=min_stock,
@@ -94,10 +93,10 @@ class ProductService:
         competitor_store: str | None = None,
         min_competitor_price: int | None = None,
         max_competitor_price: int | None = None,
+        pricing_mode: str | None = None,
         min_stock: int | None,
         max_stock: int | None,
         in_stock: bool | None,
-        no_competitor_price: bool = False,
         sort: ProductSort,
         page: int,
         page_size: int,
@@ -122,7 +121,7 @@ class ProductService:
             min_stock=min_stock,
             max_stock=max_stock,
             in_stock=in_stock,
-            no_competitor_price=no_competitor_price,
+            pricing_mode=pricing_mode,
         )
         return self._repos.list(
             filters=filters,
@@ -161,15 +160,6 @@ class ProductService:
         if product is None:
             raise ProductNotFoundError
         self._repos.set_pricing_mode(product, value=payload.pricing_mode)
-        return product
-
-    def set_no_competitor_price(
-        self, product_id: int, payload: ProductCompetitorFlagUpdate
-    ) -> Product:
-        product = self._repos.get(product_id)
-        if product is None:
-            raise ProductNotFoundError
-        self._repos.set_no_competitor_price(product, value=payload.no_competitor_price)
         return product
 
     def summary(self, *, low_stock_threshold: int) -> dict[str, int]:

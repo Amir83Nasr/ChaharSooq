@@ -97,6 +97,10 @@ def test_offline_sql_generation_uses_migration_settings_not_full_settings(
     sql = capsys.readouterr().out
     assert "CREATE TABLE alembic_version" in sql
     assert "CREATE TABLE products" in sql
+    # 0026 folds the removed flag into the third mode even in offline SQL.
+    assert "0026_no_price_pricing_mode" in sql
+    assert "UPDATE products SET pricing_mode" in sql
+    assert "DROP COLUMN no_competitor_price" in sql
 
 
 def test_offline_migrations_require_the_migration_url_in_production(

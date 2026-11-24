@@ -7,6 +7,11 @@ Date: 2026-11-24
 Accepted. Supersedes the category-based pricing-formula split described in the
 suggested-price settings and in `compares_with_competitor`.
 
+Refined by [031 — Category-scoped competitor links and unified no-price mode](031-category-competitor-links.md):
+the third selector is now a persisted `pricing_mode` value (the separate
+`no_competitor_price` boolean is removed), and competitor link slots depend on
+the catalog section alone rather than on the mode.
+
 ## Context
 
 The suggested price used to be chosen by a product's catalog section
@@ -39,9 +44,11 @@ links and blanks competitor-derived cells.
    and no suggested price is computed.
 3. The two formulas and the per-product price bounds
    (`allowed_decrease_percent` / `allowed_increase_percent`) are unchanged.
-   Only the key that selects the formula and its weight changes: weights are
-   stored per mode instead of per top group (two rows in
-   `suggested_price_formulas`).
+   The **formula selector** is the product's mode, but the weight `w` remains
+   configured per catalog section (four rows in `suggested_price_formulas`,
+   keyed by `top_group`). One weight per category is shared by both formulas:
+   it is the competitor share in the blend and the daily-change scale in the
+   delta formula.
 4. The product detail dialog exposes a three-way mode selector (قیمت رقیب /
    محصول مشابه / فاقد قیمت رقیب) and two tabs with the corresponding link
    settings — one for exact competitor links, one for similar-product links.
@@ -53,16 +60,14 @@ links and blanks competitor-derived cells.
 
 ## Consequences
 
-- The pricing settings page now configures two mode weights instead of four
-  category weights; the old four weights are collapsed deterministically
-  during migration.
+- The pricing settings page keeps four category weights; the two formulas are
+  presented as the two modes a product can select, both consuming the same
+  per-category weight.
 - CSV exports and the products table pick the formula from
   `product.pricing_mode`; category helpers remain only for display/branding
   and for choosing the tracking store.
 - New API surface: `PATCH /api/v1/products/{id}/pricing-mode`; `ProductOut`
-  gains `pricing_mode`; settings formulas use `mode` instead of `top_group`.
-- Old clients sending `top_group` weights are rejected by the settings API
-  with 422: `mode` is now required on every formula item. The migration
-  converts existing stored rows, so saved settings remain valid.
-- Backup/restore keeps the same `suggested_price_formulas` table name; only
-  its primary-key column is renamed.
+  gains `pricing_mode`. The settings formulas contract is unchanged:
+  `top_group` + `weight`.
+- Backup/restore is unaffected: the `suggested_price_formulas` table keeps its
+  name and primary key.

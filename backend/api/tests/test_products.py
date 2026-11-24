@@ -58,6 +58,7 @@ def test_product_listing_filters_sort_and_search(client: TestClient) -> None:
     assert {i["sku"] for i in low["items"]} == {"TEA-1", "COF-1"}
     assert client.get("/api/v1/products", params={"min_stock": 6}).json()["total"] == 0
     assert client.get("/api/v1/products", params={"min_stock": -1}).status_code == 422
+    assert client.get("/api/v1/products", params={"pricing_mode": "نامعتبر"}).status_code == 422
 
 
 def test_product_pagination_total(client: TestClient) -> None:
@@ -77,26 +78,37 @@ def test_product_invalid_category_rejected(client: TestClient) -> None:
     assert r.status_code == 422
 
 
-def test_no_competitor_price_flag_toggles(client: TestClient) -> None:
+def test_no_competitor_price_is_third_mode_and_filterable(client: TestClient) -> None:
+    """The old flag/endpoint are gone; no-price state is a pricing mode."""
     login(client)
-    product_id = client.post(
+    created = client.post(
         "/api/v1/products",
         json={"name": "کالای خاص", "sku": "UNIQUE-1", "price": 1000000},
-    ).json()["id"]
-    r = client.patch(
+    )
+    assert created.status_code == 201, created.text
+    product_id = created.json()["id"]
+    assert "no_competitor_price" not in created.json()
+
+    missing_endpoint = client.patch(
         f"/api/v1/products/{product_id}/no-competitor-price",
         json={"no_competitor_price": True},
     )
-    assert r.status_code == 200, r.text
-    assert r.json()["no_competitor_price"] is True
-    listed = client.get("/api/v1/products", params={"q": "UNIQUE-1"}).json()
-    assert listed["items"][0]["no_competitor_price"] is True
+    assert missing_endpoint.status_code == 404
 
-    off = client.patch(
-        f"/api/v1/products/{product_id}/no-competitor-price",
-        json={"no_competitor_price": False},
+    r = client.patch(
+        f"/api/v1/products/{product_id}/pricing-mode",
+        json={"pricing_mode": "no_competitor_price"},
     )
-    assert off.json()["no_competitor_price"] is False
+    assert r.status_code == 200, r.text
+    assert r.json()["pricing_mode"] == "no_competitor_price"
+    assert "no_competitor_price" not in r.json()
+
+    listed = client.get("/api/v1/products", params={"q": "UNIQUE-1"}).json()
+    assert listed["items"][0]["pricing_mode"] == "no_competitor_price"
+    filtered = client.get("/api/v1/products", params={"pricing_mode": "no_competitor_price"}).json()
+    assert [item["id"] for item in filtered["items"]] == [product_id]
+    other_modes = client.get("/api/v1/products", params={"pricing_mode": "exact_competitor"}).json()
+    assert product_id not in [item["id"] for item in other_modes["items"]]
 
 
 def test_product_pricing_mode_toggles(client: TestClient) -> None:

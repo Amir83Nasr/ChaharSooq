@@ -59,6 +59,18 @@ def test_group_specific_links_are_accepted(
     _create_link(client, product_id, store, url)
 
 
+def test_no_price_mode_rejects_competitor_links(client: TestClient) -> None:
+    """The third mode suppresses link entry at the API boundary too."""
+    login(client)
+    product_id = _group_product_id(client, "فرش ماشینی", pricing_mode="no_competitor_price")
+    response = client.post(
+        f"/api/v1/products/{product_id}/competitors",
+        json={"store": "digifresh", "url": "https://digifarsh.com/product/test-carpet/"},
+    )
+    assert response.status_code == 422
+    assert "فاقد قیمت رقیب" in response.json()["error"]["message"]
+
+
 @pytest.mark.parametrize(("group", "store"), [("مبلمان راحتی", "digikala"), ("فرش", "sofa")])
 def test_links_for_the_wrong_group_are_rejected(client: TestClient, group: str, store: str) -> None:
     login(client)
@@ -70,35 +82,27 @@ def test_links_for_the_wrong_group_are_rejected(client: TestClient, group: str, 
     assert response.status_code == 422
 
 
-def test_link_stores_follow_pricing_mode_not_catalog_section(client: TestClient) -> None:
-    """An exact rival link is allowed for a carpet; a tracker link is not."""
-    exact_id = _group_product_id(client, "فرش ماشینی", pricing_mode="exact_competitor")
-    exact_link = client.post(
-        f"/api/v1/products/{exact_id}/competitors",
-        json={"store": "digikala", "url": "https://www.digikala.com/product/dkp-123456/"},
-    )
-    assert exact_link.status_code == 201, exact_link.text
-    rejected = client.post(
-        f"/api/v1/products/{exact_id}/competitors",
+@pytest.mark.parametrize("mode", ["exact_competitor", "similar_product"])
+def test_link_stores_follow_category_not_pricing_mode(client: TestClient, mode: str) -> None:
+    """A carpet accepts only DigiFresh/Torob in every pricing mode."""
+    product_id = _group_product_id(client, "فرش ماشینی", pricing_mode=mode)
+    allowed = client.post(
+        f"/api/v1/products/{product_id}/competitors",
         json={"store": "digifresh", "url": "https://digifarsh.com/product/test-carpet/"},
     )
-    assert rejected.status_code == 422
-
-    switched = client.patch(
-        f"/api/v1/products/{exact_id}/pricing-mode",
-        json={"pricing_mode": "similar_product"},
-    )
-    assert switched.status_code == 200, switched.text
-    similar_link = client.post(
-        f"/api/v1/products/{exact_id}/competitors",
-        json={"store": "digifresh", "url": "https://digifarsh.com/product/test-carpet/"},
-    )
-    assert similar_link.status_code == 201, similar_link.text
-    wrong_store = client.post(
-        f"/api/v1/products/{exact_id}/competitors",
-        json={"store": "technolife", "url": "https://www.technolife.ir/product/x"},
-    )
-    assert wrong_store.status_code == 422
+    assert allowed.status_code == 201, allowed.text
+    for store, url in (
+        ("digikala", "https://www.digikala.com/product/dkp-123456/"),
+        ("technolife", "https://www.technolife.ir/product/x"),
+        ("sofa", "https://sofamobl.com/product/carloos-sofa-manya/"),
+        ("other", "https://example.com/product/123"),
+    ):
+        rejected = client.post(
+            f"/api/v1/products/{product_id}/competitors",
+            json={"store": store, "url": url},
+        )
+        assert rejected.status_code == 422
+        assert "برای این دسته فقط لینک" in rejected.json()["error"]["message"]
 
 
 def test_daily_change_compares_with_previous_day(

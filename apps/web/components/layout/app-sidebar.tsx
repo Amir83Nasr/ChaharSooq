@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Package,
   Settings,
+  Sigma,
   Sparkles,
   Store,
   UsersRound,
@@ -97,6 +98,12 @@ const NAV: NavGroup[] = [
     group: "سیستم",
     items: [
       { kind: "link", href: "/settings", label: "تنظیمات", icon: Settings },
+      {
+        kind: "link",
+        href: "/pricing",
+        label: "قیمت‌گذاری",
+        icon: Sigma,
+      },
       {
         kind: "link",
         href: "/backup",

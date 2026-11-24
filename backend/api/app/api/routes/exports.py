@@ -24,6 +24,7 @@ ListingStatus = Literal[
     "pending", "success", "not_found", "unavailable", "blocked", "failed", "manual"
 ]
 ProductSort = Literal["newest", "cheapest", "most_expensive", "alphabetical", "category"]
+PricingModeFilter = Literal["exact_competitor", "similar_product", "no_competitor_price"]
 MarketFilter = Literal["best", "digikala", "technolife", "sofa", "digifresh", "torob"]
 ExportScope = Literal["filtered", "all"]
 
@@ -75,9 +76,8 @@ def export_products_csv(
     max_competitor_price: int | None = Query(
         default=None, ge=0, description="Maximum fresh competitor price."
     ),
-    no_competitor_price: bool = Query(  # noqa: B008
-        default=False,
-        description="Only products marked by the owner as having no competitor price.",
+    pricing_mode: PricingModeFilter | None = Query(  # noqa: B008
+        default=None, description="Only products in this pricing mode."
     ),
     min_stock: int | None = Query(default=None, ge=0, description="Minimum stock."),
     max_stock: int | None = Query(default=None, ge=0, description="Maximum stock."),
@@ -113,7 +113,7 @@ def export_products_csv(
         competitor_store=competitor_store,
         min_competitor_price=min_competitor_price,
         max_competitor_price=max_competitor_price,
-        no_competitor_price=no_competitor_price,
+        pricing_mode=pricing_mode,
         min_stock=min_stock,
         max_stock=max_stock,
         in_stock=in_stock,

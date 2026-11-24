@@ -153,13 +153,13 @@ function paramsFromView(view: ProductsView): ProductFilters {
   }
   // "best" is display-only (cheapest competitor wins, no row filtering).
   // Specific stores filter to products with a fresh price from that store;
-  // "missing" filters to products the owner ticked as having no competitor.
+  // "missing" filters to products in the third pricing mode.
   const marketFilter: Pick<
     ProductFilters,
-    "competitor_store" | "no_competitor_price"
+    "competitor_store" | "pricing_mode"
   > =
     view.market === "missing"
-      ? { no_competitor_price: true }
+      ? { pricing_mode: "no_competitor_price" }
       : view.market === "best"
         ? {}
         : { competitor_store: view.market }

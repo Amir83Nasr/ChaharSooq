@@ -255,12 +255,6 @@ export const api = {
       body: JSON.stringify(payload),
     })
   },
-  setNoCompetitorPrice(id: number, value: boolean) {
-    return request<ProductOut>(`/api/v1/products/${id}/no-competitor-price`, {
-      method: "PATCH",
-      body: JSON.stringify({ no_competitor_price: value }),
-    })
-  },
   setPricingMode(id: number, pricingMode: PricingMode) {
     return request<ProductOut>(`/api/v1/products/${id}/pricing-mode`, {
       method: "PATCH",

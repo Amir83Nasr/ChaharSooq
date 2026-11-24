@@ -24,15 +24,11 @@ import {
   api,
   type CompetitorListing,
   type CompetitorPrice,
-  type CompetitorStore,
   type PricingMode,
   type ProductOut,
 } from "@/lib/api"
-import {
-  EXACT_STORES,
-  ProductCompetitorPrices,
-  SIMILAR_STORES,
-} from "./product-competitor-prices"
+import { ProductCompetitorPrices } from "./product-competitor-prices"
+import { storesForTopGroup } from "@/lib/top-groups"
 import { ProductPriceBounds } from "./product-price-bounds"
 import { ProductSuggestedPrice } from "./product-suggested-price"
 
@@ -59,7 +55,7 @@ function listingToPrice(listing: CompetitorListing): CompetitorPrice {
   }
 }
 
-type Selection = PricingMode | "none"
+type Selection = PricingMode
 
 const MODE_BUTTONS: {
   value: Selection
@@ -77,15 +73,15 @@ const MODE_BUTTONS: {
     description: "استفاده از تغییر روزانه قیمت محصول مشابه",
   },
   {
-    value: "none",
+    value: "no_competitor_price",
     label: "فاقد قیمت رقیب",
-    description: "غیرفعال کردن لینکها و ستونهای رقیب",
+    description: "غیرفعال کردن لینک‌ها و ستون‌های رقیب",
   },
 ]
 
 function toPersianError(error: unknown): string {
   if (error instanceof ApiRequestError) return error.message
-  return "تغییر حالت قیمتگذاری انجام نشد. دوباره تلاش کنید."
+  return "تغییر حالت قیمت‌گذاری انجام نشد. دوباره تلاش کنید."
 }
 
 export function ProductDetailDialog(props: {
@@ -106,11 +102,7 @@ export function ProductDetailDialog(props: {
   }, [selected])
 
   const product = localProduct ?? selected
-  const selection: Selection | null = product
-    ? product.no_competitor_price
-      ? "none"
-      : product.pricing_mode
-    : null
+  const selection: Selection | null = product ? product.pricing_mode : null
   // Manual rows have no Parsina group; they behave like appliances (the
   // default section) so their competitor links stay manageable.
   const topGroup = product ? (product.top_group ?? "لوازم خانگی") : null
@@ -118,16 +110,10 @@ export function ProductDetailDialog(props: {
   // Keep the visible tab in sync with the product's mode (also on dialog open
   // and after an optimistic mode change).
   useEffect(() => {
-    if (product && !product.no_competitor_price) {
+    if (product && product.pricing_mode !== "no_competitor_price") {
       setActiveTab(product.pricing_mode)
     }
-  }, [product?.id, product?.pricing_mode, product?.no_competitor_price])
-
-  const handleNoCompetitorPriceChange = useCallback((value: boolean) => {
-    setLocalProduct((current) =>
-      current ? { ...current, no_competitor_price: value } : current
-    )
-  }, [])
+  }, [product?.id, product?.pricing_mode])
 
   const handleListingsChanged = useCallback((listings: CompetitorListing[]) => {
     setLocalProduct((current) =>
@@ -156,30 +142,17 @@ export function ProductDetailDialog(props: {
     setModeBusy(next)
 
     // Optimistic update: derived selection and tab switch immediately.
-    if (next === "none") {
-      setLocalProduct({ ...previous, no_competitor_price: true })
-    } else {
-      setLocalProduct({
-        ...previous,
-        no_competitor_price: false,
-        pricing_mode: next,
-      })
-      setActiveTab(next)
-    }
+    setLocalProduct({ ...previous, pricing_mode: next })
+    if (next !== "no_competitor_price") setActiveTab(next)
 
     try {
-      if (next === "none") {
-        await api.setNoCompetitorPrice(previous.id, true)
-      } else {
-        await api.setPricingMode(previous.id, next)
-        if (previous.no_competitor_price) {
-          await api.setNoCompetitorPrice(previous.id, false)
-        }
-      }
+      await api.setPricingMode(previous.id, next)
       onCompetitorChanged?.()
     } catch (err) {
       setLocalProduct(previous)
-      if (previous.no_competitor_price) setActiveTab(previous.pricing_mode)
+      if (previous.pricing_mode !== "no_competitor_price") {
+        setActiveTab(previous.pricing_mode)
+      }
       setModeError(toPersianError(err))
     } finally {
       setModeBusy(null)
@@ -187,7 +160,7 @@ export function ProductDetailDialog(props: {
   }
 
   /** One tab's content; only the active tab is mounted to avoid duplicate fetches. */
-  function modePanel(stores: readonly CompetitorStore[]) {
+  function modePanel() {
     if (!product || !topGroup) return null
     return (
       <div className="grid min-h-0 gap-3 md:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] md:items-start">
@@ -202,12 +175,10 @@ export function ProductDetailDialog(props: {
         </div>
         <ProductCompetitorPrices
           productId={product.id}
-          stores={stores}
+          stores={storesForTopGroup(topGroup)}
           onChanged={onCompetitorChanged}
           onListingsChanged={handleListingsChanged}
           canEdit={canEdit}
-          noCompetitorPrice={product.no_competitor_price}
-          onNoCompetitorPriceChange={handleNoCompetitorPriceChange}
         />
       </div>
     )
@@ -257,7 +228,7 @@ export function ProductDetailDialog(props: {
               className="min-w-0 space-y-2 rounded-2xl border border-border/70 bg-muted/30 p-2.5 disabled:opacity-70"
             >
               <legend className="px-1 text-xs font-medium text-muted-foreground">
-                حالت قیمتگذاری
+                حالت قیمت‌گذاری
               </legend>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 {MODE_BUTTONS.map((option) => {
@@ -296,14 +267,14 @@ export function ProductDetailDialog(props: {
               </p>
             ) : null}
 
-            {selection === "none" ? (
-              // No tabs while flagged: links are disabled by the flag, so a
-              // notice is clearer than two tabs of dead controls. The flag's
-              // own checkbox stays available in the mode selector above.
+            {selection === "no_competitor_price" ? (
+              // No tabs in this mode: links are suppressed, so a notice is
+              // clearer than two tabs of dead controls. The three-way selector
+              // above switches back to an active mode.
               <div className="space-y-3">
                 <ProductSuggestedPrice product={product} />
                 <p className="rounded-2xl border border-dashed border-border bg-background px-3 py-4 text-center text-xs leading-6 text-muted-foreground">
-                  این کالا فاقد قیمت رقیب است. برای ویرایش لینکها، حالت «قیمت
+                  این کالا فاقد قیمت رقیب است. برای ویرایش لینک‌ها، حالت «قیمت
                   رقیب» یا «محصول مشابه» را انتخاب کنید.
                 </p>
               </div>
@@ -318,14 +289,10 @@ export function ProductDetailDialog(props: {
                   <TabsTrigger value="similar_product">محصول مشابه</TabsTrigger>
                 </TabsList>
                 <TabsContent value="exact_competitor" className="mt-1">
-                  {modePanel(EXACT_STORES)}
+                  {modePanel()}
                 </TabsContent>
                 <TabsContent value="similar_product" className="mt-1">
-                  {modePanel(
-                    topGroup
-                      ? SIMILAR_STORES[topGroup]
-                      : SIMILAR_STORES["لوازم خانگی"]
-                  )}
+                  {modePanel()}
                 </TabsContent>
               </Tabs>
             )}

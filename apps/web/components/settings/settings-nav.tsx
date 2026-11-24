@@ -7,7 +7,6 @@ import {
   PackageMinus,
   Palette,
   RefreshCw,
-  Sigma,
   type LucideIcon,
 } from "lucide-react"
 
@@ -22,7 +21,6 @@ type SettingsNavItem = {
 
 const ITEMS: SettingsNavItem[] = [
   { href: "/settings", label: "نمای کلی", icon: LayoutGrid, exact: true },
-  { href: "/settings/pricing", label: "قیمت‌گذاری", icon: Sigma },
   { href: "/settings/sync", label: "همگام‌سازی", icon: RefreshCw },
   { href: "/settings/inventory", label: "انبار", icon: PackageMinus },
   { href: "/settings/appearance", label: "نمایش", icon: Palette },

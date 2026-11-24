@@ -347,6 +347,27 @@ def test_json_ld_offer_shapes_are_parsed(
     assert _price_from_html(_page(**page_kwargs)) == expected  # type: ignore[arg-type]
 
 
+def test_torob_suggested_buy_box_wins_over_cheapest_json_ld_offer() -> None:
+    # Real Torob pages show several sellers: JSON-LD lowPrice is the cheapest
+    # listing, but the bold red buy-box is Torob's suggested offer and is the
+    # price recorded for the store.
+    page = _page("589000000", "IRR", "InStock", aggregate=True) + (
+        '<div class="Showcase_buy_box" id="cheapest-seller">'
+        "<div>خرید از آل دیجیتال</div>"
+        "<div>۶۱٫۱۹۹٫۰۰۰ تومان</div>"
+        "</div>"
+    )
+    assert prices._parse_torob(page) == FetchedPrice(Decimal("61199000"), "IRT", True)
+
+
+def test_torob_buy_box_ignores_other_toman_amounts() -> None:
+    page = (
+        '<div id="cheapest-seller"><div>ضمانت ترب</div>'
+        "<div>۴۶٬۰۰۰٬۰۰۰ تومان</div></div>" + _page("460000000", "IRR", "InStock", aggregate=True)
+    )
+    assert prices._parse_torob(page) == FetchedPrice(Decimal("46000000"), "IRT", True)
+
+
 def test_torob_json_ld_irr_is_divided_to_toman() -> None:
     # Torob labels the 10× Rial figure as IRR; 460000000 → ۴۶٬۰۰۰٬۰۰۰ تومان.
     page = _page("460000000", "IRR", "InStock", aggregate=True)

@@ -201,13 +201,18 @@ def _cache_set(key: str, value: FetchedPrice) -> None:
         _page_cache[key] = (now + _PAGE_CACHE_TTL_SECONDS, value)
 
 
-def _stream_body_with_early_exit(response: Any, *, max_bytes: int) -> bytes:
+def _stream_body_with_early_exit(
+    response: Any, *, max_bytes: int, early_exit: bool = True
+) -> bytes:
     """Read a streamed body, stopping early once structured price data appears.
 
     JSON-LD product data lives in ``<head>`` (usually the first tens of KB)
     while the rest of the page can be megabytes of body markup. As soon as
     the accumulated prefix already yields a price, the remaining bytes are
     skipped — the stream context still closes the connection cleanly.
+
+    Stores whose suggested price lives in the page body (Torob's buy-box)
+    pass ``early_exit=False`` so the whole HTML is inspected.
     """
     body_parts: list[bytes] = []
     total = 0
@@ -216,7 +221,11 @@ def _stream_body_with_early_exit(response: Any, *, max_bytes: int) -> bytes:
         if total > max_bytes:
             raise PriceFetchError("failed", "حجم صفحه از حد مجاز بیشتر است")
         body_parts.append(chunk)
-        if total >= _EARLY_PARSE_MIN_BYTES and b"application/ld+json" in chunk.lower():
+        if (
+            early_exit
+            and total >= _EARLY_PARSE_MIN_BYTES
+            and b"application/ld+json" in chunk.lower()
+        ):
             prefix = b"".join(body_parts)
             if b"</script>" in prefix.lower():
                 # _price_from_json_ld swallows malformed-JSON prefixes and
@@ -233,6 +242,7 @@ def _request(
     html_only: bool = True,
     acquire_slot: bool = True,
     client: httpx.Client | None = None,
+    early_exit: bool = True,
 ) -> tuple[int, str, str]:
     current = url
     attempt = 0
@@ -271,7 +281,9 @@ def _request(
                         status_code = response.status_code
                         location = None
                         content_type = response.headers.get("content-type", "")
-                        body = _stream_body_with_early_exit(response, max_bytes=max_bytes)
+                        body = _stream_body_with_early_exit(
+                            response, max_bytes=max_bytes, early_exit=early_exit
+                        )
             except httpx.HTTPError as exc:
                 if attempt == 0:
                     attempt = 1
@@ -508,6 +520,39 @@ def _parse_digifresh(html: str) -> FetchedPrice | None:
 _TOROB_IRR_TO_IRT = Decimal(10)
 
 
+_PERSIAN_DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹", "0123456789")
+# The red buy-box next to the product photo carries Torob's own suggested
+# offer (guaranteed/selected seller). It can differ from AggregateOffer's
+# lowPrice, which is simply the cheapest listing on the page.
+_TOROB_BUY_BOX_RE = re.compile(
+    r'<[^>]*\bid=["\']cheapest-seller["\'][^>]*>(.{0,1200}?)(?:</a>|</div></div>|$)',
+    re.DOTALL | re.IGNORECASE,
+)
+_TOROB_BUY_BOX_PRICE_RE = re.compile(r"([\d۰-۹٬٫,]+)\s*تومان")
+
+
+def _torob_buy_box_price(html: str) -> FetchedPrice | None:
+    """Read the bold suggested price from Torob's red buy-box button."""
+    box = _TOROB_BUY_BOX_RE.search(html)
+    if box is None:
+        return None
+    for match in _TOROB_BUY_BOX_PRICE_RE.finditer(box.group(1)):
+        raw = (
+            match.group(1)
+            .translate(_PERSIAN_DIGITS)
+            .replace("٬", "")
+            .replace("٫", "")
+            .replace(",", "")
+        )
+        try:
+            amount = Decimal(raw)
+        except InvalidOperation:
+            continue
+        if amount.is_finite() and amount > 0:
+            return FetchedPrice(amount, "IRT", True)
+    return None
+
+
 def _torob_next_data_price(html: str) -> FetchedPrice | None:
     """Fallback: Torob's __NEXT_DATA__ carries the cheapest price in Toman."""
     match = re.search(
@@ -530,7 +575,16 @@ def _torob_next_data_price(html: str) -> FetchedPrice | None:
 
 
 def _parse_torob(html: str) -> FetchedPrice | None:
-    """Torob marketplace price; JSON-LD IRR is 10× Toman, NEXT_DATA is Toman."""
+    """Torob marketplace: prefer the suggested buy-box over the cheapest offer.
+
+    The buy-box next to the product photo is Torob's own recommendation and
+    can be higher than JSON-LD's ``lowPrice``. Only when it is absent do we
+    fall back to the cheapest offer (JSON-LD, then __NEXT_DATA__). JSON-LD's
+    IRR figures are 10× the Toman amount shown on the page, so divide once.
+    """
+    suggested = _torob_buy_box_price(html)
+    if suggested is not None:
+        return suggested
     result = _price_from_json_ld(html)
     if result is None:
         return _torob_next_data_price(html)
@@ -707,7 +761,11 @@ def fetch_competitor_price(store: str, url: str) -> FetchedPrice:
                     _log_fetched(store, safe_url, result)
                     return result
         _robots_allows(safe_url, client=client)
-        _, html, _ = _request(safe_url, acquire_slot=False, client=client)
+        # Torob's suggested buy-box lives in the page body, so the head-only
+        # early exit must be disabled for it.
+        _, html, _ = _request(
+            safe_url, acquire_slot=False, client=client, early_exit=store != "torob"
+        )
         result = STORE_PARSERS[store](html)
         if result is None and store == "digikala":
             # HTML fallback missed (or API-first was skipped): last resort is

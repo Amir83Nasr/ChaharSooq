@@ -689,13 +689,16 @@ export function ProductCompetitorPrices({
                 busy={busyKey === listing.id || checkAllBusy}
                 canEdit={canEdit}
                 onLinkUpdate={(url) =>
-                  void mutate(listing.id, () =>
-                    api.updateCompetitorListing(listing.id, {
+                  void mutate(listing.id, async () => {
+                    // Saving a replacement link immediately checks it too, so
+                    // the new price arrives in one click.
+                    await api.updateCompetitorListing(listing.id, {
                       store: listing.store,
                       url,
                       is_active: true,
                     })
-                  )
+                    return api.checkCompetitorListing(listing.id)
+                  })
                 }
                 onCheck={(url) =>
                   void mutate(listing.id, async () => {

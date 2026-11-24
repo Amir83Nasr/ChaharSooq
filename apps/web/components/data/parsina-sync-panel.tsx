@@ -194,7 +194,9 @@ export function ParsinaSyncPanel({
     setTriggering(true)
     try {
       await api.parsinaSync()
-      toast.success("درخواست به‌روزرسانی از پارسینا ارسال شد.")
+      // The completion (or failure) toast comes from the poll loop once the
+      // run finishes; a 202 only means the request was accepted, so no
+      // immediate "sent" toast here.
       // 409 = another run (manual or scheduled) owns the lock; the poller
       // already shows it as running, nothing extra to start.
     } catch (err: unknown) {

@@ -197,7 +197,9 @@ export function CompetitorSyncPanel({
     setTriggering(true)
     try {
       await api.competitorSync()
-      toast.success("درخواست به‌روزرسانی قیمت رقبا ارسال شد.")
+      // The completion (or failure) toast comes from the poll loop once the
+      // run finishes; a 202 only means the request was accepted, so no
+      // immediate "sent" toast here.
       // 409 = another run already owns the lock; the poller already shows
       // it as running, nothing extra to start.
     } catch (err: unknown) {

@@ -19,7 +19,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
-from app.models.competitor import CompetitorSyncState
+from app.models.competitor import CompetitorListing, CompetitorSyncState
 from app.repositories.competitor import CompetitorRepository
 from app.repositories.competitor_sync import CompetitorSyncStateRepository
 from app.services.competitor_check import apply_competitor_check as _apply_check
@@ -27,9 +27,10 @@ from app.services.competitor_check import apply_competitor_check as _apply_check
 log = logging.getLogger("charsooq.competitors")
 
 LOCK_SECONDS = 30 * 60
-# Bounded concurrency: enough to overlap independent stores without flooding
-# sockets or tripping a store's rate limit (spacing itself is per store).
-MAX_WORKERS = 4
+# One worker per store group; the store set is small and fixed by the catalog
+# sections (digikala, technolife, sofa, digifresh, torob). Spacing inside a
+# store still comes from its own politeness slot, so overlapping stores is safe.
+MAX_WORKERS = 5
 
 
 class CompetitorSyncBusyError(Exception):
@@ -72,8 +73,7 @@ class CompetitorSyncService:
             rows = self._listings.list_all()
             active = [row for row in rows if row.is_active]
             skipped = len(rows) - len(active)
-            active_ids = [row.id for row in active]
-            results = self._check_many(active_ids)
+            results = self._check_many(active)
         except Exception as exc:  # noqa: BLE001 — record, then let the caller classify
             self._fail(now, exc)
             raise
@@ -100,42 +100,49 @@ class CompetitorSyncService:
         )
         return result
 
-    def _check_many(self, listing_ids: list[int]) -> dict[int, bool]:
-        """Refresh links concurrently, each in its own transaction.
+    def _check_many(self, rows: list[CompetitorListing]) -> dict[int, bool]:
+        """Refresh links with one worker per store.
 
-        When a session factory is available (production), every worker owns a
-        separate Session — SQLAlchemy Sessions are not thread-safe. Without a
-        factory (tests and callers that pass an in-memory Session) the check
-        runs sequentially on the caller's Session so behavior stays identical.
-        The store-level slot in ``fetch_competitor_price`` is process-global
-        and thread-safe, so concurrent workers still respect politeness.
+        Every store owns its worker and processes its links sequentially, so
+        all stores run in parallel while the per-store politeness slot in
+        ``fetch_competitor_price`` still spaces requests within a store. A
+        slow or rate-limited store can never hold back a different store,
+        which is the dominant cost as the number of links grows.
+
+        With no session factory (tests and direct callers) the check stays
+        sequential on the caller's Session. With a factory, each group owns a
+        separate Session — SQLAlchemy Sessions are not thread-safe.
         """
-        if not listing_ids:
+        if not rows:
             return {}
         if self._session_factory is None:
-            return {
-                listing_id: self._check_one(self._session, listing_id) for listing_id in listing_ids
-            }
+            return {row.id: self._check_one(self._session, row.id) for row in rows}
+
+        by_store: dict[str, list[int]] = {}
+        for row in rows:
+            by_store.setdefault(row.store, []).append(row.id)
         outcomes: dict[int, bool] = {}
-        workers = min(MAX_WORKERS, len(listing_ids))
-        with ThreadPoolExecutor(max_workers=workers) as pool:
+        with ThreadPoolExecutor(max_workers=min(MAX_WORKERS, len(by_store))) as pool:
             futures = {
-                pool.submit(self._check_in_session, listing_id): listing_id
-                for listing_id in listing_ids
+                pool.submit(self._check_store, listing_ids): store
+                for store, listing_ids in by_store.items()
             }
             for future in as_completed(futures):
-                listing_id = futures[future]
-                outcomes[listing_id] = future.result()
+                outcomes.update(future.result())
         return outcomes
 
-    def _check_in_session(self, listing_id: int) -> bool:
+    def _check_store(self, listing_ids: list[int]) -> dict[int, bool]:
         factory = self._session_factory
         if factory is None:  # pragma: no cover — guarded by _check_many
             raise RuntimeError("session factory is required for concurrent checks")
+        results: dict[int, bool] = {}
+        # One Session per store group: sequential use inside a single thread,
+        # isolated from every other store's transaction.
         with factory() as session:
-            ok = self._check_one(session, listing_id)
-            session.commit()
-            return ok
+            for listing_id in listing_ids:
+                results[listing_id] = self._check_one(session, listing_id)
+                session.commit()
+        return results
 
     @staticmethod
     def _check_one(session: Session, listing_id: int) -> bool:

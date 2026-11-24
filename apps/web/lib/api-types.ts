@@ -198,6 +198,46 @@ export interface ParsinaConnectionUpdate {
   fiscal_year?: number | null
 }
 
+export type CardexPeriodKey = "today" | "3_days" | "7_days" | "30_days"
+
+export interface CardexPeriod {
+  key: CardexPeriodKey
+  label: string
+  from_date: string
+  to_date: string
+}
+
+export interface CardexEntry {
+  kind: "sale" | "purchase"
+  invoice_id: number
+  invoice_number: number | null
+  invoice_date: string | null
+  counterparty: string | null
+  quantity: number
+  net_price: number
+  is_cancelled: boolean
+  is_confirmed: boolean
+  is_checkedout: boolean
+}
+
+export interface CardexSummary {
+  purchase_quantity: number
+  purchase_amount: number
+  sale_quantity: number
+  sale_amount: number
+}
+
+export interface ProductCardex {
+  product_id: number
+  sku: string
+  period: CardexPeriodKey
+  periods: CardexPeriod[]
+  summary: CardexSummary
+  entries: CardexEntry[]
+  configured: boolean
+  pricing_mode: PricingMode | null
+}
+
 export interface CompetitorSyncStatus {
   running: boolean
   running_since: string | null

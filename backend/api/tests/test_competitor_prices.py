@@ -976,3 +976,48 @@ def test_blocked_fetch_does_not_throttle_the_next_check(
     )
     result = CompetitorService(db_session).check(listing_id)
     assert result.status == "success"
+
+
+def test_global_sync_uses_one_worker_per_store(
+    client: TestClient, db_session: Session, monkeypatch: MonkeyPatch
+) -> None:
+    """Links of one store stay in a single worker; stores run in parallel."""
+    first_id, second_id = _seed_two_products_with_links(client)
+    # Add a second digikala link so that store has two links to serialize.
+    third = client.post(
+        "/api/v1/products",
+        json={"name": "یخچال سه", "sku": "FRIDGE-C", "price": 95000000},
+    )
+    assert third.status_code == 201, third.text
+    created = client.post(
+        f"/api/v1/products/{third.json()['id']}/competitors",
+        json={"store": "digikala", "url": "https://www.digikala.com/product/dkp-654321/"},
+    )
+    assert created.status_code == 201, created.text
+
+    barrier = threading.Barrier(2, timeout=15)
+    digikala_calls = 0
+    digikala_lock = threading.Lock()
+    store_starts: list[str] = []
+
+    def tracking_fetch(store: str, _url: str) -> FetchedPrice:
+        nonlocal digikala_calls
+        if store == "digikala":
+            with digikala_lock:
+                digikala_calls += 1
+                call_no = digikala_calls
+            if call_no == 1:
+                store_starts.append("digikala")
+                barrier.wait()  # waits for the technolife worker
+        else:
+            store_starts.append(store)
+            barrier.wait()
+        return FetchedPrice(Decimal("27000000"), "IRR", True, datetime.now(UTC))
+
+    monkeypatch.setattr("app.services.competitor_check.fetch_competitor_price", tracking_fetch)
+    factory = sessionmaker(bind=get_engine(), autoflush=False, expire_on_commit=False)
+    with factory() as session:
+        result = CompetitorSyncService(session, session_factory=factory).run()
+    assert (result.checked, result.updated, result.failed) == (3, 3, 0)
+    assert digikala_calls == 2
+    assert sorted(store_starts) == ["digikala", "technolife"]

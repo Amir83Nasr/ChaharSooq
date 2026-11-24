@@ -9,17 +9,31 @@ import logging
 import threading
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.dependencies import get_db, get_db_readonly, require_admin, require_owner, require_user
-from app.api.openapi import CONFLICT, FORBIDDEN, SERVICE_UNAVAILABLE, UNAUTHORIZED, VALIDATION_ERROR
+from app.api.openapi import (
+    CONFLICT,
+    FORBIDDEN,
+    NOT_FOUND,
+    SERVICE_UNAVAILABLE,
+    UNAUTHORIZED,
+    VALIDATION_ERROR,
+)
 from app.core.database import get_engine
 from app.models import Admin, ParsinaSyncState
 from app.models.competitor import CompetitorSyncState
-from app.schemas import ParsinaConnectionIn, ParsinaConnectionOut, SyncRunOut, SyncStatusOut
+from app.schemas import (
+    ParsinaConnectionIn,
+    ParsinaConnectionOut,
+    ProductCardexOut,
+    SyncRunOut,
+    SyncStatusOut,
+)
 from app.schemas.competitor import CompetitorSyncRunOut, CompetitorSyncStatusOut
 from app.services import SettingsService
+from app.services.cardex import CardexProductNotFoundError, ProductCardexService
 from app.services.competitor_sync import CompetitorSyncBusyError, CompetitorSyncService
 from app.services.parsina_connection import get_parsina_connection_view, update_parsina_connection
 from app.services.sync import (
@@ -193,6 +207,29 @@ def parsina_sync(
     else:
         message = "همگام‌سازی با پارسینا آغاز شد"
     return SyncRunOut(status="running", message=message)
+
+
+@router.get(
+    "/products/{product_id}/cardex",
+    response_model=ProductCardexOut,
+    summary="Product cardex (Parsina sales and purchases)",
+    description=(
+        "Sales/purchase lines and totals recorded in Parsina for one product. "
+        "`period` is one of `today`, `3_days`, `7_days`, or `30_days`. "
+        "The response also carries all four selectable windows with ISO bounds."
+    ),
+    responses={404: NOT_FOUND, 422: VALIDATION_ERROR},
+)
+def product_cardex(
+    product_id: int,
+    period: str = Query(default="7_days", pattern="^(today|3_days|7_days|30_days)$"),
+    _user: Admin = Depends(require_user),  # noqa: B008
+    session: Session = Depends(get_db_readonly),  # noqa: B008
+) -> ProductCardexOut:
+    try:
+        return ProductCardexService(session).get(product_id=product_id, period=period)
+    except CardexProductNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from None
 
 
 @router.get(

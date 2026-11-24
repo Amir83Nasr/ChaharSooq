@@ -3256,6 +3256,85 @@
         ]
       }
     },
+    "/api/v1/products/{product_id}/cardex": {
+      "get": {
+        "tags": [
+          "Integrations"
+        ],
+        "summary": "Product cardex (Parsina sales and purchases)",
+        "description": "Sales/purchase lines and totals recorded in Parsina for one product. `period` is one of `today`, `3_days`, `7_days`, or `30_days`. The response also carries all four selectable windows with ISO bounds.",
+        "operationId": "product_cardex",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Product Id"
+            }
+          },
+          {
+            "name": "period",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(today|3_days|7_days|30_days)$",
+              "default": "7_days",
+              "title": "Period"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductCardexOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource does not exist (`not_found`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/integrations/competitors/status": {
       "get": {
         "tags": [
@@ -3952,6 +4031,160 @@
           "file"
         ],
         "title": "Body_upload_backup"
+      },
+      "CardexEntryOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "`sale` or `purchase`."
+          },
+          "invoice_id": {
+            "type": "integer",
+            "title": "Invoice Id",
+            "description": "Parsina invoice id."
+          },
+          "invoice_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice Number",
+            "description": "Parsina invoice number."
+          },
+          "invoice_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice Date",
+            "description": "Invoice date, ISO."
+          },
+          "counterparty": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counterparty",
+            "description": "Buyer or seller name."
+          },
+          "quantity": {
+            "type": "number",
+            "title": "Quantity",
+            "description": "Total quantity in the invoice line.",
+            "default": 0
+          },
+          "net_price": {
+            "type": "integer",
+            "title": "Net Price",
+            "description": "Net line amount in toman (integer).",
+            "default": 0
+          },
+          "is_cancelled": {
+            "type": "boolean",
+            "title": "Is Cancelled",
+            "description": "Parsina IsCancel flag.",
+            "default": false
+          },
+          "is_confirmed": {
+            "type": "boolean",
+            "title": "Is Confirmed",
+            "description": "Parsina isConfirm flag.",
+            "default": false
+          },
+          "is_checkedout": {
+            "type": "boolean",
+            "title": "Is Checkedout",
+            "description": "Parsina IsCheckedout flag.",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "invoice_id"
+        ],
+        "title": "CardexEntryOut",
+        "description": "A single purchase or sale line for the selected product."
+      },
+      "CardexPeriod": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key",
+            "description": "Stable key: today, 3_days, 7_days, or 30_days."
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "Persian label shown in the period selector."
+          },
+          "from_date": {
+            "type": "string",
+            "format": "date",
+            "title": "From Date",
+            "description": "Inclusive ISO start date (UTC machine value)."
+          },
+          "to_date": {
+            "type": "string",
+            "format": "date",
+            "title": "To Date",
+            "description": "Inclusive ISO end date (UTC machine value)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "from_date",
+          "to_date"
+        ],
+        "title": "CardexPeriod",
+        "description": "One of the four selectable cardex windows."
+      },
+      "CardexSummaryOut": {
+        "properties": {
+          "purchase_quantity": {
+            "type": "number",
+            "title": "Purchase Quantity",
+            "description": "Purchased quantity in the window.",
+            "default": 0
+          },
+          "purchase_amount": {
+            "type": "integer",
+            "title": "Purchase Amount",
+            "description": "Purchase amount in toman (integer).",
+            "default": 0
+          },
+          "sale_quantity": {
+            "type": "number",
+            "title": "Sale Quantity",
+            "description": "Sold quantity in the window.",
+            "default": 0
+          },
+          "sale_amount": {
+            "type": "integer",
+            "title": "Sale Amount",
+            "description": "Sale amount in toman (integer).",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "CardexSummaryOut",
+        "description": "Aggregate purchase/sale figures for the selected window."
       },
       "CatalogBrandOut": {
         "properties": {
@@ -5252,6 +5485,68 @@
           "exact_competitor",
           "similar_product"
         ]
+      },
+      "ProductCardexOut": {
+        "properties": {
+          "product_id": {
+            "type": "integer",
+            "title": "Product Id",
+            "description": "Charsooq product id."
+          },
+          "sku": {
+            "type": "string",
+            "title": "Sku",
+            "description": "Product SKU / Parsina good code."
+          },
+          "period": {
+            "type": "string",
+            "title": "Period",
+            "description": "Selected period key."
+          },
+          "periods": {
+            "items": {
+              "$ref": "#/components/schemas/CardexPeriod"
+            },
+            "type": "array",
+            "title": "Periods",
+            "description": "The four available windows."
+          },
+          "summary": {
+            "$ref": "#/components/schemas/CardexSummaryOut"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/CardexEntryOut"
+            },
+            "type": "array",
+            "title": "Entries"
+          },
+          "configured": {
+            "type": "boolean",
+            "title": "Configured",
+            "description": "Parsina connection is configured.",
+            "default": false
+          },
+          "pricing_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PricingMode"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Current pricing mode of the product."
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "sku",
+          "period"
+        ],
+        "title": "ProductCardexOut",
+        "description": "Sales/purchase history recorded in Parsina for one product."
       },
       "ProductIn": {
         "properties": {

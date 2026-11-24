@@ -29,6 +29,7 @@ import {
   type PricingMode,
   type ProductOut,
 } from "@/lib/api"
+import { ProductCardexPanel } from "./product-cardex"
 import { ProductCompetitorPrices } from "./product-competitor-prices"
 import { storesForTopGroup } from "@/lib/top-groups"
 import { ProductPriceBounds } from "./product-price-bounds"
@@ -98,11 +99,13 @@ export function ProductDetailDialog(props: {
   const [modeError, setModeError] = useState<string | null>(null)
   const [pinBusy, setPinBusy] = useState(false)
   const [pinError, setPinError] = useState<string | null>(null)
-  type DetailTab = "links" | "bounds"
-  const [activeTab, setActiveTab] = useState<DetailTab>("links")
+  type DetailTab = "cardex" | "links" | "bounds"
+  // Cardex is the primary tab and opens by default for every selected product.
+  const [activeTab, setActiveTab] = useState<DetailTab>("cardex")
 
   useEffect(() => {
     setLocalProduct(selected)
+    setActiveTab("cardex")
   }, [selected])
 
   const product = localProduct ?? selected
@@ -374,9 +377,13 @@ export function ProductDetailDialog(props: {
               className="gap-2"
             >
               <TabsList variant="line" className="self-start">
+                <TabsTrigger value="cardex">کارتکس کالا</TabsTrigger>
                 <TabsTrigger value="links">لینک فروشگاه‌ها</TabsTrigger>
                 <TabsTrigger value="bounds">محدودیت قیمت پیشنهادی</TabsTrigger>
               </TabsList>
+              <TabsContent value="cardex" className="mt-1">
+                <ProductCardexPanel productId={product.id} />
+              </TabsContent>
               <TabsContent value="links" className="mt-1">
                 {linksPanel()}
               </TabsContent>

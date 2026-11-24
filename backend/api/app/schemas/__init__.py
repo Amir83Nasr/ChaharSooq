@@ -29,7 +29,14 @@ from app.schemas.dashboard import (
     DashboardOverviewOut,
     DashboardSummaryOut,
 )
-from app.schemas.parsina import ParsinaConnectionIn, ParsinaConnectionOut
+from app.schemas.parsina import (
+    CardexEntryOut,
+    CardexPeriod,
+    CardexSummaryOut,
+    ParsinaConnectionIn,
+    ParsinaConnectionOut,
+    ProductCardexOut,
+)
 from app.schemas.settings import SettingsOut, SettingsUpdateIn
 from app.schemas.suggested_price import SuggestedPriceFormulaIn, SuggestedPriceFormulaOut
 from app.schemas.users import AssignableRole, UserCreateIn, UserOut, UserRole
@@ -37,6 +44,9 @@ from app.schemas.users import AssignableRole, UserCreateIn, UserOut, UserRole
 __all__ = [
     "AssignableRole",
     "BackupOut",
+    "CardexEntryOut",
+    "CardexPeriod",
+    "CardexSummaryOut",
     "BackupSettingsOut",
     "BackupSettingsUpdateIn",
     "CatalogBrandOut",
@@ -55,6 +65,7 @@ __all__ = [
     "MeOut",
     "ParsinaConnectionIn",
     "ParsinaConnectionOut",
+    "ProductCardexOut",
     "ProductIn",
     "ProductOut",
     "ProductPage",

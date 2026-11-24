@@ -5,6 +5,10 @@ Contract (docs/parsina-api.pdf):
   GET  {base}/Commodity                    list of goods
   GET  {base}/commodity/LoadByFilter?Ware&Saletype&Id
   GET  {base}/BaseInfo/UnitCount           counting units (legacy alias below)
+  GET  {base}/SaleFactor?fromDate&toDate   sales invoices (Jalali date range)
+  GET  {base}/SaleFactor/{id}              sales invoice with Details[]
+  GET  {base}/buyFactor?fromDate&toDate    purchase invoices (Jalali date range)
+  GET  {base}/BuyFactor/{id}               purchase invoice with Details[]
 Every envelope: {isSuccess, statusCode, message, data, total}.
 """
 
@@ -84,7 +88,7 @@ def _decimal(raw: Any) -> Decimal | None:
         return None
 
 
-def _int(raw: Any) -> int | None:
+def integer(raw: Any) -> int | None:
     if raw is None or raw == "":
         return None
     try:
@@ -100,7 +104,7 @@ def _str(raw: Any) -> str | None:
     return text or None
 
 
-def _field(record: dict[str, Any], *names: str) -> Any:
+def field(record: dict[str, Any], *names: str) -> Any:
     """Case-insensitive field lookup.
 
     Parsina serializes some payloads with PascalCase (`Title`, `Id`) and others
@@ -126,8 +130,8 @@ def unit_titles_from_rows(rows: Any) -> dict[int, str]:
         if not isinstance(raw, dict):
             continue
         row = cast("dict[str, Any]", raw)
-        unit_id = _int(_field(row, "id", "unitId", "unit_id", "unitCode", "code"))
-        title = _str(_field(row, "Title", "title", "unitName", "unit_name", "name"))
+        unit_id = integer(field(row, "id", "unitId", "unit_id", "unitCode", "code"))
+        title = _str(field(row, "Title", "title", "unitName", "unit_name", "name"))
         if unit_id is not None and title:
             out[unit_id] = title
     return out
@@ -147,7 +151,7 @@ def parse_commodity(raw: Any) -> CommodityRow | None:
     if not isinstance(raw, dict):
         return None
     record = cast("dict[str, Any]", raw)
-    good_id = _int(record.get("goodId"))
+    good_id = integer(record.get("goodId"))
     good_name = _str(record.get("goodName"))
     if good_id is None or good_id <= 0 or good_name is None:
         return None
@@ -155,11 +159,11 @@ def parse_commodity(raw: Any) -> CommodityRow | None:
         good_id=good_id,
         good_code=_str(record.get("goodCode")) or str(good_id),
         good_name=good_name,
-        main_group=_int(record.get("mainGroup")),
-        sub_group=_int(record.get("subGroup")),
+        main_group=integer(record.get("mainGroup")),
+        sub_group=integer(record.get("subGroup")),
         main_group_name=_str(record.get("mainGroupName")),
         sub_group_name=_str(record.get("subGroupName")),
-        count_unit=_int(record.get("countUnit")),
+        count_unit=integer(record.get("countUnit")),
         weight=_decimal(record.get("weight")),
         is_special=_as_bool(record.get("khas")),
         sale_pack_price=_decimal(record.get("salePackPrice")),
@@ -220,7 +224,7 @@ class ParsinaClient:
         token = body.get("access_token")
         if not isinstance(token, str) or not token:
             raise ParsinaAuthError("پاسخ احراز هویت پارسینا توکن معتبر ندارد")
-        expires_in = _int(body.get("expires_in"))
+        expires_in = integer(body.get("expires_in"))
         ttl = float(expires_in) if expires_in and expires_in > 0 else TOKEN_FALLBACK_TTL_SECONDS
         self._token = token
         self._token_expires_at = time.monotonic() + max(ttl - TOKEN_REFRESH_MARGIN_SECONDS, 60)
@@ -327,6 +331,36 @@ class ParsinaClient:
 
     # ── ENDPOINTS ────────────────────────────────────────────
 
+    def invoices(
+        self,
+        *,
+        kind: str,
+        from_date: str | None = None,
+        to_date: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Raw invoice rows for a Jalali date range.
+
+        Parsina accepts `fromDate`/`toDate` as Jalali strings (e.g. ۱۴۰۴/۰۱/۰۱
+        written with Latin digits: `1404/01/01`). The list endpoint does not
+        include product lines, so the caller loads details per invoice.
+        """
+        path = "/SaleFactor" if kind == "sale" else "/buyFactor"
+        params = {"fromDate": from_date, "toDate": to_date}
+        rows: list[Any] = self._data_list(self._request("GET", path, params=params))
+        return [row for row in rows if isinstance(row, dict)]
+
+    def invoice_details(self, *, kind: str, invoice_id: int) -> list[dict[str, Any]]:
+        """Product lines of one invoice (`Details[]` in the Parsina contract)."""
+        base = "/SaleFactor" if kind == "sale" else "/BuyFactor"
+        body = self._envelope(self._request("GET", f"{base}/{invoice_id}"))
+        data = body.get("data")
+        if not isinstance(data, dict):
+            return []
+        details: Any = field(cast("dict[str, Any]", data), "Details")
+        if not isinstance(details, list):
+            return []
+        return [cast("dict[str, Any]", row) for row in details if isinstance(row, dict)]
+
     def commodities(self) -> tuple[list[Any], int | None]:
         """Raw rows + reported total.
 
@@ -341,7 +375,7 @@ class ParsinaClient:
             body = self._request("GET", "/commodity/LoadByFilter", params=params)
         else:
             body = self._request("GET", "/Commodity")
-        total = _int(self._envelope(body).get("total"))
+        total = integer(self._envelope(body).get("total"))
         return self._data_list(body), total
 
     def units(self) -> dict[int, str]:

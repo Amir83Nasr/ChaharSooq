@@ -17,6 +17,7 @@ import type {
   BackupRecord,
   BackupSettings,
   BackupSettingsUpdate,
+  CardexPeriodKey,
   CatalogSection,
   CategoryOut,
   CompetitorGap,
@@ -27,6 +28,7 @@ import type {
   DashboardSummary,
   InventorySummary,
   MeOut,
+  ProductCardex,
   ProductFilters,
   ProductOut,
   ProductPage,
@@ -366,6 +368,12 @@ export const api = {
   parsinaConnection() {
     return request<ParsinaConnectionOut>(
       "/api/v1/integrations/parsina/connection"
+    )
+  },
+  /** Parsina purchase/sale history for one product and one time window. */
+  productCardex(productId: number, period: CardexPeriodKey) {
+    return request<ProductCardex>(
+      `/api/v1/products/${productId}/cardex?period=${period}`
     )
   },
   updateParsinaConnection(payload: ParsinaConnectionUpdate) {

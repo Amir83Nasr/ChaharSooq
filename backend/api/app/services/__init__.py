@@ -8,6 +8,7 @@ from app.services.backups import (
     InvalidArchiveError,
     UploadTooLargeError,
 )
+from app.services.cardex import CardexProductNotFoundError, ProductCardexService
 from app.services.catalog import CategoryService
 from app.services.dashboard import DashboardService
 from app.services.exports import (
@@ -54,6 +55,7 @@ __all__ = [
     "DEFAULT_PAGE_SIZE_KEY",
     "AuthService",
     "BackupRequestError",
+    "CardexProductNotFoundError",
     "BackupService",
     "BackupUnavailableError",
     "InvalidArchiveError",
@@ -70,6 +72,7 @@ __all__ = [
     "LastAdminError",
     "ProductService",
     "ProductNotFoundError",
+    "ProductCardexService",
     "SettingsService",
     "SYNC_INTERVAL_KEY",
     "UsernameTakenError",

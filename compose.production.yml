@@ -50,9 +50,9 @@ x-api-image: &api-image
 
 x-web-image: &web-image
   # Same contract as the API image: an explicit, immutable reference and no
-  # default. `CHARSOOQ_WEB_IMAGE` must come from the same release as
+  # default. `CHAHARSOQ_WEB_IMAGE` must come from the same release as
   # `CHAHARSOQ_API_IMAGE`.
-  image: ${CHARSOOQ_WEB_IMAGE:?set CHARSOOQ_WEB_IMAGE to the released image reference, for example ghcr.io/<namespace>/charsooq-web@sha256:<digest>}
+  image: ${CHAHARSOQ_WEB_IMAGE:?set CHAHARSOQ_WEB_IMAGE to the released image reference, for example ghcr.io/<namespace>/chaharsooq-web@sha256:<digest>}
   pull_policy: missing
   build:
     context: .

@@ -388,7 +388,7 @@ PROD_DEPLOYMENT_ENV = \
 
 PROD_IMAGE_ENV = \
 	CHAHARSOQ_API_IMAGE=ghcr.io/example/chaharsooq-api@sha256:0000000000000000000000000000000000000000000000000000000000000000 \
-	CHARSOOQ_WEB_IMAGE=ghcr.io/example/charsooq-web@sha256:0000000000000000000000000000000000000000000000000000000000000000
+	CHAHARSOQ_WEB_IMAGE=ghcr.io/example/chaharsooq-web@sha256:0000000000000000000000000000000000000000000000000000000000000000
 
 PROD_STRUCTURAL_ENV = $(PROD_DEPLOYMENT_ENV) $(PROD_IMAGE_ENV)
 
@@ -402,7 +402,7 @@ PROD_BUILD_VERSION ?= $(PROD_BUILD_TAG)
 PROD_BUILD_SOURCE ?= $(shell git config --get remote.origin.url 2>/dev/null | sed -e 's|\.git$$||' -e 's|^git@github.com:|https://github.com/|')
 PROD_BUILD_ENV = \
 	CHAHARSOQ_API_IMAGE=chaharsooq-api:$(PROD_BUILD_TAG) \
-	CHARSOOQ_WEB_IMAGE=charsooq-web:$(PROD_BUILD_TAG) \
+	CHAHARSOQ_WEB_IMAGE=chaharsooq-web:$(PROD_BUILD_TAG) \
 	CHARSOOQ_BUILD_REVISION=$(PROD_BUILD_REVISION) \
 	CHARSOOQ_BUILD_DATE=$(PROD_BUILD_DATE) \
 	CHARSOOQ_BUILD_VERSION=$(PROD_BUILD_VERSION) \
@@ -470,7 +470,7 @@ prod-build: ## Build production API and web images from this commit (host-build 
 	# The deployment values are documentation placeholders: Compose interpolates
 	# the whole file before building, and none of them affect the image bytes.
 	$(PROD_DEPLOYMENT_ENV) $(PROD_BUILD_ENV) $(COMPOSE_PROD) build
-	@echo "built chaharsooq-api:$(PROD_BUILD_TAG) and charsooq-web:$(PROD_BUILD_TAG) from $(PROD_BUILD_REVISION)"
+	@echo "built chaharsooq-api:$(PROD_BUILD_TAG) and chaharsooq-web:$(PROD_BUILD_TAG) from $(PROD_BUILD_REVISION)"
 
 # One command to deploy on the server. Set SSH_HOST to run remotely; otherwise
 # run it directly on the host. VERSION defaults to the newest published release.
@@ -523,7 +523,7 @@ prod-deploy-simulate: ## @user Preview prod-deploy output locally (SIMULATION, n
 	step 3 'Resolving the release to immutable image digests'; \
 	note 'fetching the newest published release of example/charsooq'; \
 	note 'api image   ghcr.io/example/chaharsooq-api@sha256:1111111111111111111111111111111111111111111111111111111111111111'; \
-	note 'web image   ghcr.io/example/charsooq-web@sha256:2222222222222222222222222222222222222222222222222222222222222222'; \
+	note 'web image   ghcr.io/example/chaharsooq-web@sha256:2222222222222222222222222222222222222222222222222222222222222222'; \
 	step 4 'Verifying that both images are from one release'; \
 	note 'version 1.2.3, commit a1b2c3d4e5f60718293a4b5c6d7e8f9012345678'; \
 	step 5 'Validating the production Compose file'; \
@@ -555,12 +555,12 @@ prod-pull: ## Pull the released API and web images (needs image refs)
 	$(COMPOSE_PROD) pull api web
 
 prod-image-revision: ## Print the release commit recorded in the image references (needs the image variables)
-	@test -n "$(CHAHARSOQ_API_IMAGE)" && test -n "$(CHARSOOQ_WEB_IMAGE)" || { \
-		echo "usage: CHAHARSOQ_API_IMAGE=<ref> CHARSOOQ_WEB_IMAGE=<ref> make prod-image-revision"; \
+	@test -n "$(CHAHARSOQ_API_IMAGE)" && test -n "$(CHAHARSOQ_WEB_IMAGE)" || { \
+		echo "usage: CHAHARSOQ_API_IMAGE=<ref> CHAHARSOQ_WEB_IMAGE=<ref> make prod-image-revision"; \
 		exit 2; \
 	}
 	docker image inspect "$(CHAHARSOQ_API_IMAGE)" --format 'api revision {{index .Config.Labels "org.opencontainers.image.revision"}}'
-	docker image inspect "$(CHARSOOQ_WEB_IMAGE)" --format 'web revision {{index .Config.Labels "org.opencontainers.image.revision"}}'
+	docker image inspect "$(CHAHARSOQ_WEB_IMAGE)" --format 'web revision {{index .Config.Labels "org.opencontainers.image.revision"}}'
 
 prod-provision: ## Run idempotent database role provisioning once (needs real secrets)
 	$(COMPOSE_PROD) run --rm provision

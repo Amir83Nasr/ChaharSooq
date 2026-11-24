@@ -313,12 +313,12 @@ real Production secrets; owner bootstrap remains a separate explicit step.
 ### Images and releases
 
 Production runs **published images**, not a local build. `CHAHARSOQ_API_IMAGE` and
-`CHARSOOQ_WEB_IMAGE` are required and have no default, so an unset reference stops the stack
+`CHAHARSOQ_WEB_IMAGE` are required and have no default, so an unset reference stops the stack
 instead of deploying whatever happens to be in the local image cache:
 
 ```bash
 export CHAHARSOQ_API_IMAGE='ghcr.io/<owner>/chaharsooq-api@sha256:<digest>'
-export CHARSOOQ_WEB_IMAGE='ghcr.io/<owner>/charsooq-web@sha256:<digest>'
+export CHAHARSOQ_WEB_IMAGE='ghcr.io/<owner>/chaharsooq-web@sha256:<digest>'
 ```
 
 Images are published by [`.github/workflows/release.yml`](.github/workflows/release.yml) when a

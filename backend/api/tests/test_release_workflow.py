@@ -165,7 +165,7 @@ def _run_guard(
     env = {
         "PATH": f"{stub_dir}{os.pathsep}{os.environ['PATH']}",
         "API_IMAGE": "ghcr.io/ns/chaharsooq-api",
-        "WEB_IMAGE": "ghcr.io/ns/charsooq-web",
+        "WEB_IMAGE": "ghcr.io/ns/chaharsooq-web",
         "VERSION": "1.0.0",
         "SHA": "1" * 40,
     }
@@ -436,7 +436,10 @@ def test_the_verify_step_checks_the_latest_pointer() -> None:
 def test_the_image_names_follow_the_repository_layout() -> None:
     api = _step("build_api")
     web = _step("build_web")
+    job_env = _release_job()["env"]
 
+    assert job_env["API_IMAGE_NAME"] == "chaharsooq-api"
+    assert job_env["WEB_IMAGE_NAME"] == "chaharsooq-web"
     assert "steps.meta.outputs.api_image" in str(api["with"]["tags"])
     assert "steps.meta.outputs.web_image" in str(web["with"]["tags"])
     script = _script("meta")
@@ -513,7 +516,7 @@ def test_the_digests_are_recorded_in_the_release_report() -> None:
     assert "$GITHUB_STEP_SUMMARY" in record
     # The final body is built from the verified digests, then handed to the
     # publication step as a file. No placeholder is ever published.
-    assert "charsooq:image-digests:start" in release
+    assert "chaharsooq:image-digests:start" in release
     assert "${API_DIGEST}" in release
     assert "${WEB_DIGEST}" in release
     assert "--notes-file" in publish

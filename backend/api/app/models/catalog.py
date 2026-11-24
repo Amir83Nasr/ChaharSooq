@@ -83,6 +83,8 @@ class Product(Base):
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     sku: Mapped[str] = mapped_column(String(64), nullable=False)
+    # All money columns on this model are Toman. Parsina sends Rial; the sync
+    # service divides by 10 once before assigning any of these fields.
     price: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False, default=0)
     stock: Mapped[Decimal] = mapped_column(Numeric(18, 3), nullable=False, default=0)
     category_id: Mapped[int | None] = mapped_column(
@@ -122,6 +124,7 @@ class Product(Base):
         Numeric(18, 2), nullable=True, default=None
     )
     use_price: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True, default=None)
+    # Parsina discount/extra are percentages, not money: never divide by 10.
     discount: Mapped[Decimal | None] = mapped_column(Numeric(9, 4), nullable=True, default=None)
     extra: Mapped[Decimal | None] = mapped_column(Numeric(9, 4), nullable=True, default=None)
     number_in_box: Mapped[Decimal | None] = mapped_column(

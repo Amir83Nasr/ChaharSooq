@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.core.config import ParsinaSettings
 from app.core.database import get_engine
 from app.models import Product
-from app.services.cardex import ProductCardexService
+from app.services.cardex import ProductCardexService, _toman
 from tests.helpers import login
 
 SETTINGS = ParsinaSettings(
@@ -100,6 +100,17 @@ def _product(session: Session) -> Product:
     session.add(product)
     session.flush()
     return product
+
+
+def test_invoice_rial_amounts_become_integer_toman() -> None:
+    """Cardex amounts are integer Toman; odd Rial input rounds to whole Toman."""
+    assert _toman(20000) == 2000
+    assert _toman("20000") == 2000
+    assert _toman(20000.0) == 2000
+    assert _toman(None) == 0
+    # Financial half-up rounding: 5 rials → 1 toman, 15 rials → 2 toman.
+    assert _toman(5) == 1
+    assert _toman(15) == 2
 
 
 def test_cardex_aggregates_purchases_and_sales(session: Session) -> None:

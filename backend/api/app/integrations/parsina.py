@@ -56,6 +56,12 @@ class ParsinaResponseError(ParsinaError):
 
 @dataclass(frozen=True)
 class CommodityRow:
+    """One raw Parsina catalog row. Every price field here is RIAL, not Toman.
+
+    `parse_commodity` deliberately does not convert: `ProductSyncService` is the
+    single rial → toman boundary. `discount`/`extra` are percentages, not money.
+    """
+
     good_id: int
     good_code: str
     good_name: str

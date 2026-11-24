@@ -182,6 +182,16 @@ Machine and display representations are separate.
 
 - **Machine values** (backend, API, calculations, database): plain numbers such as `1000000`,
   integer toman, UTC datetimes. Never store Persian digits or Jalali strings.
+- **Parsina boundary — all money from Parsina is in RIAL (ریال), never toman.** Convert once with
+  `÷ 10` at the ingestion edge (`app/services/sync.py` for catalog prices, `app/services/cardex.py`
+  for invoice lines) and store/return toman everywhere after that; none of the app's own
+  calculations, API responses, CSV exports or UI ever see rial values. The dev mirror
+  (`app/integrations/dev_db.py`) multiplies stored toman back up to rial so it goes through the
+  same single conversion — do not divide twice. Parsina `discount`/`extra` are **percentages**,
+  not money: copy them unchanged. Competitor prices are a separate domain: their payload carries
+  an explicit `IRR`/`IRT` currency, and only `IRR` values are divided by 10 at the read/display
+  edge (never at Parsina ingestion). When adding a new Parsina money field, route it through the
+  existing conversion helper and add a rial→toman assertion in the tests.
 - **Display values** (UI only), all implemented in `packages/ui/src/lib/`:
   - Digits: Persian `۰–۹`.
   - Thousands separator: `٬` (U+066C). Example: `۱٬۰۰۰٬۰۰۰`. Never `,`.

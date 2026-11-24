@@ -289,6 +289,17 @@ def test_sync_converts_all_parsina_prices_from_rials_to_toman(session: Session) 
     assert product.weight == Decimal("1.5")
 
 
+def test_sync_keeps_parsina_percentages_unconverted(session: Session) -> None:
+    """Parsina discount/extra are percentages, not Rial amounts."""
+    good = _good(1, "A-1", "کالا", sale=26316000)
+    good.update({"discount": 12.5, "extra": 3})
+    _service(session, FakeParsina(_goods(good))).run()
+
+    product = session.execute(select(Product)).scalar_one()
+    assert product.discount == Decimal("12.5")
+    assert product.extra == Decimal("3")
+
+
 def test_sync_keeps_missing_and_zero_prices_without_rescaling(session: Session) -> None:
     good = _good(1, "A-1", "کالا", sale=0, remain=3)
     good["buyPrice"] = None

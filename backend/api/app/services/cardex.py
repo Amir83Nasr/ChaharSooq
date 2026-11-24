@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, date, datetime, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import TYPE_CHECKING, Any, cast
 
 import jdatetime  # type: ignore[import-untyped]
@@ -67,8 +67,8 @@ def _decimal(raw: Any) -> Decimal:
 
 
 def _toman(raw: Any) -> int:
-    """Parsina rial amount → integer toman; round to the nearest toman."""
-    return int((_decimal(raw) / RIALS_PER_TOMAN).quantize(Decimal("1")))
+    """Parsina rial amount → integer toman; explicit half-up rounding for money."""
+    return int((_decimal(raw) / RIALS_PER_TOMAN).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
 
 def _invoice_date(raw: Any) -> date | None:

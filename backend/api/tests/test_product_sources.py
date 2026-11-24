@@ -184,6 +184,23 @@ def test_json_fixture_uses_real_unit_titles_and_all_prices(tmp_path: Path) -> No
     )
 
 
+@pytest.mark.skipif(not _PRODUCTS_FIXTURE.exists(), reason="local Parsina JSON fixture not present")
+def test_real_parsina_fixture_prices_are_stored_in_toman(session: Session) -> None:
+    """The saved Rial dump goes through the same ÷10 boundary as the live API."""
+    source = CsvCommoditySource(_PRODUCTS_FIXTURE)
+    rows, _total, _units = source.fetch()
+    raw = next(row for row in rows if row.get("goodId") == 3)
+
+    ProductSyncService(session, source=source).run()
+
+    product = session.execute(select(Product).where(Product.external_id == 3)).scalar_one()
+    assert Decimal(str(raw["salePrice"])) / 10 == product.price
+    assert Decimal(str(raw["buyPrice"])) / 10 == product.buy_price
+    assert Decimal(str(raw["salePackPrice"])) / 10 == product.sale_pack_price
+    assert Decimal(str(raw["saleBoxPrice"])) / 10 == product.sale_box_price
+    assert Decimal(str(raw["usePrice"])) / 10 == product.use_price
+
+
 def test_csv_source_missing_or_unreadable_is_handled(tmp_path: Path) -> None:
     assert CsvCommoditySource(tmp_path / "missing.csv").is_configured is False
     bad = tmp_path / "bad.csv"
@@ -302,6 +319,38 @@ def test_dev_db_round_trip_keeps_toman_prices_unchanged(tmp_path: Path, session:
     products = session.execute(select(Product).order_by(Product.external_id)).scalars().all()
     assert [p.price for p in products] == [Decimal(1000), Decimal(2000)]
     assert [p.buy_price for p in products] == [None, None]
+
+
+def test_dev_db_round_trip_scales_all_price_fields_once(tmp_path: Path, session: Session) -> None:
+    """Every stored Toman price returns unchanged after the ×10 → ÷10 round trip."""
+    url = f"sqlite:///{tmp_path / 'prices.db'}"
+    engine = create_engine(url)
+    Base.metadata.create_all(engine)
+    prices = {
+        "price": Decimal(2631600),
+        "buy_price": Decimal(2105300),
+        "sale_pack_price": Decimal(2631600),
+        "sale_box_price": Decimal(2745500),
+        "use_price": Decimal(2850000),
+    }
+    with Session(engine) as s:
+        s.add(
+            Product(
+                external_id=7,
+                name="کالا با تمام قیمت‌ها",
+                sku="A-7",
+                stock=Decimal(3),
+                **prices,
+            )
+        )
+        s.commit()
+    engine.dispose()
+
+    ProductSyncService(session, source=DevDatabaseCommoditySource(url)).run()
+
+    product = session.execute(select(Product)).scalar_one()
+    for field, expected in prices.items():
+        assert getattr(product, field) == expected, field
 
 
 def test_dev_db_source_reports_unreachable_db(tmp_path: Path) -> None:

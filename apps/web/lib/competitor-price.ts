@@ -88,7 +88,7 @@ export function competitorForRow(
 
 /**
  * Short label for a competitor-derived cell with no value. The long reason
- * goes into the cell's `title` tooltip so the column stays narrow.
+ * goes into the cell's hover tooltip so the column stays narrow.
  */
 export function competitorEmptyMessage(
   mode: PricingMode,
@@ -106,10 +106,10 @@ export function competitorEmptyHint(
 ): string {
   if (mode === "similar_product") {
     return kind === "daily_change"
-      ? "برای تغییر روزانه، مشاهدهٔ قیمت دو روز لازم است"
-      : "برای محاسبهٔ قیمت، تغییر قیمت دو روز لازم است"
+      ? "برای تغییر روزانه، مشاهده قیمت دو روز لازم است"
+      : "برای محاسبه قیمت، تغییر قیمت دو روز لازم است"
   }
   return kind === "daily_change"
-    ? "برای تغییر روزانه، مشاهدهٔ قیمت دو روز لازم است"
-    : "برای محاسبهٔ قیمت، قیمت تازه لازم است"
+    ? "برای تغییر روزانه، مشاهده قیمت دو روز لازم است"
+    : "برای محاسبه قیمت، قیمت تازه لازم است"
 }

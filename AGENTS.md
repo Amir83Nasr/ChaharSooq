@@ -172,6 +172,9 @@ Charsooq has exactly three independent environments
   Two independent words still take a real space. Prefer Persian letters (`ی`, `ک`) over Arabic
   ones. After changing any Persian copy, verify the rendered text in the browser in RTL — the ZWNJ
   is invisible, so a plain space or a joined form can look plausible in source but read wrong.
+- Do not add the standalone hamza (`ٔ`, `U+0654`) to words such as `محاسبه` and `مشاهده`. Write
+  `محاسبه قیمت` and `مشاهده قیمت`, never `محاسبهٔ قیمت` or `مشاهدهٔ قیمت`. When a hamza of this
+  kind appears in existing UI copy, correct it as part of the change that touches that copy.
 
 ## 6. Numbers, dates, currency
 

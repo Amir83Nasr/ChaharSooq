@@ -23,6 +23,11 @@ import { formatPersianNumber } from "@workspace/ui/lib/number"
 import { cn } from "@workspace/ui/lib/utils"
 import { formatPersianRelativeTime } from "@workspace/ui/lib/relative-time"
 import { Skeleton } from "@workspace/ui/primitives/skeleton"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@workspace/ui/primitives/tooltip"
 import { CircleAlert, PackageSearch, Pin, RefreshCw } from "lucide-react"
 import { StockCell } from "@/components/data/products-stock-cell"
 import {
@@ -89,6 +94,33 @@ function formatPercentMagnitude(percent: number): string {
 // اختلاف درصد به صورت عدد صحیح نمایش داده میشود؛ اعشار اضافهای ندارد.
 function formatWholePercentMagnitude(percent: number): string {
   return `${formatPersianNumber(Math.round(Math.abs(percent)))}٪`
+}
+
+// Empty competitor cells carry a short label plus a longer reason on hover.
+// A shadcn tooltip keeps the wording consistent with the rest of the UI and
+// inherits the same hover delay as the theme/sidebar tooltips.
+function HintedCellText({
+  children,
+  hint,
+}: {
+  children: React.ReactNode
+  hint?: string
+}) {
+  if (!hint)
+    return <span className="text-xs text-muted-foreground">{children}</span>
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span className="cursor-help text-xs text-muted-foreground">
+            {children}
+          </span>
+        }
+      />
+      <TooltipContent side="top">{hint}</TooltipContent>
+    </Tooltip>
+  )
 }
 
 // Shared by the data, skeleton and error rows so the column layout never shifts.
@@ -481,9 +513,8 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                 {shown.has("suggested_price_change") ? (
                   <TableCell className="text-center">
                     {dailyChange === null ? (
-                      <span
-                        className="text-xs text-muted-foreground"
-                        title={
+                      <HintedCellText
+                        hint={
                           !hasLink
                             ? undefined
                             : competitorEmptyHint(
@@ -497,7 +528,7 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                         {!hasLink
                           ? "—"
                           : competitorEmptyMessage(mode, "daily_change")}
-                      </span>
+                      </HintedCellText>
                     ) : Math.round(dailyChange * 10) === 0 ? (
                       <span className="block text-xs text-muted-foreground">
                         بدون تغییر
@@ -518,9 +549,8 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                 {shown.has("suggested_price") ? (
                   <TableCell className="text-center">
                     {suggested === null ? (
-                      <span
-                        className="text-xs text-muted-foreground"
-                        title={
+                      <HintedCellText
+                        hint={
                           !hasLink
                             ? undefined
                             : competitorEmptyHint(
@@ -534,7 +564,7 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                         {!hasLink
                           ? "—"
                           : competitorEmptyMessage(mode, "suggested")}
-                      </span>
+                      </HintedCellText>
                     ) : (
                       <Price value={suggested} />
                     )}

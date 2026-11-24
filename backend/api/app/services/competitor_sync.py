@@ -19,6 +19,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models.competitor import CompetitorListing, CompetitorSyncState
 from app.repositories.competitor import CompetitorRepository
 from app.repositories.competitor_sync import CompetitorSyncStateRepository
@@ -67,12 +68,31 @@ class CompetitorSyncService:
         return self.run_acquired()
 
     def run_acquired(self) -> CompetitorSyncResult:
-        """Check every link. Caller already holds the lock."""
+        """Check every stale link. Caller already holds the lock.
+
+        Links with a fresh successful price are skipped rather than fetched
+        again: a bulk refresh repeated sooner than the configured price TTL
+        would otherwise re-spend one politeness slot per link for no new data.
+        This is the dominant cost as the link count grows.
+        """
         now = datetime.now(UTC)
         try:
             rows = self._listings.list_all()
-            active = [row for row in rows if row.is_active]
-            skipped = len(rows) - len(active)
+            ttl = timedelta(hours=get_settings().competitor_price_ttl_hours)
+            active: list[CompetitorListing] = []
+            skipped = 0
+            for row in rows:
+                if not row.is_active:
+                    skipped += 1
+                    continue
+                last_success = row.last_success_at
+                if last_success is not None:
+                    if last_success.tzinfo is None:
+                        last_success = last_success.replace(tzinfo=UTC)
+                    if now - last_success < ttl:
+                        skipped += 1
+                        continue
+                active.append(row)
             results = self._check_many(active)
         except Exception as exc:  # noqa: BLE001 — record, then let the caller classify
             self._fail(now, exc)

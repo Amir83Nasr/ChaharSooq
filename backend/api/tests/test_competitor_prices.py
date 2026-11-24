@@ -1021,3 +1021,27 @@ def test_global_sync_uses_one_worker_per_store(
     assert (result.checked, result.updated, result.failed) == (3, 3, 0)
     assert digikala_calls == 2
     assert sorted(store_starts) == ["digikala", "technolife"]
+
+
+def test_global_sync_skips_links_with_fresh_price(
+    client: TestClient, db_session: Session, monkeypatch: MonkeyPatch
+) -> None:
+    """A repeated bulk refresh must not re-spend slots on fresh prices."""
+    first_id, second_id = _seed_two_products_with_links(client)
+    first_listing = client.get(f"/api/v1/products/{first_id}/competitors").json()[0]
+    fresh_row = db_session.get(CompetitorListing, first_listing["id"])
+    assert fresh_row is not None
+    fresh_row.last_success_at = datetime.now(UTC)
+    fresh_row.status = "success"
+    db_session.commit()
+
+    fetched: list[str] = []
+
+    def tracking_fetch(store: str, _url: str) -> FetchedPrice:
+        fetched.append(store)
+        return FetchedPrice(Decimal("27000000"), "IRR", True, datetime.now(UTC))
+
+    monkeypatch.setattr("app.services.competitor_check.fetch_competitor_price", tracking_fetch)
+    result = CompetitorSyncService(db_session).run()
+    assert (result.checked, result.updated, result.failed, result.skipped) == (1, 1, 0, 1)
+    assert fetched == ["technolife"]

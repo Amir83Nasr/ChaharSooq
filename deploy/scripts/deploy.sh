@@ -53,6 +53,17 @@ if [ -f "$ENV_FILE" ]; then
   set +a
 fi
 
+# Explicit digest arguments must be in the environment before `docker compose
+# config` runs in step 2; the full validation below happens in step 3.
+if [ $# -eq 2 ]; then
+  case "$1" in
+    *@sha256:*) export CHAHARSOQ_API_IMAGE="$1" ;;
+  esac
+  case "$2" in
+    *@sha256:*) export CHAHARSOQ_WEB_IMAGE="$2" ;;
+  esac
+fi
+
 [ -f "$COMPOSE_FILE" ] || fail "compose file not found: $COMPOSE_FILE"
 
 for name in CHARSOOQ_PROXY_BIND_IP CHARSOOQ_SITE_HOST CHARSOOQ_EDGE_SUBNET \

@@ -648,6 +648,32 @@ def test_api_must_report_healthy_not_just_running(tmp_path: Path) -> None:
     assert "health verification failed" in result.stderr
 
 
+def test_digest_args_are_exported_before_compose_config(tmp_path: Path) -> None:
+    """The watch agent passes digests as args; compose interpolation in step 2
+    must see them before the step-3 validation assigns them."""
+    env = _fixture(tmp_path)
+    docker_log, _ = _fake_bin(tmp_path, env)
+    bin_dir = tmp_path / "bin"
+    docker = bin_dir / "docker"
+    original = docker.read_text(encoding="utf-8")
+    docker.write_text(
+        original.replace(
+            '  *"config --format json"*) printf',
+            '  *"config --format json"*) '
+            '[ -n "${CHAHARSOQ_API_IMAGE:-}" ] && '
+            '[ -n "${CHAHARSOQ_WEB_IMAGE:-}" ] || exit 42; printf',
+        ),
+        encoding="utf-8",
+    )
+
+    api = "ghcr.io/example/chaharsooq-api@sha256:" + "a" * 64
+    web = "ghcr.io/example/chaharsooq-web@sha256:" + "b" * 64
+    result = _run([api, web], env)
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert "compose file not found" not in result.stderr
+
+
 def test_stopped_legacy_containers_are_removed_after_starting(tmp_path: Path) -> None:
     env = _fixture(tmp_path)
     docker_log, _ = _fake_bin(tmp_path, env)

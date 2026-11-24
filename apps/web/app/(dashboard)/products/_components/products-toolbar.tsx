@@ -184,21 +184,19 @@ export function ProductsToolbar(props: ToolbarProps) {
       <Button
         type="button"
         variant="outline"
-        size="sm"
+        size="icon-sm"
         aria-pressed={pinned}
         aria-label={
           pinned ? "نمایش فقط پین\u200cشده‌ها" : "نمایش پین\u200cشده‌ها"
         }
         onClick={() => onPinnedChange(!pinned)}
         className={cn(
-          "w-full gap-1.5 sm:w-auto",
           pinned
             ? "border-primary/50 bg-primary/10 text-primary hover:bg-primary/15"
             : "text-muted-foreground"
         )}
       >
         <Pin className="size-4" aria-hidden="true" />
-        {"پین\u200cشده"}
       </Button>
       <div className="relative w-full sm:w-40">
         <Input

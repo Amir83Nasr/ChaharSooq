@@ -383,6 +383,18 @@ if [ -n "$api_container_id" ]; then
 fi
 "${COMPOSE[@]}" up -d --no-build --remove-orphans
 
+# Compose only removes orphans from its own project. A rename of the project
+# (charsooq -> chaharsooq) leaves stopped containers from the old prefix behind;
+# they are inert but confusing in `docker ps -a`. Remove only containers that
+# are stopped and carry the legacy prefix — never touch volumes or images.
+legacy_orphans="$(docker ps -aq --filter 'name=^/charsooq-production-' \
+  --filter 'status=exited' 2>/dev/null || true)"
+if [ -n "$legacy_orphans" ]; then
+  # shellcheck disable=SC2086 -- each id is a docker-generated hex string
+  docker rm $legacy_orphans >/dev/null || true
+  note "removed $(printf '%s\n' "$legacy_orphans" | wc -l | tr -d ' ') stopped legacy container(s)"
+fi
+
 # The upstream host is resolved by Caddy; a graceful reload refreshes that DNS
 # after the web container was replaced (admin API is off, so SIGUSR1 is used).
 caddy_id="$("${COMPOSE[@]}" ps -q caddy 2>/dev/null || true)"

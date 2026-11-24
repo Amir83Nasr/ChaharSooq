@@ -512,11 +512,13 @@ prod-deploy: ## @user Deploy the newest GitHub Release on the server [VERSION=â€
 # Install/start/stop the outbound-only release-polling agent on the host (ADR 033).
 # The timer calls deploy.sh; it never runs a CI workflow on the host.
 prod-watch-install: ## @user Install and enable the 5-minute auto-deploy timer on the server
-	sudo install -m 0644 deploy/systemd/charsooq-release-watch.service /etc/systemd/system/
-	sudo install -m 0644 deploy/systemd/charsooq-release-watch.timer /etc/systemd/system/
+	@sed 's|/opt/charsooq|$(CURDIR)|g' deploy/systemd/charsooq-release-watch.service > /tmp/charsooq-release-watch.service
+	@cp deploy/systemd/charsooq-release-watch.timer /tmp/charsooq-release-watch.timer
+	sudo install -m 0644 /tmp/charsooq-release-watch.service /etc/systemd/system/
+	sudo install -m 0644 /tmp/charsooq-release-watch.timer /etc/systemd/system/
 	sudo systemctl daemon-reload
 	sudo systemctl enable --now charsooq-release-watch.timer
-	@echo "auto-deploy timer enabled; check: systemctl status charsooq-release-watch.timer"
+	@echo "auto-deploy timer enabled from $(CURDIR); check: make prod-watch-status"
 
 prod-watch-status: ## @user Show auto-deploy timer status and recent agent log
 	sudo systemctl status charsooq-release-watch.timer --no-pager || true

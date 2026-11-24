@@ -648,6 +648,18 @@ def test_api_must_report_healthy_not_just_running(tmp_path: Path) -> None:
     assert "health verification failed" in result.stderr
 
 
+def test_stopped_legacy_containers_are_removed_after_starting(tmp_path: Path) -> None:
+    env = _fixture(tmp_path)
+    docker_log, _ = _fake_bin(tmp_path, env)
+
+    result = _run([], env)
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    commands = docker_log.read_text()
+    assert "ps -aq --filter name=^/charsooq-production-" in commands
+    assert "status=exited" in commands
+
+
 def test_rollback_tag_is_normalized_when_the_label_already_has_the_v_prefix(
     tmp_path: Path,
 ) -> None:

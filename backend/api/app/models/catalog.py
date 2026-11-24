@@ -44,6 +44,7 @@ class Product(Base):
         Index("ix_products_sku", "sku"),
         Index("ix_products_main_group_name", "main_group_name"),
         Index("ix_products_is_active", "is_active"),
+        Index("ix_products_pinned", "pinned"),
         Index("ix_products_price", "price"),
         Index("ix_products_stock", "stock"),
         # Matches 0012_search_indexes: composite active-first paths for the
@@ -96,9 +97,10 @@ class Product(Base):
     weight: Mapped[Decimal | None] = mapped_column(Numeric(18, 3), nullable=True, default=None)
     is_special: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Owner marker: pinned products can be revisited later with the پین filter.
+    pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     # Which formula computes the suggested price: a direct competitor price
-    # blend, the daily change of a similar product's linked listing, or no
-    # competitor price at all (all competitor cells are suppressed).
+    # blend or the daily change of a similar product's linked listing.
     pricing_mode: Mapped[str] = mapped_column(
         String(32), nullable=False, default="exact_competitor"
     )

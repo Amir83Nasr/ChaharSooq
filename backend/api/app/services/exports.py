@@ -109,6 +109,7 @@ def _has_filters(filters: ProductFilters) -> bool:
             filters.min_competitor_price is not None,
             filters.max_competitor_price is not None,
             bool(filters.pricing_mode),
+            filters.pinned is not None,
             filters.min_stock is not None,
             filters.max_stock is not None,
             filters.in_stock is not None,
@@ -345,11 +346,8 @@ class ExportService:
         base_price = float(product.price or 0)
 
         exact_mode = product.pricing_mode == "exact_competitor"
-        # No-price mode suppresses every competitor-derived cell and the
-        # suggested price, regardless of any stored links.
-        show_competitor = product.pricing_mode != "no_competitor_price"
-        # Both active modes use the same category-scoped store slots; only the
-        # formula consuming the picked price differs.
+        # Both modes use the same category-scoped store slots; only the formula
+        # consuming the picked price differs.
         tracked_stores = stores_for_top_group(top)
 
         def competitor_text(store: str | None) -> str:
@@ -365,9 +363,7 @@ class ExportService:
             status = competitor.status if competitor else None
             return COMPETITOR_STATUS_LABELS.get(str(status) if status else "", "لینک ثبت نشده")
 
-        if not show_competitor:
-            competitor = None
-        elif market == "best":
+        if market == "best":
             # The first store in the category's ordered map with a price wins;
             # if none has one, keep the first link so its status is displayed.
             linked = [
@@ -378,14 +374,12 @@ class ExportService:
                 (p for p in available if p.price is not None),
                 available[0] if available else None,
             )
-            show_competitor = bool(available)
         else:
             competitor = (
                 next((p for p in prices if p.store == market), None)
                 if market in tracked_stores
                 else None
             )
-            show_competitor = market in tracked_stores
         amount: float | None = None
         if competitor and competitor.price is not None:
             toman = _to_toman(competitor.price, competitor.currency)
@@ -393,9 +387,7 @@ class ExportService:
                 amount = float(toman)
         fresh = bool(competitor and competitor.is_fresh and amount is not None)
 
-        if not show_competitor:
-            competitor_price_text = "—"
-        elif fresh and amount is not None:
+        if fresh and amount is not None:
             competitor_price_text = format_amount(amount)
         else:
             status = competitor.status if competitor else None
@@ -403,9 +395,7 @@ class ExportService:
                 str(status) if status else "", "لینک ثبت نشده"
             )
 
-        pct = (
-            _diff_percent(base_price, amount) if exact_mode and fresh and show_competitor else None
-        )
+        pct = _diff_percent(base_price, amount) if exact_mode and fresh else None
         if not exact_mode or pct is None:
             price_diff_text = "—"
         else:
@@ -417,7 +407,7 @@ class ExportService:
                 price_diff_text = f"{_format_whole_percent_magnitude(pct)} {word}"
 
         weight = weights.get(top) if top is not None else None
-        if fresh and show_competitor:
+        if fresh:
             if exact_mode:
                 raw_suggested = _suggested_price_for(base_price, amount, weight)
             else:
@@ -441,7 +431,7 @@ class ExportService:
 
         # Daily change of the selected competitor price, not the suggested-price delta.
         daily_change: float | None = None
-        if competitor is not None and show_competitor:
+        if competitor is not None:
             daily_change = competitor.price_change_percent
         if daily_change is None:
             daily_change_text = "—"
@@ -465,12 +455,8 @@ class ExportService:
             "unit": product.unit_name or "—",
             "price": format_amount(product.price),
             "competitor_price": competitor_price_text,
-            "competitor_price_digikala": (
-                competitor_text("digikala") if exact_mode and show_competitor else "—"
-            ),
-            "competitor_price_technolife": (
-                competitor_text("technolife") if exact_mode and show_competitor else "—"
-            ),
+            "competitor_price_digikala": (competitor_text("digikala") if exact_mode else "—"),
+            "competitor_price_technolife": (competitor_text("technolife") if exact_mode else "—"),
             "price_diff": price_diff_text,
             "suggested_price": suggested_text,
             "suggested_price_change": daily_change_text,

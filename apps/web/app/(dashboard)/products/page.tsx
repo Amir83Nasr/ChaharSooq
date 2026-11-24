@@ -27,6 +27,7 @@ import {
   setProductsView,
   setSyncBaseline,
   useProductsStore,
+  type CompetitorMarketFilter,
   type StockFilter,
 } from "@/lib/products-store"
 import { toSuggestedPriceWeights } from "@/lib/suggested-price"
@@ -146,7 +147,8 @@ function ProductsPageContent() {
     view.topGroup !== null ||
     view.sort !== "category" ||
     view.stock !== "all" ||
-    view.market === "missing" ||
+    view.pinned ||
+    view.market !== "best" ||
     minPrice.trim() !== "" ||
     maxPrice.trim() !== ""
   const activeFilterCount =
@@ -154,12 +156,10 @@ function ProductsPageContent() {
     (view.topGroup !== null ? 1 : 0) +
     (view.sort !== "category" ? 1 : 0) +
     (view.stock !== "all" ? 1 : 0) +
-    (view.market === "missing" ? 1 : 0) +
+    (view.pinned ? 1 : 0) +
+    (view.market !== "best" ? 1 : 0) +
     (minPrice.trim() !== "" ? 1 : 0) +
     (maxPrice.trim() !== "" ? 1 : 0)
-
-  // "missing" is a filter only; column rendering still uses the "best" view.
-  const displayMarket = view.market === "missing" ? "best" : view.market
 
   function clearFilters() {
     setQ("")
@@ -174,6 +174,7 @@ function ProductsPageContent() {
     sort: view.sort,
     stock: view.stock,
     market: view.market,
+    pinned: view.pinned,
     minPrice,
     maxPrice,
     hasFilters,
@@ -182,8 +183,9 @@ function ProductsPageContent() {
       setProductsView({ topGroup: value }),
     onSort: (value: typeof view.sort) => setProductsView({ sort: value }),
     onStock: (value: StockFilter) => setProductsView({ stock: value }),
-    onMarketChange: (value: typeof view.market) =>
+    onMarketChange: (value: CompetitorMarketFilter) =>
       setProductsView({ market: value }),
+    onPinnedChange: (value: boolean) => setProductsView({ pinned: value }),
     onMinPrice: setMinPrice,
     onMaxPrice: setMaxPrice,
     onClear: clearFilters,
@@ -205,11 +207,8 @@ function ProductsPageContent() {
       top_group: view.topGroup ?? undefined,
       min_price: toNumber(view.minPrice),
       max_price: toNumber(view.maxPrice),
-      ...(view.market === "missing"
-        ? { pricing_mode: "no_competitor_price" as const }
-        : view.market === "best"
-          ? {}
-          : { competitor_store: view.market }),
+      pinned: view.pinned || undefined,
+      ...(view.market === "best" ? {} : { competitor_store: view.market }),
       sort: view.sort,
     }
     if (view.stock === "in" || view.stock === "out") {
@@ -228,7 +227,7 @@ function ProductsPageContent() {
       buildUrl: () =>
         api.productExportUrl(exportFilters, {
           columns: visibleColumns,
-          market: displayMarket,
+          market: view.market,
           scope: "filtered",
         }),
     },
@@ -241,7 +240,7 @@ function ProductsPageContent() {
           // The all-export drops the view filters; group rows by section instead
           // of using the API's newest-first default.
           { sort: "category" },
-          { columns: visibleColumns, market: displayMarket, scope: "all" }
+          { columns: visibleColumns, market: view.market, scope: "all" }
         ),
     },
   ]
@@ -328,7 +327,7 @@ function ProductsPageContent() {
             <ProductsCards
               items={page.items}
               sort={view.sort}
-              market={displayMarket}
+              market={view.market}
               threshold={threshold}
               onSelect={setSelected}
             />
@@ -357,7 +356,7 @@ function ProductsPageContent() {
             showPageSize
             hasFilters={hasFilters}
             sort={view.sort}
-            market={displayMarket}
+            market={view.market}
             weights={weights}
             visibleColumns={visibleColumns}
             onSelect={setSelected}

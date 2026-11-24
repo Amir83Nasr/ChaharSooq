@@ -20,9 +20,10 @@ import { EmptyState } from "@workspace/ui/feedback/state"
 import { Price } from "@workspace/ui/persian/price"
 import { PersianNumber } from "@workspace/ui/persian/persian-number"
 import { formatPersianNumber } from "@workspace/ui/lib/number"
+import { cn } from "@workspace/ui/lib/utils"
 import { formatPersianRelativeTime } from "@workspace/ui/lib/relative-time"
 import { Skeleton } from "@workspace/ui/primitives/skeleton"
-import { CircleAlert, PackageSearch, RefreshCw } from "lucide-react"
+import { CircleAlert, PackageSearch, Pin, RefreshCw } from "lucide-react"
 import { StockCell } from "@/components/data/products-stock-cell"
 import {
   competitorEmptyHint,
@@ -311,7 +312,6 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
             // The formula switch is per product; the category supplies the
             // shared weight and hints which similar-product store to display.
             const exact = item.pricing_mode === "exact_competitor"
-            const noCompetitor = item.pricing_mode === "no_competitor_price"
             const mode = item.pricing_mode
             const showCompetitorCell = showsCompetitorPrice(market, top)
             const competitor = showCompetitorCell
@@ -325,12 +325,12 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
               competitor?.currency ?? null
             )
             const pct =
-              !noCompetitor && exact && competitor?.is_fresh === true
+              exact && competitor?.is_fresh === true
                 ? diffPercent(item.price, amount)
                 : null
             const weight = top ? (weights[top] ?? null) : null
             const rawSuggested =
-              !noCompetitor && competitor?.is_fresh === true
+              competitor?.is_fresh === true
                 ? exact
                   ? suggestedPriceFor(item.price, amount, weight)
                   : suggestedPriceFromDailyChange(
@@ -346,16 +346,17 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
               item.allowed_increase_percent
             )
             // Daily change of the competitor price against the previous day.
-            const dailyChange = noCompetitor
-              ? null
-              : (competitor?.price_change_percent ?? null)
+            const dailyChange = competitor?.price_change_percent ?? null
             return (
               <TableRow
                 key={entry.key}
                 tabIndex={0}
                 aria-rowindex={i + 1}
                 ref={observeRow(entryIndex)}
-                className="cursor-pointer"
+                className={cn(
+                  "cursor-pointer",
+                  item.pinned && "!border-s-[3px] !border-s-primary"
+                )}
                 onClick={() => onSelect(item)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
@@ -366,7 +367,14 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
               >
                 {shown.has("row") ? (
                   <TableCell className="text-center text-sm text-muted-foreground">
-                    <PersianNumber value={rowNumber} />
+                    {item.pinned ? (
+                      <Pin
+                        className="mx-auto size-4 text-primary"
+                        aria-label="پین\u200cشده"
+                      />
+                    ) : (
+                      <PersianNumber value={rowNumber} />
+                    )}
                   </TableCell>
                 ) : null}
                 {shown.has("name") ? (
@@ -438,11 +446,7 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                 ) : null}
                 {shown.has("competitor_price") ? (
                   <TableCell className="text-center">
-                    {noCompetitor ? (
-                      <span className="block text-xs text-destructive">
-                        {competitorEmptyMessage(mode, "price")}
-                      </span>
-                    ) : !hasLink || !showCompetitorCell ? (
+                    {!hasLink || !showCompetitorCell ? (
                       <span className="text-muted-foreground">—</span>
                     ) : !exact ? (
                       <span className="flex flex-col items-center gap-0.5">
@@ -480,7 +484,7 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                       <span
                         className="text-xs text-muted-foreground"
                         title={
-                          noCompetitor || !hasLink
+                          !hasLink
                             ? undefined
                             : competitorEmptyHint(
                                 item.pricing_mode === "similar_product"
@@ -490,7 +494,7 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                               )
                         }
                       >
-                        {noCompetitor || !hasLink
+                        {!hasLink
                           ? "—"
                           : competitorEmptyMessage(mode, "daily_change")}
                       </span>
@@ -517,7 +521,7 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                       <span
                         className="text-xs text-muted-foreground"
                         title={
-                          noCompetitor || !hasLink
+                          !hasLink
                             ? undefined
                             : competitorEmptyHint(
                                 item.pricing_mode === "similar_product"
@@ -527,7 +531,7 @@ export const ProductsTable = memo(function ProductsTable(props: TableProps) {
                               )
                         }
                       >
-                        {noCompetitor || !hasLink
+                        {!hasLink
                           ? "—"
                           : competitorEmptyMessage(mode, "suggested")}
                       </span>

@@ -1,4 +1,5 @@
-import { Fragment } from "react"
+import { Pin } from "lucide-react"
+
 import {
   Select,
   SelectContent,
@@ -14,6 +15,7 @@ import {
   formatPersianNumber,
   parsePriceFilterInput,
 } from "@workspace/ui/lib/number"
+import { cn } from "@workspace/ui/lib/utils"
 import { TomanGlyph } from "@workspace/ui/persian/toman-glyph"
 import {
   DataTableToolbar,
@@ -44,7 +46,10 @@ interface ToolbarProps {
   topGroup: TopGroup | null
   sort: ProductSort
   stock: StockFilter
+  /** Selected competitor store; `best` shows the cheapest available rival. */
   market: CompetitorMarketFilter
+  /** Toggle: show only owner-pinned products. */
+  pinned: boolean
   minPrice: string
   maxPrice: string
   hasFilters: boolean
@@ -53,6 +58,7 @@ interface ToolbarProps {
   onSort: (v: ProductSort) => void
   onStock: (v: StockFilter) => void
   onMarketChange: (v: CompetitorMarketFilter) => void
+  onPinnedChange: (v: boolean) => void
   onMinPrice: (v: string) => void
   onMaxPrice: (v: string) => void
   onClear: () => void
@@ -65,6 +71,7 @@ export function ProductsToolbar(props: ToolbarProps) {
     sort,
     stock,
     market,
+    pinned,
     minPrice,
     maxPrice,
     hasFilters,
@@ -73,6 +80,7 @@ export function ProductsToolbar(props: ToolbarProps) {
     onSort,
     onStock,
     onMarketChange,
+    onPinnedChange,
     onMinPrice,
     onMaxPrice,
     onClear,
@@ -155,29 +163,43 @@ export function ProductsToolbar(props: ToolbarProps) {
         <SelectTrigger className="w-full sm:w-44" aria-label="فروشگاه رقیب">
           <SelectValue>
             {(value: CompetitorMarketFilter | null) =>
-              value === "missing"
-                ? "فاقد قیمت رقیب"
-                : value
-                  ? (COMPETITOR_MARKETS.find((m) => m.store === value)?.label ??
-                    "فروشگاه رقیب")
-                  : "فروشگاه رقیب"
+              value
+                ? (COMPETITOR_MARKETS.find((m) => m.store === value)?.label ??
+                  "فروشگاه رقیب")
+                : "فروشگاه رقیب"
             }
           </SelectValue>
         </SelectTrigger>
         <SelectContent align="start">
           <SelectGroup>
-            <SelectLabel>فروشگاه رقیب</SelectLabel>
-            {COMPETITOR_MARKETS.map((m, index) => (
-              <Fragment key={m.store}>
-                <SelectItem value={m.store}>{m.label}</SelectItem>
-                {index === 0 ? (
-                  <SelectItem value="missing">فاقد قیمت رقیب</SelectItem>
-                ) : null}
-              </Fragment>
+            <SelectLabel>قیمت رقبا</SelectLabel>
+            {COMPETITOR_MARKETS.map((m) => (
+              <SelectItem key={m.store} value={m.store}>
+                {m.label}
+              </SelectItem>
             ))}
           </SelectGroup>
         </SelectContent>
       </Select>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        aria-pressed={pinned}
+        aria-label={
+          pinned ? "نمایش فقط پین\u200cشده‌ها" : "نمایش پین\u200cشده‌ها"
+        }
+        onClick={() => onPinnedChange(!pinned)}
+        className={cn(
+          "w-full gap-1.5 sm:w-auto",
+          pinned
+            ? "border-primary/50 bg-primary/10 text-primary hover:bg-primary/15"
+            : "text-muted-foreground"
+        )}
+      >
+        <Pin className="size-4" aria-hidden="true" />
+        {"پین\u200cشده"}
+      </Button>
       <div className="relative w-full sm:w-40">
         <Input
           value={minPrice === "" ? "" : formatPersianNumber(minPrice)}

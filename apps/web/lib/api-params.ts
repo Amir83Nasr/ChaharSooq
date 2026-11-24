@@ -43,6 +43,7 @@ function appendProductParams(
   if (params.max_price !== undefined)
     search.set("max_price", String(params.max_price))
   if (params.pricing_mode) search.set("pricing_mode", params.pricing_mode)
+  if (params.pinned !== undefined) search.set("pinned", String(params.pinned))
   if (params.competitor_store)
     search.set("competitor_store", params.competitor_store)
   if (params.min_competitor_price !== undefined)

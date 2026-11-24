@@ -29,8 +29,8 @@ import { DEFAULT_LOW_STOCK_THRESHOLD } from "./inventory"
 
 export type StockFilter = "all" | "in" | "out" | "low"
 
-/** `missing` is the toolbar's "فاقد قیمت رقیب" choice; it is not an API store. */
-export type CompetitorMarketFilter = CompetitorMarketOption | "missing"
+/** The toolbar's competitor price source (cheapest default, or a single store). */
+export type CompetitorMarketFilter = CompetitorMarketOption
 
 export interface ProductsView {
   q: string
@@ -41,6 +41,7 @@ export interface ProductsView {
   maxPrice: string
   page: number
   pageSize: number
+  pinned: boolean
   market: CompetitorMarketFilter
 }
 
@@ -69,6 +70,7 @@ const INITIAL_VIEW: ProductsView = {
   maxPrice: "",
   page: 1,
   pageSize: 0,
+  pinned: false,
   market: "best",
 }
 
@@ -151,24 +153,17 @@ function paramsFromView(view: ProductsView): ProductFilters {
     stockParams.in_stock = true
     stockParams.max_stock = threshold()
   }
-  // "best" is display-only (cheapest competitor wins, no row filtering).
-  // Specific stores filter to products with a fresh price from that store;
-  // "missing" filters to products in the third pricing mode.
-  const marketFilter: Pick<
-    ProductFilters,
-    "competitor_store" | "pricing_mode"
-  > =
-    view.market === "missing"
-      ? { pricing_mode: "no_competitor_price" }
-      : view.market === "best"
-        ? {}
-        : { competitor_store: view.market }
+  // "best" is display-only (cheapest competitor wins, no row filtering);
+  // a specific store filters to products with a price from that store.
+  const marketFilter: Pick<ProductFilters, "competitor_store"> =
+    view.market === "best" ? {} : { competitor_store: view.market }
   return {
     q: view.q || undefined,
     top_group: view.topGroup ?? undefined,
     min_price: priceParam(view.minPrice),
     max_price: priceParam(view.maxPrice),
     ...stockParams,
+    pinned: view.pinned || undefined,
     ...marketFilter,
     sort: view.sort,
     page: view.page,
@@ -305,6 +300,7 @@ function hasViewChanged(prev: ProductsView, next: ProductsView): boolean {
     prev.maxPrice !== next.maxPrice ||
     prev.page !== next.page ||
     prev.pageSize !== next.pageSize ||
+    prev.pinned !== next.pinned ||
     prev.market !== next.market
   )
 }
@@ -328,6 +324,7 @@ export function setProductsView(patch: Partial<ProductsView>): void {
     (patch.stock !== undefined && patch.stock !== previous.stock) ||
     (patch.minPrice !== undefined && patch.minPrice !== previous.minPrice) ||
     (patch.maxPrice !== undefined && patch.maxPrice !== previous.maxPrice) ||
+    (patch.pinned !== undefined && patch.pinned !== previous.pinned) ||
     (patch.market !== undefined && patch.market !== previous.market) ||
     (patch.pageSize !== undefined && patch.pageSize !== previous.pageSize)
 
@@ -380,6 +377,7 @@ export function primeProductsView(patch: Partial<ProductsView>): void {
     (patch.stock !== undefined && patch.stock !== previous.stock) ||
     (patch.minPrice !== undefined && patch.minPrice !== previous.minPrice) ||
     (patch.maxPrice !== undefined && patch.maxPrice !== previous.maxPrice) ||
+    (patch.pinned !== undefined && patch.pinned !== previous.pinned) ||
     (patch.market !== undefined && patch.market !== previous.market) ||
     (patch.pageSize !== undefined && patch.pageSize !== previous.pageSize)
   if (changesFilters && patch.page === undefined) next.page = 1

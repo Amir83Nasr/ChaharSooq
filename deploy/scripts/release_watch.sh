@@ -82,11 +82,27 @@ if [ "$release_tag" = "$last_tag" ]; then
 fi
 log "new release $release_tag found (last deployed: ${last_tag:-none})"
 
-# deploy.sh re-fetches the same release to extract the verified digests and
-# runs all health gates; on any failure it exits non-zero and the state file
-# is left untouched, so the next tick retries.
-log "calling deploy.sh for $release_tag"
-if "$DEPLOY_SCRIPT" "$release_tag"; then
+# The body of a verified release carries the two digest-pinned images. Pass
+# them explicitly so deploy.sh never needs discovery variables or values in
+# the env file: the release body is the only source of the deployment identity.
+release_body="$(printf '%s' "$release_json" | jq -r '.body // empty')"
+api_ref="$(printf '%s\n' "$release_body" |
+  sed -n "s/.*CHAHARSOQ_API_IMAGE=[\"']\([^\"']*\)[\"'].*/\1/p" | head -n 1)"
+web_ref="$(printf '%s\n' "$release_body" |
+  sed -n "s/.*CHAHARSOQ_WEB_IMAGE=[\"']\([^\"']*\)[\"'].*/\1/p" | head -n 1)"
+case "$api_ref" in
+  *@sha256:*) ;;
+  *) fail "release $release_tag has no CHAHARSOQ_API_IMAGE digest; will retry" ;;
+esac
+case "$web_ref" in
+  *@sha256:*) ;;
+  *) fail "release $release_tag has no CHAHARSOQ_WEB_IMAGE digest; will retry" ;;
+esac
+
+# deploy.sh runs all health gates; on any failure it exits non-zero and the
+# state file is left untouched, so the next tick retries.
+log "calling deploy.sh with the release digests"
+if "$DEPLOY_SCRIPT" "$api_ref" "$web_ref"; then
   printf '%s\n' "$release_tag" > "$STATE_FILE"
   chmod 0600 "$STATE_FILE"
   log "deployed $release_tag and recorded it in $STATE_FILE"

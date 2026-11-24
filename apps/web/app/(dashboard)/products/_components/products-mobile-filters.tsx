@@ -27,6 +27,7 @@ interface Props {
   sort: ProductSort
   stock: StockFilter
   market: CompetitorMarketFilter
+  pinned: boolean
   minPrice: string
   maxPrice: string
   hasFilters: boolean
@@ -36,6 +37,7 @@ interface Props {
   onSort: (v: ProductSort) => void
   onStock: (v: StockFilter) => void
   onMarketChange: (v: CompetitorMarketFilter) => void
+  onPinnedChange: (v: boolean) => void
   onMinPrice: (v: string) => void
   onMaxPrice: (v: string) => void
   onClear: () => void
@@ -104,6 +106,7 @@ export function ProductsMobileFilters(props: Props) {
                 sort={props.sort}
                 stock={props.stock}
                 market={props.market}
+                pinned={props.pinned}
                 minPrice={props.minPrice}
                 maxPrice={props.maxPrice}
                 hasFilters={hasFilters}
@@ -112,6 +115,7 @@ export function ProductsMobileFilters(props: Props) {
                 onSort={props.onSort}
                 onStock={props.onStock}
                 onMarketChange={props.onMarketChange}
+                onPinnedChange={props.onPinnedChange}
                 onMinPrice={props.onMinPrice}
                 onMaxPrice={props.onMaxPrice}
                 onClear={onClear}

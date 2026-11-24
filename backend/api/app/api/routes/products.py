@@ -15,6 +15,7 @@ from app.schemas import (
     ProductIn,
     ProductOut,
     ProductPage,
+    ProductPinUpdate,
     ProductPriceBoundsUpdate,
     ProductPricingModeUpdate,
 )
@@ -28,7 +29,7 @@ from app.services.competitor import CompetitorService
 
 router = APIRouter(tags=["Products"], responses={401: UNAUTHORIZED})
 
-PricingModeFilter = Literal["exact_competitor", "similar_product", "no_competitor_price"]
+PricingModeFilter = Literal["exact_competitor", "similar_product"]
 
 
 @router.get(
@@ -68,6 +69,9 @@ def list_products(
     pricing_mode: PricingModeFilter | None = Query(  # noqa: B008
         default=None, description="Only products in this pricing mode."
     ),
+    pinned: bool | None = Query(
+        default=None, description="`true` for pinned products, `false` for unpinned ones."
+    ),
     min_stock: int | None = Query(default=None, ge=0, description="Minimum stock."),
     max_stock: int | None = Query(default=None, ge=0, description="Maximum stock."),
     in_stock: bool | None = Query(
@@ -101,6 +105,7 @@ def list_products(
         min_competitor_price=min_competitor_price,
         max_competitor_price=max_competitor_price,
         pricing_mode=pricing_mode,
+        pinned=pinned,
         min_stock=min_stock,
         max_stock=max_stock,
         in_stock=in_stock,
@@ -188,9 +193,8 @@ def update_product_price_bounds(
     summary="Set a product's pricing mode",
     description=(
         "Selects the suggested-price formula for one product: "
-        "`exact_competitor` (weighted blend with a direct competitor price), "
-        "`similar_product` (daily price change of a linked similar product), or "
-        "`no_competitor_price` (suppresses all competitor-derived cells). "
+        "`exact_competitor` (weighted blend with a direct competitor price) or "
+        "`similar_product` (daily price change of a linked similar product). "
         "Admin-only; viewers receive `403`."
     ),
     responses={404: NOT_FOUND, 422: VALIDATION_ERROR},
@@ -203,6 +207,32 @@ def update_product_pricing_mode(
 ) -> ProductOut:
     try:
         product = ProductService(session).set_pricing_mode(product_id, payload)
+    except ProductNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="کالا پیدا نشد",
+        ) from None
+    return ProductOut.model_validate(product)
+
+
+@router.patch(
+    "/products/{product_id}/pin",
+    response_model=ProductOut,
+    summary="Pin or unpin a product",
+    description=(
+        "Marks one product as pinned so it can be revisited with the پین list "
+        "filter. Admin-only; viewers receive `403`."
+    ),
+    responses={404: NOT_FOUND, 422: VALIDATION_ERROR},
+)
+def update_product_pin(
+    product_id: int,
+    payload: ProductPinUpdate,
+    _admin: Admin = Depends(require_admin),  # noqa: B008
+    session: Session = Depends(get_db),  # noqa: B008
+) -> ProductOut:
+    try:
+        product = ProductService(session).set_pinned(product_id, payload)
     except ProductNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -10,7 +10,7 @@ import { cn } from "@workspace/ui/lib/utils"
 import { Button } from "@workspace/ui/primitives/button"
 import { EmptyState } from "@workspace/ui/feedback/state"
 import { Skeleton } from "@workspace/ui/primitives/skeleton"
-import { PackageSearch } from "lucide-react"
+import { PackageSearch, Pin } from "lucide-react"
 import { StockCell } from "@/components/data/products-stock-cell"
 import {
   competitorEmptyMessage,
@@ -47,13 +47,12 @@ export function ProductMobileCard({
   const top = item.top_group
   // The pricing formula comes from the product, not its catalog section.
   const exact = item.pricing_mode === "exact_competitor"
-  const noCompetitor = item.pricing_mode === "no_competitor_price"
   const showCompetitor = showsCompetitorPrice(market, top)
   const competitor = showCompetitor
     ? competitorForRow(item.competitor_prices, market, top)
     : null
   // Name a store only when a listing actually exists: with no link — or in
-  // no-price / similar-product mode — there is no store to put above the price.
+  // similar-product mode — there is no store to put above the price.
   const storeLabel =
     competitor !== null
       ? market === "best"
@@ -65,7 +64,7 @@ export function ProductMobileCard({
     competitor?.currency ?? null
   )
   const pct =
-    !noCompetitor && exact && competitor?.is_fresh === true
+    exact && competitor?.is_fresh === true
       ? diffPercent(item.price, amount)
       : null
 
@@ -78,6 +77,12 @@ export function ProductMobileCard({
     >
       <span className="flex min-w-0 flex-1 flex-col gap-1.5">
         <span className="flex items-start justify-between gap-2">
+          {item.pinned ? (
+            <Pin
+              className="mt-1 size-3.5 shrink-0 text-primary"
+              aria-label="پین\u200cشده"
+            />
+          ) : null}
           <span className="line-clamp-2 min-w-0 flex-1 text-sm leading-6 font-semibold wrap-break-word">
             {item.name}
           </span>
@@ -109,18 +114,14 @@ export function ProductMobileCard({
             <span className="text-[11px] text-muted-foreground">قیمت ما</span>
             <Price value={item.price} className="text-base font-bold" />
           </span>
-          {showCompetitor || noCompetitor ? (
+          {showCompetitor ? (
             <span className="flex flex-col items-end gap-0.5">
               {storeLabel ? (
                 <span className="text-[11px] text-muted-foreground">
                   {storeLabel}
                 </span>
               ) : null}
-              {noCompetitor ? (
-                <span className="text-xs text-destructive">
-                  {competitorEmptyMessage(item.pricing_mode, "price")}
-                </span>
-              ) : competitor === null || !showCompetitor ? (
+              {competitor === null || !showCompetitor ? (
                 <span className="text-xs text-muted-foreground">
                   لینک ثبت نشد
                 </span>
@@ -153,9 +154,7 @@ export function ProductMobileCard({
             >
               {formatDiffCompact(pct)} {pct > 0 ? "گران‌تر" : "ارزان‌تر"}
             </span>
-          ) : !noCompetitor &&
-            !exact &&
-            competitor?.price_change_percent != null ? (
+          ) : !exact && competitor?.price_change_percent != null ? (
             <span
               className={cn(
                 "text-xs font-medium",

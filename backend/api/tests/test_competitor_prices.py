@@ -208,8 +208,8 @@ def test_link_edit_keeps_manual_values_but_marks_them_stale(client: TestClient) 
     assert edited.json()["price_is_fresh"] is False
 
 
-def test_competitor_store_and_pricing_mode_filters(client: TestClient) -> None:
-    """Store choice filters by that store; no-price is the third mode.
+def test_competitor_store_and_pinned_filters(client: TestClient) -> None:
+    """Store choice filters by that store; pinned selects owner-marked rows.
 
     "Best" is display-only and must never restrict the rows.
     """
@@ -218,9 +218,9 @@ def test_competitor_store_and_pricing_mode_filters(client: TestClient) -> None:
         "/api/v1/products",
         json={"name": "یخچال دیجی", "sku": "FRIDGE-DIGI", "price": 100000000},
     ).json()["id"]
-    no_price_id = client.post(
+    pinned_id = client.post(
         "/api/v1/products",
-        json={"name": "کالای بدون رقیب", "sku": "FRIDGE-NONE", "price": 100000000},
+        json={"name": "کالای پین‌شده", "sku": "FRIDGE-PIN", "price": 100000000},
     ).json()["id"]
 
     for product_id, store, url in (
@@ -237,8 +237,8 @@ def test_competitor_store_and_pricing_mode_filters(client: TestClient) -> None:
         )
 
     changed = client.patch(
-        f"/api/v1/products/{no_price_id}/pricing-mode",
-        json={"pricing_mode": "no_competitor_price"},
+        f"/api/v1/products/{pinned_id}/pin",
+        json={"pinned": True},
     )
     assert changed.status_code == 200, changed.text
 
@@ -248,18 +248,18 @@ def test_competitor_store_and_pricing_mode_filters(client: TestClient) -> None:
     by_digikala = client.get("/api/v1/products", params={"competitor_store": "digikala"}).json()
     assert [item["id"] for item in by_digikala["items"]] == [digikala_id]
 
-    # Mode: only the no-price product, not merely products without prices.
-    no_price = client.get("/api/v1/products", params={"pricing_mode": "no_competitor_price"}).json()
-    assert [item["id"] for item in no_price["items"]] == [no_price_id]
-    exact = client.get("/api/v1/products", params={"pricing_mode": "exact_competitor"}).json()
-    assert {item["id"] for item in exact["items"]} == {technolife_id, digikala_id}
+    # Pin: only the owner-marked product, not merely products without prices.
+    pinned = client.get("/api/v1/products", params={"pinned": True}).json()
+    assert [item["id"] for item in pinned["items"]] == [pinned_id]
+    similar = client.get("/api/v1/products", params={"pricing_mode": "similar_product"}).json()
+    assert [item["id"] for item in similar["items"]] == []
 
-    # No mode filter: every active product stays visible.
+    # No filter: every active product stays visible.
     all_items = client.get("/api/v1/products").json()
     assert {item["id"] for item in all_items["items"]} == {
         technolife_id,
         digikala_id,
-        no_price_id,
+        pinned_id,
     }
 
 
@@ -370,6 +370,40 @@ def test_torob_next_data_fallback_uses_toman() -> None:
         "</script></html>"
     )
     assert prices._parse_torob(page) == FetchedPrice(Decimal("46000000"), "IRT", True)
+
+
+def test_technolife_out_of_stock_without_offer_is_not_a_price_error() -> None:
+    """Real out-of-stock pages have JSON-LD Product with no offers at all.
+
+    The page's __NEXT_DATA__ explicitly marks the product unavailable; it must
+    be reported as an out-of-stock fetch (amount=None, in_stock=False), never
+    as an extraction failure.
+    """
+    page = (
+        '<html><script type="application/ld+json">'
+        '{"@type":"Product","name":"آبسردکن بلانتون","sku":"278781"}'
+        "</script>"
+        '<script id="__NEXT_DATA__" type="application/json">'
+        '{"props":{"pageProps":{"dehydratedState":{"queries":['
+        '{"state":{"data":{"product_info":{"code":"TLP-278781",'
+        '"is_available":false}}}}]}}}}'
+        "</script></html>"
+    )
+    assert prices._parse_technolife(page) == FetchedPrice(None, None, False)
+
+
+def test_technolife_missing_availability_stays_unresolved() -> None:
+    # No offer, no availability signal: still an extraction problem.
+    page = (
+        '<html><script type="application/ld+json">'
+        '{"@type":"Product","name":"محصول"}</script></html>'
+    )
+    assert prices._parse_technolife(page) is None
+
+
+def test_technolife_available_page_keeps_parsed_offer() -> None:
+    page = _page("112900000", "IRR", "InStock")
+    assert prices._parse_technolife(page) == FetchedPrice(Decimal("112900000"), "IRT", True)
 
 
 def test_torob_search_url_is_refused() -> None:
@@ -665,6 +699,67 @@ def test_request_follows_redirect_chain_with_single_rate_slot(monkeypatch: Monke
     assert result.in_stock is True
     # Four HTTP hops, but only one interval wait: redirects must not each sleep.
     assert calls == ["technolife"]
+
+
+def test_technolife_out_of_stock_page_is_a_successful_check(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """The reported URL: no price, but explicitly out of stock on the site."""
+    _stub_settings(monkeypatch)
+    monkeypatch.setattr(prices, "_assert_public_dns", lambda _host: None)
+    out_of_stock_page = (
+        b'<html><script type="application/ld+json">'
+        b'{"@type":"Product","name":"out of stock product"}'
+        b"</script>"
+        b'<script id="__NEXT_DATA__" type="application/json">'
+        b'{"props":{"pageProps":{"dehydratedState":{"queries":['
+        b'{"state":{"data":{"product_info":{"is_available":false}}}}]}}}}'
+        b"</script></html>"
+    )
+    url = (
+        "https://www.technolife.com/product-278781/"
+        "%D8%A2%D8%A8%D8%B3%D8%B1%D8%AF%DA%A9%D9%86-%D8%A8%D9%84%D8%A7%D9%86%D8%AA%D9%88%D9%86-"
+        "%D9%85%D8%AF%D9%84-bak-wd1201"
+    )
+    _FakeStreamClient.routes = {url: _FakeStreamResponse(200, None, out_of_stock_page)}
+    monkeypatch.setattr(prices.httpx, "Client", _FakeStreamClient)
+    prices._page_cache.clear()
+    prices._host_last_request.clear()
+    prices._host_blocked_until.clear()
+    monkeypatch.setattr(prices, "_robots_allows", lambda _url, **_kwargs: None)
+
+    result = prices.fetch_competitor_price("technolife", url)
+    assert result.amount is None
+    assert result.currency is None
+    assert result.in_stock is False
+    assert result.observed_at is not None
+
+
+def test_technolife_out_of_stock_row_is_not_an_extraction_error(
+    client: TestClient, monkeypatch: MonkeyPatch
+) -> None:
+    product_id = _product_id(client)
+    created = client.post(
+        f"/api/v1/products/{product_id}/competitors",
+        json={
+            "store": "technolife",
+            "url": "https://www.technolife.com/product-278781/out-of-stock",
+        },
+    )
+    assert created.status_code == 201, created.text
+    listing_id = created.json()["id"]
+
+    monkeypatch.setattr(
+        "app.services.competitor_check.fetch_competitor_price",
+        lambda _store, _url: FetchedPrice(None, None, False, datetime.now(UTC)),
+    )
+    checked = client.post(f"/api/v1/competitors/{listing_id}/check")
+    assert checked.status_code == 200, checked.text
+    body = checked.json()
+    assert body["status"] == "success"
+    assert body["last_error"] is None
+    assert body["effective_in_stock"] is False
+    assert body["effective_price"] is None
 
 
 def _seed_two_products_with_links(client: TestClient) -> tuple[int, int]:

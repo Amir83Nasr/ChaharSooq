@@ -59,18 +59,6 @@ def test_group_specific_links_are_accepted(
     _create_link(client, product_id, store, url)
 
 
-def test_no_price_mode_rejects_competitor_links(client: TestClient) -> None:
-    """The third mode suppresses link entry at the API boundary too."""
-    login(client)
-    product_id = _group_product_id(client, "فرش ماشینی", pricing_mode="no_competitor_price")
-    response = client.post(
-        f"/api/v1/products/{product_id}/competitors",
-        json={"store": "digifresh", "url": "https://digifarsh.com/product/test-carpet/"},
-    )
-    assert response.status_code == 422
-    assert "فاقد قیمت رقیب" in response.json()["error"]["message"]
-
-
 @pytest.mark.parametrize(("group", "store"), [("مبلمان راحتی", "digikala"), ("فرش", "sofa")])
 def test_links_for_the_wrong_group_are_rejected(client: TestClient, group: str, store: str) -> None:
     login(client)

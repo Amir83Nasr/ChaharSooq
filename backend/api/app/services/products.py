@@ -18,6 +18,7 @@ from app.repositories import (
 )
 from app.schemas import (
     ProductIn,
+    ProductPinUpdate,
     ProductPriceBoundsUpdate,
     ProductPricingModeUpdate,
 )
@@ -54,6 +55,7 @@ class ProductService:
         min_competitor_price: int | None = None,
         max_competitor_price: int | None = None,
         pricing_mode: str | None = None,
+        pinned: bool | None = None,
         min_stock: int | None,
         max_stock: int | None,
         in_stock: bool | None,
@@ -74,6 +76,7 @@ class ProductService:
             min_competitor_price=min_competitor_price,
             max_competitor_price=max_competitor_price,
             pricing_mode=pricing_mode,
+            pinned=pinned,
             competitor_price_since=datetime.now(UTC)
             - timedelta(hours=get_settings().competitor_price_ttl_hours),
             min_stock=min_stock,
@@ -94,6 +97,7 @@ class ProductService:
         min_competitor_price: int | None = None,
         max_competitor_price: int | None = None,
         pricing_mode: str | None = None,
+        pinned: bool | None = None,
         min_stock: int | None,
         max_stock: int | None,
         in_stock: bool | None,
@@ -122,6 +126,7 @@ class ProductService:
             max_stock=max_stock,
             in_stock=in_stock,
             pricing_mode=pricing_mode,
+            pinned=pinned,
         )
         return self._repos.list(
             filters=filters,
@@ -160,6 +165,13 @@ class ProductService:
         if product is None:
             raise ProductNotFoundError
         self._repos.set_pricing_mode(product, value=payload.pricing_mode)
+        return product
+
+    def set_pinned(self, product_id: int, payload: ProductPinUpdate) -> Product:
+        product = self._repos.get(product_id)
+        if product is None:
+            raise ProductNotFoundError
+        self._repos.set_pinned(product, value=payload.pinned)
         return product
 
     def summary(self, *, low_stock_threshold: int) -> dict[str, int]:

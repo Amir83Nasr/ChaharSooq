@@ -49,7 +49,6 @@ export function ProductSuggestedPrice({ product }: { product: ProductOut }) {
   // The formula follows the per-product mode; the category supplies the shared
   // weight and picks which similar-product store to display.
   const exact = product.pricing_mode === "exact_competitor"
-  const noCompetitor = product.pricing_mode === "no_competitor_price"
   const weight = weights?.[topGroup] ?? null
   const fresh = product.competitor_prices.filter(
     (price) => price.is_fresh && price.price !== null
@@ -65,7 +64,7 @@ export function ProductSuggestedPrice({ product }: { product: ProductOut }) {
     competitor?.currency ?? null
   )
   const rawSuggested =
-    !noCompetitor && competitor?.is_fresh === true
+    competitor?.is_fresh === true
       ? exact
         ? suggestedPriceFor(product.price, amount, weight)
         : suggestedPriceFromDailyChange(
@@ -89,15 +88,13 @@ export function ProductSuggestedPrice({ product }: { product: ProductOut }) {
     ? "دریافت تنظیمات ممکن نشد."
     : weights === null
       ? "در حال خواندن وزن‌ها…"
-      : noCompetitor
-        ? "این کالا فاقد قیمت رقیب است؛ قیمت پیشنهادی محاسبه نمی‌شود."
-        : weight === null
-          ? `برای دسته ${topGroup} وزنی ثبت نشده است.`
-          : suggested === null
-            ? exact
-              ? "قیمت تازه‌ای از فروشگاه رقیب ثبت نشده است."
-              : "برای محاسبه، لینک تازه و تغییر قیمت دو روز لازم است."
-            : null
+      : weight === null
+        ? `برای دسته ${topGroup} وزنی ثبت نشده است.`
+        : suggested === null
+          ? exact
+            ? "قیمت تازه‌ای از فروشگاه رقیب ثبت نشده است."
+            : "برای محاسبه، لینک تازه و تغییر قیمت دو روز لازم است."
+          : null
 
   return (
     <section className="rounded-2xl border border-border bg-card px-3 py-2.5 text-start">

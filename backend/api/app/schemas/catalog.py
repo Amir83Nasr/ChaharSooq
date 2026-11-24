@@ -8,9 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.core.top_groups import TopGroup
 from app.schemas.competitor import CompetitorPriceOut
 
-# Which suggested-price formula applies to a product. The third mode marks a
-# product with no comparable competitor price; it suppresses competitor cells.
-type PricingMode = Literal["exact_competitor", "similar_product", "no_competitor_price"]
+# Which suggested-price formula applies to a product.
+type PricingMode = Literal["exact_competitor", "similar_product"]
 
 
 class CategoryIn(BaseModel):
@@ -67,6 +66,7 @@ class ProductOut(BaseModel):
     sub_group_name: str | None = None
     unit_name: str | None = None
     is_active: bool = Field(default=True, description="False once the source drops the row.")
+    pinned: bool = Field(default=False, description="True when the owner pinned this product.")
     category: CategoryOut | None = None
     synced_at: datetime | None = Field(
         default=None, description="Last successful source sync (UTC)."
@@ -84,8 +84,7 @@ class ProductOut(BaseModel):
         description=(
             "Formula selector: `exact_competitor` blends the base price with a "
             "direct competitor price; `similar_product` uses a linked product's "
-            "daily price change; `no_competitor_price` marks a product with no "
-            "comparable competitor price and suppresses competitor cells."
+            "daily price change."
         ),
     )
     allowed_decrease_percent: float | None = Field(
@@ -113,10 +112,15 @@ class ProductPricingModeUpdate(BaseModel):
     pricing_mode: PricingMode = Field(
         description=(
             "`exact_competitor` blends the base with a direct competitor price; "
-            "`similar_product` scales a linked product's daily price change; "
-            "`no_competitor_price` suppresses competitor-derived cells."
+            "`similar_product` scales a linked product's daily price change."
         )
     )
+
+
+class ProductPinUpdate(BaseModel):
+    """Pin or unpin one product for later revisits."""
+
+    pinned: bool = Field(description="True to pin the product, false to unpin it.")
 
 
 class ProductPriceBoundsUpdate(BaseModel):

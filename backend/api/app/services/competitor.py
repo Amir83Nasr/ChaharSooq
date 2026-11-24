@@ -236,8 +236,6 @@ class CompetitorService:
         product = self._repo.product(product_id)
         if product is None:
             raise CompetitorNotFoundError
-        if product.pricing_mode == "no_competitor_price":
-            raise InvalidCompetitorProductError("برای کالای فاقد قیمت رقیب نمیتوان لینک ثبت کرد")
         allowed = stores_for_top_group(product.top_group)
         if payload.store not in allowed:
             raise InvalidCompetitorProductError(_store_error(allowed))

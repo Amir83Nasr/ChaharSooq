@@ -41,7 +41,10 @@ def _fixture(
     log = tmp_path / "calls.log"
 
     (bin_dir / "docker").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    release = json.dumps({"tag_name": tag, "draft": draft, "prerelease": prerelease})
+    api = "ghcr.io/amir83nasr/chaharsooq-api@sha256:" + "a" * 64
+    web = "ghcr.io/amir83nasr/chaharsooq-web@sha256:" + "b" * 64
+    body = f'export CHAHARSOQ_API_IMAGE="{api}"\nexport CHAHARSOQ_WEB_IMAGE="{web}"\n'
+    release = json.dumps({"tag_name": tag, "draft": draft, "prerelease": prerelease, "body": body})
     (bin_dir / "curl").write_text(
         f"#!/bin/sh\nprintf '%s\\n' '{release}'\n",
         encoding="utf-8",
@@ -91,7 +94,8 @@ def test_new_release_is_deployed_and_recorded(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr + result.stdout
     log = tmp_path / "calls.log"
-    assert log.read_text().strip() == "DEPLOY v0.1.12"
+    assert "ghcr.io/amir83nasr/chaharsooq-api@sha256:" in log.read_text()
+    assert "ghcr.io/amir83nasr/chaharsooq-web@sha256:" in log.read_text()
     assert (tmp_path / "state" / "last-release").read_text().strip() == "v0.1.12"
 
 

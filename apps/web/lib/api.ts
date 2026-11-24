@@ -30,6 +30,7 @@ import type {
   ProductFilters,
   ProductOut,
   ProductPage,
+  ProductPinUpdate,
   ProductPriceBoundsUpdate,
   SettingsOut,
   SettingsUpdate,
@@ -259,6 +260,12 @@ export const api = {
     return request<ProductOut>(`/api/v1/products/${id}/pricing-mode`, {
       method: "PATCH",
       body: JSON.stringify({ pricing_mode: pricingMode }),
+    })
+  },
+  setProductPin(id: number, payload: ProductPinUpdate) {
+    return request<ProductOut>(`/api/v1/products/${id}/pin`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
     })
   },
   competitorListings(productId: number) {

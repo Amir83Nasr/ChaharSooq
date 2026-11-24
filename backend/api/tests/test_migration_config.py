@@ -101,6 +101,10 @@ def test_offline_sql_generation_uses_migration_settings_not_full_settings(
     assert "0026_no_price_pricing_mode" in sql
     assert "UPDATE products SET pricing_mode" in sql
     assert "DROP COLUMN no_competitor_price" in sql
+    # 0027 translates the removed mode and adds the pinned marker.
+    assert "0027_pinned_and_two_modes" in sql
+    assert "ADD COLUMN pinned" in sql
+    assert "ix_products_pinned" in sql
 
 
 def test_offline_migrations_require_the_migration_url_in_production(

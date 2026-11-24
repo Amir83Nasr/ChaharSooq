@@ -10,13 +10,8 @@ export interface CategoryOut {
 export type ProductSort =
   "category" | "alphabetical" | "newest" | "cheapest" | "most_expensive"
 
-/**
- * Which competitor source drives this product's suggested price.
- * `no_competitor_price` is the third selection of the three-way dialog: no
- * links are offered and all competitor-derived cells render as dashes.
- */
-export type PricingMode =
-  "exact_competitor" | "similar_product" | "no_competitor_price"
+/** Which competitor source drives this product's suggested price. */
+export type PricingMode = "exact_competitor" | "similar_product"
 
 export interface ProductOut {
   id: number
@@ -24,8 +19,10 @@ export interface ProductOut {
   name: string
   /** True when an active competitor link has a fresh price (any store). */
   has_competitor_price: boolean
-  /** Three-way per-product selector; independent of the catalog top group. */
+  /** Per-product selector; independent of the catalog top group. */
   pricing_mode: PricingMode
+  /** True when the owner pinned this product for later revisits. */
+  pinned: boolean
   sku: string
   price: number
   stock: number
@@ -338,6 +335,7 @@ export interface ProductFilters {
   max_price?: number
   competitor_store?: CompetitorStore
   pricing_mode?: PricingMode
+  pinned?: boolean
   min_competitor_price?: number
   max_competitor_price?: number
   min_stock?: number
@@ -356,4 +354,8 @@ export interface ProductPriceBoundsUpdate {
 
 export interface ProductPricingModeUpdate {
   pricing_mode: PricingMode
+}
+
+export interface ProductPinUpdate {
+  pinned: boolean
 }

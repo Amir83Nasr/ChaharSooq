@@ -1,6 +1,11 @@
 /** Which competitor price a catalog row shows, and how it is picked. */
 
-import type { CompetitorPrice, CompetitorStore, TopGroup } from "./api-types"
+import type {
+  CompetitorPrice,
+  CompetitorStore,
+  PricingMode,
+  TopGroup,
+} from "./api-types"
 import { toTomanAmount } from "./money"
 import { storesForTopGroup } from "./top-groups"
 
@@ -86,10 +91,9 @@ export function competitorForRow(
  * goes into the cell's `title` tooltip so the column stays narrow.
  */
 export function competitorEmptyMessage(
-  mode: "exact_competitor" | "similar_product" | "no_competitor_price",
+  mode: PricingMode,
   kind: "price" | "diff" | "daily_change" | "suggested"
 ): string {
-  if (mode === "no_competitor_price") return "فاقد قیمت رقیب"
   if (mode === "similar_product" && kind === "price") return "کالای مشابه"
   if (kind === "price" || kind === "diff") return "—"
   return "داده کافی نیست"
@@ -97,7 +101,7 @@ export function competitorEmptyMessage(
 
 /** Detailed reason for the tooltip, where space is not constrained. */
 export function competitorEmptyHint(
-  mode: "exact_competitor" | "similar_product",
+  mode: PricingMode,
   kind: "daily_change" | "suggested"
 ): string {
   if (mode === "similar_product") {

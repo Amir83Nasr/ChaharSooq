@@ -78,8 +78,8 @@ def test_product_invalid_category_rejected(client: TestClient) -> None:
     assert r.status_code == 422
 
 
-def test_no_competitor_price_is_third_mode_and_filterable(client: TestClient) -> None:
-    """The old flag/endpoint are gone; no-price state is a pricing mode."""
+def test_no_competitor_price_mode_is_rejected(client: TestClient) -> None:
+    """The third mode was removed; old flag endpoints stay gone."""
     login(client)
     created = client.post(
         "/api/v1/products",
@@ -87,28 +87,52 @@ def test_no_competitor_price_is_third_mode_and_filterable(client: TestClient) ->
     )
     assert created.status_code == 201, created.text
     product_id = created.json()["id"]
-    assert "no_competitor_price" not in created.json()
 
-    missing_endpoint = client.patch(
-        f"/api/v1/products/{product_id}/no-competitor-price",
-        json={"no_competitor_price": True},
+    assert (
+        client.get("/api/v1/products", params={"pricing_mode": "no_competitor_price"}).status_code
+        == 422
     )
-    assert missing_endpoint.status_code == 404
-
-    r = client.patch(
-        f"/api/v1/products/{product_id}/pricing-mode",
-        json={"pricing_mode": "no_competitor_price"},
+    assert (
+        client.patch(
+            f"/api/v1/products/{product_id}/pricing-mode",
+            json={"pricing_mode": "no_competitor_price"},
+        ).status_code
+        == 422
     )
-    assert r.status_code == 200, r.text
-    assert r.json()["pricing_mode"] == "no_competitor_price"
-    assert "no_competitor_price" not in r.json()
+    assert (
+        client.patch(
+            f"/api/v1/products/{product_id}/no-competitor-price",
+            json={"no_competitor_price": True},
+        ).status_code
+        == 404
+    )
 
-    listed = client.get("/api/v1/products", params={"q": "UNIQUE-1"}).json()
-    assert listed["items"][0]["pricing_mode"] == "no_competitor_price"
-    filtered = client.get("/api/v1/products", params={"pricing_mode": "no_competitor_price"}).json()
-    assert [item["id"] for item in filtered["items"]] == [product_id]
-    other_modes = client.get("/api/v1/products", params={"pricing_mode": "exact_competitor"}).json()
-    assert product_id not in [item["id"] for item in other_modes["items"]]
+
+def test_product_pin_toggle_and_filter(client: TestClient) -> None:
+    """Pinned products are marked in the payload and selectable in the list."""
+    login(client)
+    created = client.post(
+        "/api/v1/products",
+        json={"name": "کالای پین‌شده", "sku": "PIN-1", "price": 1000000},
+    )
+    assert created.status_code == 201, created.text
+    product_id = created.json()["id"]
+    assert created.json()["pinned"] is False
+
+    pinned = client.patch(f"/api/v1/products/{product_id}/pin", json={"pinned": True})
+    assert pinned.status_code == 200, pinned.text
+    assert pinned.json()["pinned"] is True
+    listed = client.get("/api/v1/products", params={"q": "PIN-1"}).json()
+    assert listed["items"][0]["pinned"] is True
+    only_pinned = client.get("/api/v1/products", params={"pinned": True}).json()
+    assert [item["id"] for item in only_pinned["items"]] == [product_id]
+    unpinned = client.get("/api/v1/products", params={"pinned": False}).json()
+    assert product_id not in [item["id"] for item in unpinned["items"]]
+
+    released = client.patch(f"/api/v1/products/{product_id}/pin", json={"pinned": False})
+    assert released.json()["pinned"] is False
+    assert client.get("/api/v1/products", params={"pinned": True}).json()["total"] == 0
+    assert client.patch("/api/v1/products/999999/pin", json={"pinned": True}).status_code == 404
 
 
 def test_product_pricing_mode_toggles(client: TestClient) -> None:

@@ -1162,8 +1162,7 @@
                 {
                   "enum": [
                     "exact_competitor",
-                    "similar_product",
-                    "no_competitor_price"
+                    "similar_product"
                   ],
                   "type": "string"
                 },
@@ -1175,6 +1174,24 @@
               "title": "Pricing Mode"
             },
             "description": "Only products in this pricing mode."
+          },
+          {
+            "name": "pinned",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`true` for pinned products, `false` for unpinned ones.",
+              "title": "Pinned"
+            },
+            "description": "`true` for pinned products, `false` for unpinned ones."
           },
           {
             "name": "min_stock",
@@ -1452,7 +1469,7 @@
           "Products"
         ],
         "summary": "Set a product's pricing mode",
-        "description": "Selects the suggested-price formula for one product: `exact_competitor` (weighted blend with a direct competitor price), `similar_product` (daily price change of a linked similar product), or `no_competitor_price` (suppresses all competitor-derived cells). Admin-only; viewers receive `403`.",
+        "description": "Selects the suggested-price formula for one product: `exact_competitor` (weighted blend with a direct competitor price) or `similar_product` (daily price change of a linked similar product). Admin-only; viewers receive `403`.",
         "operationId": "update_product_pricing_mode",
         "security": [
           {
@@ -1476,6 +1493,84 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ProductPricingModeUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource does not exist (`not_found`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/products/{product_id}/pin": {
+      "patch": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Pin or unpin a product",
+        "description": "Marks one product as pinned so it can be revisited with the پین list filter. Admin-only; viewers receive `403`.",
+        "operationId": "update_product_pin",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Product Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductPinUpdate"
               }
             }
           }
@@ -2264,8 +2359,7 @@
                 {
                   "enum": [
                     "exact_competitor",
-                    "similar_product",
-                    "no_competitor_price"
+                    "similar_product"
                   ],
                   "type": "string"
                 },
@@ -2277,6 +2371,24 @@
               "title": "Pricing Mode"
             },
             "description": "Only products in this pricing mode."
+          },
+          {
+            "name": "pinned",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`true` for pinned products, `false` for unpinned ones.",
+              "title": "Pinned"
+            },
+            "description": "`true` for pinned products, `false` for unpinned ones."
           },
           {
             "name": "min_stock",
@@ -5138,8 +5250,7 @@
         "type": "string",
         "enum": [
           "exact_competitor",
-          "similar_product",
-          "no_competitor_price"
+          "similar_product"
         ]
       },
       "ProductIn": {
@@ -5295,6 +5406,12 @@
             "description": "False once the source drops the row.",
             "default": true
           },
+          "pinned": {
+            "type": "boolean",
+            "title": "Pinned",
+            "description": "True when the owner pinned this product.",
+            "default": false
+          },
           "category": {
             "anyOf": [
               {
@@ -5333,7 +5450,7 @@
           },
           "pricing_mode": {
             "$ref": "#/components/schemas/PricingMode",
-            "description": "Formula selector: `exact_competitor` blends the base price with a direct competitor price; `similar_product` uses a linked product's daily price change; `no_competitor_price` marks a product with no comparable competitor price and suppresses competitor cells.",
+            "description": "Formula selector: `exact_competitor` blends the base price with a direct competitor price; `similar_product` uses a linked product's daily price change.",
             "default": "exact_competitor"
           },
           "allowed_decrease_percent": {
@@ -5413,6 +5530,21 @@
         ],
         "title": "ProductPage"
       },
+      "ProductPinUpdate": {
+        "properties": {
+          "pinned": {
+            "type": "boolean",
+            "title": "Pinned",
+            "description": "True to pin the product, false to unpin it."
+          }
+        },
+        "type": "object",
+        "required": [
+          "pinned"
+        ],
+        "title": "ProductPinUpdate",
+        "description": "Pin or unpin one product for later revisits."
+      },
       "ProductPriceBoundsUpdate": {
         "properties": {
           "allowed_decrease_percent": {
@@ -5452,7 +5584,7 @@
         "properties": {
           "pricing_mode": {
             "$ref": "#/components/schemas/PricingMode",
-            "description": "`exact_competitor` blends the base with a direct competitor price; `similar_product` scales a linked product's daily price change; `no_competitor_price` suppresses competitor-derived cells."
+            "description": "`exact_competitor` blends the base with a direct competitor price; `similar_product` scales a linked product's daily price change."
           }
         },
         "type": "object",

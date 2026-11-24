@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { BadgeCheck, Link2, SlidersHorizontal } from "lucide-react"
+import { BadgeCheck, Link2, Pin } from "lucide-react"
 
 import {
   ResponsiveDialog,
@@ -77,16 +77,12 @@ const MODE_BUTTONS: {
     description: "استفاده از تغییر روزانه قیمت محصول مشابه",
     icon: BadgeCheck,
   },
-  {
-    value: "no_competitor_price",
-    label: "فاقد قیمت رقیب",
-    description: "بدون لینک و بدون قیمت رقیب",
-    icon: SlidersHorizontal,
-  },
 ]
-function toPersianError(error: unknown): string {
+const PIN_ERROR = "تغییر پین انجام نشد. دوباره تلاش کنید."
+
+function toPersianError(error: unknown, fallback: string): string {
   if (error instanceof ApiRequestError) return error.message
-  return "تغییر حالت قیمت‌گذاری انجام نشد. دوباره تلاش کنید."
+  return fallback
 }
 
 export function ProductDetailDialog(props: {
@@ -100,6 +96,8 @@ export function ProductDetailDialog(props: {
   const [localProduct, setLocalProduct] = useState<ProductOut | null>(null)
   const [modeBusy, setModeBusy] = useState<Selection | null>(null)
   const [modeError, setModeError] = useState<string | null>(null)
+  const [pinBusy, setPinBusy] = useState(false)
+  const [pinError, setPinError] = useState<string | null>(null)
   type DetailTab = "links" | "bounds"
   const [activeTab, setActiveTab] = useState<DetailTab>("links")
 
@@ -147,9 +145,33 @@ export function ProductDetailDialog(props: {
       onCompetitorChanged?.()
     } catch (err) {
       setLocalProduct(previous)
-      setModeError(toPersianError(err))
+      setModeError(
+        toPersianError(
+          err,
+          "تغییر حالت قیمت\u200cگذاری انجام نشد. دوباره تلاش کنید."
+        )
+      )
     } finally {
       setModeBusy(null)
+    }
+  }
+
+  async function togglePin() {
+    if (!product || pinBusy) return
+    const previous = product
+    const next = !previous.pinned
+    setPinError(null)
+    setPinBusy(true)
+    // Optimistic update, mirroring the pricing-mode selector.
+    setLocalProduct({ ...previous, pinned: next })
+    try {
+      await api.setProductPin(previous.id, { pinned: next })
+      onCompetitorChanged?.()
+    } catch (err) {
+      setLocalProduct(previous)
+      setPinError(toPersianError(err, PIN_ERROR))
+    } finally {
+      setPinBusy(false)
     }
   }
 
@@ -232,7 +254,7 @@ export function ProductDetailDialog(props: {
               className="min-w-0 space-y-2 rounded-2xl border border-border/70 bg-muted/30 p-2.5 disabled:opacity-70"
             >
               <legend className="px-1 text-xs font-medium text-muted-foreground">
-                حالت قیمت‌گذاری
+                حالت قیمت‌گذاری و پین
               </legend>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 {MODE_BUTTONS.map((option) => {
@@ -284,6 +306,47 @@ export function ProductDetailDialog(props: {
                     </Button>
                   )
                 })}
+                <Button
+                  type="button"
+                  variant="outline"
+                  aria-pressed={product.pinned}
+                  disabled={!canEdit || modeBusy !== null || pinBusy}
+                  onClick={() => void togglePin()}
+                  className={cn(
+                    "relative h-auto min-h-20 flex-col items-start justify-start gap-1 rounded-2xl border p-3 text-start transition-[background-color,border-color,box-shadow,opacity]",
+                    product.pinned
+                      ? "border-primary/50 bg-primary/5 shadow-[0_0_0_1px_var(--primary)]"
+                      : "border-border/70 bg-background/60 opacity-75 hover:opacity-100"
+                  )}
+                >
+                  <span className="flex w-full items-center gap-2">
+                    <span
+                      className={cn(
+                        "flex size-8 shrink-0 items-center justify-center rounded-xl",
+                        product.pinned
+                          ? "bg-primary/15 text-primary"
+                          : "bg-muted text-muted-foreground"
+                      )}
+                    >
+                      <Pin className="size-4" aria-hidden="true" />
+                    </span>
+                    <BusyLabel
+                      busy={pinBusy}
+                      idle={product.pinned ? "پین\u200cشده" : "پین"}
+                      busyLabel={product.pinned ? "پین\u200cشده" : "پین"}
+                      spinner
+                    />
+                    {product.pinned && !pinBusy ? (
+                      <BadgeCheck
+                        className="ms-auto size-4 shrink-0 text-primary"
+                        aria-label="انتخابشده"
+                      />
+                    ) : null}
+                  </span>
+                  <span className="w-full text-[11px] leading-4 font-normal text-muted-foreground">
+                    نگه داشتن کالا برای بررسی بعدی
+                  </span>
+                </Button>
               </div>
             </fieldset>
 
@@ -296,34 +359,31 @@ export function ProductDetailDialog(props: {
               </p>
             ) : null}
 
-            {selection === "no_competitor_price" ? (
-              <div className="space-y-3">
-                <ProductSuggestedPrice product={product} />
-                <p className="rounded-2xl border border-dashed border-border bg-background px-3 py-4 text-center text-xs leading-6 text-muted-foreground">
-                  این کالا فاقد قیمت رقیب است. برای ویرایش لینک‌ها، حالت «قیمت
-                  رقیب» یا «محصول مشابه» را انتخاب کنید.
-                </p>
-              </div>
-            ) : (
-              <Tabs
-                value={activeTab}
-                onValueChange={(value) => setActiveTab(value as DetailTab)}
-                className="gap-2"
+            {pinError ? (
+              <p
+                role="alert"
+                className="rounded-2xl border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive"
               >
-                <TabsList variant="line" className="self-start">
-                  <TabsTrigger value="links">لینک فروشگاه‌ها</TabsTrigger>
-                  <TabsTrigger value="bounds">
-                    محدودیت قیمت پیشنهادی
-                  </TabsTrigger>
-                </TabsList>
-                <TabsContent value="links" className="mt-1">
-                  {linksPanel()}
-                </TabsContent>
-                <TabsContent value="bounds" className="mt-1">
-                  {boundsPanel()}
-                </TabsContent>
-              </Tabs>
-            )}
+                {pinError}
+              </p>
+            ) : null}
+
+            <Tabs
+              value={activeTab}
+              onValueChange={(value) => setActiveTab(value as DetailTab)}
+              className="gap-2"
+            >
+              <TabsList variant="line" className="self-start">
+                <TabsTrigger value="links">لینک فروشگاه‌ها</TabsTrigger>
+                <TabsTrigger value="bounds">محدودیت قیمت پیشنهادی</TabsTrigger>
+              </TabsList>
+              <TabsContent value="links" className="mt-1">
+                {linksPanel()}
+              </TabsContent>
+              <TabsContent value="bounds" className="mt-1">
+                {boundsPanel()}
+              </TabsContent>
+            </Tabs>
           </div>
         ) : null}
       </ResponsiveDialogContent>

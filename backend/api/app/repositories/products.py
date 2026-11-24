@@ -34,6 +34,7 @@ class ProductFilters(NamedTuple):
     min_competitor_price: int | None
     max_competitor_price: int | None
     pricing_mode: str | None
+    pinned: bool | None
     competitor_price_since: datetime
     min_stock: int | None
     max_stock: int | None
@@ -164,6 +165,8 @@ def product_criteria(filters: ProductFilters) -> list[ColumnElement[bool]]:
     criteria = product_base_criteria(filters)
     if filters.pricing_mode:
         criteria.append(Product.pricing_mode == filters.pricing_mode)
+    if filters.pinned is not None:
+        criteria.append(Product.pinned.is_(filters.pinned))
     if (
         filters.competitor_store
         or filters.min_competitor_price is not None
@@ -478,6 +481,10 @@ class ProductRepository:
 
     def set_pricing_mode(self, product: Product, *, value: str) -> None:
         product.pricing_mode = value
+        self._session.flush()
+
+    def set_pinned(self, product: Product, *, value: bool) -> None:
+        product.pinned = value
         self._session.flush()
 
     def stage(self, product: Product) -> Product:

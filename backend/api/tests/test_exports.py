@@ -461,7 +461,7 @@ def test_products_csv_percent_precision_and_daily_change(client: TestClient) -> 
     assert row[headers.index("تغییرات قیمت رقبا")] == "۳.۸٪ کاهش"
 
 
-def test_products_csv_uses_pricing_mode_and_suppresses_no_price_mode(
+def test_products_csv_uses_pricing_mode_and_pinned_filter(
     client: TestClient,
 ) -> None:
     from sqlalchemy.orm import Session
@@ -548,39 +548,28 @@ def test_products_csv_uses_pricing_mode_and_suppresses_no_price_mode(
     # similar_product: 100M × (1 + 0.5 × (−20%)) = 90M.
     assert similar_row[headers.index("قیمت پیشنهادی (تومان)")] == "۹۰۰۰۰۰۰۰"
 
-    no_price = client.patch(
-        f"/api/v1/products/{similar_id}/pricing-mode",
-        json={"pricing_mode": "no_competitor_price"},
-    )
-    assert no_price.status_code == 200, no_price.text
+    # Pinning a product never suppresses its competitor cells; the mode alone
+    # selects the suggested-price formula.
+    pinned = client.patch(f"/api/v1/products/{similar_id}/pin", json={"pinned": True})
+    assert pinned.status_code == 200, pinned.text
     headers, similar_row = row_for("MODE-SIMILAR")
-    for column in (
-        "قیمت ارزانترین رقیب",
-        "قیمت پیشنهادی (تومان)",
-        "اختلاف قیمت با ارزانترین رقیب",
-        "تغییرات قیمت ارزانترین رقیب",
-    ):
-        assert similar_row[headers.index(column)] == "—"
+    assert similar_row[headers.index("قیمت پیشنهادی (تومان)")] == "۹۰۰۰۰۰۰۰"
 
-    # Per-store competitor cells stay suppressed too, even with links present.
-    all_rows = _rows(
+    # Export filter accepts the same two modes and pinned flag as the list.
+    pinned_only = _rows(
         client.get(
             "/api/v1/exports/products.csv",
-            params={"q": "MODE-SIMILAR", "scope": "all"},
+            params={"pinned": "true", "columns": "sku,category"},
         )
     )
-    all_headers = all_rows[0]
-    assert all_rows[1][all_headers.index("قیمت رقبا (دیجی\u200cکالا)")] == "—"
-    assert all_rows[1][all_headers.index("قیمت رقبا (تکنولایف)")] == "—"
-
-    # Export filter accepts the same three-value mode as the products list.
-    only_no_price = _rows(
+    assert [row[pinned_only[0].index("کد")] for row in pinned_only[1:]] == ["MODE-SIMILAR"]
+    similar_only = _rows(
         client.get(
             "/api/v1/exports/products.csv",
-            params={"pricing_mode": "no_competitor_price", "columns": "sku,category"},
+            params={"pricing_mode": "similar_product", "columns": "sku,category"},
         )
     )
-    assert [row[only_no_price[0].index("کد")] for row in only_no_price[1:]] == ["MODE-SIMILAR"]
+    assert [row[similar_only[0].index("کد")] for row in similar_only[1:]] == ["MODE-SIMILAR"]
     exact_only = _rows(
         client.get(
             "/api/v1/exports/products.csv",
@@ -588,6 +577,12 @@ def test_products_csv_uses_pricing_mode_and_suppresses_no_price_mode(
         )
     )
     assert [row[exact_only[0].index("کد")] for row in exact_only[1:]] == ["MODE-EXACT"]
+    assert (
+        client.get(
+            "/api/v1/exports/products.csv", params={"pricing_mode": "no_competitor_price"}
+        ).status_code
+        == 422
+    )
     assert (
         client.get("/api/v1/exports/products.csv", params={"pricing_mode": "نامعتبر"}).status_code
         == 422

@@ -55,16 +55,17 @@ def test_local_ci_and_client_follow_the_production_major() -> None:
     assert clients == {production_major}
 
 
-def test_only_the_non_blocking_transition_leg_uses_the_old_major() -> None:
+def test_ci_has_no_transition_major_after_the_upgrade_was_verified() -> None:
+    # ADR 028 kept one non-blocking PostgreSQL 18 leg while a rollback to the
+    # old major was possible. The Production 19 cutover was verified, so that
+    # temporary leg is removed and every CI service now matches Production.
     production_major = _major(_production_tag())
     ci = _read(CI_WORKFLOW)
     other_majors = {_major(tag) for tag in _postgres_refs(CI_WORKFLOW)} - {production_major}
 
-    assert other_majors == {"18"}
-    assert "continue-on-error: ${{ matrix.transition }}" in ci
-    assert "transition: true" in ci
-    assert "transition: false" in ci
-    assert "ADR 028" in ci
+    assert other_majors == set()
+    assert "matrix.transition" not in ci
+    assert "ADR 028" in ci  # the removed leg is still explained there
     assert "19.1" in _read(UPGRADE_ADR)
 
 

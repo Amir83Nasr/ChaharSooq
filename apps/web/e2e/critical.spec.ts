@@ -15,6 +15,7 @@ test("unauthenticated routes land on the Persian RTL login page", async ({
     "/settings/sync",
     "/settings/inventory",
     "/settings/appearance",
+    "/settings/ai",
     "/backup",
   ]) {
     await page.goto(path)

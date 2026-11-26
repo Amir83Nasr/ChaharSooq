@@ -24,6 +24,7 @@ const breadcrumbLabels: Record<string, string> = {
   inventory: "انبار",
   backup: "پشتیبان‌گیری",
   appearance: "نمایش",
+  ai: "هوش مصنوعی",
 }
 
 export function DashboardBreadcrumbs() {

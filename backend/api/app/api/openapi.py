@@ -31,6 +31,13 @@ TAGS_METADATA: list[dict[str, Any]] = [
             "Owner-only backup settings, archive metadata, and direct restore execution."
         ),
     },
+    {
+        "name": "AI",
+        "description": (
+            "Owner-only AI connection settings, shared system prompt, and a "
+            "connection test over an OpenAI-compatible chat-completions endpoint."
+        ),
+    },
     {"name": "Dashboard", "description": "Aggregated catalog, stock, and competitor metrics."},
     {
         "name": "Products",
@@ -92,5 +99,9 @@ CONFLICT = _error(
 RATE_LIMITED = _error(ErrorEnvelope, "Too many attempts; retry later (`rate_limited`).")
 SERVICE_UNAVAILABLE = _error(
     ErrorEnvelope,
-    "The product source is not configured or temporarily unavailable.",
+    "The requested integration is not configured or temporarily unavailable.",
+)
+BAD_GATEWAY = _error(
+    ErrorEnvelope,
+    "The upstream provider rejected the request or could not answer (`bad_gateway`).",
 )

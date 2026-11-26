@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, cast
 import jdatetime  # type: ignore[import-untyped]
 
 from app.core.config import ParsinaSettings, get_parsina_settings, get_settings
+from app.integrations.cardex_demo import demo_invoices
 from app.integrations.cardex_fixture import CardexFixtureSource
 from app.integrations.parsina import (
     ParsinaClient,
@@ -90,6 +91,14 @@ def _jalali(date_value: date) -> str:
     return f"{jalali.year:04d}/{jalali.month:02d}/{jalali.day:02d}"
 
 
+def _invoice_details(invoice: dict[str, Any]) -> list[dict[str, Any]]:
+    raw_rows = invoice.get("Details")
+    if not isinstance(raw_rows, list):
+        return []
+    rows = cast("list[Any]", raw_rows)
+    return [cast("dict[str, Any]", row) for row in rows if isinstance(row, dict)]
+
+
 def available_periods(*, today: date) -> list[CardexPeriod]:
     """The four selectable windows, with inclusive ISO bounds in Tehran time."""
     return [
@@ -136,10 +145,14 @@ class ProductCardexService:
             raise ValueError("بازه کارتکس نامعتبر است")
 
         entries: list[CardexEntryOut] = []
+        app_env = get_settings().app_env
+        fixture = CardexFixtureSource() if app_env == "development" else None
+        demo_used = False
         # Development reads the saved Parsina dumps so the default tab shows a
         # realistic cardex without credentials; production uses the live API.
-        if get_settings().app_env == "development":
-            fixture = CardexFixtureSource()
+        # Products the dumps do not cover (or cover only with cancelled rows)
+        # fall back to deterministic demo invoices so every dialog has numbers.
+        if app_env == "development" and fixture is not None:
             if fixture.is_configured:
                 for kind in ("sale", "purchase"):
                     entries.extend(
@@ -151,6 +164,17 @@ class ProductCardexService:
                             to_date=window.to_date,
                         )
                     )
+            active_kinds = {entry.kind for entry in entries if not entry.is_cancelled}
+            missing_kinds = [kind for kind in ("sale", "purchase") if kind not in active_kinds]
+            for kind in missing_kinds:
+                demos = self._demo_entries(
+                    product,
+                    kind=kind,
+                    from_date=window.from_date,
+                    to_date=window.to_date,
+                )
+                demo_used = demo_used or bool(demos)
+                entries.extend(demos)
         elif settings.is_configured:
             with ParsinaClient(settings, transport=self._transport) as client:
                 for kind in ("sale", "purchase"):
@@ -182,7 +206,11 @@ class ProductCardexService:
             summary=summary,
             entries=entries,
             configured=settings.is_configured
-            or (get_settings().app_env == "development" and CardexFixtureSource().is_configured),
+            or (
+                app_env == "development"
+                and fixture is not None
+                and (fixture.is_configured or demo_used)
+            ),
             pricing_mode=cast("PricingMode | None", product.pricing_mode),
         )
 
@@ -202,6 +230,27 @@ class ProductCardexService:
                 continue
             details = fixture.details(kind=kind, invoice_id=invoice_id)
             entries.extend(self._build_entries(product, invoice, details, kind=kind))
+        return entries
+
+    def _demo_entries(
+        self,
+        product: Product,
+        *,
+        kind: str,
+        from_date: date,
+        to_date: date,
+    ) -> list[CardexEntryOut]:
+        """Development-only synthetic rows; see `app.integrations.cardex_demo`."""
+        entries: list[CardexEntryOut] = []
+        for invoice in demo_invoices(
+            product,
+            kind=kind,
+            from_date=from_date,
+            to_date=to_date,
+        ):
+            entries.extend(
+                self._build_entries(product, invoice, _invoice_details(invoice), kind=kind)
+            )
         return entries
 
     def _entries(

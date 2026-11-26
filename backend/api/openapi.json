@@ -62,6 +62,282 @@
         }
       }
     },
+    "/api/v1/ai/settings": {
+      "get": {
+        "tags": [
+          "AI"
+        ],
+        "summary": "Read AI settings",
+        "description": "Effective OpenAI-compatible base URL, model id, shared system prompt, and whether an API key is stored. The key itself is never returned.",
+        "operationId": "get_ai_settings",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AISettingsOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Signed in, but the account role is not allowed to perform this action (`forbidden`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "AI"
+        ],
+        "summary": "Update AI settings",
+        "description": "Partial update of the AI connection. Omitted fields keep their value; an empty `api_key` keeps the stored key, an empty `system_prompt` clears it. Owner only.",
+        "operationId": "update_ai_settings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AISettingsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AISettingsOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Signed in, but the account role is not allowed to perform this action (`forbidden`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/ai/test": {
+      "post": {
+        "tags": [
+          "AI"
+        ],
+        "summary": "Test the AI connection",
+        "description": "Sends one prompt through the configured model and returns its reply. Returns `503` when the connection is not configured and `502` when the provider rejects or cannot answer the request. Owner only.",
+        "operationId": "test_ai_connection",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AITestIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AITestOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Signed in, but the account role is not allowed to perform this action (`forbidden`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The upstream provider rejected the request or could not answer (`bad_gateway`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The requested integration is not configured or temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/ai/stream": {
+      "post": {
+        "tags": [
+          "AI"
+        ],
+        "summary": "Stream an AI reply",
+        "description": "Sends one prompt and streams the model reply as Server-Sent Events: `delta` frames carry `{\"text\": ...}`, the terminal `done` frame carries `model` and `latency_ms`, and a post-open provider failure is reported as a terminal `error` frame with a Persian message. Returns `503` before the stream when the connection is not configured. Owner only.",
+        "operationId": "stream_ai_connection",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AITestIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "SSE stream of delta/done/error events.",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Signed in, but the account role is not allowed to perform this action (`forbidden`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The requested integration is not configured or temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      }
+    },
     "/api/v1/auth/login": {
       "post": {
         "tags": [
@@ -3239,7 +3515,7 @@
             }
           },
           "503": {
-            "description": "The product source is not configured or temporarily unavailable.",
+            "description": "The requested integration is not configured or temporarily unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3721,6 +3997,154 @@
   },
   "components": {
     "schemas": {
+      "AISettingsIn": {
+        "properties": {
+          "base_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 512
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url",
+            "description": "OpenAI-compatible base URL, e.g. https://api.gapgpt.ir/v1."
+          },
+          "api_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 512
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key",
+            "description": "Write-only API key. Empty or omitted keeps the stored key.",
+            "writeOnly": true
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Id",
+            "description": "Model id, e.g. gapgpt-deepseek-v4.1-flash."
+          },
+          "system_prompt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "System Prompt",
+            "description": "Shared system prompt; an empty string clears it."
+          }
+        },
+        "type": "object",
+        "title": "AISettingsIn",
+        "description": "Partial update. Omitted fields keep their stored value.",
+        "examples": [
+          {
+            "api_key": "sk-...",
+            "base_url": "https://api.gapgpt.ir/v1",
+            "model_id": "gapgpt-deepseek-v4.1-flash",
+            "system_prompt": "تو دستیار فروشگاه چهارسوق هستی."
+          }
+        ]
+      },
+      "AISettingsOut": {
+        "properties": {
+          "base_url": {
+            "type": "string",
+            "title": "Base Url",
+            "description": "Effective OpenAI-compatible API base URL."
+          },
+          "model_id": {
+            "type": "string",
+            "title": "Model Id",
+            "description": "Effective model id sent with every request."
+          },
+          "system_prompt": {
+            "type": "string",
+            "title": "System Prompt",
+            "description": "Shared system prompt prepended to requests."
+          },
+          "api_key_set": {
+            "type": "boolean",
+            "title": "Api Key Set",
+            "description": "True when an API key is stored."
+          },
+          "configured": {
+            "type": "boolean",
+            "title": "Configured",
+            "description": "True when base URL, model id, and API key are all available."
+          }
+        },
+        "type": "object",
+        "required": [
+          "base_url",
+          "model_id",
+          "system_prompt",
+          "api_key_set",
+          "configured"
+        ],
+        "title": "AISettingsOut"
+      },
+      "AITestIn": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "User prompt used for the connection check."
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "AITestIn"
+      },
+      "AITestOut": {
+        "properties": {
+          "model": {
+            "type": "string",
+            "title": "Model",
+            "description": "Model reported by the provider."
+          },
+          "reply": {
+            "type": "string",
+            "title": "Reply",
+            "description": "Model reply text."
+          },
+          "latency_ms": {
+            "type": "integer",
+            "title": "Latency Ms",
+            "description": "Round-trip time in milliseconds."
+          }
+        },
+        "type": "object",
+        "required": [
+          "model",
+          "reply",
+          "latency_ms"
+        ],
+        "title": "AITestOut"
+      },
       "BackupOut": {
         "properties": {
           "id": {
@@ -6376,6 +6800,10 @@
     {
       "name": "Backups",
       "description": "Owner-only backup settings, archive metadata, and direct restore execution."
+    },
+    {
+      "name": "AI",
+      "description": "Owner-only AI connection settings, shared system prompt, and a connection test over an OpenAI-compatible chat-completions endpoint."
     },
     {
       "name": "Dashboard",

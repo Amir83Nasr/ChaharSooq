@@ -72,6 +72,7 @@ RESTORE_LOAD_ORDER: tuple[str, ...] = (
     "parsina_sync_state",
     "suggested_price_formulas",
     "settings",
+    "ai_config",
 )
 #: Children before parents; independent tables last.
 RESTORE_DELETE_ORDER: tuple[str, ...] = (
@@ -83,6 +84,7 @@ RESTORE_DELETE_ORDER: tuple[str, ...] = (
     "parsina_sync_state",
     "competitor_sync_state",
     "settings",
+    "ai_config",
 )
 #: Never self-reference: backup metadata and live sessions are environment state.
 #: ``alembic_version`` is excluded because the application role deliberately has

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import date
+from datetime import date, timedelta
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -13,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import ParsinaSettings
 from app.core.database import get_engine
+from app.integrations.cardex_demo import demo_invoices
 from app.models import Product
 from app.services.cardex import ProductCardexService, _toman
 from tests.helpers import login
@@ -135,6 +137,54 @@ def test_cardex_aggregates_purchases_and_sales(session: Session) -> None:
     assert report.entries[1].invoice_date == date(2025, 11, 11)
     assert any("SaleFactor" in path for path in fake.paths)
     assert any("buyFactor" in path for path in fake.paths)
+
+
+def test_development_demo_invoices_cover_both_directions(session: Session) -> None:
+    product = _product(session)
+    today = date(2026, 11, 26)
+    start = today - timedelta(days=6)
+
+    sale = demo_invoices(product, kind="sale", from_date=start, to_date=today)
+    purchase = demo_invoices(product, kind="purchase", from_date=start, to_date=today)
+
+    assert sale
+    assert purchase
+    assert sale == demo_invoices(product, kind="sale", from_date=start, to_date=today)
+    assert all(
+        invoice["Details"][0]["goodid"] == product.external_id for invoice in sale + purchase
+    )
+
+
+def test_development_cardex_falls_back_to_demo_data(
+    client: TestClient,
+    session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from app.core import config
+
+    # No saved fixtures under this path, so every direction comes from demo data.
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("PRODUCTS_CSV_PATH", str(tmp_path / "products.json"))
+    config.get_settings.cache_clear()
+    try:
+        product = _product(session)
+        service = ProductCardexService(session, settings=ParsinaSettings())
+
+        report = service.get(product_id=product.id, period="7_days")
+        again = service.get(product_id=product.id, period="7_days")
+
+        assert report.configured is True
+        assert report.summary.purchase_quantity > 0
+        assert report.summary.sale_quantity > 0
+        assert {entry.kind for entry in report.entries} == {"purchase", "sale"}
+        assert all(entry.invoice_date is not None for entry in report.entries)
+        # Stable history across requests keeps the chart from jumping around.
+        assert [(e.kind, e.invoice_id, e.quantity) for e in report.entries] == [
+            (e.kind, e.invoice_id, e.quantity) for e in again.entries
+        ]
+    finally:
+        config.get_settings.cache_clear()
 
 
 def test_cardex_unconfigured_returns_empty_report(session: Session) -> None:

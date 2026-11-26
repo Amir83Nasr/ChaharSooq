@@ -35,6 +35,8 @@ This file is the single source of agent rules. Other documents:
 | Pricing page (032)       | [Standalone pricing page in the system sidebar](docs/adr/032-standalone-pricing-page.md) (relocates the pricing UI previously nested under settings)                                                                                                                                                                                                                   |
 | Auto-deploy (033)        | [Automatic Production deploy via release polling](docs/adr/033-automatic-release-polling-deploy.md) (outbound-only systemd timer calls `deploy.sh`; no runner on the host)                                                                                                                                                                                             |
 | Pinned products (034)    | [Pinned products and two pricing modes](docs/adr/034-pinned-products-and-two-pricing-modes.md) (removes the no-price mode; adds a pinned marker and filter)                                                                                                                                                                                                            |
+| AI foundation (035)      | [Owner-managed AI provider foundation](docs/adr/035-ai-provider-foundation.md) (OpenAI-compatible chat completions; owner-managed base URL, write-only key, model, and shared system prompt)                                                                                                                                                                           |
+| AI streaming (036)       | [Streaming AI replies over Server-Sent Events](docs/adr/036-ai-streaming-sse.md) (`POST /ai/stream`; delta/done/error events over fetch, abortable in the panel)                                                                                                                                                                                                       |
 
 ## 1. Repository map
 
@@ -211,8 +213,8 @@ This is an admin panel with password login.
   in production, `SameSite=Lax`, `Path=/`, rotated on every login so older cookies stop working.
 - Roles: `owner` (env-managed via `OWNER_*`), `admin` (shop data plus viewer management), `viewer`
   (read-only). Reads use `require_user`; all writes plus `/users*` and `/settings*` use
-  `require_admin`; viewers get `403 forbidden`. The owner cannot be deleted and the last management
-  account cannot be removed.
+  `require_admin`; `/ai/*` is owner-only; viewers get `403 forbidden`. The owner cannot be deleted
+  and the last management account cannot be removed.
 - Rate-limit login to 10/min per IP and username. No auth tokens in `localStorage`/`sessionStorage`;
   never log passwords, session IDs, API keys, secrets, or Authorization headers.
 - Never commit secrets. Only per-app `.env.example` files (`backend/api/`, `apps/web/`) are tracked;

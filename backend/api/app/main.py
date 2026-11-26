@@ -54,6 +54,11 @@ _FIELD_LABELS: dict[str, str] = {
     "interval_minutes": "فاصلهٔ پشتیبان‌گیری",
     "file": "فایل پشتیبان",
     "source_revision": "نسخهٔ منبع",
+    "base_url": "آدرس پایه",
+    "api_key": "کلید API",
+    "model_id": "شناسه مدل",
+    "system_prompt": "دستور سیستمی",
+    "prompt": "متن آزمایش",
 }
 
 
@@ -212,6 +217,8 @@ def create_app() -> FastAPI:
             413: "payload_too_large",
             422: "validation_error",
             429: "rate_limited",
+            502: "bad_gateway",
+            503: "service_unavailable",
         }
         defaults = {
             400: "درخواست نامعتبر است.",

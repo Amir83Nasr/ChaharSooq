@@ -613,7 +613,7 @@ def test_sync_endpoint_reports_missing_configuration(client: TestClient) -> None
     login(client)
     r = client.post("/api/v1/integrations/parsina/sync")
     assert r.status_code == 503
-    assert r.json()["error"]["code"] == "error"
+    assert r.json()["error"]["code"] == "service_unavailable"
 
 
 def test_sync_endpoint_returns_409_while_another_run_holds_lock(client: TestClient) -> None:

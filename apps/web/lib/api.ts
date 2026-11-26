@@ -13,6 +13,10 @@ import {
   type ProductExportOptions,
 } from "./api-params"
 import type {
+  AISettings,
+  AISettingsUpdate,
+  AIStreamDone,
+  AITestResult,
   ApiError,
   BackupRecord,
   BackupSettings,
@@ -57,6 +61,10 @@ export const SHOW_ALL_MAX = 3000
 const REQUEST_TIMEOUT_MS = 15_000
 // Archives are streamed and verified server-side, so an upload gets longer.
 const UPLOAD_TIMEOUT_MS = 10 * 60_000
+// An AI reply may include reasoning tokens; give the provider room to answer.
+const AI_TEST_TIMEOUT_MS = 120_000
+// Streaming may run past the buffered timeout; the abort signal still stops it.
+const AI_STREAM_TIMEOUT_MS = 180_000
 // How often the owner's backup screen refreshes while work is in flight.
 export const BACKUP_POLL_MS = 3_000
 
@@ -144,6 +152,146 @@ function toApiError(status: number, body: ApiError | null): ApiRequestError {
   )
 }
 
+// ── AI streaming (SSE over fetch; owner only) ──
+
+export type AIStreamHandlers = {
+  onDelta: (text: string) => void
+  onDone: (done: AIStreamDone) => void
+}
+
+type SSEFrame = { event: string; data: string }
+
+function parseSSEFrame(block: string): SSEFrame {
+  let event = "message"
+  const data: string[] = []
+  for (const rawLine of block.split("\n")) {
+    const line = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine
+    if (line === "" || line.startsWith(":")) continue
+    if (line.startsWith("event:")) {
+      event = line.slice(6).trim()
+    } else if (line.startsWith("data:")) {
+      data.push(line.slice(5).replace(/^ /, ""))
+    }
+  }
+  return { event, data: data.join("\n") }
+}
+
+async function streamAIRequest(
+  path: string,
+  body: unknown,
+  handlers: AIStreamHandlers,
+  signal?: AbortSignal
+): Promise<void> {
+  const timeout = AbortSignal.timeout(AI_STREAM_TIMEOUT_MS)
+  const combined = signal ? AbortSignal.any([signal, timeout]) : timeout
+  let res: Response
+  try {
+    res = await fetch(path, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+      },
+      body: JSON.stringify(body),
+      signal: combined,
+    })
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") throw err
+    if (err instanceof DOMException && err.name === "TimeoutError") {
+      throw new ApiRequestError(
+        0,
+        "پاسخ سرور طول کشید. لطفاً دوباره تلاش کنید."
+      )
+    }
+    throw new ApiRequestError(
+      0,
+      "اتصال به سرور برقرار نشد. اتصال اینترنت را بررسی کنید."
+    )
+  }
+  if (!res.ok) {
+    const payload = (await res.json().catch(() => null)) as ApiError | null
+    throw toApiError(res.status, payload)
+  }
+  if (!res.body) throw new ApiRequestError(0, GENERIC_ERROR_MESSAGE)
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ""
+  let completed = false
+
+  const handleFrame = (frame: SSEFrame) => {
+    if (!frame.data) return
+    let payload: unknown
+    try {
+      payload = JSON.parse(frame.data)
+    } catch {
+      throw new ApiRequestError(0, "پاسخ سرویس هوش مصنوعی قابل خواندن نبود.")
+    }
+    if (frame.event === "delta") {
+      const text = (payload as { text?: unknown }).text
+      if (typeof text === "string" && text !== "") handlers.onDelta(text)
+      return
+    }
+    if (frame.event === "done") {
+      const done = payload as { model?: unknown; latency_ms?: unknown }
+      if (
+        typeof done.model !== "string" ||
+        typeof done.latency_ms !== "number"
+      ) {
+        throw new ApiRequestError(0, "پاسخ سرویس هوش مصنوعی ناقص بود.")
+      }
+      completed = true
+      handlers.onDone({ model: done.model, latency_ms: done.latency_ms })
+      return
+    }
+    if (frame.event === "error") {
+      const message = (payload as { message?: unknown }).message
+      throw new ApiRequestError(
+        0,
+        typeof message === "string" && message.trim()
+          ? message
+          : GENERIC_ERROR_MESSAGE
+      )
+    }
+  }
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      let separator = buffer.indexOf("\n\n")
+      while (separator !== -1) {
+        const block = buffer.slice(0, separator)
+        buffer = buffer.slice(separator + 2)
+        handleFrame(parseSSEFrame(block))
+        separator = buffer.indexOf("\n\n")
+      }
+    }
+    buffer += decoder.decode()
+    if (buffer.trim() !== "") handleFrame(parseSSEFrame(buffer))
+    if (!completed) {
+      throw new ApiRequestError(
+        0,
+        "پاسخ سرویس هوش مصنوعی کامل نشد؛ دوباره تلاش کنید."
+      )
+    }
+  } catch (err) {
+    if (err instanceof ApiRequestError) throw err
+    if (err instanceof DOMException && err.name === "AbortError") throw err
+    if (err instanceof DOMException && err.name === "TimeoutError") {
+      throw new ApiRequestError(
+        0,
+        "پاسخ سرویس هوش مصنوعی طول کشید. لطفاً دوباره تلاش کنید."
+      )
+    }
+    throw new ApiRequestError(0, "دریافت پاسخ سرویس هوش مصنوعی ناتمام ماند.")
+  } finally {
+    reader.releaseLock()
+  }
+}
+
 // Coalesces concurrent settings reads (the settings page mounts six cards
 // at once) and reuses the result across navigations. Errors are never cached;
 // saves refresh the entry below. Settings change rarely and every save
@@ -170,6 +318,32 @@ export const api = {
       settingsCache.set(data)
       return data
     })
+  },
+  // ── AI (owner only) ──
+  // The API key is write-only; an empty string keeps the stored one.
+  aiSettings() {
+    return request<AISettings>("/api/v1/ai/settings")
+  },
+  updateAISettings(patch: AISettingsUpdate) {
+    return request<AISettings>("/api/v1/ai/settings", {
+      method: "PUT",
+      body: JSON.stringify(patch),
+    })
+  },
+  testAIConnection(prompt: string) {
+    return request<AITestResult>(
+      "/api/v1/ai/test",
+      { method: "POST", body: JSON.stringify({ prompt }) },
+      AI_TEST_TIMEOUT_MS
+    )
+  },
+  /** Owner-only SSE stream; resolves after the terminal `done` event. */
+  streamAIConnection(
+    prompt: string,
+    handlers: AIStreamHandlers,
+    signal?: AbortSignal
+  ) {
+    return streamAIRequest("/api/v1/ai/stream", { prompt }, handlers, signal)
   },
   // Backup data is deliberately outside the five-minute settings cache: the
   // owner sees live archive state and restore progress.

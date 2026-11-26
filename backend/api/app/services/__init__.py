@@ -1,5 +1,12 @@
 """Business logic lives here — never in route handlers."""
 
+from app.services.ai import (
+    AI_NOT_CONFIGURED_MESSAGE,
+    AINotConfiguredError,
+    AIProviderError,
+    AIService,
+    AIStream,
+)
 from app.services.auth import LOGIN_ERROR, AuthService
 from app.services.backups import (
     BackupRequestError,
@@ -44,6 +51,11 @@ from app.services.users import (
 )
 
 __all__ = [
+    "AI_NOT_CONFIGURED_MESSAGE",
+    "AINotConfiguredError",
+    "AIProviderError",
+    "AIService",
+    "AIStream",
     "LOGIN_ERROR",
     "INVALID_CATEGORY_ERROR",
     "LOW_STOCK_THRESHOLD_KEY",

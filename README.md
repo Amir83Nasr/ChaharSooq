@@ -167,7 +167,7 @@ Accounts have one of three roles:
 | `admin`  | Shop data (products, categories, settings, sync) and viewer management. Never sees other admins.   |
 | `viewer` | Read-only: catalog, dashboard, integration pages, and the settings values those views use.         |
 
-`/users` is available to the owner and admins. The owner sees every account and may create or delete `admin` and `viewer` accounts. An admin sees viewer accounts plus their own account and may create/delete viewers; the owner and other admins stay hidden. At least one management account always remains; since the owner cannot be deleted, the owner can remove every admin. Viewers get `403 forbidden` on every write. `/settings` is available to the owner and admins; the sidebar hides the سیستم group from viewers. See [AGENTS.md](AGENTS.md) and [ADR 010](docs/adr/010-owner-role.md).
+`/users` is available to the owner and admins. The owner sees every account and may create or delete `admin` and `viewer` accounts. An admin sees viewer accounts plus their own account and may create/delete viewers; the owner and other admins stay hidden. At least one management account always remains; since the owner cannot be deleted, the owner can remove every admin. Viewers get `403 forbidden` on every write. `/settings` is available to the owner and admins; the sidebar hides the سیستم group from viewers. `/settings/ai` is owner-only (AI provider connection and system prompt). See [AGENTS.md](AGENTS.md) and [ADR 010](docs/adr/010-owner-role.md).
 
 ```bash
 GET    /api/v1/users          # owner: all accounts; admin: viewers + self
@@ -187,6 +187,21 @@ Both paths share one validation/apply routine and one DB lock, so runs never ove
 ## Competitor prices
 
 Competitor links and observations are stored separately from the Parsina catalog. In product details, admins can add Digikala, Technolife, or another public product URL; run a check; save a manual price/stock correction; disable the link; or delete it. Each product dialog also has a «به‌روزرسانی همه قیمت‌ها» button that re-checks all of its active links at once, and the products header has a «به‌روزرسانی قیمت رقبا» button that refreshes every active link in the background (poll `GET /integrations/competitors/status`, `409` while a run holds the lock). The same bulk refresh also runs automatically on a schedule set in Settings («فاصله به‌روزرسانی خودکار قیمت رقبا», default 24 hours). Automatic extraction is limited to Digikala and Technolife public product pages, uses JSON-LD product offers only, checks each host's `robots.txt`, validates redirects and public DNS, and stops for six hours after a `403` or `429`. Unknown stores remain manual-only. Prices expire after 24 hours by default and stale values are excluded from the table and competitor-price filters. Configure `COMPETITOR_REQUEST_INTERVAL_SECONDS` (default 5) and `COMPETITOR_PRICE_TTL_HOURS` (default 24) in `backend/api/.env.local`.
+
+## AI assistant foundation
+
+The panel can talk to any OpenAI-compatible chat-completions endpoint. The owner configures it in **تنظیمات → هوش مصنوعی** (`/settings/ai`): base URL (default `https://api.gapgpt.ir/v1`), API key, model id (default `gapgpt-deepseek-v4.1-flash`), and one shared system prompt. The key is write-only — the API returns only whether one is stored — and the page includes a live «آزمایش اتصال» panel that streams a real reply through the saved configuration with a stop button.
+
+`POST /api/v1/ai/stream` emits Server-Sent Events: `delta` frames carry `{"text": "..."}`, the terminal `done` frame carries `model` and `latency_ms`, and a provider failure after the stream opens is a terminal `error` frame with a Persian message. Missing configuration is still a normal `503` JSON response before the stream opens.
+
+Future features call `AIService.complete()` or `AIService.stream()` in `backend/api/app/services/ai.py`; they must not build their own provider requests. See [ADR 035](docs/adr/035-ai-provider-foundation.md) and [ADR 036](docs/adr/036-ai-streaming-sse.md).
+
+```bash
+GET  /api/v1/ai/settings   # owner only; never includes the key
+PUT  /api/v1/ai/settings   # base_url, api_key, model_id, system_prompt (partial)
+POST /api/v1/ai/test       # buffered: { prompt } → { model, reply, latency_ms }
+POST /api/v1/ai/stream     # SSE: delta / done / error events
+```
 
 ## Database setup
 

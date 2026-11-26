@@ -198,6 +198,35 @@ export interface ParsinaConnectionUpdate {
   fiscal_year?: number | null
 }
 
+/** Owner-only AI connection settings. The API key is never returned. */
+export interface AISettings {
+  base_url: string
+  model_id: string
+  system_prompt: string
+  api_key_set: boolean
+  configured: boolean
+}
+
+export interface AISettingsUpdate {
+  base_url?: string
+  /** Empty string keeps the stored key. */
+  api_key?: string | null
+  model_id?: string
+  system_prompt?: string
+}
+
+export interface AITestResult {
+  model: string
+  reply: string
+  latency_ms: number
+}
+
+/** Terminal metadata of one streamed AI reply (text arrives as deltas). */
+export interface AIStreamDone {
+  model: string
+  latency_ms: number
+}
+
 export type CardexPeriodKey = "today" | "3_days" | "7_days" | "30_days"
 
 export interface CardexPeriod {

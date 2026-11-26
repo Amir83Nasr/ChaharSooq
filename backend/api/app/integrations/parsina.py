@@ -15,11 +15,15 @@ Every envelope: {isSuccess, statusCode, message, data, total}.
 from __future__ import annotations
 
 import logging
+import re
+import socket
+import ssl
 import threading
 import time
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Any, cast
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -52,6 +56,78 @@ class ParsinaNetworkError(ParsinaError):
 
 class ParsinaResponseError(ParsinaError):
     """Envelope reported failure, non-JSON body, or a contract violation."""
+
+
+class ParsinaConfigError(ParsinaError):
+    """The configured base URL cannot form a valid Parsina request.
+
+    Kept separate from `ParsinaNetworkError`: a malformed address is a settings
+    problem, not a reachability problem, and must not be reported as offline.
+    """
+
+
+_SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://")
+# How deep to walk wrapper exceptions (httpx -> httpcore -> OSError).
+_CAUSE_DEPTH = 5
+
+
+def normalize_base_url(raw: str) -> str:
+    """Return a usable Parsina base URL; raise `ParsinaConfigError` otherwise.
+
+    The contract's BaseUrl is `http://ip:port/Api/V1`. Owners routinely paste a
+    scheme-less address; that used to reach httpx, fail as a transport error and
+    surface as the misleading «ارتباط با پارسینا برقرار نشد». A missing scheme
+    now means HTTP — the only transport the Parsina contract documents — and
+    everything else (scheme, host, port, whitespace) is validated up front.
+    """
+    value = (raw or "").strip()
+    if not value:
+        return ""
+    if any(char.isspace() for char in value):
+        raise ParsinaConfigError("آدرس سرور پارسینا نباید فاصله داشته باشد")
+    if value.lower().startswith(("http:", "https:")) and not _SCHEME_RE.match(value):
+        raise ParsinaConfigError("آدرس سرور پارسینا باید به شکل http:// یا https:// باشد")
+    if not _SCHEME_RE.match(value):
+        value = f"http://{value}"
+    try:
+        parts = urlsplit(value)
+        port = parts.port
+    except ValueError as exc:
+        raise ParsinaConfigError("آدرس سرور پارسینا معتبر نیست (پورت نامعتبر)") from exc
+    if parts.scheme.lower() not in {"http", "https"}:
+        raise ParsinaConfigError("آدرس سرور پارسینا باید با http:// یا https:// شروع شود")
+    if not parts.hostname:
+        raise ParsinaConfigError("آدرس سرور پارسینا باید نام میزبان داشته باشد")
+    if port == 0:
+        raise ParsinaConfigError("آدرس سرور پارسینا معتبر نیست (پورت نامعتبر)")
+    normalized = f"{parts.scheme.lower()}://{parts.netloc}{parts.path.rstrip('/')}"
+    if parts.query:
+        normalized = f"{normalized}?{parts.query}"
+    return normalized
+
+
+def _transport_reason(exc: httpx.HTTPError) -> str:
+    """Classify one transport failure just enough to act on it in Persian.
+
+    The generic «ارتباط برقرار نشد» made production incidents indistinguishable
+    from a bad settings value. DNS, refused, TLS and timeout now read
+    differently; anything unrecognized keeps the original wording.
+    """
+    if isinstance(exc, httpx.TimeoutException):
+        return "پاسخی از پارسینا دریافت نشد (timeout)"
+    cause: BaseException | None = exc
+    for _ in range(_CAUSE_DEPTH):
+        nested = cause.__cause__ or cause.__context__
+        if nested is None:
+            break
+        cause = nested
+        if isinstance(cause, socket.gaierror):
+            return "نام میزبان پارسینا پیدا نشد"
+        if isinstance(cause, ConnectionRefusedError):
+            return "اتصال به پارسینا رد شد"
+        if isinstance(cause, ssl.SSLError):
+            return "خطای امنیتی TLS در اتصال به پارسینا"
+    return "ارتباط با پارسینا برقرار نشد"
 
 
 @dataclass(frozen=True)
@@ -197,12 +273,20 @@ class ParsinaClient:
     ) -> None:
         if not settings.is_configured:
             raise ParsinaAuthError("اتصال پارسینا تنظیم نشده است")
+        # Validate/normalize before httpx sees the value: a scheme-less address
+        # must read as a settings error, not as "Parsina is unreachable".
+        base_url = normalize_base_url(settings.parsina_base_url)
+        if not base_url:
+            raise ParsinaAuthError("اتصال پارسینا تنظیم نشده است")
         self._settings = settings
-        self._http = httpx.Client(
-            base_url=settings.base_url,
-            timeout=httpx.Timeout(settings.parsina_timeout_seconds),
-            transport=transport,
-        )
+        try:
+            self._http = httpx.Client(
+                base_url=base_url,
+                timeout=httpx.Timeout(settings.parsina_timeout_seconds),
+                transport=transport,
+            )
+        except (httpx.InvalidURL, ValueError) as exc:
+            raise ParsinaConfigError("آدرس سرور پارسینا معتبر نیست") from exc
         self._lock = threading.Lock()
         self._token: str | None = None
         self._token_expires_at = 0.0
@@ -265,6 +349,9 @@ class ParsinaClient:
             headers["Authorization"] = f"Bearer {self._token_or_refresh()}"
         try:
             response = self._http.request(method, path, params=params, json=json, headers=headers)
+        except (httpx.UnsupportedProtocol, httpx.InvalidURL) as exc:
+            # Deterministic settings bugs, not transient network failures.
+            raise ParsinaConfigError("آدرس سرور پارسینا معتبر نیست") from exc
         except httpx.TimeoutException as exc:
             if _network_attempt < TRANSIENT_REQUEST_ATTEMPTS:
                 time.sleep(TRANSIENT_REQUEST_BACKOFF_SECONDS * _network_attempt)
@@ -277,7 +364,7 @@ class ParsinaClient:
                     _retry=_retry,
                     _network_attempt=_network_attempt + 1,
                 )
-            raise ParsinaNetworkError("پاسخی از پارسینا دریافت نشد (timeout)") from exc
+            raise ParsinaNetworkError(_transport_reason(exc)) from exc
         except httpx.HTTPError as exc:
             if _network_attempt < TRANSIENT_REQUEST_ATTEMPTS:
                 time.sleep(TRANSIENT_REQUEST_BACKOFF_SECONDS * _network_attempt)
@@ -290,7 +377,7 @@ class ParsinaClient:
                     _retry=_retry,
                     _network_attempt=_network_attempt + 1,
                 )
-            raise ParsinaNetworkError("ارتباط با پارسینا برقرار نشد") from exc
+            raise ParsinaNetworkError(_transport_reason(exc)) from exc
 
         if response.status_code == 401:
             # Token might have been revoked before its advertised lifetime.

@@ -35,7 +35,11 @@ from app.schemas.competitor import CompetitorSyncRunOut, CompetitorSyncStatusOut
 from app.services import SettingsService
 from app.services.cardex import CardexProductNotFoundError, ProductCardexService
 from app.services.competitor_sync import CompetitorSyncBusyError, CompetitorSyncService
-from app.services.parsina_connection import get_parsina_connection_view, update_parsina_connection
+from app.services.parsina_connection import (
+    ParsinaConnectionConfigError,
+    get_parsina_connection_view,
+    update_parsina_connection,
+)
 from app.services.sync import (
     ProductSyncService,
     SyncBusyError,
@@ -163,14 +167,19 @@ def update_parsina_connection_view(
     _owner: Admin = Depends(require_owner),  # noqa: B008
     session: Session = Depends(get_db),  # noqa: B008
 ) -> ParsinaConnectionOut:
-    result = update_parsina_connection(
-        session,
-        base_url=payload.base_url,
-        username=payload.username,
-        password=payload.password,
-        org_id=payload.org_id,
-        fiscal_year=payload.fiscal_year,
-    )
+    try:
+        result = update_parsina_connection(
+            session,
+            base_url=payload.base_url,
+            username=payload.username,
+            password=payload.password,
+            org_id=payload.org_id,
+            fiscal_year=payload.fiscal_year,
+        )
+    except ParsinaConnectionConfigError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from None
     return ParsinaConnectionOut.model_validate(result)
 
 

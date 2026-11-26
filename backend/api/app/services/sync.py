@@ -30,6 +30,7 @@ from app.integrations.dev_db import DevDbSourceError
 from app.integrations.parsina import (
     CommodityRow,
     ParsinaAuthError,
+    ParsinaConfigError,
     ParsinaError,
     ParsinaNetworkError,
     ParsinaResponseError,
@@ -158,15 +159,19 @@ class ProductSyncService:
         except Exception as exc:  # noqa: BLE001 — record, then let the caller classify
             self._fail(now, exc)
             raise
-        self._sync_state.record_result(
-            attempted_at=now,
-            processed=result.processed,
-            created=result.created,
-            updated=result.updated,
-            deactivated=result.deactivated,
-            skipped=result.skipped,
-        )
-        self._sync_state.release(success=True)
+        try:
+            self._sync_state.record_result(
+                attempted_at=now,
+                processed=result.processed,
+                created=result.created,
+                updated=result.updated,
+                deactivated=result.deactivated,
+                skipped=result.skipped,
+            )
+        finally:
+            # The products are already committed. A failing status write must
+            # not leave the 30-minute lock behind and block every later run.
+            self._sync_state.release(success=True)
         log.info(
             "parsina sync ok: processed=%d created=%d updated=%d deactivated=%d skipped=%d",
             result.processed,
@@ -293,6 +298,8 @@ class ProductSyncService:
             return f"خطای داده آزمایشی: {exc}"
         if isinstance(exc, DevDbSourceError):
             return f"خطای دیتابیس dev: {exc}"
+        if isinstance(exc, ParsinaConfigError):
+            return f"خطای تنظیمات پارسینا: {exc}"
         if isinstance(exc, ParsinaAuthError):
             return f"خطای احراز هویت پارسینا: {exc}"
         if isinstance(exc, ParsinaNetworkError):
@@ -356,6 +363,7 @@ __all__ = [
     "SyncNotConfiguredError",
     "SyncResult",
     "ParsinaAuthError",
+    "ParsinaConfigError",
     "ParsinaError",
     "ParsinaNetworkError",
     "ParsinaResponseError",

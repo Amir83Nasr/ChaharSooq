@@ -202,7 +202,7 @@ export function ParsinaSyncPanel({
     } catch (err: unknown) {
       if (err instanceof ApiRequestError && err.status === 409) {
         // Another run is already in progress; the poll shows its state.
-        toast.info("همگام‌sازی دیگری از قبل در حال اجراست.")
+        toast.info("همگام‌سازی دیگری از قبل در حال اجراست.")
       } else {
         handle(err)
       }

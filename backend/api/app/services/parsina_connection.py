@@ -7,8 +7,13 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
 from app.core.config import ParsinaSettings, get_parsina_settings
+from app.integrations.parsina import ParsinaConfigError, normalize_base_url
 from app.models import ParsinaSyncState
 from app.repositories import SyncStateRepository
+
+
+class ParsinaConnectionConfigError(Exception):
+    """Rejected Parsina connection input (e.g., a malformed base URL)."""
 
 
 @dataclass(frozen=True)
@@ -113,7 +118,11 @@ def update_parsina_connection(
 ) -> dict[str, object]:
     state = SyncStateRepository(session).ensure_state()
     if base_url is not None:
-        state.base_url = base_url.strip() or None
+        try:
+            normalized = normalize_base_url(base_url)
+        except ParsinaConfigError as exc:
+            raise ParsinaConnectionConfigError(str(exc)) from exc
+        state.base_url = normalized or None
     if username is not None:
         state.username = username.strip() or None
     if clear_password:

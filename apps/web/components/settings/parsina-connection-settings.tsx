@@ -14,6 +14,30 @@ function toLatinInt(value: string): string {
   return toLatinDigits(value).replace(/[^0-9]/g, "")
 }
 
+/**
+ * Mirrors the API's base-URL rule: a missing scheme means HTTP (the only
+ * transport Parsina documents), everything else must be a valid http(s) URL.
+ * Returns null when the value cannot be used.
+ */
+function normalizeBaseUrl(raw: string): string | null {
+  const value = raw.trim()
+  if (value === "") return ""
+  if (/\s/.test(value)) return null
+  const hasScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(value)
+  if (/^https?:/i.test(value) && !hasScheme) return null
+  const withScheme = hasScheme ? value : `http://${value}`
+  let url: URL
+  try {
+    url = new URL(withScheme)
+  } catch {
+    return null
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return null
+  if (!url.hostname) return null
+  const path = url.pathname.replace(/\/+$/, "")
+  return `${url.protocol}//${url.host}${path}${url.search}`
+}
+
 export function ParsinaConnectionSettings() {
   const [baseUrl, setBaseUrl] = useState("")
   const [username, setUsername] = useState("")
@@ -67,10 +91,19 @@ export function ParsinaConnectionSettings() {
       toast.error("سال مالی باید یک عدد معتبر باشد.")
       return
     }
+    // Reject a malformed address here instead of saving it and later reporting
+    // the misleading «Parsina unreachable» on every sync.
+    const normalizedBaseUrl = normalizeBaseUrl(baseUrl)
+    if (normalizedBaseUrl === null) {
+      toast.error(
+        "آدرس سرور پارسینا معتبر نیست؛ قالب درست: http://IP:PORT/Api/V1"
+      )
+      return
+    }
     setBusy(true)
     try {
       const data = await api.updateParsinaConnection({
-        base_url: baseUrl.trim(),
+        base_url: normalizedBaseUrl,
         username: username.trim(),
         password: password === "" ? null : password,
         org_id: org,

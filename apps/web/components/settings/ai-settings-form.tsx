@@ -15,6 +15,7 @@ export function AISettingsForm() {
   const [baseUrl, setBaseUrl] = useState("")
   const [apiKey, setApiKey] = useState("")
   const [modelId, setModelId] = useState("")
+  const [analysisModelId, setAnalysisModelId] = useState("")
   const [systemPrompt, setSystemPrompt] = useState("")
   const [apiKeySet, setApiKeySet] = useState(false)
   const [configured, setConfigured] = useState(false)
@@ -24,6 +25,7 @@ export function AISettingsForm() {
   function apply(data: AISettings) {
     setBaseUrl(data.base_url ?? "")
     setModelId(data.model_id ?? "")
+    setAnalysisModelId(data.analysis_model_id ?? "")
     setSystemPrompt(data.system_prompt ?? "")
     setApiKeySet(data.api_key_set)
     setConfigured(data.configured)
@@ -58,6 +60,7 @@ export function AISettingsForm() {
         base_url: baseUrl.trim(),
         api_key: apiKey === "" ? null : apiKey,
         model_id: modelId.trim(),
+        analysis_model_id: analysisModelId.trim(),
         system_prompt: systemPrompt,
       })
       apply(data)
@@ -117,6 +120,21 @@ export function AISettingsForm() {
             aria-label="شناسه مدل هوش مصنوعی"
             className="h-11 sm:h-9"
           />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium">مدل تحلیل محصول</span>
+          <Input
+            dir="ltr"
+            value={analysisModelId}
+            onChange={(e) => setAnalysisModelId(e.target.value)}
+            placeholder="gpt-4.1-mini"
+            aria-label="شناسه مدل تحلیل محصول"
+            className="h-11 sm:h-9"
+          />
+          <span className="text-xs text-muted-foreground">
+            گزارش محصول با این مدل ساخته می‌شود تا سریع‌تر و کلمه‌به‌کلمه نمایش
+            داده شود. خالی گذاشتن آن، پیش‌فرض gpt-4.1-mini را برمی‌گرداند.
+          </span>
         </label>
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-medium">کلید API</span>

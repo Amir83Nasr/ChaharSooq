@@ -30,6 +30,7 @@ import {
   type ProductOut,
 } from "@/lib/api"
 import { ProductCardexPanel } from "./product-cardex"
+import { ProductAIAnalysis } from "./product-ai-analysis"
 import { ProductCompetitorPrices } from "./product-competitor-prices"
 import { storesForTopGroup } from "@/lib/top-groups"
 import { ProductPriceBounds } from "./product-price-bounds"
@@ -92,14 +93,22 @@ export function ProductDetailDialog(props: {
   onCompetitorChanged?: () => void
   /** `false` for read-only accounts: prices stay visible, editing is hidden. */
   canEdit?: boolean
+  /** AI analysis is owner-only (the endpoint enforces the same role). */
+  canUseAI?: boolean
 }) {
-  const { selected, onClose, onCompetitorChanged, canEdit = true } = props
+  const {
+    selected,
+    onClose,
+    onCompetitorChanged,
+    canEdit = true,
+    canUseAI = false,
+  } = props
   const [localProduct, setLocalProduct] = useState<ProductOut | null>(null)
   const [modeBusy, setModeBusy] = useState<Selection | null>(null)
   const [modeError, setModeError] = useState<string | null>(null)
   const [pinBusy, setPinBusy] = useState(false)
   const [pinError, setPinError] = useState<string | null>(null)
-  type DetailTab = "cardex" | "links" | "bounds"
+  type DetailTab = "cardex" | "analysis" | "links" | "bounds"
   // Cardex is the primary tab and opens by default for every selected product.
   const [activeTab, setActiveTab] = useState<DetailTab>("cardex")
 
@@ -376,14 +385,31 @@ export function ProductDetailDialog(props: {
               onValueChange={(value) => setActiveTab(value as DetailTab)}
               className="gap-2"
             >
-              <TabsList variant="line" className="self-start">
+              <TabsList
+                variant="line"
+                className="no-scrollbar max-w-full self-start overflow-x-auto"
+              >
                 <TabsTrigger value="cardex">کارتکس کالا</TabsTrigger>
+                {canUseAI ? (
+                  <TabsTrigger value="analysis">تحلیل هوش مصنوعی</TabsTrigger>
+                ) : null}
                 <TabsTrigger value="links">لینک فروشگاه‌ها</TabsTrigger>
                 <TabsTrigger value="bounds">محدودیت قیمت پیشنهادی</TabsTrigger>
               </TabsList>
               <TabsContent value="cardex" className="mt-1">
                 <ProductCardexPanel productId={product.id} />
               </TabsContent>
+              {canUseAI ? (
+                <TabsContent value="analysis" keepMounted className="mt-1">
+                  {/* Keyed by product so switching products starts clean;
+                      keepMounted preserves a finished report across tabs. */}
+                  <ProductAIAnalysis
+                    key={product.id}
+                    productId={product.id}
+                    productName={product.name}
+                  />
+                </TabsContent>
+              ) : null}
               <TabsContent value="links" className="mt-1">
                 {linksPanel()}
               </TabsContent>

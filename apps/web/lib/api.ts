@@ -32,6 +32,7 @@ import type {
   DashboardSummary,
   InventorySummary,
   MeOut,
+  ProductAnalysisReport,
   ProductCardex,
   ProductFilters,
   ProductOut,
@@ -286,7 +287,10 @@ async function streamAIRequest(
         "پاسخ سرویس هوش مصنوعی طول کشید. لطفاً دوباره تلاش کنید."
       )
     }
-    throw new ApiRequestError(0, "دریافت پاسخ سرویس هوش مصنوعی ناتمام ماند.")
+    throw new ApiRequestError(
+      0,
+      "ارتباط با سرویس هوش مصنوعی پیش از پایان پاسخ قطع شد؛ دوباره تلاش کنید."
+    )
   } finally {
     reader.releaseLock()
   }
@@ -344,6 +348,33 @@ export const api = {
     signal?: AbortSignal
   ) {
     return streamAIRequest("/api/v1/ai/stream", { prompt }, handlers, signal)
+  },
+  /**
+   * Owner-only SSE stream of one product's analysis. The backend builds the
+   * context; sending no body here is deliberate — the client cannot inject
+   * a prompt or data.
+   */
+  streamProductAnalysis(
+    productId: number,
+    handlers: AIStreamHandlers,
+    signal?: AbortSignal
+  ) {
+    return streamAIRequest(
+      `/api/v1/ai/products/${productId}/analysis`,
+      {},
+      handlers,
+      signal
+    )
+  },
+  productAnalysisReport(productId: number) {
+    return request<ProductAnalysisReport>(
+      `/api/v1/ai/products/${productId}/analysis/report`
+    )
+  },
+  deleteProductAnalysisReport(productId: number) {
+    return request<void>(`/api/v1/ai/products/${productId}/analysis/report`, {
+      method: "DELETE",
+    })
   },
   // Backup data is deliberately outside the five-minute settings cache: the
   // owner sees live archive state and restore progress.

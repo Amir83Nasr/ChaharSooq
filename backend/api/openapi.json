@@ -338,6 +338,241 @@
         ]
       }
     },
+    "/api/v1/ai/products/{product_id}/analysis": {
+      "post": {
+        "tags": [
+          "AI"
+        ],
+        "summary": "Stream an AI analysis of one product",
+        "description": "Builds a bounded, privacy-safe context for one product (the catalog row, fresh competitor prices, and the live 30-day cardex) and streams the model analysis as Server-Sent Events. The client sends no prompt and cannot inject context; counterparty names, invoice ids, and competitor URLs never leave the backend. Owner only.",
+        "operationId": "stream_product_analysis",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Product Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SSE stream of delta/done/error events.",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Signed in, but the account role is not allowed to perform this action (`forbidden`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource does not exist (`not_found`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The requested integration is not configured or temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/products/{product_id}/analysis/report": {
+      "get": {
+        "tags": [
+          "AI"
+        ],
+        "summary": "Read the saved product analysis report",
+        "description": "The last complete AI report for one product, if any. Owner only. A new analysis replaces it; `DELETE` removes it.",
+        "operationId": "get_product_analysis_report",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Product Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductAnalysisReportOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Signed in, but the account role is not allowed to perform this action (`forbidden`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource does not exist (`not_found`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "AI"
+        ],
+        "summary": "Delete the saved product analysis report",
+        "description": "Owner only. Idempotent: deleting a missing report still returns `204`.",
+        "operationId": "delete_product_analysis_report",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Product Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Missing, expired, or invalid session cookie (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Signed in, but the account role is not allowed to perform this action (`forbidden`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource does not exist (`not_found`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (`validation_error`); `details` maps field paths to Persian messages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/login": {
       "post": {
         "tags": [
@@ -4039,6 +4274,19 @@
             "title": "Model Id",
             "description": "Model id, e.g. gapgpt-deepseek-v4.1-flash."
           },
+          "analysis_model_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analysis Model Id",
+            "description": "Model id for product analysis reports; empty uses the fast default (gpt-4.1-mini)."
+          },
           "system_prompt": {
             "anyOf": [
               {
@@ -4058,6 +4306,7 @@
         "description": "Partial update. Omitted fields keep their stored value.",
         "examples": [
           {
+            "analysis_model_id": "gpt-4.1-mini",
             "api_key": "sk-...",
             "base_url": "https://api.gapgpt.ir/v1",
             "model_id": "gapgpt-deepseek-v4.1-flash",
@@ -4076,6 +4325,11 @@
             "type": "string",
             "title": "Model Id",
             "description": "Effective model id sent with every request."
+          },
+          "analysis_model_id": {
+            "type": "string",
+            "title": "Analysis Model Id",
+            "description": "Effective model id used only for product analysis reports."
           },
           "system_prompt": {
             "type": "string",
@@ -4097,6 +4351,7 @@
         "required": [
           "base_url",
           "model_id",
+          "analysis_model_id",
           "system_prompt",
           "api_key_set",
           "configured"
@@ -5909,6 +6164,37 @@
           "exact_competitor",
           "similar_product"
         ]
+      },
+      "ProductAnalysisReportOut": {
+        "properties": {
+          "product_id": {
+            "type": "integer",
+            "title": "Product Id"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          },
+          "model_id": {
+            "type": "string",
+            "title": "Model Id"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At",
+            "description": "UTC timestamp of the saved report."
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "content",
+          "model_id",
+          "generated_at"
+        ],
+        "title": "ProductAnalysisReportOut",
+        "description": "The last complete AI report saved for one product."
       },
       "ProductCardexOut": {
         "properties": {

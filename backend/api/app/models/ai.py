@@ -23,4 +23,6 @@ class AIConfig(Base):
     base_url: Mapped[str] = mapped_column(String(512), nullable=False, default="")
     api_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
     model_id: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    # Separate from `model_id` so reports can use a fast model.
+    analysis_model_id: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     system_prompt: Mapped[str] = mapped_column(Text, nullable=False, default="")

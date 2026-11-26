@@ -58,7 +58,7 @@ function stockFromParam(value: string | null): StockFilter {
 function ProductsPageContent() {
   const searchParams = useSearchParams()
   const stockParam = searchParams.get("stock")
-  const { canManage } = useSession()
+  const { canManage, role } = useSession()
   const { view, page, error, settings, syncBaseline } = useProductsStore()
 
   // Inputs are local so the caret never jumps; the store receives their
@@ -368,6 +368,7 @@ function ProductsPageContent() {
         onClose={() => setSelected(null)}
         onCompetitorChanged={refreshProducts}
         canEdit={canManage}
+        canUseAI={role === "owner"}
       />
     </>
   )

@@ -1,6 +1,7 @@
 """SQLAlchemy models — machine-readable values only, never Jalali/Persian strings."""
 
 from app.models.ai import AIConfig
+from app.models.analysis import ProductAnalysisReport
 from app.models.auth import Admin
 from app.models.backup import BackupRecord, BackupState
 from app.models.catalog import Category, Product
@@ -16,6 +17,7 @@ from app.models.suggested_price import SuggestedPriceFormula
 
 __all__ = [
     "AIConfig",
+    "ProductAnalysisReport",
     "Admin",
     "AdminSession",
     "BackupRecord",

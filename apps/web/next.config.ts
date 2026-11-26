@@ -20,6 +20,14 @@ const API_BASE = (
 ).replace(/\/+$/, "")
 
 const nextConfig: NextConfig = {
+  experimental: {
+    // The dev rewrite proxy defaults to a 30s socket timeout. AI reports can
+    // stay silent (reasoning) or stream for a couple of minutes, and a cut
+    // response is indistinguishable from a broken provider in the panel.
+    // Keep the proxy alive for the length of one report; the API streams a
+    // keepalive comment every few seconds as well.
+    proxyTimeout: 5 * 60_000,
+  },
   // The Docker runtime enables the traced standalone output; local, CI, and
   // Vercel builds keep the default output. Trace from the monorepo root so
   // workspace packages are included.

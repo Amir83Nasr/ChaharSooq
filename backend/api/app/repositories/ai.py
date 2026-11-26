@@ -22,6 +22,7 @@ class AIConfigRepository:
                 base_url="",
                 api_key=None,
                 model_id="",
+                analysis_model_id="",
                 system_prompt="",
             )
             self._session.add(row)

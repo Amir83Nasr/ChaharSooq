@@ -235,6 +235,7 @@ def test_ai_settings_defaults(client: TestClient) -> None:
     assert r.json() == {
         "base_url": DEFAULT_BASE_URL,
         "model_id": DEFAULT_MODEL_ID,
+        "analysis_model_id": "gpt-4.1-mini",
         "system_prompt": "",
         "api_key_set": False,
         "configured": False,
@@ -249,6 +250,7 @@ def test_ai_settings_update_never_returns_the_key(client: TestClient) -> None:
             "base_url": "https://ai.example/v1/",
             "api_key": "sk-owner-secret",
             "model_id": "own-model",
+            "analysis_model_id": "fast-model",
             "system_prompt": "تو دستیار چهارسوق هستی.",
         },
     )
@@ -256,6 +258,7 @@ def test_ai_settings_update_never_returns_the_key(client: TestClient) -> None:
     data = r.json()
     assert data["base_url"] == "https://ai.example/v1"
     assert data["model_id"] == "own-model"
+    assert data["analysis_model_id"] == "fast-model"
     assert data["system_prompt"] == "تو دستیار چهارسوق هستی."
     assert data["api_key_set"] is True
     assert data["configured"] is True
@@ -285,10 +288,14 @@ def test_ai_settings_empty_endpoint_fields_fall_back_to_defaults(client: TestCli
             "model_id": "own-model",
         },
     )
-    cleared = client.put(SETTINGS_URL, json={"base_url": "", "model_id": "", "api_key": ""})
+    cleared = client.put(
+        SETTINGS_URL,
+        json={"base_url": "", "model_id": "", "analysis_model_id": "", "api_key": ""},
+    )
     assert cleared.status_code == 200, cleared.text
     assert cleared.json()["base_url"] == DEFAULT_BASE_URL
     assert cleared.json()["model_id"] == DEFAULT_MODEL_ID
+    assert cleared.json()["analysis_model_id"] == "gpt-4.1-mini"
     assert cleared.json()["api_key_set"] is True
 
 
@@ -459,3 +466,38 @@ def test_ai_stream_reports_provider_failure_as_an_error_event(
     assert 'data: {"text": "نیمه"}' in r.text
     assert "event: error" in r.text
     assert "کلید API" in r.text
+
+
+# ── SSE keepalive ─────────────────────────────────────────────────────
+
+
+def test_stream_events_emits_keepalives_while_the_model_is_silent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import time
+
+    from app.api.routes.ai import _stream_events
+    from app.services.ai import AIStream
+
+    monkeypatch.setattr("app.api.routes.ai.SSE_HEARTBEAT_SECONDS", 0.01)
+
+    def chunks() -> Any:
+        time.sleep(0.05)
+        yield "سلام"
+
+    frames = list(_stream_events(AIStream(model="test-model", chunks=chunks())))
+    assert ": ping\n\n" in frames
+    assert frames[-1].startswith("event: done")
+
+
+def test_stream_events_turns_an_unexpected_failure_into_a_terminal_error() -> None:
+    from app.api.routes.ai import _stream_events
+    from app.services.ai import AIStream
+
+    def chunks() -> Any:
+        yield "یک"
+        raise RuntimeError("provider pipe broke")
+
+    frames = list(_stream_events(AIStream(model="test-model", chunks=chunks())))
+    assert any(frame.startswith("event: error") for frame in frames)
+    assert not any(frame.startswith("event: done") for frame in frames)

@@ -23,6 +23,11 @@ from app.services.exports import (
     ExportService,
     ExportTooLargeError,
 )
+from app.services.product_analysis import (
+    ProductAnalysisProductNotFoundError,
+    ProductAnalysisReportService,
+    ProductAnalysisService,
+)
 from app.services.products import (
     INVALID_CATEGORY_ERROR,
     InvalidCategoryError,
@@ -82,6 +87,9 @@ __all__ = [
     "ForbiddenRoleError",
     "InvalidCategoryError",
     "LastAdminError",
+    "ProductAnalysisProductNotFoundError",
+    "ProductAnalysisReportService",
+    "ProductAnalysisService",
     "ProductService",
     "ProductNotFoundError",
     "ProductCardexService",

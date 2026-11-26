@@ -1,6 +1,12 @@
 """Pydantic boundary schemas — machine-readable in/out only."""
 
-from app.schemas.ai import AISettingsIn, AISettingsOut, AITestIn, AITestOut
+from app.schemas.ai import (
+    AISettingsIn,
+    AISettingsOut,
+    AITestIn,
+    AITestOut,
+    ProductAnalysisReportOut,
+)
 from app.schemas.auth import LoginIn, LoginOut, MeOut
 from app.schemas.backup import (
     BackupOut,
@@ -45,6 +51,7 @@ from app.schemas.users import AssignableRole, UserCreateIn, UserOut, UserRole
 __all__ = [
     "AISettingsIn",
     "AISettingsOut",
+    "ProductAnalysisReportOut",
     "AITestIn",
     "AITestOut",
     "AssignableRole",

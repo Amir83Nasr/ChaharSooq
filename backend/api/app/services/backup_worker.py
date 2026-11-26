@@ -66,6 +66,7 @@ log = logging.getLogger("charsooq.backup")
 RESTORE_LOAD_ORDER: tuple[str, ...] = (
     "categories",
     "products",
+    "product_analysis_reports",
     "competitor_listings",
     "competitor_price_observations",
     "competitor_sync_state",
@@ -78,6 +79,7 @@ RESTORE_LOAD_ORDER: tuple[str, ...] = (
 RESTORE_DELETE_ORDER: tuple[str, ...] = (
     "competitor_price_observations",
     "competitor_listings",
+    "product_analysis_reports",
     "products",
     "categories",
     "suggested_price_formulas",

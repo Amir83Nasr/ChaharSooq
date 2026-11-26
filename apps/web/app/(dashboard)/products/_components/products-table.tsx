@@ -216,8 +216,13 @@ export function ProductTableSkeleton({
   )
   return (
     <div aria-label="در حال بارگذاری">
+      {/* The skeleton keeps the data table's column widths so the layout does
+          not shift when the rows arrive. On narrower viewports that makes the
+          table wider than the card; clip the overflow instead of turning the
+          placeholder into a horizontally scrollable region. */}
       <Table
         className="table-fixed"
+        containerClassName="overflow-x-clip"
         style={{ minWidth: productTableMinWidth(columns) }}
       >
         <ProductsTableHead columns={columns} />

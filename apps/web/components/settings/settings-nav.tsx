@@ -44,11 +44,10 @@ function isActive(item: SettingsNavItem, pathname: string): boolean {
 }
 
 /**
- * In-settings navigation: a sticky column on desktop and a horizontally
- * scrollable chip row on mobile, so the settings map is always one tap away.
- * On desktop it sits below the sticky title band: the 5rem scroll-area top
- * padding cancels the glass header's 4rem, leaving 4rem title + 1.5rem gap,
- * so the sticky offset is 4.5rem (top-18).
+ * In-settings navigation: a column below the page title on desktop and a
+ * horizontally scrollable chip row on mobile, so the settings map is always
+ * one tap away. The settings layout owns the sticky positioning of the
+ * whole start column (title + nav); this component only renders the list.
  */
 export function SettingsNav() {
   const pathname = usePathname()
@@ -56,10 +55,7 @@ export function SettingsNav() {
   const items = ITEMS.filter((item) => !item.ownerOnly || isOwner(role))
 
   return (
-    <nav
-      aria-label="بخش‌های تنظیمات"
-      className="min-w-0 md:sticky md:top-18 md:self-start"
-    >
+    <nav aria-label="بخش‌های تنظیمات" className="min-w-0">
       <ul className="no-scrollbar flex items-center gap-2 overflow-x-auto pb-1 md:flex-col md:items-stretch md:overflow-visible md:pb-0">
         {items.map((item) => {
           const active = isActive(item, pathname)

@@ -392,20 +392,6 @@
   background-size: 48px 48px;
 }
 
-/* A title band that sticks inside the scroll area paints above the static
-   grid layer. An opaque --background alone cuts a flat hole in the squares,
-   so the band repeats the same grid, phase-aligned with that layer: the band
-   rests 5rem below the inset's grid origin, i.e. 1rem into a 48px tile.
-   Only this 4rem band repaints; the full-size grid stays on its own layer. */
-@media (min-width: 768px) {
-  .sticky-page-band {
-    background-color: var(--background);
-    background-image: var(--grid-image);
-    background-size: 48px 48px;
-    background-position: 0 1rem;
-  }
-}
-
 /* Sidebar inset keeps a flat background by default: painting the grid on
    the animating/scrolling inset itself forces a repaint on each sidebar
    animation frame and each scroll frame. Apply .bg-grid-pattern only on a

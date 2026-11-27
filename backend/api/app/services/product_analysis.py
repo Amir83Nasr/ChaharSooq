@@ -316,8 +316,8 @@ def build_analysis_payload(
         notes.append("اتصال پارسینا تنظیم نشده است؛ داده فروش در دسترس نیست.")
     elif not sales:
         notes.append("در ۳۰ روز گذشته فروشی برای این کالا ثبت نشده است.")
-    if app_env == "development":
-        notes.append("داده فروش از محیط توسعه می‌آید و ممکن است نمایشی باشد.")
+    if app_env == "development" or get_settings().resolved_fixture_dir is not None:
+        notes.append("داده فروش شبیه‌سازی‌شده است و ممکن است نمایشی باشد.")
     notes.append("داده فروش ۳۰ روز قبل در دسترس نیست؛ مقایسه با دورهٔ قبل ممکن نیست.")
     notes.append("میانگین فروش دسته در دسترس نیست.")
     if unit_cost is None:

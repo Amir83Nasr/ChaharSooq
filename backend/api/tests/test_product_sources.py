@@ -19,7 +19,7 @@ from app.integrations.dev_db import (
 )
 from app.integrations.parsina import parse_commodity
 from app.integrations.parsina_csv import CsvCommoditySource, CsvSourceError
-from app.integrations.sources import ParsinaCommoditySource, build_commodity_source
+from app.integrations.sources import build_commodity_source
 from app.models import CompetitorListing, Product
 from app.services.sync import ProductSyncService
 
@@ -238,17 +238,28 @@ def test_source_selection_by_environment(tmp_path: Path, monkeypatch: pytest.Mon
         ),
         CsvCommoditySource,
     )
-    assert isinstance(
-        build_commodity_source(
-            app_settings=Settings(
-                app_env="production",
-                session_secret="test-secret-12345678901234567890",
-                owner_password="test-owner-password",
-            ),
-            parsina_settings=ParsinaSettings(),
-        ),
-        ParsinaCommoditySource,
+
+    # Staging selects the fixtures bundled with the API (no credentials needed).
+    monkeypatch.setattr("app.core.config._BACKEND_DIR", tmp_path)
+    fixtures = tmp_path / "app" / "fixtures"
+    fixtures.mkdir(parents=True)
+    (fixtures / "products.json").write_text(
+        json.dumps({"isSuccess": True, "data": [], "total": 0}), encoding="utf-8"
     )
+    staging = Settings(
+        app_env="production",
+        session_secret="test-secret-12345678901234567890",
+        owner_password="test-owner-password",
+    )
+    staging_source = build_commodity_source(
+        app_settings=staging,
+        parsina_settings=ParsinaSettings(),
+    )
+    assert isinstance(staging_source, CsvCommoditySource)
+    assert staging_source.path == fixtures / "products.json"
+    assert staging.source_mode == "csv"
+
+    # An explicit dev database still wins over the bundled fixtures.
     url = f"sqlite:///{tmp_path / 'dev.db'}"
     dev = build_commodity_source(
         app_settings=Settings(
@@ -261,6 +272,15 @@ def test_source_selection_by_environment(tmp_path: Path, monkeypatch: pytest.Mon
     )
     assert isinstance(dev, DevDatabaseCommoditySource)
     assert dev.label == "dev" and dev.is_configured is True
+
+
+def test_fixture_dir_is_disabled_for_production(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("DEPLOYMENT_ENV", raising=False)
+    monkeypatch.setattr("app.core.config.resolve_deployment_env_optional", lambda: "production")
+    settings = Settings(app_env="test", parsina_fixture_dir=str(tmp_path))
+    assert settings.resolved_fixture_dir is None
 
 
 def _make_dev_db(path: Path) -> str:

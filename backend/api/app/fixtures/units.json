@@ -1,0 +1,615 @@
+{
+  "endpoint": "/BaseInfo/UnitCount",
+  "isSuccess": true,
+  "statusCode": "Success",
+  "message": "عملیات با موفقیت انجام شد",
+  "total": 101,
+  "data": [
+    {
+      "Id": "1",
+      "Title": "لنگه",
+      "Description": null,
+      "TaxCode": "1611"
+    },
+    {
+      "Id": "2",
+      "Title": "عدل",
+      "Description": null,
+      "TaxCode": "1612"
+    },
+    {
+      "Id": "3",
+      "Title": "جعبه",
+      "Description": null,
+      "TaxCode": "1613"
+    },
+    {
+      "Id": "4",
+      "Title": "توپ",
+      "Description": null,
+      "TaxCode": "1618"
+    },
+    {
+      "Id": "5",
+      "Title": "ست",
+      "Description": null,
+      "TaxCode": "1619"
+    },
+    {
+      "Id": "6",
+      "Title": "دست",
+      "Description": null,
+      "TaxCode": "1620"
+    },
+    {
+      "Id": "7",
+      "Title": "کارتن",
+      "Description": null,
+      "TaxCode": "1624"
+    },
+    {
+      "Id": "8",
+      "Title": "عدد",
+      "Description": null,
+      "TaxCode": "1627"
+    },
+    {
+      "Id": "9",
+      "Title": "بسته",
+      "Description": null,
+      "TaxCode": "1628"
+    },
+    {
+      "Id": "10",
+      "Title": "پاکت",
+      "Description": null,
+      "TaxCode": "1629"
+    },
+    {
+      "Id": "11",
+      "Title": "دستگاه",
+      "Description": null,
+      "TaxCode": "1631"
+    },
+    {
+      "Id": "12",
+      "Title": "تخته",
+      "Description": null,
+      "TaxCode": "1640"
+    },
+    {
+      "Id": "13",
+      "Title": "رول",
+      "Description": null,
+      "TaxCode": "1641"
+    },
+    {
+      "Id": "14",
+      "Title": "طاقه",
+      "Description": null,
+      "TaxCode": "1642"
+    },
+    {
+      "Id": "15",
+      "Title": "جفت",
+      "Description": null,
+      "TaxCode": "1643"
+    },
+    {
+      "Id": "16",
+      "Title": "مترمربع",
+      "Description": null,
+      "TaxCode": "1645"
+    },
+    {
+      "Id": "17",
+      "Title": "پالت",
+      "Description": null,
+      "TaxCode": "1649"
+    },
+    {
+      "Id": "18",
+      "Title": "دوجین",
+      "Description": null,
+      "TaxCode": "1661"
+    },
+    {
+      "Id": "19",
+      "Title": "(رینگ)حلقه",
+      "Description": null,
+      "TaxCode": "1668"
+    },
+    {
+      "Id": "20",
+      "Title": "قراص",
+      "Description": null,
+      "TaxCode": "1673"
+    },
+    {
+      "Id": "21",
+      "Title": "قراصه (bundle)",
+      "Description": null,
+      "TaxCode": "1694"
+    },
+    {
+      "Id": "22",
+      "Title": "لیتر",
+      "Description": null,
+      "TaxCode": "1637"
+    },
+    {
+      "Id": "23",
+      "Title": "ساشه",
+      "Description": null,
+      "TaxCode": "1650"
+    },
+    {
+      "Id": "24",
+      "Title": "کپسول",
+      "Description": null,
+      "TaxCode": "1683"
+    },
+    {
+      "Id": "25",
+      "Title": "بندیل",
+      "Description": null,
+      "TaxCode": "1656"
+    },
+    {
+      "Id": "26",
+      "Title": "حلقه(رول)",
+      "Description": null,
+      "TaxCode": "1630"
+    },
+    {
+      "Id": "27",
+      "Title": "قالب",
+      "Description": null,
+      "TaxCode": "163"
+    },
+    {
+      "Id": "28",
+      "Title": "شانه",
+      "Description": null,
+      "TaxCode": "1660"
+    },
+    {
+      "Id": "29",
+      "Title": "مترمکعب",
+      "Description": null,
+      "TaxCode": "1647"
+    },
+    {
+      "Id": "30",
+      "Title": "ثوب",
+      "Description": null,
+      "TaxCode": "1689"
+    },
+    {
+      "Id": "31",
+      "Title": "نیم دوجین",
+      "Description": null,
+      "TaxCode": "1690"
+    },
+    {
+      "Id": "32",
+      "Title": "قرقره",
+      "Description": null,
+      "TaxCode": "1635"
+    },
+    {
+      "Id": "33",
+      "Title": "کیلوگرم",
+      "Description": null,
+      "TaxCode": "164"
+    },
+    {
+      "Id": "34",
+      "Title": "بطری",
+      "Description": null,
+      "TaxCode": "1638"
+    },
+    {
+      "Id": "35",
+      "Title": "برگ",
+      "Description": null,
+      "TaxCode": "161"
+    },
+    {
+      "Id": "36",
+      "Title": "سطل",
+      "Description": null,
+      "TaxCode": "1625"
+    },
+    {
+      "Id": "37",
+      "Title": "ورق",
+      "Description": null,
+      "TaxCode": "1654"
+    },
+    {
+      "Id": "38",
+      "Title": "شاخه",
+      "Description": null,
+      "TaxCode": "1646"
+    },
+    {
+      "Id": "39",
+      "Title": "قوطی",
+      "Description": null,
+      "TaxCode": "1644"
+    },
+    {
+      "Id": "40",
+      "Title": "جلد",
+      "Description": null,
+      "TaxCode": "1617"
+    },
+    {
+      "Id": "41",
+      "Title": "تیوب",
+      "Description": null,
+      "TaxCode": "162"
+    },
+    {
+      "Id": "42",
+      "Title": "متر",
+      "Description": null,
+      "TaxCode": "165"
+    },
+    {
+      "Id": "43",
+      "Title": "کلاف",
+      "Description": null,
+      "TaxCode": "1610"
+    },
+    {
+      "Id": "44",
+      "Title": "کیسه",
+      "Description": null,
+      "TaxCode": "1615"
+    },
+    {
+      "Id": "45",
+      "Title": "طغرا",
+      "Description": null,
+      "TaxCode": "1680"
+    },
+    {
+      "Id": "46",
+      "Title": "بشکه",
+      "Description": null,
+      "TaxCode": "1639"
+    },
+    {
+      "Id": "47",
+      "Title": "گالن",
+      "Description": null,
+      "TaxCode": "1614"
+    },
+    {
+      "Id": "48",
+      "Title": "فاقد بسته بندی",
+      "Description": null,
+      "TaxCode": "1687"
+    },
+    {
+      "Id": "49",
+      "Title": "کارتن (master case)",
+      "Description": null,
+      "TaxCode": "1693"
+    },
+    {
+      "Id": "50",
+      "Title": "صفحه",
+      "Description": null,
+      "TaxCode": "166"
+    },
+    {
+      "Id": "51",
+      "Title": "مخزن",
+      "Description": null,
+      "TaxCode": "1666"
+    },
+    {
+      "Id": "52",
+      "Title": "تانکر",
+      "Description": null,
+      "TaxCode": "1626"
+    },
+    {
+      "Id": "53",
+      "Title": "دبه",
+      "Description": null,
+      "TaxCode": "1648"
+    },
+    {
+      "Id": "54",
+      "Title": "سبد",
+      "Description": null,
+      "TaxCode": "1684"
+    },
+    {
+      "Id": "55",
+      "Title": "تن",
+      "Description": null,
+      "TaxCode": "169"
+    },
+    {
+      "Id": "56",
+      "Title": "بانکه",
+      "Description": null,
+      "TaxCode": "1651"
+    },
+    {
+      "Id": "57",
+      "Title": "سیلندر",
+      "Description": null,
+      "TaxCode": "1633"
+    },
+    {
+      "Id": "58",
+      "Title": "فوت مربع",
+      "Description": null,
+      "TaxCode": "1679"
+    },
+    {
+      "Id": "59",
+      "Title": "حلب",
+      "Description": null,
+      "TaxCode": "168"
+    },
+    {
+      "Id": "60",
+      "Title": "شیت",
+      "Description": null,
+      "TaxCode": "1665"
+    },
+    {
+      "Id": "61",
+      "Title": "چلیک",
+      "Description": null,
+      "TaxCode": "1659"
+    },
+    {
+      "Id": "62",
+      "Title": "جام",
+      "Description": null,
+      "TaxCode": "1636"
+    },
+    {
+      "Id": "63",
+      "Title": "گرم",
+      "Description": null,
+      "TaxCode": "1622"
+    },
+    {
+      "Id": "64",
+      "Title": "نخ",
+      "Description": null,
+      "TaxCode": "1616"
+    },
+    {
+      "Id": "65",
+      "Title": "شعله",
+      "Description": null,
+      "TaxCode": "1652"
+    },
+    {
+      "Id": "66",
+      "Title": "قیراط",
+      "Description": null,
+      "TaxCode": "1678"
+    },
+    {
+      "Id": "67",
+      "Title": "میلی لیتر",
+      "Description": null,
+      "TaxCode": "16100"
+    },
+    {
+      "Id": "68",
+      "Title": "میلی متر",
+      "Description": null,
+      "TaxCode": "16101"
+    },
+    {
+      "Id": "69",
+      "Title": "میلی گرم",
+      "Description": null,
+      "TaxCode": "16102"
+    },
+    {
+      "Id": "70",
+      "Title": "ساعت",
+      "Description": null,
+      "TaxCode": "16103"
+    },
+    {
+      "Id": "71",
+      "Title": "روز",
+      "Description": null,
+      "TaxCode": "16104"
+    },
+    {
+      "Id": "72",
+      "Title": "تن کیلومتر",
+      "Description": null,
+      "TaxCode": "16105"
+    },
+    {
+      "Id": "73",
+      "Title": "کیلووات ساعت",
+      "Description": null,
+      "TaxCode": "1669"
+    },
+    {
+      "Id": "74",
+      "Title": "نفر",
+      "Description": null,
+      "TaxCode": "1676"
+    },
+    {
+      "Id": "75",
+      "Title": "ثانیه",
+      "Description": null,
+      "TaxCode": "16110"
+    },
+    {
+      "Id": "76",
+      "Title": "دقیقه",
+      "Description": null,
+      "TaxCode": "16111"
+    },
+    {
+      "Id": "77",
+      "Title": "ماه",
+      "Description": null,
+      "TaxCode": "16112"
+    },
+    {
+      "Id": "78",
+      "Title": "سال",
+      "Description": null,
+      "TaxCode": "16113"
+    },
+    {
+      "Id": "79",
+      "Title": "قطعه",
+      "Description": null,
+      "TaxCode": "16114"
+    },
+    {
+      "Id": "80",
+      "Title": "سانتي متر",
+      "Description": null,
+      "TaxCode": "16115"
+    },
+    {
+      "Id": "81",
+      "Title": "سانتي متر مربع",
+      "Description": null,
+      "TaxCode": "16116"
+    },
+    {
+      "Id": "82",
+      "Title": "فروند",
+      "Description": null,
+      "TaxCode": "1632"
+    },
+    {
+      "Id": "83",
+      "Title": "واحد",
+      "Description": null,
+      "TaxCode": "1653"
+    },
+    {
+      "Id": "84",
+      "Title": "لیوان",
+      "Description": null,
+      "TaxCode": "16108"
+    },
+    {
+      "Id": "85",
+      "Title": "مگا وات ساعت",
+      "Description": null,
+      "TaxCode": "16118"
+    },
+    {
+      "Id": "86",
+      "Title": "نوبت",
+      "Description": null,
+      "TaxCode": "16117"
+    },
+    {
+      "Id": "87",
+      "Title": "گیگا بایت بر ثانیه",
+      "Description": null,
+      "TaxCode": "16119"
+    },
+    {
+      "Id": "88",
+      "Title": "ویال",
+      "Description": null,
+      "TaxCode": "1681"
+    },
+    {
+      "Id": "89",
+      "Title": "حلقه )دیسك(",
+      "Description": null,
+      "TaxCode": "1667"
+    },
+    {
+      "Id": "90",
+      "Title": "نسخه )جلد(",
+      "Description": null,
+      "TaxCode": "16120"
+    },
+    {
+      "Id": "92",
+      "Title": "نفر- ساعت",
+      "Description": null,
+      "TaxCode": "16121"
+    },
+    {
+      "Id": "93",
+      "Title": "کیلومتر",
+      "Description": null,
+      "TaxCode": "16122"
+    },
+    {
+      "Id": "94",
+      "Title": "آمپر",
+      "Description": null,
+      "TaxCode": "16125"
+    },
+    {
+      "Id": "95",
+      "Title": "میلي آمپر",
+      "Description": null,
+      "TaxCode": "16126"
+    },
+    {
+      "Id": "96",
+      "Title": "مثقال",
+      "Description": null,
+      "TaxCode": "16127"
+    },
+    {
+      "Id": "97",
+      "Title": "سیر",
+      "Description": null,
+      "TaxCode": "16128"
+    },
+    {
+      "Id": "98",
+      "Title": "دفعه(time (",
+      "Description": null,
+      "TaxCode": "16129"
+    },
+    {
+      "Id": "99",
+      "Title": "مگا یونیت",
+      "Description": null,
+      "TaxCode": "16130"
+    },
+    {
+      "Id": "100",
+      "Title": "کادر",
+      "Description": null,
+      "TaxCode": "16131"
+    },
+    {
+      "Id": "101",
+      "Title": "پرس",
+      "Description": null,
+      "TaxCode": "16132"
+    },
+    {
+      "Id": "102",
+      "Title": "بلوک",
+      "Description": null,
+      "TaxCode": "16133"
+    }
+  ]
+}

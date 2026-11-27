@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -242,6 +243,48 @@ def test_development_cardex_falls_back_to_demo_data(
         ]
     finally:
         config.get_settings.cache_clear()
+
+
+def test_staging_cardex_reads_bundled_fixtures(
+    client: TestClient,
+    session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from types import SimpleNamespace
+
+    today = (datetime.now(UTC) + timedelta(hours=3, minutes=30)).date()
+    envelope = {"isSuccess": True, "total": 1}
+    sale = {"id": 501, "Number": 7, "Date": _jalali(today), "BuyerName": "مشتری"}
+    details = {
+        "id": 501,
+        "Details": [{"goodid": 42, "goodcode": "X-1", "TotalCount": 4, "NetPrice": 40000}],
+    }
+    for name, row in (
+        ("sale-factors.json", sale),
+        ("buy-factors.json", None),
+        ("sale-factor-details.json", details),
+        ("buy-factor-details.json", None),
+    ):
+        rows = [row] if row is not None else []
+        (tmp_path / name).write_text(
+            json.dumps({**envelope, "data": rows, "total": len(rows)}), encoding="utf-8"
+        )
+
+    # Staging behaves like production but reads the bundled saved responses.
+    monkeypatch.setattr(
+        "app.services.cardex.get_settings",
+        lambda: SimpleNamespace(app_env="production", resolved_fixture_dir=tmp_path),
+    )
+    product = _product(session)
+    service = ProductCardexService(session, settings=ParsinaSettings())
+
+    report = service.get(product_id=product.id, period="7_days")
+
+    assert report.configured is True
+    assert report.summary.sale_quantity == 4
+    assert report.summary.sale_amount == 4000
+    assert any(entry.invoice_id == 501 for entry in report.entries)
 
 
 def test_cardex_unconfigured_returns_empty_report(session: Session) -> None:

@@ -1,11 +1,14 @@
-"""Development cardex source — Parsina-shaped invoice envelopes from `data/`.
+"""Saved cardex source — Parsina-shaped invoice envelopes from a fixture dir.
 
 Mirrors the live `GET /SaleFactor`, `/buyFactor`, and their `/{id}` detail
-endpoints exactly (same envelope, same field names), so development shows the
-same cardex shape as production without credentials or network access.
+endpoints exactly (same envelope, same field names), so Development and the
+Staging simulation show the same cardex shape as production without
+credentials or network access.
 
 The saved dumps are paired by id: `sale-factors.json` holds invoice headers,
 `sale-factor-details.json` holds the corresponding `Details[]` records.
+Development reads `data/`; Staging reads the fixtures bundled with the API
+(see `Settings.resolved_fixture_dir`).
 """
 
 from __future__ import annotations

@@ -1,7 +1,9 @@
-"""Commodity sources — live Parsina in production, local CSV in development.
+"""Commodity sources — live Parsina in production, saved fixtures elsewhere.
 
-`ProductSyncService` only depends on this small protocol, so validation, locking,
-and apply rules stay identical regardless of where the rows came from.
+Development reads the local CSV/JSON export; Staging reads the fixtures
+bundled with the API. `ProductSyncService` only depends on this small
+protocol, so validation, locking, and apply rules stay identical regardless
+of where the rows came from.
 When `DEV_DATABASE_URL` is set, production syncs from the dev database
 instead of Parsina (button + scheduler simulation, see `dev_db.py`).
 """
@@ -79,12 +81,18 @@ def build_commodity_source(
 ) -> CommoditySource:
     """Development reads the CSV fixture; production reads Parsina or dev DB.
 
-    `DEV_DATABASE_URL` switches production to the dev-database simulation:
-    the sync button and the scheduler copy the dev mirror instead of calling
-    Parsina, with identical validation, locking, and status reporting.
+    The Staging identity reads the saved fixtures bundled with the API, so the
+    «به‌روزرسانی از پارسینا» button and the scheduler run the same validation
+    and apply path without Parsina credentials. `DEV_DATABASE_URL` switches
+    production to the dev-database simulation: the sync button and the
+    scheduler copy the dev mirror instead of calling Parsina, with identical
+    validation, locking, and status reporting.
     """
-    if app_settings.app_env == "development":
-        return CsvCommoditySource(Path(app_settings.products_csv_path))
     if app_settings.dev_database_url.strip():
         return DevDatabaseCommoditySource(app_settings.dev_database_url)
+    fixtures = app_settings.resolved_fixture_dir
+    if fixtures is not None:
+        return CsvCommoditySource(fixtures / "products.json")
+    if app_settings.app_env == "development":
+        return CsvCommoditySource(Path(app_settings.products_csv_path))
     return ParsinaCommoditySource(parsina_settings, transport=transport)

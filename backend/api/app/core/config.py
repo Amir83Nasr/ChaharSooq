@@ -17,7 +17,10 @@ from sqlalchemy.engine import URL, make_url
 from sqlalchemy.exc import ArgumentError
 
 from app.core.deployment import (
+    PRODUCTION,
+    STAGING,
     is_production_deployment,
+    resolve_deployment_env_optional,
     resolve_runtime_deployment_env,
 )
 
@@ -444,6 +447,11 @@ class Settings(DatabaseSettings):
     # from this dev database instead of the live Parsina API, through the same
     # ProductSyncService path (button + scheduler behave identically).
     dev_database_url: str = Field(default="")
+    # Staging simulation: saved Parsina responses (catalog, units, invoices)
+    # are bundled under `backend/api/app/fixtures` and used by the Staging
+    # identity. Empty means "use that bundled directory"; keep it empty in
+    # Production, which never reads fixtures (see `resolved_fixture_dir`).
+    parsina_fixture_dir: str = Field(default="")
     competitor_request_interval_seconds: float = Field(default=5.0, ge=1, le=300)
     competitor_price_ttl_hours: int = Field(default=24, ge=1, le=720)
     # Local archive directory. Empty means the environment default: the gitignored
@@ -539,12 +547,35 @@ class Settings(DatabaseSettings):
         return _DEV_BACKUP_DIR
 
     @property
+    def resolved_fixture_dir(self) -> Path | None:
+        """Bundled Parsina fixtures for the Staging simulation, if enabled.
+
+        Staging has no Parsina credentials and must exercise the real sync and
+        cardex code paths with saved responses. The directory is bundled with
+        the API (`backend/api/app/fixtures`) and is selected only by the
+        explicit Staging identity, never by Production. Development keeps
+        reading the gitignored `data/` directory through its own default.
+        """
+        if resolve_deployment_env_optional() == PRODUCTION:
+            return None
+        raw = self.parsina_fixture_dir.strip()
+        if raw:
+            path = Path(raw).expanduser()
+            return path if path.is_absolute() else _BACKEND_DIR / path
+        if resolve_deployment_env_optional() == STAGING:
+            bundled = _BACKEND_DIR / "app" / "fixtures"
+            return bundled if bundled.is_dir() else None
+        return None
+
+    @property
     def source_mode(self) -> Literal["csv", "dev", "parsina", "off"]:
         """Product source mode — single place for the scheduler/sync branch."""
-        if self.app_env == "development":
+        if self.dev_database_url.strip():
+            return "dev"
+        if self.resolved_fixture_dir is not None or self.app_env == "development":
             return "csv"
         if self.is_production:
-            return "dev" if self.dev_database_url.strip() else "parsina"
+            return "parsina"
         return "off"
 
 

@@ -57,6 +57,7 @@ SSH_HOST ?= ## Optional server alias; when set, prod-deploy and prod-logs run ov
 VERSION ?= latest## Release to deploy; "latest" means the newest published GitHub Release
 DB_PORT ?= 5433 ## Host port of the dev postgres db-wait/dev-api expect
 YES ?= 0 ## Set YES=1 to skip the confirmation prompt for db-sync-dev-to-staging
+FULL ?= 0 ## Set FULL=1 to also soft-deactivate staging products absent from dev (mirror)
 
 # Shared command prefixes: shorter recipes, identical semantics.
 UV_RUN := uv run --no-sync --project backend/api
@@ -138,7 +139,7 @@ db-clear-products: db-migrate ## Delete all products + competitor listings from 
 # ─── DATABASE: STAGING ────────────────────────────────────
 db-sync-dev-to-staging: ## Upsert dev data into staging Neon, then fill demo competitor prices (reads backend/api/.env.staging)
 	@test -f $(STAGING_ENV_FILE) || { echo "backend/api/.env.staging is required" >&2; exit 1; }
-	DEPLOYMENT_ENV=staging $(UV_STAGING_PY)sync_dev_to_prod.py $(if $(filter 1,$(YES)),--yes,)
+	DEPLOYMENT_ENV=staging $(UV_STAGING_PY)sync_dev_to_prod.py $(if $(filter 1,$(YES)),--yes,) $(if $(filter 1,$(FULL)),--mirror,)
 	DEPLOYMENT_ENV=staging $(UV_STAGING_PY)seed_demo_competitors.py --staging
 
 db-seed-demo-staging: ## Fill staging Neon with demo competitor prices (reads backend/api/.env.staging)

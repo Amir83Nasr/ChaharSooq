@@ -164,14 +164,17 @@ class ProductCardexService:
         )
 
         entries: list[CardexEntryOut] = []
-        app_env = get_settings().app_env
-        fixture = CardexFixtureSource() if app_env == "development" else None
+        app_settings = get_settings()
+        fixtures_dir = app_settings.resolved_fixture_dir
+        # Development and the Staging simulation read saved Parsina dumps so the
+        # default tab shows a realistic cardex without credentials; every other
+        # environment uses the live API. Products the dumps do not cover (or
+        # cover only with cancelled rows) fall back to deterministic demo
+        # invoices so every dialog has numbers.
+        use_fixtures = app_settings.app_env == "development" or fixtures_dir is not None
+        fixture = CardexFixtureSource(directory=fixtures_dir) if use_fixtures else None
         demo_used = False
-        # Development reads the saved Parsina dumps so the default tab shows a
-        # realistic cardex without credentials; production uses the live API.
-        # Products the dumps do not cover (or cover only with cancelled rows)
-        # fall back to deterministic demo invoices so every dialog has numbers.
-        if app_env == "development" and fixture is not None:
+        if use_fixtures and fixture is not None:
             if fixture.is_configured:
                 for kind in ("sale", "purchase"):
                     entries.extend(
@@ -227,11 +230,7 @@ class ProductCardexService:
             summary=summary,
             entries=entries,
             configured=settings.is_configured
-            or (
-                app_env == "development"
-                and fixture is not None
-                and (fixture.is_configured or demo_used)
-            ),
+            or (use_fixtures and fixture is not None and (fixture.is_configured or demo_used)),
             pricing_mode=cast("PricingMode | None", product.pricing_mode),
         )
 
@@ -289,7 +288,8 @@ class ProductCardexService:
         from_date: date,
         to_date: date,
     ) -> list[CardexEntryOut]:
-        """Development-only synthetic rows; see `app.integrations.cardex_demo`."""
+        """Synthetic rows for the Development and Staging simulations; see
+        `app.integrations.cardex_demo`."""
         entries: list[CardexEntryOut] = []
         for invoice in demo_invoices(
             product,

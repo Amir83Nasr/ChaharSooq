@@ -336,15 +336,18 @@ def test_seed_parsina_still_works_in_development(
 def test_sync_allowed_for_staging_destination(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    calls: list[tuple[str, str]] = []
+    calls: list[tuple[str, str, bool]] = []
 
-    def fake_sync(dev_url: str, dest_url: str) -> dict[str, int]:
-        calls.append((dev_url, dest_url))
+    def fake_sync(dev_url: str, dest_url: str, *, mirror: bool = False) -> dict[str, int]:
+        calls.append((dev_url, dest_url, mirror))
         return {
             "categories": 0,
             "settings": 0,
+            "suggested_price_formulas": 0,
             "products": 0,
+            "products_deactivated": 0,
             "competitor_listings_added": 0,
+            "competitor_observations_added": 0,
         }
 
     monkeypatch.setenv("DEPLOYMENT_ENV", "staging")
@@ -363,7 +366,7 @@ def test_sync_allowed_for_staging_destination(
     )
 
     assert sync_dev_to_prod.main() == 0
-    assert calls == [("sqlite:///source.db", "sqlite:///staging.db")]
+    assert calls == [("sqlite:///source.db", "sqlite:///staging.db", False)]
 
 
 # ── MAKEFILE GUARDS (STATIC, NO DATABASE) ────────────────────

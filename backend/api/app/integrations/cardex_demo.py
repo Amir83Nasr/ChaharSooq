@@ -1,4 +1,4 @@
-"""Development-only demo cardex — deterministic invoices for every product.
+"""Development/Staging demo cardex — deterministic invoices for every product.
 
 The saved Parsina dumps in `data/` only cover a handful of products and a fixed
 date range, so most products show an empty cardex in local development. This
@@ -6,8 +6,9 @@ module fabricates Parsina-shaped invoice envelopes for any product and window,
 purely from a stable hash of the product and date: no network, no credentials,
 and no writes.
 
-It is only called from `ProductCardexService` when `APP_ENV=development`; live
-Parsina data and every other environment stay untouched.
+It is only called from `ProductCardexService` for the Development and Staging
+simulations (see `Settings.resolved_fixture_dir`); live Parsina data and real
+Production stay untouched.
 """
 
 from __future__ import annotations

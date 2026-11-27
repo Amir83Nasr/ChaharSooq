@@ -40,7 +40,6 @@ export function ProductAIAnalysis({
   const [done, setDone] = useState<AIStreamDone | null>(null)
   const [saved, setSaved] = useState<ProductAnalysisReport | null>(null)
   const [loadingSaved, setLoadingSaved] = useState(true)
-  const [confirmDelete, setConfirmDelete] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [phase, setPhase] = useState<Phase>("idle")
   const controllerRef = useRef<AbortController | null>(null)
@@ -79,7 +78,6 @@ export function ProductAIAnalysis({
     setReport("")
     setDone(null)
     setSaved(null)
-    setConfirmDelete(false)
 
     try {
       await api.streamProductAnalysis(
@@ -124,7 +122,6 @@ export function ProductAIAnalysis({
       setDone(null)
       setSaved(null)
       setError(null)
-      setConfirmDelete(false)
       toast.success("گزارش حذف شد.")
     } catch (err) {
       // A report that never reached the database is only in local state.
@@ -133,7 +130,6 @@ export function ProductAIAnalysis({
         setDone(null)
         setSaved(null)
         setError(null)
-        setConfirmDelete(false)
         toast.success("گزارش حذف شد.")
         return
       }
@@ -298,36 +294,15 @@ export function ProductAIAnalysis({
                   را نمی‌گیرد.
                 </p>
                 {canManage && (saved !== null || done !== null) ? (
-                  confirmDelete ? (
-                    <span className="flex items-center gap-1">
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        onClick={() => void remove()}
-                        className="h-8 text-xs"
-                      >
-                        حذف قطعی
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={() => setConfirmDelete(false)}
-                        className="h-8 text-xs"
-                      >
-                        انصراف
-                      </Button>
-                    </span>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => setConfirmDelete(true)}
-                      className="h-8 gap-1.5 text-xs text-destructive hover:text-destructive"
-                    >
-                      <Trash2 className="size-3.5" aria-hidden="true" />
-                      حذف گزارش
-                    </Button>
-                  )
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => void remove()}
+                    className="h-8 gap-1.5 text-xs"
+                  >
+                    <Trash2 className="size-3.5" aria-hidden="true" />
+                    حذف گزارش
+                  </Button>
                 ) : null}
               </div>
             ) : null}

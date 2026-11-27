@@ -1,7 +1,16 @@
 "use client"
 
 import { useMemo } from "react"
-import { Bar, BarChart, CartesianGrid, LabelList, XAxis, YAxis } from "recharts"
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  LabelList,
+  XAxis,
+  YAxis,
+} from "recharts"
 
 import {
   ChartContainer,
@@ -27,10 +36,17 @@ const chartConfig = {
   },
 } satisfies ChartConfig
 
+export type CardexChartVariant = "bar" | "line"
+
 const DIRECTION_TITLE: Record<CardexDirection, string> = {
-  all: "نمودار خرید و فروش",
-  sale: "نمودار فروش",
-  purchase: "نمودار خرید",
+  all: "خرید و فروش",
+  sale: "فروش",
+  purchase: "خرید",
+}
+
+const VARIANT_TITLE: Record<CardexChartVariant, string> = {
+  bar: "نمودار میله‌ای",
+  line: "نمودار خطی",
 }
 
 type CardexChartPoint = {
@@ -93,10 +109,12 @@ export function ProductCardexChart({
   entries,
   report,
   direction = "all",
+  variant = "bar",
 }: {
   entries: CardexEntry[]
   report: ProductCardex
   direction?: CardexDirection
+  variant?: CardexChartVariant
 }) {
   const points = useMemo(
     () => buildChartPoints(entries, report),
@@ -109,11 +127,38 @@ export function ProductCardexChart({
 
   if (!hasData || points.length === 0) return null
 
+  const tooltipContent = (
+    <ChartTooltipContent
+      formatter={(value, name) => {
+        const numeric = typeof value === "number" ? value : Number(value)
+        const key = name === "sale" ? "sale" : "purchase"
+        return (
+          <div className="flex w-full items-center gap-2">
+            <span
+              aria-hidden="true"
+              className="size-2 shrink-0 rounded-[2px]"
+              style={{ backgroundColor: chartConfig[key].color }}
+            />
+            <span className="text-muted-foreground">
+              {chartConfig[key].label}
+            </span>
+            <span className="ms-auto font-medium tabular-nums">
+              {Number.isFinite(numeric) ? formatPersianNumber(numeric) : "—"}{" "}
+              عدد
+            </span>
+          </div>
+        )
+      }}
+    />
+  )
+
   return (
     <div className="rounded-2xl border border-border/70 bg-muted/20 p-3">
       <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-xs font-medium">{DIRECTION_TITLE[direction]}</p>
+          <p className="text-xs font-medium">
+            {VARIANT_TITLE[variant]} {DIRECTION_TITLE[direction]}
+          </p>
           <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
             مقدار روزانه در بازه انتخابی، بر حسب عدد
           </p>
@@ -136,88 +181,96 @@ export function ProductCardexChart({
         dir="rtl"
         className="aspect-auto h-52 w-full sm:h-60"
       >
-        <BarChart
-          accessibilityLayer
-          data={points}
-          margin={{ top: 24, right: 8, left: 8, bottom: 0 }}
-          barCategoryGap="26%"
-          barGap={2}
-        >
-          <CartesianGrid vertical={false} />
-          <XAxis
-            dataKey="label"
-            reversed
-            tickLine={false}
-            axisLine={false}
-            tickMargin={8}
-            fontSize={10}
-            interval="preserveStartEnd"
-            minTickGap={8}
-          />
-          <YAxis hide />
-          <ChartTooltip
-            cursor={false}
-            content={
-              <ChartTooltipContent
-                formatter={(value, name) => {
-                  const numeric =
-                    typeof value === "number" ? value : Number(value)
-                  const key = name === "sale" ? "sale" : "purchase"
-                  return (
-                    <div className="flex w-full items-center gap-2">
-                      <span
-                        aria-hidden="true"
-                        className="size-2 shrink-0 rounded-[2px]"
-                        style={{ backgroundColor: chartConfig[key].color }}
-                      />
-                      <span className="text-muted-foreground">
-                        {chartConfig[key].label}
-                      </span>
-                      <span className="ms-auto font-medium tabular-nums">
-                        {Number.isFinite(numeric)
-                          ? formatPersianNumber(numeric)
-                          : "—"}{" "}
-                        عدد
-                      </span>
-                    </div>
-                  )
-                }}
+        {variant === "line" ? (
+          <AreaChart
+            accessibilityLayer
+            data={points}
+            margin={{ top: 24, right: 8, left: 8, bottom: 0 }}
+          >
+            <CartesianGrid vertical={false} />
+            <XAxis
+              dataKey="label"
+              reversed
+              tickLine={false}
+              axisLine={false}
+              tickMargin={8}
+              fontSize={10}
+              interval="preserveStartEnd"
+              minTickGap={8}
+            />
+            <YAxis hide />
+            <ChartTooltip cursor={false} content={tooltipContent} />
+            {visibleKinds.map((key) => (
+              <Area
+                key={key}
+                dataKey={key}
+                type="linear"
+                fill={`var(--color-${key})`}
+                fillOpacity={0.3}
+                stroke={`var(--color-${key})`}
+                strokeWidth={2}
               />
-            }
-          />
-          {direction !== "sale" ? (
-            <Bar
-              dataKey="purchase"
-              fill="var(--color-purchase)"
-              radius={[6, 6, 0, 0]}
-            >
-              {showLabels ? (
-                <LabelList
-                  dataKey="purchase"
-                  position="top"
-                  offset={6}
-                  fontSize={10}
-                  className="fill-muted-foreground"
-                  formatter={formatQuantity}
-                />
-              ) : null}
-            </Bar>
-          ) : null}
-          {direction !== "purchase" ? (
-            <Bar dataKey="sale" fill="var(--color-sale)" radius={[6, 6, 0, 0]}>
-              {showLabels ? (
-                <LabelList
-                  dataKey="sale"
-                  position="top"
-                  offset={6}
-                  fontSize={10}
-                  className="fill-muted-foreground"
-                  formatter={formatQuantity}
-                />
-              ) : null}
-            </Bar>
-          ) : null}
-        </BarChart>
+            ))}
+          </AreaChart>
+        ) : (
+          <BarChart
+            accessibilityLayer
+            data={points}
+            margin={{ top: 24, right: 8, left: 8, bottom: 0 }}
+            barCategoryGap="26%"
+            barGap={2}
+          >
+            <CartesianGrid vertical={false} />
+            <XAxis
+              dataKey="label"
+              reversed
+              tickLine={false}
+              axisLine={false}
+              tickMargin={8}
+              fontSize={10}
+              interval="preserveStartEnd"
+              minTickGap={8}
+            />
+            <YAxis hide />
+            <ChartTooltip cursor={false} content={tooltipContent} />
+            {direction !== "sale" ? (
+              <Bar
+                dataKey="purchase"
+                fill="var(--color-purchase)"
+                radius={[6, 6, 0, 0]}
+              >
+                {showLabels ? (
+                  <LabelList
+                    dataKey="purchase"
+                    position="top"
+                    offset={6}
+                    fontSize={10}
+                    className="fill-muted-foreground"
+                    formatter={formatQuantity}
+                  />
+                ) : null}
+              </Bar>
+            ) : null}
+            {direction !== "purchase" ? (
+              <Bar
+                dataKey="sale"
+                fill="var(--color-sale)"
+                radius={[6, 6, 0, 0]}
+              >
+                {showLabels ? (
+                  <LabelList
+                    dataKey="sale"
+                    position="top"
+                    offset={6}
+                    fontSize={10}
+                    className="fill-muted-foreground"
+                    formatter={formatQuantity}
+                  />
+                ) : null}
+              </Bar>
+            ) : null}
+          </BarChart>
+        )}
       </ChartContainer>
     </div>
   )

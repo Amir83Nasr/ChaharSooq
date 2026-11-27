@@ -38,7 +38,7 @@ const FALLBACK_PERIODS: CardexPeriod[] = [
   { key: "30_days", label: "۳۰ روز گذشته", from_date: "", to_date: "" },
 ]
 
-type CardexView = "chart" | "table"
+type CardexView = "bar" | "line" | "table"
 
 const DIRECTION_OPTIONS: { value: CardexDirection; label: string }[] = [
   { value: "all", label: "همه" },
@@ -47,7 +47,8 @@ const DIRECTION_OPTIONS: { value: CardexDirection; label: string }[] = [
 ]
 
 const VIEW_OPTIONS: { value: CardexView; label: string }[] = [
-  { value: "chart", label: "نمودار" },
+  { value: "bar", label: "نمودار میله‌ای" },
+  { value: "line", label: "نمودار خطی" },
   { value: "table", label: "جدول" },
 ]
 
@@ -138,7 +139,7 @@ function SegmentedFilter<T extends string>({
 export function ProductCardexPanel({ productId }: { productId: number }) {
   const [period, setPeriod] = useState<CardexPeriodKey>("7_days")
   const [direction, setDirection] = useState<CardexDirection>("all")
-  const [view, setView] = useState<CardexView>("chart")
+  const [view, setView] = useState<CardexView>("bar")
   const [report, setReport] = useState<ProductCardex | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -289,13 +290,14 @@ export function ProductCardexPanel({ productId }: { productId: number }) {
             <p className="rounded-2xl border border-border/70 bg-muted/30 px-3 py-6 text-center text-xs text-muted-foreground">
               برای کالا در این بازه {directionNoun}ی ثبت نشده است.
             </p>
-          ) : view === "chart" ? (
+          ) : view !== "table" ? (
             report ? (
               activeFilteredCount > 0 ? (
                 <ProductCardexChart
                   entries={filteredEntries}
                   report={report}
                   direction={direction}
+                  variant={view}
                 />
               ) : (
                 <p className="rounded-2xl border border-border/70 bg-muted/30 px-3 py-6 text-center text-xs text-muted-foreground">

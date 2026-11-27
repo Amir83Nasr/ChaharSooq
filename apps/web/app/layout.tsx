@@ -63,7 +63,7 @@ export default function RootLayout({
           <div id="charsooq-root" className="relative min-h-dvh">
             {children}
           </div>
-          <Toaster position="bottom-center" richColors closeButton />
+          <Toaster position="bottom-right" richColors closeButton />
         </ThemeProvider>
       </body>
     </html>

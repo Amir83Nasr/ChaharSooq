@@ -645,16 +645,32 @@ export function ProductCompetitorPrices({
       {loading ? (
         <div
           className="grid gap-3 sm:grid-cols-2"
+          role="status"
           aria-label="در حال بارگذاری منابع قیمت"
         >
+          <span className="sr-only">در حال بارگذاری منابع قیمت…</span>
           {stores.map((store) => (
             <div
               key={store}
-              className="space-y-2 rounded-2xl border border-border bg-background p-3 sm:p-4"
+              aria-hidden="true"
+              className="space-y-2 rounded-2xl border border-border bg-background p-3"
             >
-              <Skeleton className="h-5 w-32" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-8 w-28" />
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5">
+                  <Skeleton className="h-5 w-16" />
+                  <Skeleton className="h-5 w-20" />
+                </div>
+                <Skeleton className="h-8 w-32" />
+              </div>
+              <Skeleton className="h-14 w-full rounded-2xl" />
+              <div className="space-y-1.5">
+                <Skeleton className="h-3 w-28" />
+                <Skeleton className="h-9 w-full" />
+              </div>
+              <div className="flex gap-2">
+                <Skeleton className="h-8 w-24" />
+                <Skeleton className="h-8 w-24" />
+              </div>
             </div>
           ))}
         </div>

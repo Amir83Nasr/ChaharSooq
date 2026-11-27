@@ -21,6 +21,8 @@ import {
   PopoverTrigger,
 } from "@workspace/ui/primitives/popover"
 import { Separator } from "@workspace/ui/primitives/separator"
+import { Skeleton } from "@workspace/ui/primitives/skeleton"
+import { Spinner } from "@workspace/ui/primitives/spinner"
 import { JalaliRangeCalendar } from "@workspace/ui/persian/persian-calendar"
 import { PersianDate } from "@workspace/ui/persian/persian-date"
 import { PersianNumber } from "@workspace/ui/persian/persian-number"
@@ -165,6 +167,45 @@ function SegmentedFilter<T extends string>({
   )
 }
 
+/**
+ * Reserves the exact shape of the loaded cardex (summary cards, hint, chart)
+ * so the first paint already matches the final layout and nothing jumps when
+ * the report arrives.
+ */
+function ProductCardexSkeleton() {
+  return (
+    <div role="status" aria-label="در حال خواندن کارتکس…" className="space-y-3">
+      <span className="sr-only">در حال خواندن کارتکس…</span>
+      <div className="grid grid-cols-2 gap-2" aria-hidden="true">
+        {[0, 1].map((index) => (
+          <div
+            key={index}
+            className="rounded-2xl border border-border/70 bg-muted/30 px-3 py-2.5"
+          >
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="mt-1.5 h-5 w-24" />
+            <Skeleton className="mt-1.5 h-4 w-28" />
+          </div>
+        ))}
+      </div>
+      <Skeleton className="mx-1 h-3 w-64 max-w-full" aria-hidden="true" />
+      <div
+        className="rounded-2xl border border-border/70 bg-muted/20 p-3"
+        aria-hidden="true"
+      >
+        <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+          <div className="space-y-1.5">
+            <Skeleton className="h-3.5 w-40" />
+            <Skeleton className="h-3 w-56 max-w-full" />
+          </div>
+          <Skeleton className="h-3 w-24" />
+        </div>
+        <Skeleton className="h-52 w-full rounded-xl sm:h-60" />
+      </div>
+    </div>
+  )
+}
+
 /** Purchase/sale history recorded in Parsina for the selected product. */
 export function ProductCardexPanel({ productId }: { productId: number }) {
   const [period, setPeriod] = useState<CardexPeriodKey>("7_days")
@@ -207,6 +248,9 @@ export function ProductCardexPanel({ productId }: { productId: number }) {
     }
   }, [productId, period, customRange])
 
+  // Refetches keep the previous report on screen; only the first load for a
+  // product uses the skeleton.
+  const refreshing = loading && report !== null
   const periods = report?.periods?.length ? report.periods : FALLBACK_PERIODS
   const entries: CardexEntry[] = report?.entries ?? []
   const filteredEntries = useMemo(
@@ -299,8 +343,12 @@ export function ProductCardexPanel({ productId }: { productId: number }) {
   return (
     <section className="space-y-3 text-start">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-xs font-medium text-muted-foreground">
+        <h3 className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
           خرید و فروش ثبت‌شده در پارسینا
+          <Spinner active={refreshing} className="size-3.5" />
+          {refreshing ? (
+            <span className="sr-only">در حال به‌روزرسانی…</span>
+          ) : null}
         </h3>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           <div
@@ -426,11 +474,11 @@ export function ProductCardexPanel({ productId }: { productId: number }) {
         </p>
       ) : null}
 
-      {loading ? (
-        <p className="rounded-2xl border border-border/70 bg-muted/30 px-3 py-6 text-center text-xs text-muted-foreground">
-          در حال خواندن کارتکس…
-        </p>
-      ) : report?.configured === false ? (
+      {report === null ? (
+        error === null ? (
+          <ProductCardexSkeleton />
+        ) : null
+      ) : report.configured === false ? (
         <p className="rounded-2xl border border-border/70 bg-muted/30 px-3 py-6 text-center text-xs text-muted-foreground">
           اتصال پارسینا تنظیم نشده است.
         </p>

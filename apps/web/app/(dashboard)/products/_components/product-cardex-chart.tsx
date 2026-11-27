@@ -176,6 +176,8 @@ export function ProductCardexChart({
           ))}
         </div>
       </div>
+      {/* The time axis always runs left → right; dir="rtl" only keeps the
+          Persian tooltip text right-to-left. */}
       <ChartContainer
         config={chartConfig}
         dir="rtl"
@@ -190,7 +192,6 @@ export function ProductCardexChart({
             <CartesianGrid vertical={false} />
             <XAxis
               dataKey="label"
-              reversed
               tickLine={false}
               axisLine={false}
               tickMargin={8}
@@ -223,7 +224,6 @@ export function ProductCardexChart({
             <CartesianGrid vertical={false} />
             <XAxis
               dataKey="label"
-              reversed
               tickLine={false}
               axisLine={false}
               tickMargin={8}

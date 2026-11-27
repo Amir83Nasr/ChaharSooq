@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, cast
 import jdatetime  # type: ignore[import-untyped]
 
 from app.core.config import ParsinaSettings, get_parsina_settings, get_settings
+from app.core.persian_format import to_persian_digits
 from app.integrations.cardex_demo import demo_invoices
 from app.integrations.cardex_fixture import CardexFixtureSource
 from app.integrations.parsina import (
@@ -53,9 +54,17 @@ PERIOD_DAYS = (
     ("30_days", "۳۰ روز گذشته", 30),
 )
 
+# A custom window lists every Parsina invoice and then fetches each invoice's
+# details, so the window is capped to keep one cardex request bounded.
+MAX_CUSTOM_RANGE_DAYS = 90
+
 
 class CardexProductNotFoundError(LookupError):
     """No local product with the requested id."""
+
+
+class CardexRangeError(ValueError):
+    """The requested custom window is missing, reversed, or too long."""
 
 
 def _decimal(raw: Any) -> Decimal:
@@ -125,7 +134,14 @@ class ProductCardexService:
         self._settings = settings
         self._transport = transport
 
-    def get(self, *, product_id: int, period: str) -> ProductCardexOut:
+    def get(
+        self,
+        *,
+        product_id: int,
+        period: str,
+        from_date: date | None = None,
+        to_date: date | None = None,
+    ) -> ProductCardexOut:
         product = self._products.get(product_id)
         if product is None:
             raise CardexProductNotFoundError("کالا یافت نشد")
@@ -140,9 +156,12 @@ class ProductCardexService:
 
         today = (datetime.now(UTC) + TEHRAN_OFFSET).date()
         periods = available_periods(today=today)
-        window = next((p for p in periods if p.key == period), None)
-        if window is None:
-            raise ValueError("بازه کارتکس نامعتبر است")
+        window = self._select_window(
+            period,
+            periods=periods,
+            from_date=from_date,
+            to_date=to_date,
+        )
 
         entries: list[CardexEntryOut] = []
         app_env = get_settings().app_env
@@ -202,6 +221,8 @@ class ProductCardexService:
             product_id=product.id,
             sku=product.sku,
             period=window.key,
+            from_date=window.from_date,
+            to_date=window.to_date,
             periods=periods,
             summary=summary,
             entries=entries,
@@ -213,6 +234,34 @@ class ProductCardexService:
             ),
             pricing_mode=cast("PricingMode | None", product.pricing_mode),
         )
+
+    @staticmethod
+    def _select_window(
+        period: str,
+        *,
+        periods: list[CardexPeriod],
+        from_date: date | None,
+        to_date: date | None,
+    ) -> CardexPeriod:
+        """Resolve a preset key or a validated custom range to one window."""
+        if period == "custom":
+            if from_date is None or to_date is None:
+                raise CardexRangeError("برای بازه دلخواه، تاریخ شروع و پایان را انتخاب کنید.")
+            if from_date > to_date:
+                raise CardexRangeError("تاریخ شروع باید پیش از تاریخ پایان باشد.")
+            if (to_date - from_date).days + 1 > MAX_CUSTOM_RANGE_DAYS:
+                limit = to_persian_digits(str(MAX_CUSTOM_RANGE_DAYS))
+                raise CardexRangeError(f"بازه دلخواه حداکثر {limit} روز است.")
+            return CardexPeriod(
+                key="custom",
+                label="بازه دلخواه",
+                from_date=from_date,
+                to_date=to_date,
+            )
+        window = next((item for item in periods if item.key == period), None)
+        if window is None:
+            raise ValueError("بازه کارتکس نامعتبر است")
+        return window
 
     def _fixture_entries(
         self,

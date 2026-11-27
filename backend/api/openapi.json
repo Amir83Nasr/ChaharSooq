@@ -3763,7 +3763,7 @@
           "Integrations"
         ],
         "summary": "Product cardex (Parsina sales and purchases)",
-        "description": "Sales/purchase lines and totals recorded in Parsina for one product. `period` is one of `today`, `3_days`, `7_days`, or `30_days`. The response also carries all four selectable windows with ISO bounds.",
+        "description": "Sales/purchase lines and totals recorded in Parsina for one product. `period` is one of `today`, `3_days`, `7_days`, or `30_days`, or `custom` with `from_date` and `to_date` (ISO, inclusive, at most 90 days). The response carries the selected window bounds and the four presets.",
         "operationId": "product_cardex",
         "security": [
           {
@@ -3786,10 +3786,48 @@
             "required": false,
             "schema": {
               "type": "string",
-              "pattern": "^(today|3_days|7_days|30_days)$",
+              "pattern": "^(today|3_days|7_days|30_days|custom)$",
               "default": "7_days",
               "title": "Period"
             }
+          },
+          {
+            "name": "from_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive ISO start date; required when `period=custom`.",
+              "title": "From Date"
+            },
+            "description": "Inclusive ISO start date; required when `period=custom`."
+          },
+          {
+            "name": "to_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive ISO end date; required when `period=custom`.",
+              "title": "To Date"
+            },
+            "description": "Inclusive ISO end date; required when `period=custom`."
           }
         ],
         "responses": {
@@ -6181,7 +6219,19 @@
           "period": {
             "type": "string",
             "title": "Period",
-            "description": "Selected period key."
+            "description": "Selected period key; `custom` for a manual range."
+          },
+          "from_date": {
+            "type": "string",
+            "format": "date",
+            "title": "From Date",
+            "description": "Inclusive ISO start of the selected window."
+          },
+          "to_date": {
+            "type": "string",
+            "format": "date",
+            "title": "To Date",
+            "description": "Inclusive ISO end of the selected window."
           },
           "periods": {
             "items": {
@@ -6189,7 +6239,7 @@
             },
             "type": "array",
             "title": "Periods",
-            "description": "The four available windows."
+            "description": "The four preset windows."
           },
           "summary": {
             "$ref": "#/components/schemas/CardexSummaryOut"
@@ -6223,7 +6273,9 @@
         "required": [
           "product_id",
           "sku",
-          "period"
+          "period",
+          "from_date",
+          "to_date"
         ],
         "title": "ProductCardexOut",
         "description": "Sales/purchase history recorded in Parsina for one product."

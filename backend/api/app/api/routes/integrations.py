@@ -7,7 +7,7 @@ click, a second admin, and the scheduler can never run in parallel.
 
 import logging
 import threading
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, sessionmaker
@@ -33,7 +33,11 @@ from app.schemas import (
 )
 from app.schemas.competitor import CompetitorSyncRunOut, CompetitorSyncStatusOut
 from app.services import SettingsService
-from app.services.cardex import CardexProductNotFoundError, ProductCardexService
+from app.services.cardex import (
+    CardexProductNotFoundError,
+    CardexRangeError,
+    ProductCardexService,
+)
 from app.services.competitor_sync import CompetitorSyncBusyError, CompetitorSyncService
 from app.services.parsina_connection import (
     ParsinaConnectionConfigError,
@@ -224,21 +228,43 @@ def parsina_sync(
     summary="Product cardex (Parsina sales and purchases)",
     description=(
         "Sales/purchase lines and totals recorded in Parsina for one product. "
-        "`period` is one of `today`, `3_days`, `7_days`, or `30_days`. "
-        "The response also carries all four selectable windows with ISO bounds."
+        "`period` is one of `today`, `3_days`, `7_days`, or `30_days`, or "
+        "`custom` with `from_date` and `to_date` (ISO, inclusive, at most 90 days). "
+        "The response carries the selected window bounds and the four presets."
     ),
     responses={404: NOT_FOUND, 422: VALIDATION_ERROR},
 )
 def product_cardex(
     product_id: int,
-    period: str = Query(default="7_days", pattern="^(today|3_days|7_days|30_days)$"),
+    period: str = Query(
+        default="7_days",
+        pattern="^(today|3_days|7_days|30_days|custom)$",
+    ),
+    from_date: date | None = Query(  # noqa: B008
+        default=None,
+        description="Inclusive ISO start date; required when `period=custom`.",
+    ),
+    to_date: date | None = Query(  # noqa: B008
+        default=None,
+        description="Inclusive ISO end date; required when `period=custom`.",
+    ),
     _user: Admin = Depends(require_user),  # noqa: B008
     session: Session = Depends(get_db_readonly),  # noqa: B008
 ) -> ProductCardexOut:
     try:
-        return ProductCardexService(session).get(product_id=product_id, period=period)
+        return ProductCardexService(session).get(
+            product_id=product_id,
+            period=period,
+            from_date=from_date,
+            to_date=to_date,
+        )
     except CardexProductNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from None
+    except CardexRangeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from None
 
 
 @router.get(

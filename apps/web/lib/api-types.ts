@@ -235,7 +235,8 @@ export interface ProductAnalysisReport {
   generated_at: string
 }
 
-export type CardexPeriodKey = "today" | "3_days" | "7_days" | "30_days"
+export type CardexPeriodKey =
+  "today" | "3_days" | "7_days" | "30_days" | "custom"
 
 export interface CardexPeriod {
   key: CardexPeriodKey
@@ -268,6 +269,8 @@ export interface ProductCardex {
   product_id: number
   sku: string
   period: CardexPeriodKey
+  from_date: string
+  to_date: string
   periods: CardexPeriod[]
   summary: CardexSummary
   entries: CardexEntry[]

@@ -57,6 +57,8 @@ def _cardex(
         product_id=1,
         sku="TV-55",
         period="30_days",
+        from_date=TO_DATE - timedelta(days=29),
+        to_date=TO_DATE,
         periods=PERIODS,
         summary=CardexSummaryOut(
             purchase_quantity=purchase_quantity,

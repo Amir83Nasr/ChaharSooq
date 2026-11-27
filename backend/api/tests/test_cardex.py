@@ -16,7 +16,12 @@ from app.core.config import ParsinaSettings
 from app.core.database import get_engine
 from app.integrations.cardex_demo import demo_invoices
 from app.models import Product
-from app.services.cardex import ProductCardexService, _toman
+from app.services.cardex import (
+    CardexRangeError,
+    ProductCardexService,
+    _jalali,
+    _toman,
+)
 from tests.helpers import login
 
 SETTINGS = ParsinaSettings(
@@ -36,9 +41,11 @@ def _envelope(data: Any) -> dict[str, Any]:
 class CardexParsina:
     def __init__(self) -> None:
         self.paths: list[str] = []
+        self.params: list[dict[str, str]] = []
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         self.paths.append(request.url.path)
+        self.params.append(dict(request.url.params))
         if request.url.path.endswith("/Account"):
             return httpx.Response(200, json={"access_token": "token", "expires_in": 7200})
         if request.url.path.endswith("/SaleFactor"):
@@ -139,6 +146,52 @@ def test_cardex_aggregates_purchases_and_sales(session: Session) -> None:
     assert any("buyFactor" in path for path in fake.paths)
 
 
+def test_cardex_custom_range_uses_selected_window(session: Session) -> None:
+    product = _product(session)
+    fake = CardexParsina()
+    service = ProductCardexService(session, settings=SETTINGS, transport=httpx.MockTransport(fake))
+    start, end = date(2025, 11, 1), date(2025, 11, 20)
+
+    report = service.get(
+        product_id=product.id,
+        period="custom",
+        from_date=start,
+        to_date=end,
+    )
+
+    assert report.period == "custom"
+    assert (report.from_date, report.to_date) == (start, end)
+    # Presets stay the four fixed windows; the custom bounds are top-level.
+    assert [p.key for p in report.periods] == ["today", "3_days", "7_days", "30_days"]
+    assert report.summary.sale_amount == 2000
+    assert any(
+        params.get("fromDate") == _jalali(start) and params.get("toDate") == _jalali(end)
+        for params in fake.params
+    )
+
+
+def test_cardex_custom_range_validation(session: Session) -> None:
+    product = _product(session)
+    service = ProductCardexService(session, settings=SETTINGS)
+
+    with pytest.raises(CardexRangeError):
+        service.get(product_id=product.id, period="custom", from_date=date(2025, 11, 1))
+    with pytest.raises(CardexRangeError):
+        service.get(
+            product_id=product.id,
+            period="custom",
+            from_date=date(2025, 11, 20),
+            to_date=date(2025, 11, 1),
+        )
+    with pytest.raises(CardexRangeError):
+        service.get(
+            product_id=product.id,
+            period="custom",
+            from_date=date(2025, 1, 1),
+            to_date=date(2025, 12, 31),
+        )
+
+
 def test_development_demo_invoices_cover_both_directions(session: Session) -> None:
     product = _product(session)
     today = date(2026, 11, 26)
@@ -213,3 +266,30 @@ def test_cardex_route_validation_and_auth(client: TestClient, session: Session) 
     assert response.status_code == 422
     missing = client.get("/api/v1/products/999999/cardex")
     assert missing.status_code == 404
+
+
+def test_cardex_route_custom_range(client: TestClient, session: Session) -> None:
+    product_id = _product(session).id
+    login(client)
+    path = f"/api/v1/products/{product_id}/cardex"
+
+    incomplete = client.get(
+        path,
+        params={"period": "custom", "from_date": "2025-11-01"},
+    )
+    assert incomplete.status_code == 422
+    assert incomplete.json()["error"]["code"] == "validation_error"
+
+    ok = client.get(
+        path,
+        params={
+            "period": "custom",
+            "from_date": "2025-11-01",
+            "to_date": "2025-11-20",
+        },
+    )
+    assert ok.status_code == 200
+    body = ok.json()
+    assert body["period"] == "custom"
+    assert body["from_date"] == "2025-11-01"
+    assert body["to_date"] == "2025-11-20"

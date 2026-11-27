@@ -576,9 +576,18 @@ export const api = {
     )
   },
   /** Parsina purchase/sale history for one product and one time window. */
-  productCardex(productId: number, period: CardexPeriodKey) {
+  productCardex(
+    productId: number,
+    period: CardexPeriodKey,
+    range?: { from: string; to: string }
+  ) {
+    const params = new URLSearchParams({ period })
+    if (period === "custom" && range) {
+      params.set("from_date", range.from)
+      params.set("to_date", range.to)
+    }
     return request<ProductCardex>(
-      `/api/v1/products/${productId}/cardex?period=${period}`
+      `/api/v1/products/${productId}/cardex?${params.toString()}`
     )
   },
   updateParsinaConnection(payload: ParsinaConnectionUpdate) {

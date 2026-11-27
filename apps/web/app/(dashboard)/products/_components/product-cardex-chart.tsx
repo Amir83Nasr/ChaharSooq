@@ -77,9 +77,6 @@ function buildChartPoints(
   entries: CardexEntry[],
   report: ProductCardex
 ): CardexChartPoint[] {
-  const window = report.periods.find((item) => item.key === report.period)
-  if (!window) return []
-
   const totals = new Map<string, { sale: number; purchase: number }>()
   for (const entry of entries) {
     if (entry.is_cancelled || !entry.invoice_date) continue
@@ -89,8 +86,8 @@ function buildChartPoints(
     totals.set(date, current)
   }
 
-  const start = parseIsoDay(window.from_date).getTime()
-  const end = parseIsoDay(window.to_date).getTime()
+  const start = parseIsoDay(report.from_date).getTime()
+  const end = parseIsoDay(report.to_date).getTime()
   const points: CardexChartPoint[] = []
   for (let time = start; time <= end; time += DAY_MS) {
     const date = toIsoDay(new Date(time))

@@ -79,9 +79,11 @@ class ProductCardexOut(BaseModel):
 
     product_id: int = Field(description="Charsooq product id.")
     sku: str = Field(description="Product SKU / Parsina good code.")
-    period: str = Field(description="Selected period key.")
+    period: str = Field(description="Selected period key; `custom` for a manual range.")
+    from_date: date = Field(description="Inclusive ISO start of the selected window.")
+    to_date: date = Field(description="Inclusive ISO end of the selected window.")
     periods: list[CardexPeriod] = Field(
-        default_factory=list, description="The four available windows."
+        default_factory=list, description="The four preset windows."
     )
     summary: CardexSummaryOut = Field(default_factory=CardexSummaryOut)
     entries: list[CardexEntryOut] = Field(default_factory=list)

@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { CalendarDaysIcon } from "lucide-react"
 
 import {
   Select,
@@ -8,14 +9,31 @@ import {
   SelectGroup,
   SelectItem,
   SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/primitives/select"
 import { Badge } from "@workspace/ui/primitives/badge"
 import { Button } from "@workspace/ui/primitives/button"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@workspace/ui/primitives/popover"
+import { Separator } from "@workspace/ui/primitives/separator"
+import { JalaliRangeCalendar } from "@workspace/ui/persian/persian-calendar"
 import { PersianDate } from "@workspace/ui/persian/persian-date"
 import { PersianNumber } from "@workspace/ui/persian/persian-number"
 import { Price } from "@workspace/ui/persian/price"
+import {
+  compareJalaliParts,
+  formatJalaliParts,
+  jalaliDaySpan,
+  jalaliPartsToIsoDay,
+  toJalaliParts,
+  toJalaliPartsUtc,
+  type JalaliParts,
+} from "@workspace/ui/lib/jalali"
 import { cn } from "@workspace/ui/lib/utils"
 
 import {
@@ -38,7 +56,14 @@ const FALLBACK_PERIODS: CardexPeriod[] = [
   { key: "30_days", label: "۳۰ روز گذشته", from_date: "", to_date: "" },
 ]
 
+/** Mirrors the API cap for a manual cardex window. */
+const MAX_CUSTOM_RANGE_DAYS = 90
+const CUSTOM_RANGE_LIMIT_HINT = "بازه دلخواه حداکثر ۹۰ روز است."
+const CUSTOM_RANGE_TOO_LONG = "بازه انتخابی بیش از ۹۰ روز است."
+
 type CardexView = "bar" | "line" | "table"
+
+type CustomRange = { from: string; to: string }
 
 const DIRECTION_OPTIONS: { value: CardexDirection; label: string }[] = [
   { value: "all", label: "همه" },
@@ -55,6 +80,11 @@ const VIEW_OPTIONS: { value: CardexView; label: string }[] = [
 function cardexError(error: unknown): string {
   if (error instanceof ApiRequestError) return error.message
   return "دریافت کارتکس کالا انجام نشد. دوباره تلاش کنید."
+}
+
+/** ISO machine day in, Jalali parts out without a time-zone shift. */
+function isoDayToJalali(iso: string): JalaliParts {
+  return toJalaliPartsUtc(new Date(`${iso}T00:00:00Z`))
 }
 
 function SummaryCard({
@@ -144,12 +174,25 @@ export function ProductCardexPanel({ productId }: { productId: number }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // The manual window is applied only after both ends are confirmed; until
+  // then the previous report stays visible behind the picker.
+  const [customRange, setCustomRange] = useState<CustomRange | null>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [draftFrom, setDraftFrom] = useState<JalaliParts | null>(null)
+  const [draftTo, setDraftTo] = useState<JalaliParts | null>(null)
+  const [rangeError, setRangeError] = useState<string | null>(null)
+  const previousPeriod = useRef<CardexPeriodKey>("7_days")
+  const pickerAnchor = useRef<HTMLDivElement | null>(null)
+
+  const today = useMemo(() => toJalaliParts(new Date()), [])
+
   useEffect(() => {
+    if (period === "custom" && customRange === null) return
     let cancelled = false
     setLoading(true)
     setError(null)
     api
-      .productCardex(productId, period)
+      .productCardex(productId, period, customRange ?? undefined)
       .then((data) => {
         if (!cancelled) setReport(data)
       })
@@ -162,7 +205,7 @@ export function ProductCardexPanel({ productId }: { productId: number }) {
     return () => {
       cancelled = true
     }
-  }, [productId, period])
+  }, [productId, period, customRange])
 
   const periods = report?.periods?.length ? report.periods : FALLBACK_PERIODS
   const entries: CardexEntry[] = report?.entries ?? []
@@ -179,6 +222,80 @@ export function ProductCardexPanel({ productId }: { productId: number }) {
   const activeFilteredCount = filteredEntries.length - cancelledCount
   const directionNoun = direction === "sale" ? "فروش" : "خرید"
 
+  function periodLabel(value: CardexPeriodKey | null): string {
+    if (value === "custom") {
+      return customRange
+        ? `${formatJalaliParts(isoDayToJalali(customRange.from))} تا ${formatJalaliParts(isoDayToJalali(customRange.to))}`
+        : "بازه دلخواه"
+    }
+    return periods.find((item) => item.key === value)?.label ?? "۷ روز گذشته"
+  }
+
+  function openCustomPicker() {
+    setRangeError(null)
+    setPickerOpen(true)
+    if (customRange !== null) {
+      setDraftFrom(isoDayToJalali(customRange.from))
+      setDraftTo(isoDayToJalali(customRange.to))
+      return
+    }
+    if (report !== null) {
+      setDraftFrom(isoDayToJalali(report.from_date))
+      setDraftTo(isoDayToJalali(report.to_date))
+      return
+    }
+    setDraftFrom(null)
+    setDraftTo(null)
+  }
+
+  function handlePeriodChange(value: CardexPeriodKey) {
+    if (value === "custom") {
+      if (period !== "custom") previousPeriod.current = period
+      setPeriod("custom")
+      openCustomPicker()
+      return
+    }
+    setPickerOpen(false)
+    setPeriod(value)
+  }
+
+  function handlePickerOpenChange(open: boolean) {
+    setPickerOpen(open)
+    // Dismissing the picker without applying a range must not leave the tab
+    // stuck on an empty "custom" window.
+    if (!open && period === "custom" && customRange === null) {
+      setPeriod(previousPeriod.current)
+    }
+  }
+
+  function handleSelectDay(day: JalaliParts) {
+    setRangeError(null)
+    if (draftFrom === null || draftTo !== null) {
+      setDraftFrom(day)
+      setDraftTo(null)
+      return
+    }
+    if (compareJalaliParts(day, draftFrom) < 0) {
+      setDraftTo(draftFrom)
+      setDraftFrom(day)
+      return
+    }
+    setDraftTo(day)
+  }
+
+  function applyCustomRange() {
+    if (draftFrom === null || draftTo === null) return
+    if (jalaliDaySpan(draftFrom, draftTo) > MAX_CUSTOM_RANGE_DAYS) {
+      setRangeError(CUSTOM_RANGE_TOO_LONG)
+      return
+    }
+    setCustomRange({
+      from: jalaliPartsToIsoDay(draftFrom),
+      to: jalaliPartsToIsoDay(draftTo),
+    })
+    setPickerOpen(false)
+  }
+
   return (
     <section className="space-y-3 text-start">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -186,32 +303,105 @@ export function ProductCardexPanel({ productId }: { productId: number }) {
           خرید و فروش ثبت‌شده در پارسینا
         </h3>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-          <Select
-            value={period}
-            onValueChange={(value) => setPeriod(value as CardexPeriodKey)}
+          <div
+            ref={pickerAnchor}
+            className="flex w-full items-center gap-1 sm:w-auto"
           >
-            <SelectTrigger
-              className="w-full sm:w-40"
-              aria-label="بازه کارتکس کالا"
-            >
-              <SelectValue>
-                {(value: string | null) =>
-                  periods.find((item) => item.key === value)?.label ??
-                  "۷ روز گذشته"
+            <Popover open={pickerOpen} onOpenChange={handlePickerOpenChange}>
+              <Select
+                value={period}
+                onValueChange={(value) =>
+                  handlePeriodChange(value as CardexPeriodKey)
                 }
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent align="start">
-              <SelectGroup>
-                <SelectLabel>بازه گزارش</SelectLabel>
-                {periods.map((item) => (
-                  <SelectItem key={item.key} value={item.key}>
-                    {item.label}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
+              >
+                <SelectTrigger
+                  className="w-full sm:w-auto sm:min-w-40"
+                  aria-label="بازه کارتکس کالا"
+                >
+                  <SelectValue>
+                    {(value: string | null) =>
+                      periodLabel(value as CardexPeriodKey | null)
+                    }
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent align="start">
+                  <SelectGroup>
+                    <SelectLabel>بازه گزارش</SelectLabel>
+                    {periods.map((item) => (
+                      <SelectItem key={item.key} value={item.key}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                  <SelectSeparator />
+                  <SelectGroup>
+                    <SelectItem value="custom">بازه دلخواه…</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              {period === "custom" ? (
+                <PopoverTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon-sm"
+                      aria-label="تغییر بازه دلخواه"
+                      className="max-md:size-11"
+                    />
+                  }
+                >
+                  <CalendarDaysIcon />
+                </PopoverTrigger>
+              ) : null}
+              <PopoverContent
+                anchor={pickerAnchor}
+                align="start"
+                className="w-[19.5rem] p-3"
+              >
+                <JalaliRangeCalendar
+                  from={draftFrom}
+                  to={draftTo}
+                  maxDate={today}
+                  onSelect={handleSelectDay}
+                />
+                <Separator className="my-3" />
+                <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                  <span>
+                    از: {draftFrom ? formatJalaliParts(draftFrom) : "—"}
+                  </span>
+                  <span>تا: {draftTo ? formatJalaliParts(draftTo) : "—"}</span>
+                </div>
+                <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
+                  {CUSTOM_RANGE_LIMIT_HINT}
+                </p>
+                {rangeError ? (
+                  <p role="alert" className="mt-2 text-[11px] text-destructive">
+                    {rangeError}
+                  </p>
+                ) : null}
+                <div className="mt-3 flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="flex-1"
+                    disabled={draftFrom === null || draftTo === null}
+                    onClick={applyCustomRange}
+                  >
+                    اعمال بازه
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setPickerOpen(false)}
+                  >
+                    بستن
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
           <SegmentedFilter
             label="نوع تراکنش کارتکس"
             value={direction}

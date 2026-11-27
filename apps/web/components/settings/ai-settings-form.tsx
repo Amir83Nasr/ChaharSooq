@@ -1,34 +1,35 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { FlaskConical } from "lucide-react"
 
 import { BusyLabel } from "@workspace/ui/primitives/busy-label"
 import { Button } from "@workspace/ui/primitives/button"
 import { Input } from "@workspace/ui/primitives/input"
+import { Spinner } from "@workspace/ui/primitives/spinner"
 import { Textarea } from "@workspace/ui/primitives/textarea"
 import { toast } from "@workspace/ui/primitives/sonner"
 
 import { api, type AISettings } from "@/lib/api"
 
-/** Owner-only AI connection and shared system-prompt editor. */
+const TEST_PROMPT = "سلام! در یک جمله کوتاه بگو آماده‌ای."
+
+/** AI connection and shared system-prompt editor for management accounts. */
 export function AISettingsForm() {
   const [baseUrl, setBaseUrl] = useState("")
   const [apiKey, setApiKey] = useState("")
   const [modelId, setModelId] = useState("")
-  const [analysisModelId, setAnalysisModelId] = useState("")
   const [systemPrompt, setSystemPrompt] = useState("")
   const [apiKeySet, setApiKeySet] = useState(false)
-  const [configured, setConfigured] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [testing, setTesting] = useState(false)
 
   function apply(data: AISettings) {
     setBaseUrl(data.base_url ?? "")
     setModelId(data.model_id ?? "")
-    setAnalysisModelId(data.analysis_model_id ?? "")
     setSystemPrompt(data.system_prompt ?? "")
     setApiKeySet(data.api_key_set)
-    setConfigured(data.configured)
     setApiKey("")
   }
 
@@ -60,7 +61,6 @@ export function AISettingsForm() {
         base_url: baseUrl.trim(),
         api_key: apiKey === "" ? null : apiKey,
         model_id: modelId.trim(),
-        analysis_model_id: analysisModelId.trim(),
         system_prompt: systemPrompt,
       })
       apply(data)
@@ -69,6 +69,21 @@ export function AISettingsForm() {
       toast.error(err instanceof Error ? err.message : "خطایی رخ داد.")
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function testConnection() {
+    if (testing) return
+    setTesting(true)
+    try {
+      await api.testAIConnection(TEST_PROMPT)
+      toast.success("اتصال هوش مصنوعی درست کار می‌کند.")
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error ? err.message : "آزمایش اتصال انجام نشد."
+      )
+    } finally {
+      setTesting(false)
     }
   }
 
@@ -81,14 +96,11 @@ export function AISettingsForm() {
     )
   }
 
-  const keyReady = apiKeySet || apiKey.trim() !== ""
-  const ready = keyReady && baseUrl.trim() !== "" && modelId.trim() !== ""
-
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm leading-6 text-muted-foreground">
-        این بخش فقط در دسترس سوپرادمین است. آدرس پایه باید به یک سرویس سازگار با
-        OpenAI اشاره کند و مسیر تکمیل گفتگو به{" "}
+        آدرس پایه باید به یک سرویس سازگار با OpenAI اشاره کند و مسیر تکمیل گفتگو
+        به{" "}
         <span dir="ltr" className="font-mono text-xs">
           POST /chat/completions
         </span>{" "}
@@ -106,8 +118,7 @@ export function AISettingsForm() {
             className="h-11 sm:h-9"
           />
           <span className="text-xs text-muted-foreground">
-            مثلاً https://api.gapgpt.ir/v1. خالی گذاشتن این فیلد، مقدار پیش‌فرض
-            را برمی‌گرداند.
+            خالی گذاشتن این فیلد، مقدار پیش‌فرض را برمی‌گرداند.
           </span>
         </label>
         <label className="flex flex-col gap-1.5">
@@ -120,21 +131,6 @@ export function AISettingsForm() {
             aria-label="شناسه مدل هوش مصنوعی"
             className="h-11 sm:h-9"
           />
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium">مدل تحلیل محصول</span>
-          <Input
-            dir="ltr"
-            value={analysisModelId}
-            onChange={(e) => setAnalysisModelId(e.target.value)}
-            placeholder="gpt-4.1-mini"
-            aria-label="شناسه مدل تحلیل محصول"
-            className="h-11 sm:h-9"
-          />
-          <span className="text-xs text-muted-foreground">
-            گزارش محصول با این مدل ساخته می‌شود تا سریع‌تر و کلمه‌به‌کلمه نمایش
-            داده شود. خالی گذاشتن آن، پیش‌فرض gpt-4.1-mini را برمی‌گرداند.
-          </span>
         </label>
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-medium">کلید API</span>
@@ -165,15 +161,14 @@ export function AISettingsForm() {
             className="min-h-28"
           />
           <span className="text-xs text-muted-foreground">
-            این متن به عنوان پیام system پیش از ورودی هر کاربر به مدل فرستاده
-            می‌شود. خالی گذاشتن آن، دستور سیستمی را پاک می‌کند.
+            خالی گذاشتن آن، دستور سیستمی را پاک می‌کند.
           </span>
         </label>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <Button
           onClick={save}
-          disabled={busy}
+          disabled={busy || testing}
           aria-busy={busy}
           className="h-11 shrink-0 sm:h-9"
         >
@@ -184,17 +179,21 @@ export function AISettingsForm() {
             spinner
           />
         </Button>
-        <span
-          className={
-            ready || configured
-              ? "text-xs text-muted-foreground"
-              : "text-xs text-destructive"
-          }
+        <Button
+          type="button"
+          onClick={testConnection}
+          disabled={busy || testing}
+          aria-busy={testing}
+          variant="outline"
+          className="h-11 shrink-0 gap-2 sm:h-9"
         >
-          {ready || configured
-            ? "اتصال برای استفاده آماده است."
-            : "برای فعال شدن، کلید API، آدرس پایه و شناسه مدل لازم است."}
-        </span>
+          {testing ? (
+            <Spinner active />
+          ) : (
+            <FlaskConical className="size-4" aria-hidden="true" />
+          )}
+          <span>آزمایش اتصال</span>
+        </Button>
       </div>
     </div>
   )

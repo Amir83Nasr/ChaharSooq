@@ -107,7 +107,11 @@ def _product(session: Session) -> Product:
         is_active=True,
     )
     session.add(product)
-    session.flush()
+    # HTTP requests read through a different session, so the row must be
+    # visible beyond this one: commit instead of only flushing. SQLite's
+    # shared in-memory connection hid the difference; PostgreSQL does not.
+    session.commit()
+    session.refresh(product)
     return product
 
 

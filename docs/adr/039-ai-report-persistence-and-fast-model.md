@@ -4,7 +4,11 @@ Date: 2026-11-26
 
 ## Status
 
-Accepted.
+Accepted. The separate `analysis_model_id` is superseded by
+[ADR 040](040-admin-ai-settings-single-model.md); product analysis uses the one
+configured model.
+
+> Report persistence and the owner-only report endpoints below still hold.
 
 ## Context
 

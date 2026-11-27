@@ -198,12 +198,10 @@ export interface ParsinaConnectionUpdate {
   fiscal_year?: number | null
 }
 
-/** Owner-only AI connection settings. The API key is never returned. */
+/** Management-only AI connection settings. The API key is never returned. */
 export interface AISettings {
   base_url: string
   model_id: string
-  /** Model used only for product analysis reports. */
-  analysis_model_id: string
   system_prompt: string
   api_key_set: boolean
   configured: boolean
@@ -214,7 +212,6 @@ export interface AISettingsUpdate {
   /** Empty string keeps the stored key. */
   api_key?: string | null
   model_id?: string
-  analysis_model_id?: string
   system_prompt?: string
 }
 

@@ -93,15 +93,18 @@ export function ProductDetailDialog(props: {
   onCompetitorChanged?: () => void
   /** `false` for read-only accounts: prices stay visible, editing is hidden. */
   canEdit?: boolean
-  /** AI analysis is owner-only (the endpoint enforces the same role). */
-  canUseAI?: boolean
+  /**
+   * Management accounts generate and delete AI reports; every signed-in account
+   * can open the tab and read the saved report.
+   */
+  canManageAI?: boolean
 }) {
   const {
     selected,
     onClose,
     onCompetitorChanged,
     canEdit = true,
-    canUseAI = false,
+    canManageAI = false,
   } = props
   const [localProduct, setLocalProduct] = useState<ProductOut | null>(null)
   const [modeBusy, setModeBusy] = useState<Selection | null>(null)
@@ -390,26 +393,23 @@ export function ProductDetailDialog(props: {
                 className="no-scrollbar max-w-full self-start overflow-x-auto"
               >
                 <TabsTrigger value="cardex">کارتکس کالا</TabsTrigger>
-                {canUseAI ? (
-                  <TabsTrigger value="analysis">تحلیل هوش مصنوعی</TabsTrigger>
-                ) : null}
+                <TabsTrigger value="analysis">تحلیل هوش مصنوعی</TabsTrigger>
                 <TabsTrigger value="links">لینک فروشگاه‌ها</TabsTrigger>
                 <TabsTrigger value="bounds">محدودیت قیمت پیشنهادی</TabsTrigger>
               </TabsList>
               <TabsContent value="cardex" className="mt-1">
                 <ProductCardexPanel productId={product.id} />
               </TabsContent>
-              {canUseAI ? (
-                <TabsContent value="analysis" keepMounted className="mt-1">
-                  {/* Keyed by product so switching products starts clean;
-                      keepMounted preserves a finished report across tabs. */}
-                  <ProductAIAnalysis
-                    key={product.id}
-                    productId={product.id}
-                    productName={product.name}
-                  />
-                </TabsContent>
-              ) : null}
+              <TabsContent value="analysis" keepMounted className="mt-1">
+                {/* Keyed by product so switching products starts clean;
+                    keepMounted preserves a finished report across tabs. */}
+                <ProductAIAnalysis
+                  key={product.id}
+                  productId={product.id}
+                  productName={product.name}
+                  canManage={canManageAI}
+                />
+              </TabsContent>
               <TabsContent value="links" className="mt-1">
                 {linksPanel()}
               </TabsContent>

@@ -5,10 +5,8 @@ import { PackageMinus, Palette, RefreshCw, Sparkles } from "lucide-react"
 
 import { formatPersianNumber } from "@workspace/ui/lib/number"
 
-import { useSession } from "@/components/auth/session-provider"
 import { SettingsOverviewCard } from "@/components/settings/settings-overview-card"
 import { api, type SettingsOut } from "@/lib/api"
-import { isOwner } from "@/lib/session"
 
 function intervalLabel(minutes: number): string {
   const hours = minutes / 60
@@ -20,7 +18,6 @@ function intervalLabel(minutes: number): string {
 
 export function SettingsOverview() {
   const [settings, setSettings] = useState<SettingsOut | null>(null)
-  const { role } = useSession()
 
   useEffect(() => {
     let cancelled = false
@@ -70,15 +67,13 @@ export function SettingsOverview() {
         description="تم، تعداد ردیف جدول و ستون‌های جدول محصولات"
         summary="ظاهر پنل و چیدمان جدول محصولات را تنظیم کنید"
       />
-      {isOwner(role) ? (
-        <SettingsOverviewCard
-          href="/settings/ai"
-          icon={Sparkles}
-          title="هوش مصنوعی"
-          description="اتصال به سرویس OpenAI-compatible، کلید API، مدل و دستور سیستمی"
-          summary="زیرساخت مشترک دستیار هوشمند و سایر قابلیت‌های مبتنی بر مدل"
-        />
-      ) : null}
+      <SettingsOverviewCard
+        href="/settings/ai"
+        icon={Sparkles}
+        title="هوش مصنوعی"
+        description="اتصال به سرویس OpenAI-compatible، کلید API، مدل و دستور سیستمی"
+        summary="زیرساخت مشترک دستیار هوشمند و سایر قابلیت‌های مبتنی بر مدل"
+      />
     </div>
   )
 }

@@ -4,7 +4,11 @@ Date: 2026-11-26
 
 ## Status
 
-Accepted.
+Accepted. Route access is superseded by
+[ADR 040](040-admin-ai-settings-single-model.md): admins generate and delete
+reports, and every signed-in account can read the saved report.
+
+> The analysis design, server-built context, and privacy rules below still hold.
 
 ## Context
 

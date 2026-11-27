@@ -15,7 +15,7 @@ from app.integrations.openai_compatible import (
     AIResponseError,
     OpenAICompatibleClient,
 )
-from tests.helpers import login, login_owner
+from tests.helpers import login, login_as, login_owner
 
 SETTINGS_URL = "/api/v1/ai/settings"
 TEST_URL = "/api/v1/ai/test"
@@ -212,19 +212,35 @@ def test_client_stream_rejects_empty_streams_and_error_frames() -> None:
     assert "quota exceeded" in str(excinfo.value)
 
 
-# ── Owner-only settings ─────────────────────────────────────
+# ── Management-only settings ────────────────────────────────
 
 
-def test_ai_settings_require_owner(client: TestClient) -> None:
+def test_ai_settings_require_a_management_account(client: TestClient) -> None:
     assert client.get(SETTINGS_URL).status_code == 401
     assert client.put(SETTINGS_URL, json={"model_id": "x"}).status_code == 401
     assert client.post(TEST_URL, json={"prompt": "سلام"}).status_code == 401
-    assert client.post(STREAM_URL, json={"prompt": "سلام"}).status_code == 401
 
+    # Admins can read, save, and test the shared connection.
     login(client)
+    assert client.get(SETTINGS_URL).status_code == 200
+    assert client.put(SETTINGS_URL, json={"model_id": "admin-model"}).status_code == 200
+    assert client.post(TEST_URL, json={"prompt": "سلام"}).status_code == 503
+
+    # Viewers stay read-only.
+    created = client.post(
+        "/api/v1/users",
+        json={"username": "ai-viewer", "password": "viewer-pass-123", "role": "viewer"},
+    )
+    assert created.status_code == 201, created.text
+    login_as(client, "ai-viewer", "viewer-pass-123")
     assert client.get(SETTINGS_URL).status_code == 403
     assert client.put(SETTINGS_URL, json={"model_id": "x"}).status_code == 403
     assert client.post(TEST_URL, json={"prompt": "سلام"}).status_code == 403
+
+
+def test_ai_stream_remains_owner_only(client: TestClient) -> None:
+    assert client.post(STREAM_URL, json={"prompt": "سلام"}).status_code == 401
+    login(client)
     assert client.post(STREAM_URL, json={"prompt": "سلام"}).status_code == 403
 
 
@@ -235,7 +251,6 @@ def test_ai_settings_defaults(client: TestClient) -> None:
     assert r.json() == {
         "base_url": DEFAULT_BASE_URL,
         "model_id": DEFAULT_MODEL_ID,
-        "analysis_model_id": "gpt-4.1-mini",
         "system_prompt": "",
         "api_key_set": False,
         "configured": False,
@@ -250,7 +265,6 @@ def test_ai_settings_update_never_returns_the_key(client: TestClient) -> None:
             "base_url": "https://ai.example/v1/",
             "api_key": "sk-owner-secret",
             "model_id": "own-model",
-            "analysis_model_id": "fast-model",
             "system_prompt": "تو دستیار چهارسوق هستی.",
         },
     )
@@ -258,7 +272,6 @@ def test_ai_settings_update_never_returns_the_key(client: TestClient) -> None:
     data = r.json()
     assert data["base_url"] == "https://ai.example/v1"
     assert data["model_id"] == "own-model"
-    assert data["analysis_model_id"] == "fast-model"
     assert data["system_prompt"] == "تو دستیار چهارسوق هستی."
     assert data["api_key_set"] is True
     assert data["configured"] is True
@@ -290,12 +303,11 @@ def test_ai_settings_empty_endpoint_fields_fall_back_to_defaults(client: TestCli
     )
     cleared = client.put(
         SETTINGS_URL,
-        json={"base_url": "", "model_id": "", "analysis_model_id": "", "api_key": ""},
+        json={"base_url": "", "model_id": "", "api_key": ""},
     )
     assert cleared.status_code == 200, cleared.text
     assert cleared.json()["base_url"] == DEFAULT_BASE_URL
     assert cleared.json()["model_id"] == DEFAULT_MODEL_ID
-    assert cleared.json()["analysis_model_id"] == "gpt-4.1-mini"
     assert cleared.json()["api_key_set"] is True
 
 

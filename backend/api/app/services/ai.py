@@ -1,8 +1,9 @@
-"""AI service — owner-managed config plus the shared completion entry point.
+"""AI service — management-managed config plus the shared completion entry point.
 
-Every AI feature should call ``AIService.complete`` rather than building a
-provider request itself: the system prompt, credentials, error mapping, and
-timeout stay in one place.
+Every AI feature should call ``AIService.complete`` (or ``stream``) rather than
+building a provider request itself: the system prompt, credentials, error
+mapping, and timeout stay in one place. One configured model serves every
+feature, including product analysis.
 """
 
 from __future__ import annotations
@@ -30,8 +31,6 @@ log = logging.getLogger("charsooq.ai")
 
 DEFAULT_AI_BASE_URL = "https://api.gapgpt.ir/v1"
 DEFAULT_AI_MODEL_ID = "gapgpt-deepseek-v4.1-flash"
-# Reports favour speed and token-by-token output over deep reasoning.
-DEFAULT_ANALYSIS_MODEL_ID = "gpt-4.1-mini"
 AI_TIMEOUT_SECONDS = 90.0
 
 AI_NOT_CONFIGURED_MESSAGE = (
@@ -60,7 +59,6 @@ class EffectiveAIConfig:
     base_url: str
     api_key: str
     model_id: str
-    analysis_model_id: str
     system_prompt: str
 
     @property
@@ -90,10 +88,6 @@ class AIService:
             base_url=(row.base_url if row is not None else "").strip() or DEFAULT_AI_BASE_URL,
             api_key=(row.api_key if row is not None else None) or "",
             model_id=(row.model_id if row is not None else "").strip() or DEFAULT_AI_MODEL_ID,
-            analysis_model_id=(
-                (row.analysis_model_id if row is not None else "").strip()
-                or DEFAULT_ANALYSIS_MODEL_ID
-            ),
             system_prompt=row.system_prompt if row is not None else "",
         )
 
@@ -103,7 +97,6 @@ class AIService:
         return {
             "base_url": effective.base_url,
             "model_id": effective.model_id,
-            "analysis_model_id": effective.analysis_model_id,
             "system_prompt": effective.system_prompt,
             "api_key_set": bool(effective.api_key),
             "configured": effective.configured,
@@ -115,7 +108,6 @@ class AIService:
         base_url: str | None = None,
         api_key: str | None = None,
         model_id: str | None = None,
-        analysis_model_id: str | None = None,
         system_prompt: str | None = None,
     ) -> dict[str, object]:
         row = self._config.ensure()
@@ -123,8 +115,6 @@ class AIService:
             row.base_url = base_url.rstrip("/")
         if model_id is not None:
             row.model_id = model_id
-        if analysis_model_id is not None:
-            row.analysis_model_id = analysis_model_id
         if system_prompt is not None:
             row.system_prompt = system_prompt
         # An empty key means "keep the stored one", matching Parsina's password.
@@ -132,13 +122,11 @@ class AIService:
             row.api_key = api_key
         return self.get_view()
 
-    def _client(
-        self, effective: EffectiveAIConfig, *, model_id: str | None = None
-    ) -> OpenAICompatibleClient:
+    def _client(self, effective: EffectiveAIConfig) -> OpenAICompatibleClient:
         return OpenAICompatibleClient(
             base_url=effective.base_url,
             api_key=effective.api_key,
-            model_id=model_id or effective.model_id,
+            model_id=effective.model_id,
             timeout_seconds=AI_TIMEOUT_SECONDS,
         )
 
@@ -157,21 +145,15 @@ class AIService:
             log.warning("AI completion failed: %s", exc)
             raise AIProviderError(_provider_message(exc)) from exc
 
-    def analysis_model(self) -> str:
-        """Model used for product analysis (fast by default)."""
-        return self._effective(self._config.get()).analysis_model_id
-
-    def stream(self, messages: Sequence[AIMessage], *, model_id: str | None = None) -> AIStream:
-        """Start a streaming completion.
+    def stream(self, messages: Sequence[AIMessage]) -> AIStream:
+        """Start a streaming completion with the configured model.
 
         Configuration is resolved eagerly so the route can return a proper
         error before opening the event stream; provider failures happen while
         the returned iterator is consumed and are mapped to Persian messages.
-        ``model_id`` overrides the shared model for one call (product analysis).
         """
         effective = self._effective_or_raise()
-        model = (model_id or "").strip() or effective.model_id
-        client = self._client(effective, model_id=model)
+        client = self._client(effective)
 
         def chunks() -> Iterator[str]:
             try:
@@ -180,7 +162,7 @@ class AIService:
                 log.warning("AI streaming failed: %s", exc)
                 raise AIProviderError(_provider_message(exc)) from exc
 
-        return AIStream(model=model, chunks=chunks())
+        return AIStream(model=effective.model_id, chunks=chunks())
 
     def test_connection(self, prompt: str) -> dict[str, object]:
         started = time.perf_counter()

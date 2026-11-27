@@ -14,9 +14,6 @@ AI_SYSTEM_PROMPT_MAX_LENGTH = 20_000
 class AISettingsOut(BaseModel):
     base_url: str = Field(description="Effective OpenAI-compatible API base URL.")
     model_id: str = Field(description="Effective model id sent with every request.")
-    analysis_model_id: str = Field(
-        description="Effective model id used only for product analysis reports."
-    )
     system_prompt: str = Field(description="Shared system prompt prepended to requests.")
     api_key_set: bool = Field(description="True when an API key is stored.")
     configured: bool = Field(
@@ -35,7 +32,6 @@ class AISettingsIn(BaseModel):
                     "base_url": "https://api.gapgpt.ir/v1",
                     "api_key": "sk-...",
                     "model_id": "gapgpt-deepseek-v4.1-flash",
-                    "analysis_model_id": "gpt-4.1-mini",
                     "system_prompt": "تو دستیار فروشگاه چهارسوق هستی.",
                 }
             ]
@@ -57,13 +53,6 @@ class AISettingsIn(BaseModel):
         default=None,
         max_length=255,
         description="Model id, e.g. gapgpt-deepseek-v4.1-flash.",
-    )
-    analysis_model_id: str | None = Field(
-        default=None,
-        max_length=255,
-        description=(
-            "Model id for product analysis reports; empty uses the fast default (gpt-4.1-mini)."
-        ),
     )
     system_prompt: str | None = Field(
         default=None,

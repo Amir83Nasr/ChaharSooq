@@ -22,16 +22,19 @@ const DELETE_ERROR = "حذف گزارش انجام نشد. دوباره تلاش
 type Phase = "idle" | "reading" | "writing"
 
 /**
- * Owner-only AI report for one product. The backend assembles the context and
- * saves the last complete report; this component only names the product id,
- * renders the streamed text, and can load or delete the saved report.
+ * AI report for one product. The backend assembles the context and saves the
+ * last complete report. Management accounts can generate and delete it; every
+ * signed-in account can open the tab and read the saved report.
  */
 export function ProductAIAnalysis({
   productId,
   productName,
+  canManage,
 }: {
   productId: number
   productName: string
+  /** Owner/admin generate and delete; viewers only read the saved report. */
+  canManage: boolean
 }) {
   const [report, setReport] = useState("")
   const [done, setDone] = useState<AIStreamDone | null>(null)
@@ -68,7 +71,7 @@ export function ProductAIAnalysis({
   }, [productId])
 
   async function start() {
-    if (busy || loadingSaved) return
+    if (!canManage || busy || loadingSaved) return
     const controller = new AbortController()
     controllerRef.current = controller
     setPhase("reading")
@@ -163,19 +166,21 @@ export function ProductAIAnalysis({
           <div className="space-y-1">
             <p className="text-sm font-medium">گزارش تحلیلی {productName}</p>
             <p className="text-xs leading-6 text-muted-foreground">
-              فروش ۳۰ روز، موجودی، قیمت رقبا و پیشنهاد خرید را از دادهٔ همین
-              لحظه بررسی می‌کند. گزارش پس از پایان ذخیره می‌شود و با باز کردن
-              دوبارهٔ کالا باقی می‌ماند.
+              {canManage
+                ? "فروش ۳۰ روز، موجودی، قیمت رقبا و پیشنهاد خرید را از دادهٔ همین لحظه بررسی می‌کند. گزارش پس از پایان ذخیره می‌شود و با باز کردن دوبارهٔ کالا باقی می‌ماند."
+                : "هنوز گزارش تحلیلی برای این کالا ثبت نشده است. گزارش‌های تحلیلی توسط مدیر ساخته می‌شوند."}
             </p>
           </div>
-          <Button
-            type="button"
-            onClick={() => void start()}
-            className="h-10 gap-2"
-          >
-            <Sparkles className="size-4" aria-hidden="true" />
-            تهیه گزارش تحلیلی
-          </Button>
+          {canManage ? (
+            <Button
+              type="button"
+              onClick={() => void start()}
+              className="h-10 gap-2"
+            >
+              <Sparkles className="size-4" aria-hidden="true" />
+              تهیه گزارش تحلیلی
+            </Button>
+          ) : null}
         </div>
       ) : null}
 
@@ -220,15 +225,17 @@ export function ProductAIAnalysis({
                 </Button>
               ) : (
                 <>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => void start()}
-                    className="h-8 gap-1.5 text-xs"
-                  >
-                    <RefreshCw className="size-3.5" aria-hidden="true" />
-                    تولید مجدد
-                  </Button>
+                  {canManage ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => void start()}
+                      className="h-8 gap-1.5 text-xs"
+                    >
+                      <RefreshCw className="size-3.5" aria-hidden="true" />
+                      تولید مجدد
+                    </Button>
+                  ) : null}
                   <Button
                     type="button"
                     variant="ghost"
@@ -250,14 +257,16 @@ export function ProductAIAnalysis({
                 <p role="alert" className="text-xs leading-6 text-destructive">
                   {error}
                 </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void start()}
-                  className="h-8 text-xs"
-                >
-                  تلاش دوباره
-                </Button>
+                {canManage ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void start()}
+                    className="h-8 text-xs"
+                  >
+                    تلاش دوباره
+                  </Button>
+                ) : null}
               </div>
             ) : null}
 
@@ -288,7 +297,7 @@ export function ProductAIAnalysis({
                   این گزارش بر پایهٔ دادهٔ همین لحظه است و جای تصمیم نهایی مدیر
                   را نمی‌گیرد.
                 </p>
-                {saved !== null || done !== null ? (
+                {canManage && (saved !== null || done !== null) ? (
                   confirmDelete ? (
                     <span className="flex items-center gap-1">
                       <Button

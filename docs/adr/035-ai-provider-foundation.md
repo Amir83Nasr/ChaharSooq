@@ -4,7 +4,12 @@ Date: 2026-11-26
 
 ## Status
 
-Accepted.
+Accepted. The owner-only access to the connection settings is superseded by
+[ADR 040](040-admin-ai-settings-single-model.md); admins can manage the same
+configuration.
+
+> The provider boundary, write-only key, and single shared configuration below
+> still hold.
 
 ## Context
 

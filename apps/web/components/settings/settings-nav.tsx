@@ -13,15 +13,11 @@ import {
 
 import { cn } from "@workspace/ui/lib/utils"
 
-import { useSession } from "@/components/auth/session-provider"
-import { isOwner } from "@/lib/session"
-
 type SettingsNavItem = {
   href: string
   label: string
   icon: LucideIcon
   exact?: boolean
-  ownerOnly?: boolean
 }
 
 const ITEMS: SettingsNavItem[] = [
@@ -29,12 +25,7 @@ const ITEMS: SettingsNavItem[] = [
   { href: "/settings/sync", label: "همگام‌سازی", icon: RefreshCw },
   { href: "/settings/inventory", label: "انبار", icon: PackageMinus },
   { href: "/settings/appearance", label: "نمایش", icon: Palette },
-  {
-    href: "/settings/ai",
-    label: "هوش مصنوعی",
-    icon: Sparkles,
-    ownerOnly: true,
-  },
+  { href: "/settings/ai", label: "هوش مصنوعی", icon: Sparkles },
 ]
 
 function isActive(item: SettingsNavItem, pathname: string): boolean {
@@ -51,13 +42,11 @@ function isActive(item: SettingsNavItem, pathname: string): boolean {
  */
 export function SettingsNav() {
   const pathname = usePathname()
-  const { role } = useSession()
-  const items = ITEMS.filter((item) => !item.ownerOnly || isOwner(role))
 
   return (
     <nav aria-label="بخش‌های تنظیمات" className="min-w-0">
       <ul className="no-scrollbar flex items-center gap-2 overflow-x-auto pb-1 md:flex-col md:items-stretch md:overflow-visible md:pb-0">
-        {items.map((item) => {
+        {ITEMS.map((item) => {
           const active = isActive(item, pathname)
           return (
             <li key={item.href} className="shrink-0 md:shrink">

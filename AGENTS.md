@@ -35,11 +35,12 @@ This file is the single source of agent rules. Other documents:
 | Pricing page (032)       | [Standalone pricing page in the system sidebar](docs/adr/032-standalone-pricing-page.md) (relocates the pricing UI previously nested under settings)                                                                                                                                                                                                                   |
 | Auto-deploy (033)        | [Automatic Production deploy via release polling](docs/adr/033-automatic-release-polling-deploy.md) (outbound-only systemd timer calls `deploy.sh`; no runner on the host)                                                                                                                                                                                             |
 | Pinned products (034)    | [Pinned products and two pricing modes](docs/adr/034-pinned-products-and-two-pricing-modes.md) (removes the no-price mode; adds a pinned marker and filter)                                                                                                                                                                                                            |
-| AI foundation (035)      | [Owner-managed AI provider foundation](docs/adr/035-ai-provider-foundation.md) (OpenAI-compatible chat completions; owner-managed base URL, write-only key, model, and shared system prompt)                                                                                                                                                                           |
+| AI foundation (035)      | [Owner-managed AI provider foundation](docs/adr/035-ai-provider-foundation.md) (OpenAI-compatible chat completions; write-only key, model, and shared system prompt; access superseded by 040)                                                                                                                                                                         |
 | AI streaming (036)       | [Streaming AI replies over Server-Sent Events](docs/adr/036-ai-streaming-sse.md) (`POST /ai/stream`; delta/done/error events over fetch, abortable in the panel)                                                                                                                                                                                                       |
 | AI analysis (037)        | [Product-scoped AI analysis](docs/adr/037-ai-product-analysis.md) (owner-only `POST /ai/products/{id}/analysis`; server-built context, no client prompt, privacy-safe aggregates)                                                                                                                                                                                      |
 | AI keepalive (038)       | [SSE keepalives for long AI streams](docs/adr/038-sse-keepalive-long-streams.md) (`: ping` every 10s, terminal errors for unexpected failures, five-minute dev proxy timeout)                                                                                                                                                                                          |
-| AI reports (039)         | [Persisted AI reports and a fast analysis model](docs/adr/039-ai-report-persistence-and-fast-model.md) (last report per product in PostgreSQL; owner GET/DELETE; separate `analysis_model_id`, fast by default)                                                                                                                                                        |
+| AI reports (039)         | [Persisted AI reports and a fast analysis model](docs/adr/039-ai-report-persistence-and-fast-model.md) (last report per product in PostgreSQL; owner GET/DELETE; separate model superseded by 040)                                                                                                                                                                     |
+| AI roles (040)           | [Admin-managed AI settings, one model, shared analysis](docs/adr/040-admin-ai-settings-single-model.md) (owner/admin settings, generation and deletion; viewers read reports; one model; `/ai/stream` owner-only)                                                                                                                                                      |
 
 ## 1. Repository map
 
@@ -215,9 +216,10 @@ This is an admin panel with password login.
 - Use opaque server-managed sessions (only a SHA-256 hash is stored) in an HttpOnly cookie: `Secure`
   in production, `SameSite=Lax`, `Path=/`, rotated on every login so older cookies stop working.
 - Roles: `owner` (env-managed via `OWNER_*`), `admin` (shop data plus viewer management), `viewer`
-  (read-only). Reads use `require_user`; all writes plus `/users*` and `/settings*` use
-  `require_admin`; `/ai/*` is owner-only; viewers get `403 forbidden`. The owner cannot be deleted
-  and the last management account cannot be removed.
+  (read-only). Reads use `require_user`; all writes plus `/users*`, `/settings*`, `/ai/settings`,
+  `/ai/test`, product-analysis generation, and report deletion use `require_admin`; the saved
+  report `GET` uses `require_user`; `/ai/stream` is owner-only; viewers get `403 forbidden` on
+  writes. The owner cannot be deleted and the last management account cannot be removed.
 - Rate-limit login to 10/min per IP and username. No auth tokens in `localStorage`/`sessionStorage`;
   never log passwords, session IDs, API keys, secrets, or Authorization headers.
 - Never commit secrets. Only per-app `.env.example` files (`backend/api/`, `apps/web/`) are tracked;

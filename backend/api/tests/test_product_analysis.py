@@ -13,7 +13,7 @@ from app.models import Product
 from app.schemas import CardexEntryOut, CardexPeriod, CardexSummaryOut, ProductCardexOut
 from app.schemas.competitor import CompetitorListingOut
 from app.services.product_analysis import build_analysis_payload
-from tests.helpers import login, login_owner
+from tests.helpers import login, login_as, login_owner
 
 ANALYSIS_URL = "/api/v1/ai/products/{product_id}/analysis"
 REPORT_URL = "/api/v1/ai/products/{product_id}/analysis/report"
@@ -263,11 +263,23 @@ def test_payload_flags_stockout_with_positive_sales() -> None:
 # ── ROUTE ─────────────────────────────────────────────────────────────
 
 
-def test_analysis_route_requires_owner(client: TestClient) -> None:
+def test_analysis_route_requires_a_management_account(client: TestClient) -> None:
     assert client.post(ANALYSIS_URL.format(product_id=1)).status_code == 401
 
     login(client)
+    created = client.post(
+        "/api/v1/users",
+        json={"username": "analysis-viewer", "password": "viewer-pass-123", "role": "viewer"},
+    )
+    assert created.status_code == 201, created.text
+
+    # Viewers can read reports but never generate one.
+    login_as(client, "analysis-viewer", "viewer-pass-123")
     assert client.post(ANALYSIS_URL.format(product_id=1)).status_code == 403
+
+    # Admins may generate; 503 proves the role guard passed and AI is unconfigured.
+    login(client)
+    assert client.post(ANALYSIS_URL.format(product_id=1)).status_code == 503
 
 
 def test_analysis_route_fails_fast_when_ai_is_unconfigured(client: TestClient) -> None:
@@ -314,7 +326,6 @@ def test_analysis_route_streams_frames_from_server_built_context(
             "base_url": "https://ai.example/v1",
             "api_key": "sk-test",
             "model_id": "test-model",
-            "analysis_model_id": "fast-model",
         },
     )
     assert saved.status_code == 200, saved.text
@@ -327,15 +338,9 @@ def test_analysis_route_streams_frames_from_server_built_context(
     captured: dict[str, str] = {}
     chunks = ["سلام", " دنیا"]
 
-    def fake_stream(
-        _self: object,
-        messages: list[dict[str, str]],
-        *,
-        model_id: str | None = None,
-    ) -> AIStream:
+    def fake_stream(_self: object, messages: list[dict[str, str]]) -> AIStream:
         captured["content"] = messages[0]["content"]
-        captured["model_id"] = model_id or ""
-        return AIStream(model=model_id or "test-model", chunks=iter(chunks))
+        return AIStream(model="test-model", chunks=iter(chunks))
 
     monkeypatch.setattr("app.services.ai.AIService.stream", fake_stream)
 
@@ -349,13 +354,12 @@ def test_analysis_route_streams_frames_from_server_built_context(
     # The client cannot supply the prompt: the route sends its own JSON context.
     assert "دادهٔ کالا برای تحلیل" in captured["content"]
     assert '"sku": "AI-1"' in captured["content"]
-    # Reports use the dedicated fast model, not the shared model id.
-    assert captured["model_id"] == "fast-model"
 
     saved_report = client.get(REPORT_URL.format(product_id=product_id))
     assert saved_report.status_code == 200, saved_report.text
     assert saved_report.json()["content"] == "سلام دنیا"
-    assert saved_report.json()["model_id"] == "fast-model"
+    # Reports use the one configured model.
+    assert saved_report.json()["model_id"] == "test-model"
 
     # A new complete analysis replaces the previous report.
     chunks[:] = ["نسخه", " تازه"]
@@ -367,10 +371,23 @@ def test_analysis_route_streams_frames_from_server_built_context(
     assert client.get(REPORT_URL.format(product_id=product_id)).status_code == 404
 
 
-def test_report_routes_require_owner(client: TestClient) -> None:
+def test_report_routes_access(client: TestClient) -> None:
     assert client.get(REPORT_URL.format(product_id=1)).status_code == 401
     assert client.delete(REPORT_URL.format(product_id=1)).status_code == 401
 
     login(client)
-    assert client.get(REPORT_URL.format(product_id=1)).status_code == 403
+    created = client.post(
+        "/api/v1/users",
+        json={"username": "report-viewer", "password": "viewer-pass-123", "role": "viewer"},
+    )
+    assert created.status_code == 201, created.text
+
+    # A viewer may read the report (404 when none is saved) but never delete it.
+    login_as(client, "report-viewer", "viewer-pass-123")
+    assert client.get(REPORT_URL.format(product_id=1)).status_code == 404
     assert client.delete(REPORT_URL.format(product_id=1)).status_code == 403
+
+    # Admins keep full access; deleting a missing report is idempotent.
+    login(client)
+    assert client.delete(REPORT_URL.format(product_id=1)).status_code == 204
+    assert client.delete(REPORT_URL.format(product_id=1)).status_code == 204

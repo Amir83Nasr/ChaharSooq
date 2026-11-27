@@ -323,7 +323,7 @@ export const api = {
       return data
     })
   },
-  // ── AI (owner only) ──
+  // ── AI (management; report reading is open to every signed-in account) ──
   // The API key is write-only; an empty string keeps the stored one.
   aiSettings() {
     return request<AISettings>("/api/v1/ai/settings")

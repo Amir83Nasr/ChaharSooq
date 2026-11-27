@@ -113,7 +113,7 @@
           "AI"
         ],
         "summary": "Update AI settings",
-        "description": "Partial update of the AI connection. Omitted fields keep their value; an empty `api_key` keeps the stored key, an empty `system_prompt` clears it. Owner only.",
+        "description": "Partial update of the AI connection. Omitted fields keep their value; an empty `api_key` keeps the stored key, an empty `system_prompt` clears it. Management accounts only.",
         "operationId": "update_ai_settings",
         "requestBody": {
           "content": {
@@ -180,7 +180,7 @@
           "AI"
         ],
         "summary": "Test the AI connection",
-        "description": "Sends one prompt through the configured model and returns its reply. Returns `503` when the connection is not configured and `502` when the provider rejects or cannot answer the request. Owner only.",
+        "description": "Sends one prompt through the configured model and returns its reply. Returns `503` when the connection is not configured and `502` when the provider rejects or cannot answer the request. Management accounts only.",
         "operationId": "test_ai_connection",
         "requestBody": {
           "content": {
@@ -344,7 +344,7 @@
           "AI"
         ],
         "summary": "Stream an AI analysis of one product",
-        "description": "Builds a bounded, privacy-safe context for one product (the catalog row, fresh competitor prices, and the live 30-day cardex) and streams the model analysis as Server-Sent Events. The client sends no prompt and cannot inject context; counterparty names, invoice ids, and competitor URLs never leave the backend. Owner only.",
+        "description": "Builds a bounded, privacy-safe context for one product (the catalog row, fresh competitor prices, and the live 30-day cardex) and streams the model analysis as Server-Sent Events. The client sends no prompt and cannot inject context; counterparty names, invoice ids, and competitor URLs never leave the backend. Owner and admin only.",
         "operationId": "stream_product_analysis",
         "security": [
           {
@@ -432,7 +432,7 @@
           "AI"
         ],
         "summary": "Read the saved product analysis report",
-        "description": "The last complete AI report for one product, if any. Owner only. A new analysis replaces it; `DELETE` removes it.",
+        "description": "The last complete AI report for one product, if any. Any signed-in account can read it; viewers are read-only. A new analysis replaces it; `DELETE` (management accounts) removes it.",
         "operationId": "get_product_analysis_report",
         "security": [
           {
@@ -471,16 +471,6 @@
               }
             }
           },
-          "403": {
-            "description": "Signed in, but the account role is not allowed to perform this action (`forbidden`).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
           "404": {
             "description": "The requested resource does not exist (`not_found`).",
             "content": {
@@ -508,7 +498,7 @@
           "AI"
         ],
         "summary": "Delete the saved product analysis report",
-        "description": "Owner only. Idempotent: deleting a missing report still returns `204`.",
+        "description": "Owner and admin only. Idempotent: deleting a missing report still returns `204`.",
         "operationId": "delete_product_analysis_report",
         "security": [
           {
@@ -4274,19 +4264,6 @@
             "title": "Model Id",
             "description": "Model id, e.g. gapgpt-deepseek-v4.1-flash."
           },
-          "analysis_model_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 255
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Analysis Model Id",
-            "description": "Model id for product analysis reports; empty uses the fast default (gpt-4.1-mini)."
-          },
           "system_prompt": {
             "anyOf": [
               {
@@ -4306,7 +4283,6 @@
         "description": "Partial update. Omitted fields keep their stored value.",
         "examples": [
           {
-            "analysis_model_id": "gpt-4.1-mini",
             "api_key": "sk-...",
             "base_url": "https://api.gapgpt.ir/v1",
             "model_id": "gapgpt-deepseek-v4.1-flash",
@@ -4325,11 +4301,6 @@
             "type": "string",
             "title": "Model Id",
             "description": "Effective model id sent with every request."
-          },
-          "analysis_model_id": {
-            "type": "string",
-            "title": "Analysis Model Id",
-            "description": "Effective model id used only for product analysis reports."
           },
           "system_prompt": {
             "type": "string",
@@ -4351,7 +4322,6 @@
         "required": [
           "base_url",
           "model_id",
-          "analysis_model_id",
           "system_prompt",
           "api_key_set",
           "configured"
@@ -7089,7 +7059,7 @@
     },
     {
       "name": "AI",
-      "description": "Owner-only AI connection settings, shared system prompt, and a connection test over an OpenAI-compatible chat-completions endpoint."
+      "description": "AI connection settings shared by the owner and admins, the system prompt, a connection test, and owner-only product analysis over an OpenAI-compatible chat-completions endpoint."
     },
     {
       "name": "Dashboard",

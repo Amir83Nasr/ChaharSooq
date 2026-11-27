@@ -34,8 +34,9 @@ TAGS_METADATA: list[dict[str, Any]] = [
     {
         "name": "AI",
         "description": (
-            "Owner-only AI connection settings, shared system prompt, and a "
-            "connection test over an OpenAI-compatible chat-completions endpoint."
+            "AI connection settings shared by the owner and admins, the system "
+            "prompt, a connection test, and owner-only product analysis over an "
+            "OpenAI-compatible chat-completions endpoint."
         ),
     },
     {"name": "Dashboard", "description": "Aggregated catalog, stock, and competitor metrics."},
